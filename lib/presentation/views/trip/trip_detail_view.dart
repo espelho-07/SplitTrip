@@ -1014,6 +1014,8 @@ class _TripDetailViewState extends State<TripDetailView> {
                                   ? (isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight)
                                   : (isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight),
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           )
                         else
                           Text(
@@ -1069,12 +1071,16 @@ class _TripDetailViewState extends State<TripDetailView> {
                       children: [
                         Row(
                           children: [
-                            Text(
-                              isSelf ? '${member.displayName} (You)' : member.displayName,
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 14,
-                                color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                            Flexible(
+                              child: Text(
+                                isSelf ? '${member.displayName} (You)' : member.displayName,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                  color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             if (member.isCreator) ...[

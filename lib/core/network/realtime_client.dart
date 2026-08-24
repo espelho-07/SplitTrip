@@ -58,7 +58,25 @@ class RealtimeClient {
       final wsUrl = AppConfig.wsUrl;
       final uri = Uri.parse(wsUrl);
       _channel = WebSocketChannel.connect(uri);
-      _isConnected = true;
+
+      // Await the WebSocket handshake — catches connection-refused and other
+      // socket-level errors before they become unhandled isolate exceptions.
+      _channel!.ready.then((_) {
+        if (_isDisposed) return;
+        _isConnected = true;
+
+        // Authenticate if token exists
+        _sendAuth();
+
+        // Resubscribe to existing active trip rooms
+        for (final tripId in _activeSubscribedTripIds) {
+          _sendSubscribe(tripId);
+        }
+      }).catchError((_) {
+        _isConnected = false;
+        _cleanupChannel();
+        _scheduleReconnect();
+      });
 
       _subscription = _channel!.stream.listen(
         (message) {
@@ -72,15 +90,8 @@ class RealtimeClient {
           _isConnected = false;
           _scheduleReconnect();
         },
+        cancelOnError: false,
       );
-
-      // Authenticate if token exists
-      _sendAuth();
-
-      // Resubscribe to existing active trip rooms
-      for (final tripId in _activeSubscribedTripIds) {
-        _sendSubscribe(tripId);
-      }
     } catch (_) {
       _isConnected = false;
       _scheduleReconnect();

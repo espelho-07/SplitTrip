@@ -19,7 +19,11 @@ class AuthViewModel extends ChangeNotifier {
 
   Future<void> initSession() async {
     _isLoading = true;
-    notifyListeners();
+    // Yield to the event loop so that any pending widget builds complete
+    // before we call notifyListeners(). This prevents the
+    // "setState() called during build" assertion when initSession() is
+    // invoked synchronously from a widget's initState().
+    await Future<void>.value();
 
     try {
       _currentUser = userRepo.getCurrentUser();

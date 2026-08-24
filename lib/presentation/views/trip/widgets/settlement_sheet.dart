@@ -188,61 +188,78 @@ class _SettlementSheetState extends State<SettlementSheet> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             // From Member
-                            Row(
-                              children: [
-                                MemberAvatar(name: fromName, size: 34),
-                                const SizedBox(width: 8),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      isPayerCurrentUser ? 'You' : fromName,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 14,
-                                        color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                                      ),
+                            Flexible(
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  MemberAvatar(name: fromName, size: 34),
+                                  const SizedBox(width: 8),
+                                  Flexible(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          isPayerCurrentUser ? 'You' : fromName,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 14,
+                                            color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const Text('Pays', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                                      ],
                                     ),
-                                    const Text('Pays', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                                  ],
-                                ),
-                              ],
+                                  ),
+                                ],
+                              ),
                             ),
 
                             // Arrow & Amount
-                            Column(
-                              children: [
-                                const Icon(Icons.arrow_forward_rounded, size: 18, color: AppColors.emeraldPrimary),
-                                const SizedBox(height: 2),
-                                CurrencyDisplay(
-                                  amountInPaise: s.amountInPaise,
-                                  size: CurrencyDisplaySize.medium,
-                                  colorMode: CurrencyColorMode.neutral,
-                                  currencyCode: widget.trip.currencyCode,
-                                ),
-                              ],
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              child: Column(
+                                children: [
+                                  const Icon(Icons.arrow_forward_rounded, size: 18, color: AppColors.emeraldPrimary),
+                                  const SizedBox(height: 2),
+                                  CurrencyDisplay(
+                                    amountInPaise: s.amountInPaise,
+                                    size: CurrencyDisplaySize.medium,
+                                    colorMode: CurrencyColorMode.neutral,
+                                    currencyCode: widget.trip.currencyCode,
+                                  ),
+                                ],
+                              ),
                             ),
 
                             // To Member
-                            Row(
-                              children: [
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Text(
-                                      isReceiverCurrentUser ? 'You' : toName,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 14,
-                                        color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                                      ),
+                            Flexible(
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Flexible(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      children: [
+                                        Text(
+                                          isReceiverCurrentUser ? 'You' : toName,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 14,
+                                            color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const Text('Receives', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                                      ],
                                     ),
-                                    const Text('Receives', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                                  ],
-                                ),
-                                const SizedBox(width: 8),
-                                MemberAvatar(name: toName, size: 34),
-                              ],
+                                  ),
+                                  const SizedBox(width: 8),
+                                  MemberAvatar(name: toName, size: 34),
+                                ],
+                              ),
                             ),
                           ],
                         ),

@@ -288,4 +288,12 @@ describe('Real Cloud Staging & Multi-User End-to-End QA Test Suite', () => {
     const receivedEvent = await eventPromise;
     assert.strictEqual(receivedEvent.tripId, tripId);
   });
+
+  // 11. Balance Summary Endpoint
+  it('11. GET /api/trips/:tripId/expenses/balance/summary returns live balance summary', async () => {
+    const summaryRes = await api(`/api/trips/${tripId}/expenses/balance/summary`, { token: tokenA });
+    assert.strictEqual(summaryRes.status, 200);
+    assert.ok(summaryRes.data.data.totalTripSpendingInPaise > 0);
+    assert.ok(summaryRes.data.data.netBalancesInPaise !== undefined);
+  });
 });

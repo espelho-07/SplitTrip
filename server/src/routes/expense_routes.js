@@ -17,6 +17,18 @@ router.get('/', (req, res, next) => {
   }
 });
 
+// GET /api/trips/:tripId/expenses/balance/summary
+// Must be registered BEFORE /:expenseId to prevent Express from matching
+// "balance" as an expenseId param.
+router.get('/balance/summary', (req, res, next) => {
+  try {
+    const summary = expenseService.getBalanceSummary(req.params.tripId, req.user.id);
+    res.status(200).json({ data: summary });
+  } catch (e) {
+    next(e);
+  }
+});
+
 // POST /api/trips/:tripId/expenses
 router.post('/', (req, res, next) => {
   try {
