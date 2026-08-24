@@ -9,6 +9,28 @@ const env = require('./config/env');
 
 const app = express();
 
+// Fast Zero-Dependency Health Probes for Cloud Load Balancers & Render Deployments
+const healthHandler = (req, res) => {
+  res.status(200).json({
+    status: 'healthy',
+    ok: true,
+    service: 'kith-backend',
+    environment: env.NODE_ENV,
+    version: '1.0.0',
+    timestamp: new Date().toISOString(),
+    uptimeSeconds: Math.floor(process.uptime()),
+  });
+};
+
+app.get('/health', healthHandler);
+app.get('/healthz', healthHandler);
+app.get('/api/health', healthHandler);
+app.get('/api/healthz', healthHandler);
+app.get('/', healthHandler);
+app.head('/health', healthHandler);
+app.head('/healthz', healthHandler);
+app.head('/', healthHandler);
+
 // Environment-aware CORS configuration
 const corsOptions = {
   origin: env.NODE_ENV === 'production'
@@ -44,28 +66,6 @@ if (env.NODE_ENV !== 'test') {
     next();
   });
 }
-
-// Liveness & Health Check (Fast, lightweight, unauthenticated, zero external dependency)
-const healthHandler = (req, res) => {
-  res.status(200).json({
-    status: 'healthy',
-    ok: true,
-    service: 'kith-backend',
-    environment: env.NODE_ENV,
-    version: '1.0.0',
-    timestamp: new Date().toISOString(),
-    uptimeSeconds: Math.floor(process.uptime()),
-  });
-};
-
-app.get('/health', healthHandler);
-app.get('/healthz', healthHandler);
-app.get('/api/health', healthHandler);
-app.get('/api/healthz', healthHandler);
-app.get('/', healthHandler);
-app.head('/health', healthHandler);
-app.head('/healthz', healthHandler);
-app.head('/', healthHandler);
 
 // Readiness Check (Reports application and database subsystem readiness)
 app.get('/ready', async (req, res) => {
