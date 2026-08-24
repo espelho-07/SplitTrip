@@ -74,6 +74,8 @@ class SettlementService {
 
   /**
    * Records an explicit settlement payment between two members.
+   * Validates participant membership, caller authorization, lifecycle state,
+   * and ensures settlement amount does not exceed the debtor's actual pending debt.
    */
   recordSettlement(user, tripId, {
     fromMemberId,
@@ -88,6 +90,10 @@ class SettlementService {
 
     const trip = db.get('trips', tripId);
     if (!trip) throw AppError.notFound('Trip not found');
+
+    if (trip.lifecycleState === 'settled') {
+      throw AppError.badRequest('This trip is already settled. No further settlements can be recorded.');
+    }
 
     const authMember = db.findOne('trip_members', (m) => m.tripId === tripId && m.userId === user.id);
     if (!authMember) throw AppError.forbidden('You are not a member of this trip');
@@ -110,6 +116,34 @@ class SettlementService {
 
     if (!isPayer && !isReceiver && !isTripCreator) {
       throw AppError.forbidden('You do not have permission to record this settlement');
+    }
+
+    // Financial Validation: Ensure debtor actually owes money and amount doesn't exceed debt
+    const expenses = db.find('expenses', (e) => e.tripId === tripId && !e.isDeleted);
+    const prevSettlements = this.getSettlementsForTrip(tripId);
+
+    let debtorPaid = 0;
+    let debtorOwed = 0;
+    for (const exp of expenses) {
+      if (exp.paidById === fromMember.id) debtorPaid += exp.amountInPaise;
+      for (const s of exp.splits) {
+        if (s.memberId === fromMember.id) debtorOwed += s.amountInPaise;
+      }
+    }
+    let debtorNetDebt = debtorOwed - debtorPaid;
+    for (const stl of prevSettlements) {
+      if (stl.fromMemberId === fromMember.id) debtorNetDebt -= stl.amountInPaise;
+      if (stl.toMemberId === fromMember.id) debtorNetDebt += stl.amountInPaise;
+    }
+
+    if (debtorNetDebt <= 0) {
+      throw AppError.badRequest(`${fromMember.displayName} does not have any pending debt to settle in this trip.`);
+    }
+
+    if (amountInPaise > debtorNetDebt) {
+      throw AppError.badRequest(
+        `Settlement amount ₹${(amountInPaise / 100).toFixed(2)} exceeds ${fromMember.displayName}'s total pending debt of ₹${(debtorNetDebt / 100).toFixed(2)}`
+      );
     }
 
     const now = new Date().toISOString();

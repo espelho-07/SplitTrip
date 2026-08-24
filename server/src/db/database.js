@@ -52,10 +52,17 @@ class Database {
     if (this.inMemory) return;
     try {
       const filePath = path.join(this.dataDir, `${tableName}.json`);
+      const tmpPath = path.join(this.dataDir, `${tableName}.${Date.now()}.${Math.random().toString(36).substring(2, 6)}.tmp`);
       const data = Array.from(this.tables[tableName].values());
-      fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+      fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf8');
+      fs.renameSync(tmpPath, filePath);
     } catch (e) {
-      // Ignore transient disk write errors during test teardowns
+      // Fallback direct write if atomic rename is constrained on filesystem
+      try {
+        const filePath = path.join(this.dataDir, `${tableName}.json`);
+        const data = Array.from(this.tables[tableName].values());
+        fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+      } catch (_) {}
     }
   }
 

@@ -74,25 +74,61 @@ describe('Settlement Service Ledger & Reduction Tests', () => {
     const joinedTrip = tripService.joinTripByCode(userB, trip.inviteCode);
     const memberB = joinedTrip.members.find((m) => m.userId === userB.id);
 
-    // Stranger cannot record settlement
+    // Add expense: Charlie pays ₹1,000 split equally (Dave owes ₹500 / 50,000 paise)
+    expenseService.createExpense(userA, trip.id, {
+      title: 'Camp Gear',
+      amountInPaise: 100000,
+      paidById: memberA.id,
+      splitType: 'equal',
+      splits: [
+        { memberId: memberA.id, amountInPaise: 50000 },
+        { memberId: memberB.id, amountInPaise: 50000 },
+      ],
+    });
+
+    // Stranger cannot record settlement (403 Forbidden)
     assert.throws(
       () => {
         settlementService.recordSettlement(stranger, trip.id, {
-          fromMemberId: memberA.id,
-          toMemberId: memberB.id,
-          amountInPaise: 5000,
+          fromMemberId: memberB.id,
+          toMemberId: memberA.id,
+          amountInPaise: 50000,
         });
       },
       (err) => err.statusCode === 403
     );
 
-    // Negative amount rejected
+    // Negative amount rejected (400 Bad Request)
+    assert.throws(
+      () => {
+        settlementService.recordSettlement(userB, trip.id, {
+          fromMemberId: memberB.id,
+          toMemberId: memberA.id,
+          amountInPaise: -500,
+        });
+      },
+      (err) => err.statusCode === 400
+    );
+
+    // Excessive settlement amount: Dave owes ₹500, but tries to settle ₹10,000 (1,000,000 paise) -> Rejected (400 Bad Request)
+    assert.throws(
+      () => {
+        settlementService.recordSettlement(userB, trip.id, {
+          fromMemberId: memberB.id,
+          toMemberId: memberA.id,
+          amountInPaise: 1000000,
+        });
+      },
+      (err) => err.statusCode === 400
+    );
+
+    // Member with 0 debt (Charlie owes 0) tries to settle -> Rejected (400 Bad Request)
     assert.throws(
       () => {
         settlementService.recordSettlement(userA, trip.id, {
           fromMemberId: memberA.id,
           toMemberId: memberB.id,
-          amountInPaise: -500,
+          amountInPaise: 25000,
         });
       },
       (err) => err.statusCode === 400

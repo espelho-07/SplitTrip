@@ -4,6 +4,37 @@ const { authMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
 
+// In-memory rate limiting map for recovery endpoint
+const recoveryAttempts = new Map();
+
+function recoveryRateLimiter(req, res, next) {
+  const ip = req.ip || req.connection.remoteAddress || 'unknown';
+  const now = Date.now();
+  const windowMs = 15 * 60 * 1000; // 15 minutes
+  const maxAttempts = 10;
+
+  const record = recoveryAttempts.get(ip) || { count: 0, resetTime: now + windowMs };
+
+  if (now > record.resetTime) {
+    record.count = 0;
+    record.resetTime = now + windowMs;
+  }
+
+  if (record.count >= maxAttempts) {
+    const retryAfterSec = Math.ceil((record.resetTime - now) / 1000);
+    return res.status(429).json({
+      error: {
+        code: 'RATE_LIMIT_EXCEEDED',
+        message: `Too many recovery attempts. Please try again after ${retryAfterSec} seconds.`,
+      },
+    });
+  }
+
+  record.count += 1;
+  recoveryAttempts.set(ip, record);
+  next();
+}
+
 // POST /api/auth/guest - Create anonymous guest session
 router.post('/guest', (req, res, next) => {
   try {
@@ -15,8 +46,8 @@ router.post('/guest', (req, res, next) => {
   }
 });
 
-// POST /api/auth/recover - Recover session across devices via recovery key
-router.post('/recover', (req, res, next) => {
+// POST /api/auth/recover - Recover session across devices via recovery key with rate limiter
+router.post('/recover', recoveryRateLimiter, (req, res, next) => {
   try {
     const { recoveryKey } = req.body;
     const result = authService.recoverGuest({ recoveryKey });
