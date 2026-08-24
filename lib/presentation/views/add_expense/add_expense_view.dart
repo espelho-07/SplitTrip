@@ -428,7 +428,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
         ),
         const SizedBox(height: AppSpacing.xs),
         Text(
-          'Say who paid, what it was for, and how much.',
+          'Say who paid, what it was for, and how much.\n(e.g. "Maine 6000 train ke diye sabke liye")',
           style: AppTypography.bodyMedium(isDark: isDark),
           textAlign: TextAlign.center,
         ),
@@ -454,17 +454,37 @@ class _AddExpenseViewState extends State<AddExpenseView> {
               const SizedBox(height: AppSpacing.lg),
 
               GestureDetector(
-                onTap: () {
+                onTap: () async {
                   HapticHelper.medium();
                   if (addVm.isListening) {
-                    final draft = addVm.parseVoiceToDraft(
-                      _sampleVoicePrompts[0],
-                      trip.members,
-                      currentUserId,
+                    await addVm.stopLiveVoiceListening(
+                      tripMembers: trip.members,
+                      currentUserId: currentUserId,
+                      onDraftReady: (draft) {
+                        if (mounted) {
+                          _showDraftConfirmation(draft, trip);
+                        }
+                      },
                     );
-                    _showDraftConfirmation(draft, trip);
                   } else {
-                    addVm.startVoiceListening();
+                    final started = await addVm.startLiveVoiceListening(
+                      tripMembers: trip.members,
+                      currentUserId: currentUserId,
+                      onDraftReady: (draft) {
+                        if (mounted) {
+                          _showDraftConfirmation(draft, trip);
+                        }
+                      },
+                    );
+
+                    if (!started && mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Microphone permission required or speech recognition unavailable. Please grant permission in Settings.'),
+                          duration: Duration(seconds: 3),
+                        ),
+                      );
+                    }
                   }
                 },
                 child: Container(
@@ -497,13 +517,46 @@ class _AddExpenseViewState extends State<AddExpenseView> {
 
               const SizedBox(height: AppSpacing.md),
               Text(
-                addVm.isListening ? 'Listening... Tap to stop & confirm' : 'Tap microphone to speak',
+                addVm.isListening ? 'Listening... Tap to stop & parse' : 'Tap microphone to speak',
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 13,
                   color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                 ),
               ),
+
+              if (addVm.voiceTranscript.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.md),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.1),
+                    borderRadius: AppRadius.mdBorder,
+                    border: Border.all(
+                      color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.25),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.record_voice_over_rounded, size: 16, color: AppColors.emeraldPrimary),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          '"${addVm.voiceTranscript}"',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                            fontStyle: FontStyle.italic,
+                            color: isDark ? AppColors.emeraldLight : AppColors.emeraldDark,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
         ),

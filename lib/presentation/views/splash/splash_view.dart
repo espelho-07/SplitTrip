@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../../core/services/permission_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../viewmodels/auth_viewmodel.dart';
@@ -23,6 +24,9 @@ class _SplashViewState extends State<SplashView> {
   Future<void> _bootstrap() async {
     final authVm = context.read<AuthViewModel>();
     await authVm.initSession();
+
+    // Request permissions on first launch in the background
+    PermissionService.requestInitialPermissions();
 
     // Short graceful pause for animation fluidity
     await Future.delayed(const Duration(milliseconds: 900));

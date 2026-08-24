@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
+import '../../core/services/voice_speech_service.dart';
 import '../../data/repositories/expense_repository.dart';
 import '../../domain/engine/money_engine.dart';
 import '../../domain/engine/receipt_parser_engine.dart';
@@ -14,6 +15,7 @@ import '../../domain/models/trip_member.dart';
 
 class AddExpenseViewModel extends ChangeNotifier {
   final ExpenseRepository expenseRepo;
+  final VoiceSpeechService _speechService = VoiceSpeechService();
   final Uuid _uuid = const Uuid();
 
   int _currentTab = 2; // 0: Voice, 1: Scan, 2: Manual (default)
@@ -66,6 +68,7 @@ class AddExpenseViewModel extends ChangeNotifier {
   String get voiceTranscript => _voiceTranscript;
   VoiceExpenseIntent? get parsedIntent => _parsedIntent;
   ExpenseDraft? get activeDraft => _activeDraft;
+  VoiceSpeechService get speechService => _speechService;
 
   bool get isSaving => _isSaving;
   String? get errorMessage => _errorMessage;
@@ -84,6 +87,10 @@ class AddExpenseViewModel extends ChangeNotifier {
     _isEditMode = false;
     _editingExpenseId = null;
     _createdAt = null;
+    _title = '';
+    _amountInPaise = 0;
+    _category = ExpenseCategory.general;
+    _splitType = SplitType.equal;
 
     // Default payer to current user
     final currentMember = trip.members.where((m) => m.userId == currentUserId).firstOrNull;
@@ -100,13 +107,9 @@ class AddExpenseViewModel extends ChangeNotifier {
 
     for (final member in trip.members) {
       _shares[member.id] = 1;
-      _percentages[member.id] = 100.0 / (trip.members.isEmpty ? 1 : trip.members.length);
+      _percentages[member.id] = 100.0 / trip.members.length;
     }
 
-    _title = '';
-    _amountInPaise = 0;
-    _category = ExpenseCategory.general;
-    _splitType = SplitType.equal;
     _isListening = false;
     _voiceTranscript = '';
     _parsedIntent = null;
@@ -124,39 +127,34 @@ class AddExpenseViewModel extends ChangeNotifier {
     _isEditMode = true;
     _editingExpenseId = expense.id;
     _createdAt = expense.createdAt;
-    _currentTab = 2; // Always open Manual tab for editing
-
     _title = expense.title;
     _amountInPaise = expense.amountInPaise;
     _category = expense.category;
     _paidById = expense.paidById;
     _splitType = expense.splitType;
-    _voiceTranscript = expense.voiceTranscript ?? '';
+    _currentTab = 2; // Manual edit tab
 
     _selectedParticipantMemberIds.clear();
+    _selectedParticipantMemberIds.addAll(expense.splits.map((s) => s.memberId));
+
+    _exactAmountsInPaise.clear();
     _shares.clear();
     _percentages.clear();
-    _exactAmountsInPaise.clear();
-
-    // Initialize all trip members defaults
-    for (final member in trip.members) {
-      _shares[member.id] = 1;
-      _percentages[member.id] = 100.0 / (trip.members.isEmpty ? 1 : trip.members.length);
-    }
 
     // Populate split allocations from existing expense
     for (final split in expense.splits) {
-      _selectedParticipantMemberIds.add(split.memberId);
       _exactAmountsInPaise[split.memberId] = split.amountInPaise;
-      if (split.shares != null) _shares[split.memberId] = split.shares!;
-      if (split.percentage != null) {
-        _percentages[split.memberId] = split.percentage!.toDouble();
-      } else if (expense.amountInPaise > 0) {
-        _percentages[split.memberId] = (split.amountInPaise / expense.amountInPaise) * 100.0;
-      }
+      _shares[split.memberId] = split.shares ?? 1;
+      _percentages[split.memberId] = split.percentage ?? (100.0 / expense.splits.length);
+    }
+
+    for (final member in trip.members) {
+      if (!_shares.containsKey(member.id)) _shares[member.id] = 1;
+      if (!_percentages.containsKey(member.id)) _percentages[member.id] = 100.0 / trip.members.length;
     }
 
     _isListening = false;
+    _voiceTranscript = '';
     _parsedIntent = null;
     _activeDraft = null;
     _errorMessage = null;
@@ -164,13 +162,13 @@ class AddExpenseViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setTitle(String val) {
-    _title = val;
+  void setTitle(String value) {
+    _title = value;
     notifyListeners();
   }
 
-  void setAmountInPaise(int val) {
-    _amountInPaise = val;
+  void setAmountInPaise(int value) {
+    _amountInPaise = value < 0 ? 0 : value;
     notifyListeners();
   }
 
@@ -216,6 +214,52 @@ class AddExpenseViewModel extends ChangeNotifier {
   }
 
   // --- Voice & OCR Intelligence ---
+  Future<bool> startLiveVoiceListening({
+    required Function(ExpenseDraft draft) onDraftReady,
+    required List<TripMember> tripMembers,
+    required String currentUserId,
+  }) async {
+    _isListening = true;
+    _voiceTranscript = '';
+    _parsedIntent = null;
+    _activeDraft = null;
+    notifyListeners();
+
+    final started = await _speechService.startListening(
+      onResult: (words, isFinal) {
+        _voiceTranscript = words;
+        notifyListeners();
+
+        if (isFinal && words.trim().isNotEmpty) {
+          final draft = parseVoiceToDraft(words, tripMembers, currentUserId);
+          onDraftReady(draft);
+        }
+      },
+    );
+
+    if (!started) {
+      _isListening = false;
+      notifyListeners();
+    }
+
+    return started;
+  }
+
+  Future<void> stopLiveVoiceListening({
+    required List<TripMember> tripMembers,
+    required String currentUserId,
+    Function(ExpenseDraft draft)? onDraftReady,
+  }) async {
+    _isListening = false;
+    await _speechService.stopListening();
+    notifyListeners();
+
+    if (_voiceTranscript.trim().isNotEmpty) {
+      final draft = parseVoiceToDraft(_voiceTranscript, tripMembers, currentUserId);
+      onDraftReady?.call(draft);
+    }
+  }
+
   void startVoiceListening() {
     _isListening = true;
     _voiceTranscript = '';
