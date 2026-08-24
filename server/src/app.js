@@ -14,7 +14,7 @@ const corsOptions = {
   origin: env.NODE_ENV === 'production'
     ? (process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : false)
     : '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
 };
 
@@ -27,8 +27,10 @@ if (env.NODE_ENV !== 'test') {
     const start = Date.now();
     res.on('finish', () => {
       const duration = Date.now() - start;
-      // Skip noisy health logs in production
-      if (req.path !== '/health' && req.path !== '/api/health') {
+      const path = req.path;
+      // Skip noisy health and ping logs in production
+      const isHealthPath = path === '/health' || path === '/healthz' || path === '/api/health' || path === '/api/healthz' || path === '/';
+      if (!isHealthPath) {
         const logEntry = {
           timestamp: new Date().toISOString(),
           method: req.method,
@@ -43,7 +45,7 @@ if (env.NODE_ENV !== 'test') {
   });
 }
 
-// Liveness & Health Check
+// Liveness & Health Check (Fast, lightweight, unauthenticated, zero external dependency)
 const healthHandler = (req, res) => {
   res.status(200).json({
     status: 'healthy',
@@ -56,9 +58,15 @@ const healthHandler = (req, res) => {
 };
 
 app.get('/health', healthHandler);
+app.get('/healthz', healthHandler);
 app.get('/api/health', healthHandler);
+app.get('/api/healthz', healthHandler);
+app.get('/', healthHandler);
+app.head('/health', healthHandler);
+app.head('/healthz', healthHandler);
+app.head('/', healthHandler);
 
-// Readiness Check
+// Readiness Check (Reports application and database subsystem readiness)
 app.get('/ready', async (req, res) => {
   try {
     const result = await dbManager.checkReadiness();

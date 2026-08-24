@@ -10,22 +10,40 @@ const server = http.createServer(app);
 realtimeHub.attach(server);
 
 async function startServer() {
-  try {
-    await dbManager.init();
+  const port = Number(process.env.PORT) || env.PORT || 10000;
+  const host = process.env.HOST || '0.0.0.0';
 
-    server.listen(env.PORT, env.HOST, () => {
-      console.log(`[Kith Backend] Server listening on http://${env.HOST}:${env.PORT}`);
-      console.log(`[Kith Backend] WebSocket Hub active at ws://${env.HOST}:${env.PORT}/ws`);
-    });
-  } catch (err) {
-    console.error('[Kith Backend] Failed to start server:', err);
+  // Bind and start listening immediately so Render health checks succeed without startup race conditions
+  server.listen(port, host, async () => {
+    console.log(`[Kith Backend] Server listening on http://${host}:${port}`);
+    console.log(`[Kith Backend] WebSocket Hub active at ws://${host}:${port}/ws`);
+
+    // Perform database initialization and migrations asynchronously
+    try {
+      await dbManager.init();
+    } catch (err) {
+      console.error('[Kith Backend] Database initialization warning:', err.message);
+    }
+  });
+
+  server.on('error', (err) => {
+    console.error('[Kith Backend] Fatal server error:', err);
     process.exit(1);
-  }
+  });
 }
 
 // Graceful shutdown handling
 process.on('SIGTERM', () => {
   console.log('[Kith Backend] SIGTERM received, shutting down gracefully...');
+  realtimeHub.close();
+  server.close(() => {
+    console.log('[Kith Backend] HTTP server closed.');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('[Kith Backend] SIGINT received, shutting down gracefully...');
   realtimeHub.close();
   server.close(() => {
     console.log('[Kith Backend] HTTP server closed.');

@@ -6,6 +6,8 @@ const env = require('../config/env');
 class DatabaseManager {
   constructor() {
     this.pgAdapter = process.env.DATABASE_URL ? new PostgresAdapter(process.env.DATABASE_URL) : null;
+    this.isReady = false;
+    this.lastError = null;
   }
 
   get isPostgresActive() {
@@ -13,21 +15,37 @@ class DatabaseManager {
   }
 
   async init() {
+    console.log('[DB] initialization started');
+
     if (this.isPostgresActive) {
-      console.log('[Kith Database] Initializing PostgreSQL connection...');
       try {
         await this.pgAdapter.query('SELECT 1');
-        console.log('[Kith Database] PostgreSQL connection verified.');
+        console.log('[DB] connection established');
+
         console.log('[Kith Database] Running database schema migrations...');
         const migrationResult = await MigrationRunner.runMigrations(this.pgAdapter);
-        console.log('[Kith Database] Migrations complete:', migrationResult);
+        console.log('[DB] migrations completed');
+        console.log('[Kith Database] Migration summary:', migrationResult);
+        this.isReady = true;
+        this.lastError = null;
       } catch (err) {
+        this.isReady = false;
+        this.lastError = err.message;
         console.error('[Kith Database] PostgreSQL initialization warning:', err.message);
       }
     } else {
       console.log(`[Kith Database] Using file-based storage fallback at: ${env.DATA_DIR}`);
-      if (!fs.existsSync(env.DATA_DIR)) {
-        fs.mkdirSync(env.DATA_DIR, { recursive: true });
+      try {
+        if (!fs.existsSync(env.DATA_DIR)) {
+          fs.mkdirSync(env.DATA_DIR, { recursive: true });
+        }
+        this.isReady = true;
+        this.lastError = null;
+        console.log('[DB] connection established (local storage)');
+      } catch (err) {
+        this.isReady = false;
+        this.lastError = err.message;
+        console.error('[Kith Database] Local storage initialization error:', err.message);
       }
     }
   }
@@ -46,7 +64,9 @@ class DatabaseManager {
         return {
           status: 'not_ready',
           service: 'kith-backend',
+          database: 'postgresql',
           error: 'PostgreSQL database unreachable',
+          timestamp: new Date().toISOString(),
         };
       }
     }
@@ -64,6 +84,7 @@ class DatabaseManager {
       status: 'not_ready',
       service: 'kith-backend',
       error: 'Storage directory inaccessible',
+      timestamp: new Date().toISOString(),
     };
   }
 }
