@@ -14,11 +14,13 @@ import '../../../core/widgets/surface_card.dart';
 import '../../../core/widgets/waveform_visualizer.dart';
 import '../../../domain/enums/expense_category.dart';
 import '../../../domain/enums/split_type.dart';
+import '../../../domain/models/expense_draft.dart';
 import '../../../domain/models/trip.dart';
 import '../../../domain/models/trip_member.dart';
 import '../../viewmodels/add_expense_viewmodel.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/trip_detail_viewmodel.dart';
+import 'widgets/expense_draft_confirmation_sheet.dart';
 
 class AddExpenseView extends StatefulWidget {
   final String tripId;
@@ -39,6 +41,21 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     'Rahul ne hotel ke 3000 diye sabke liye',
     '500 coffee aur chai',
     'Cab ride 1200',
+  ];
+
+  static const List<Map<String, String>> _sampleReceipts = [
+    {
+      'title': 'Cafe Coffee Day',
+      'text': 'CAFE COFFEE DAY\nMG Road, Bangalore\nTAX INVOICE\n1x Cappuccino ₹220\n1x Croissant ₹180\n1x Cold Coffee ₹250\nSubtotal: ₹650\nCGST 2.5%: ₹16.25\nSGST 2.5%: ₹16.25\nTOTAL AMOUNT: ₹850.00\nThank you visit again!',
+    },
+    {
+      'title': 'Taj Gateway Resort',
+      'text': 'TAJ GATEWAY RESORT\nCalangute Beach, Goa\nROOM BILL\nRoom Charges: ₹5,000.00\nDining: ₹1,500.00\nService Charge: ₹500.00\nGRAND TOTAL: ₹7,000.00\nPaid via Card',
+    },
+    {
+      'title': 'HP Petrol Pump',
+      'text': 'HINDUSTAN PETROLEUM\nHighway Station #402\nPetrol 20.5L @ ₹102.50\nNET AMOUNT: ₹2,100.00\nCash Payment Received',
+    },
   ];
 
   @override
@@ -67,6 +84,33 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     super.dispose();
   }
 
+  void _showDraftConfirmation(ExpenseDraft draft, Trip trip) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => ExpenseDraftConfirmationSheet(
+        draft: draft,
+        trip: trip,
+        onEditManual: () {
+          final addVm = context.read<AddExpenseViewModel>();
+          addVm.setTab(2); // Switch to Manual tab
+          _titleController.text = addVm.title;
+          _amountController.text = addVm.amountInPaise > 0
+              ? CurrencyFormatter.toRupees(addVm.amountInPaise).toString()
+              : '';
+        },
+        onConfirm: (confirmedDraft) async {
+          final addVm = context.read<AddExpenseViewModel>();
+          final expense = await addVm.saveConfirmedDraft(trip.id, confirmedDraft);
+          if (expense != null && mounted) {
+            context.pop(true);
+          }
+        },
+      ),
+    );
+  }
+
   Future<void> _handleSave() async {
     final addVm = context.read<AddExpenseViewModel>();
     final tripDetailVm = context.read<TripDetailViewModel>();
@@ -85,8 +129,10 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final tripDetailVm = context.watch<TripDetailViewModel>();
     final addVm = context.watch<AddExpenseViewModel>();
+    final authVm = context.watch<AuthViewModel>();
 
     final trip = tripDetailVm.trip;
+    final currentUserId = authVm.currentUser?.id ?? '';
     if (trip == null) {
       return const Scaffold(body: Center(child: Text('Trip not found')));
     }
@@ -127,9 +173,9 @@ class _AddExpenseViewState extends State<AddExpenseView> {
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
                 child: addVm.currentTab == 0
-                    ? _buildVoiceInputTab(addVm, trip, isDark)
+                    ? _buildVoiceInputTab(addVm, trip, currentUserId, isDark)
                     : (addVm.currentTab == 1
-                        ? _buildReceiptScanTab(addVm, isDark)
+                        ? _buildReceiptScanTab(addVm, trip, currentUserId, isDark)
                         : _buildManualInputTab(addVm, trip, isDark)),
               ),
             ),
@@ -244,7 +290,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     );
   }
 
-  Widget _buildVoiceInputTab(AddExpenseViewModel addVm, Trip trip, bool isDark) {
+  Widget _buildVoiceInputTab(AddExpenseViewModel addVm, Trip trip, String currentUserId, bool isDark) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -284,10 +330,12 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                 onTap: () {
                   HapticHelper.medium();
                   if (addVm.isListening) {
-                    addVm.stopVoiceListeningWithTranscript(
+                    final draft = addVm.parseVoiceToDraft(
                       _sampleVoicePrompts[0],
                       trip.members,
+                      currentUserId,
                     );
+                    _showDraftConfirmation(draft, trip);
                   } else {
                     addVm.startVoiceListening();
                   }
@@ -322,7 +370,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
 
               const SizedBox(height: AppSpacing.md),
               Text(
-                addVm.isListening ? 'Listening... Tap to stop' : 'Tap microphone to speak',
+                addVm.isListening ? 'Listening... Tap to stop & confirm' : 'Tap microphone to speak',
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 13,
@@ -356,92 +404,37 @@ class _AddExpenseViewState extends State<AddExpenseView> {
               backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
               onPressed: () {
                 HapticHelper.light();
-                addVm.stopVoiceListeningWithTranscript(prompt, trip.members);
-                _titleController.text = addVm.title;
-                _amountController.text = CurrencyFormatter.toRupees(addVm.amountInPaise).toString();
+                final draft = addVm.parseVoiceToDraft(prompt, trip.members, currentUserId);
+                _showDraftConfirmation(draft, trip);
               },
             );
           }).toList(),
         ),
-
-        if (addVm.parsedIntent != null) ...[
-          const SizedBox(height: AppSpacing.xl),
-          SurfaceCard(
-            backgroundColor: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.08),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Parsed Intent (Confidence ${(addVm.parsedIntent!.confidence * 100).round()}%)',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                        color: AppColors.emeraldPrimary,
-                      ),
-                    ),
-                    Icon(
-                      addVm.parsedIntent!.category.icon,
-                      size: 18,
-                      color: AppColors.emeraldPrimary,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Transcript: "${addVm.voiceTranscript}"',
-                  style: TextStyle(
-                    fontStyle: FontStyle.italic,
-                    fontSize: 12,
-                    color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      addVm.title,
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                    ),
-                    CurrencyDisplay(
-                      amountInPaise: addVm.amountInPaise,
-                      size: CurrencyDisplaySize.medium,
-                      colorMode: CurrencyColorMode.neutral,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
       ],
     );
   }
 
-  Widget _buildReceiptScanTab(AddExpenseViewModel addVm, bool isDark) {
+  Widget _buildReceiptScanTab(AddExpenseViewModel addVm, Trip trip, String currentUserId, bool isDark) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         const SizedBox(height: AppSpacing.md),
         Text(
-          'Scan Receipt',
+          'Scan Receipt or Bill',
           style: AppTypography.titleLarge(isDark: isDark),
         ),
         const SizedBox(height: AppSpacing.xs),
         Text(
-          'Point your camera at any bill or receipt to automatically extract the total and line items.',
+          'Capture or upload any receipt. Total and merchant are extracted automatically for your confirmation.',
           style: AppTypography.bodyMedium(isDark: isDark),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: AppSpacing.xxl),
+        const SizedBox(height: AppSpacing.xl),
 
-        // Camera / OCR Abstraction Viewport
+        // Camera / OCR Viewport
         Container(
           width: double.infinity,
-          height: 240,
+          height: 200,
           decoration: BoxDecoration(
             color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
             borderRadius: AppRadius.xlBorder,
@@ -455,17 +448,17 @@ class _AddExpenseViewState extends State<AddExpenseView> {
             children: [
               Icon(
                 Icons.document_scanner_rounded,
-                size: 54,
-                color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                size: 50,
+                color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
               ),
               const SizedBox(height: 12),
               Text(
-                'OCR Scan Engine Interface',
+                'Instant Receipt OCR',
                 style: AppTypography.titleSmall(isDark: isDark),
               ),
               const SizedBox(height: 4),
               Text(
-                'Camera boundary abstraction ready for plugin link',
+                'Tap below to scan or select a sample bill',
                 style: AppTypography.bodySmall(isDark: isDark),
               ),
             ],
@@ -473,22 +466,43 @@ class _AddExpenseViewState extends State<AddExpenseView> {
         ),
         const SizedBox(height: AppSpacing.xl),
 
-        AppButton(
-          text: 'Upload or Capture Bill',
-          icon: Icons.camera_alt_outlined,
-          variant: AppButtonVariant.secondary,
-          onPressed: () {
-            // Simulated quick test receipt fill
-            addVm.setAmountInPaise(185000);
-            addVm.setTitle('Restaurant Dinner');
-            addVm.setCategory(ExpenseCategory.food);
-            _amountController.text = '1850';
-            _titleController.text = 'Restaurant Dinner';
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Simulated bill: Restaurant Dinner ₹1,850')),
-            );
-          },
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Test with sample bills:',
+            style: AppTypography.titleSmall(isDark: isDark),
+          ),
         ),
+        const SizedBox(height: AppSpacing.sm),
+        ..._sampleReceipts.map((rcpt) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: SurfaceCard(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(rcpt['title']!, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                      const SizedBox(height: 2),
+                      const Text('Ready to extract', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                    ],
+                  ),
+                  FilledButton.tonal(
+                    onPressed: () {
+                      HapticHelper.light();
+                      final draft = addVm.parseReceiptToDraft(rcpt['text']!, trip.members, currentUserId);
+                      _showDraftConfirmation(draft, trip);
+                    },
+                    child: const Text('Parse & Confirm'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }),
       ],
     );
   }

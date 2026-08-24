@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import '../../data/repositories/expense_repository.dart';
 import '../../domain/engine/money_engine.dart';
+import '../../domain/engine/receipt_parser_engine.dart';
 import '../../domain/engine/voice_parser.dart';
 import '../../domain/enums/expense_category.dart';
 import '../../domain/enums/split_type.dart';
 import '../../domain/models/expense.dart';
+import '../../domain/models/expense_draft.dart';
 import '../../domain/models/expense_split.dart';
 import '../../domain/models/trip.dart';
 import '../../domain/models/trip_member.dart';
@@ -29,10 +31,11 @@ class AddExpenseViewModel extends ChangeNotifier {
   final Map<String, int> _shares = {};
   final Map<String, double> _percentages = {};
 
-  // Voice State
+  // Voice & OCR State
   bool _isListening = false;
   String _voiceTranscript = '';
   VoiceExpenseIntent? _parsedIntent;
+  ExpenseDraft? _activeDraft;
 
   bool _isSaving = false;
   String? _errorMessage;
@@ -53,6 +56,7 @@ class AddExpenseViewModel extends ChangeNotifier {
   bool get isListening => _isListening;
   String get voiceTranscript => _voiceTranscript;
   VoiceExpenseIntent? get parsedIntent => _parsedIntent;
+  ExpenseDraft? get activeDraft => _activeDraft;
 
   bool get isSaving => _isSaving;
   String? get errorMessage => _errorMessage;
@@ -93,6 +97,7 @@ class AddExpenseViewModel extends ChangeNotifier {
     _isListening = false;
     _voiceTranscript = '';
     _parsedIntent = null;
+    _activeDraft = null;
     _errorMessage = null;
 
     notifyListeners();
@@ -144,49 +149,52 @@ class AddExpenseViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  // --- Voice Processing ---
+  // --- Voice & OCR Intelligence ---
   void startVoiceListening() {
     _isListening = true;
     _voiceTranscript = '';
     _parsedIntent = null;
+    _activeDraft = null;
     notifyListeners();
   }
 
-  void stopVoiceListeningWithTranscript(String transcript, List<TripMember> tripMembers) {
+  ExpenseDraft parseVoiceToDraft(String transcript, List<TripMember> tripMembers, String currentUserId) {
     _isListening = false;
     _voiceTranscript = transcript;
     _parsedIntent = VoiceIntentParser.parse(transcript);
 
-    if (_parsedIntent != null && _parsedIntent!.amountInPaise > 0) {
-      _amountInPaise = _parsedIntent!.amountInPaise;
-      _title = _parsedIntent!.title;
-      _category = _parsedIntent!.category;
-      _splitType = _parsedIntent!.splitType;
+    final draft = VoiceIntentParser.parseToDraft(transcript, tripMembers, currentUserId);
+    _activeDraft = draft;
 
-      // Match payer if specified by name
-      if (_parsedIntent!.specifiedPayerName != null) {
-        final match = tripMembers.where((m) =>
-            m.displayName.toLowerCase().contains(_parsedIntent!.specifiedPayerName!.toLowerCase())).firstOrNull;
-        if (match != null) {
-          _paidById = match.id;
-        }
-      }
+    applyDraft(draft);
+    return draft;
+  }
 
-      // Match participants if specific
-      if (!_parsedIntent!.forAllParticipants && _parsedIntent!.specifiedParticipantNames.isNotEmpty) {
-        _selectedParticipantMemberIds.clear();
-        for (final name in _parsedIntent!.specifiedParticipantNames) {
-          final match = tripMembers.where((m) =>
-              m.displayName.toLowerCase().contains(name.toLowerCase())).firstOrNull;
-          if (match != null) {
-            _selectedParticipantMemberIds.add(match.id);
-          }
-        }
-        // Include payer in participants if not already
-        if (!_selectedParticipantMemberIds.contains(_paidById)) {
-          _selectedParticipantMemberIds.add(_paidById);
-        }
-      }
+  ExpenseDraft parseReceiptToDraft(String ocrText, List<TripMember> tripMembers, String currentUserId) {
+    final draft = ReceiptParserEngine.parseToDraft(ocrText, tripMembers, currentUserId);
+    _activeDraft = draft;
+
+    applyDraft(draft);
+    return draft;
+  }
+
+  void applyDraft(ExpenseDraft draft) {
+    if (draft.amountInPaise > 0) {
+      _amountInPaise = draft.amountInPaise;
+    }
+    if (draft.title.isNotEmpty) {
+      _title = draft.title;
+    }
+    _category = draft.category;
+    _splitType = draft.splitType;
+
+    if (draft.payerMemberId != null && draft.payerMemberId!.isNotEmpty) {
+      _paidById = draft.payerMemberId!;
+    }
+
+    if (draft.participantMemberIds.isNotEmpty) {
+      _selectedParticipantMemberIds.clear();
+      _selectedParticipantMemberIds.addAll(draft.participantMemberIds);
     }
 
     notifyListeners();
@@ -232,6 +240,11 @@ class AddExpenseViewModel extends ChangeNotifier {
           shares: activeShares,
         );
     }
+  }
+
+  Future<Expense?> saveConfirmedDraft(String tripId, ExpenseDraft draft) async {
+    applyDraft(draft);
+    return saveExpense(tripId);
   }
 
   Future<Expense?> saveExpense(String tripId) async {

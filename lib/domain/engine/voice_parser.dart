@@ -1,5 +1,7 @@
 import '../enums/expense_category.dart';
 import '../enums/split_type.dart';
+import '../models/expense_draft.dart';
+import '../models/trip_member.dart';
 
 /// Structured intent extracted from spoken audio transcript.
 class VoiceExpenseIntent {
@@ -32,6 +34,103 @@ class VoiceExpenseIntent {
 class VoiceIntentParser {
   VoiceIntentParser._();
 
+  /// Parses voice transcript into structured intermediate [ExpenseDraft] with entity resolution against trip members.
+  static ExpenseDraft parseToDraft(
+    String transcript,
+    List<TripMember> members,
+    String currentUserId,
+  ) {
+    final intent = parse(transcript);
+    final unresolved = <String>[];
+    final candidatePayers = <TripMember>[];
+    String? resolvedPayerId;
+    String? resolvedPayerName;
+
+    // Find current user's membership
+    final selfMember = members.where((m) => m.userId == currentUserId).firstOrNull ??
+        members.firstOrNull;
+
+    // 1. Resolve Payer
+    if (intent.paidBySelf && selfMember != null) {
+      resolvedPayerId = selfMember.id;
+      resolvedPayerName = selfMember.displayName;
+    } else if (intent.specifiedPayerName != null) {
+      final query = intent.specifiedPayerName!.toLowerCase().trim();
+      final matches = members.where((m) =>
+          m.displayName.toLowerCase() == query ||
+          m.displayName.toLowerCase().startsWith('$query ') ||
+          m.displayName.toLowerCase().contains(query)).toList();
+
+      if (matches.length == 1) {
+        resolvedPayerId = matches.first.id;
+        resolvedPayerName = matches.first.displayName;
+      } else if (matches.length > 1) {
+        // Ambiguous payer (e.g. multiple "Rahul"s)
+        unresolved.add('payer_ambiguity');
+        candidatePayers.addAll(matches);
+      } else {
+        // Unknown payer not in trip members
+        unresolved.add('unknown_payer');
+        if (selfMember != null) {
+          resolvedPayerId = selfMember.id;
+          resolvedPayerName = selfMember.displayName;
+        }
+      }
+    } else if (selfMember != null) {
+      resolvedPayerId = selfMember.id;
+      resolvedPayerName = selfMember.displayName;
+    }
+
+    // 2. Resolve Participants
+    final resolvedParticipantIds = <String>[];
+    if (intent.forAllParticipants) {
+      resolvedParticipantIds.addAll(members.map((m) => m.id));
+    } else {
+      if (selfMember != null) {
+        resolvedParticipantIds.add(selfMember.id);
+      }
+      for (final name in intent.specifiedParticipantNames) {
+        final query = name.toLowerCase().trim();
+        final match = members.where((m) =>
+            m.displayName.toLowerCase() == query ||
+            m.displayName.toLowerCase().startsWith('$query ') ||
+            m.displayName.toLowerCase().contains(query)).firstOrNull;
+
+        if (match != null && !resolvedParticipantIds.contains(match.id)) {
+          resolvedParticipantIds.add(match.id);
+        }
+      }
+    }
+
+    if (resolvedParticipantIds.isEmpty) {
+      resolvedParticipantIds.addAll(members.map((m) => m.id));
+      unresolved.add('participants');
+    }
+
+    // 3. Amount Validation
+    if (intent.amountInPaise <= 0) {
+      unresolved.add('amount');
+    }
+
+    return ExpenseDraft(
+      amountInPaise: intent.amountInPaise,
+      title: intent.title,
+      category: intent.category,
+      payerMemberId: resolvedPayerId,
+      payerName: resolvedPayerName,
+      participantMemberIds: resolvedParticipantIds,
+      splitType: intent.splitType,
+      confidence: unresolved.isEmpty ? intent.confidence : (intent.confidence * 0.6),
+      rawInput: transcript,
+      source: ExpenseDraftSource.voice,
+      unresolvedFields: unresolved,
+      candidatePayers: candidatePayers,
+      ambiguityMessage: unresolved.contains('payer_ambiguity')
+          ? 'Multiple members named "${intent.specifiedPayerName}" found in this trip.'
+          : (unresolved.contains('amount') ? 'Could not confidently detect the expense amount.' : null),
+    );
+  }
+
   static VoiceExpenseIntent parse(String transcript) {
     final text = transcript.trim();
     final lower = text.toLowerCase();
@@ -46,14 +145,14 @@ class VoiceIntentParser {
     // 3. Identify Payer
     bool paidBySelf = true;
     String? payerName;
-    if (lower.contains('maine') || lower.contains('i paid') || lower.contains('i spent') || lower.contains('my payment')) {
+    if (lower.contains('maine') || lower.contains('i paid') || lower.contains('i spent') || lower.contains('my payment') || lower.contains('mera payment')) {
       paidBySelf = true;
     } else {
-      // Check if someone else paid e.g., "Rahul ne", "Rahul paid"
-      final payerMatch = RegExp(r'([a-zA-Z]+)\s+(ne|paid|diye)', caseSensitive: false).firstMatch(text);
+      // Check if someone else paid e.g., "Rahul ne", "Rahul paid", "Rahul gave"
+      final payerMatch = RegExp(r'([a-zA-Z]+)\s+(?:ne|paid|diye|gave|spent)', caseSensitive: false).firstMatch(text);
       if (payerMatch != null && payerMatch.group(1) != null) {
         final candidate = payerMatch.group(1)!.trim();
-        if (candidate.toLowerCase() != 'i' && candidate.toLowerCase() != 'maine') {
+        if (candidate.toLowerCase() != 'i' && candidate.toLowerCase() != 'maine' && candidate.toLowerCase() != 'mera') {
           paidBySelf = false;
           payerName = candidate;
         }
@@ -63,16 +162,18 @@ class VoiceIntentParser {
     // 4. Identify Participants
     bool forAll = true;
     final specificParticipants = <String>[];
-    if (lower.contains('sabke liye') || lower.contains('for everyone') || lower.contains('for all') || lower.contains('sabke')) {
+    if (lower.contains('sabke liye') || lower.contains('for everyone') || lower.contains('for all') || lower.contains('sabke') || lower.contains('all members')) {
       forAll = true;
-    } else if (lower.contains('for me and ') || lower.contains('mere aur ')) {
+    } else if (lower.contains('for me and ') || lower.contains('mere aur ') || lower.contains('for ') || lower.contains('between ')) {
       forAll = false;
-      final partMatch = RegExp(r'(?:for me and|mere aur)\s+([a-zA-Z\s,]+)', caseSensitive: false).firstMatch(text);
+      final partMatch = RegExp(r'(?:for me and|mere aur|for|between)\s+([a-zA-Z\s,]+)', caseSensitive: false).firstMatch(text);
       if (partMatch != null && partMatch.group(1) != null) {
         final names = partMatch.group(1)!.split(RegExp(r'[,&]|\band\b|\baur\b'));
         for (final n in names) {
           final trimmed = n.trim();
-          if (trimmed.isNotEmpty) specificParticipants.add(trimmed);
+          if (trimmed.isNotEmpty && trimmed.toLowerCase() != 'everyone' && trimmed.toLowerCase() != 'all') {
+            specificParticipants.add(trimmed);
+          }
         }
       }
     }
@@ -122,8 +223,8 @@ class VoiceIntentParser {
       }
     }
 
-    // Check for standard digits (e.g. 6000, 850.50, ₹1,200)
-    final digitMatch = RegExp(r'(?:₹|rs\.?|inr|\$)?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)').firstMatch(text);
+    // Check for standard digits (e.g. 6000, 850.50, ₹1,200, 6000 rupees)
+    final digitMatch = RegExp(r'(?:₹|rs\.?|inr|\$)?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s*(?:rupees|rupee|inr|rs)?').firstMatch(text);
     if (digitMatch != null && digitMatch.group(1) != null) {
       final cleaned = digitMatch.group(1)!.replaceAll(',', '');
       final val = double.tryParse(cleaned);

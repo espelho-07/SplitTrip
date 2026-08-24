@@ -5,11 +5,13 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/surface_card.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/join_trip_viewmodel.dart';
+import 'qr_scanner_view.dart';
 import 'widgets/join_preview_sheet.dart';
 
 class JoinTripView extends StatefulWidget {
@@ -28,16 +30,32 @@ class _JoinTripViewState extends State<JoinTripView> {
     super.dispose();
   }
 
-  Future<void> _handlePreviewOrJoin() async {
+  Future<void> _handlePreviewOrJoin([String? directCode]) async {
     final joinVm = context.read<JoinTripViewModel>();
     final authVm = context.read<AuthViewModel>();
 
     final user = authVm.currentUser;
     if (user == null) return;
 
+    if (directCode != null) {
+      joinVm.setCode(directCode);
+      _codeController.text = directCode;
+    }
+
     final preview = await joinVm.fetchPreview();
     if (preview != null && mounted) {
       _showPreviewSheet(preview);
+    }
+  }
+
+  Future<void> _handleOpenQrScanner() async {
+    HapticHelper.medium();
+    final scannedCode = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const QrScannerView()),
+    );
+
+    if (scannedCode != null && scannedCode.isNotEmpty && mounted) {
+      _handlePreviewOrJoin(scannedCode);
     }
   }
 
@@ -162,32 +180,36 @@ class _JoinTripViewState extends State<JoinTripView> {
 
               const SizedBox(height: AppSpacing.xxl),
 
-              // QR Code Scan Interface
+              // QR Code Scan Action Card
               Center(
                 child: Column(
                   children: [
-                    Container(
-                      width: 140,
-                      height: 140,
-                      decoration: BoxDecoration(
-                        color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
-                        borderRadius: AppRadius.xlBorder,
-                        border: Border.all(
-                          color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
-                          width: 1.5,
+                    GestureDetector(
+                      onTap: _handleOpenQrScanner,
+                      child: Container(
+                        width: 140,
+                        height: 140,
+                        decoration: BoxDecoration(
+                          color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+                          borderRadius: AppRadius.xlBorder,
+                          border: Border.all(
+                            color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+                            width: 1.5,
+                          ),
                         ),
-                      ),
-                      alignment: Alignment.center,
-                      child: Icon(
-                        Icons.qr_code_2_rounded,
-                        size: 80,
-                        color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                        alignment: Alignment.center,
+                        child: Icon(
+                          Icons.qr_code_scanner_rounded,
+                          size: 72,
+                          color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                        ),
                       ),
                     ),
                     const SizedBox(height: AppSpacing.md),
-                    Text(
-                      'Or point camera at QR code invite',
-                      style: AppTypography.bodySmall(isDark: isDark),
+                    TextButton.icon(
+                      onPressed: _handleOpenQrScanner,
+                      icon: const Icon(Icons.camera_alt_outlined, size: 18),
+                      label: const Text('Scan QR Code Invite'),
                     ),
                   ],
                 ),
