@@ -1,6 +1,10 @@
 import 'dart:io';
 
+/// Application configuration and environment separation.
+/// Supports runtime overrides and compile-time `--dart-define` injection for Staging / Production.
 class AppConfig {
+  AppConfig._();
+
   static const String appName = 'Kith';
   static const String appVersion = '1.0.0';
 
@@ -8,7 +12,12 @@ class AppConfig {
   static const String deepLinkScheme = 'kith';
   static const String deepLinkHost = 'trip';
 
-  // Configurable base URL
+  // Compile-time environment definitions via --dart-define
+  static const String _envDefineApiUrl = String.fromEnvironment('API_URL');
+  static const String _envDefineWsUrl = String.fromEnvironment('WS_URL');
+  static const String environment = String.fromEnvironment('APP_ENV', defaultValue: 'development');
+
+  // Configurable runtime overrides (used in integration tests)
   static String? _overrideBaseUrl;
   static String? _overrideWsUrl;
 
@@ -19,8 +28,9 @@ class AppConfig {
 
   static String get baseUrl {
     if (_overrideBaseUrl != null) return _overrideBaseUrl!;
+    if (_envDefineApiUrl.isNotEmpty) return _envDefineApiUrl;
 
-    // Auto-detect Android emulator vs Desktop/Web/iOS
+    // Auto-detect Android emulator vs Desktop/Web/iOS for local dev
     try {
       if (Platform.isAndroid) {
         return 'http://10.0.2.2:4000/api';
@@ -33,6 +43,7 @@ class AppConfig {
 
   static String get wsUrl {
     if (_overrideWsUrl != null) return _overrideWsUrl!;
+    if (_envDefineWsUrl.isNotEmpty) return _envDefineWsUrl;
 
     try {
       if (Platform.isAndroid) {
@@ -45,6 +56,6 @@ class AppConfig {
   }
 
   static String buildInviteLink(String inviteCode) {
-    return 'kith://trip/join?code=$inviteCode';
+    return 'https://kith.app/join?code=$inviteCode';
   }
 }
