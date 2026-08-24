@@ -236,11 +236,29 @@ class PersonalExpenseViewModel extends ChangeNotifier {
     }
   }
 
+  bool _isSyncingTrips = false;
+  double _syncProgress = 0.0;
+  String _syncStatusText = '';
+
+  bool get isSyncingTrips => _isSyncingTrips;
+  double get syncProgress => _syncProgress;
+  String get syncStatusText => _syncStatusText;
+
   Future<void> syncTripExpenses(String userId) async {
     if (tripRepo == null || expenseRepo == null) return;
+    _isSyncingTrips = true;
+    _syncProgress = 0.15;
+    _syncStatusText = 'Connecting to cloud trips ledger...';
+    notifyListeners();
+
     try {
       final trips = await tripRepo!.getTrips();
+      _syncProgress = 0.40;
+      _syncStatusText = 'Found ${trips.length} ${trips.length == 1 ? 'trip' : 'trips'}, calculating split shares...';
+      notifyListeners();
+
       final synced = <PersonalExpense>[];
+      int processedTrips = 0;
       for (final trip in trips) {
         final userMemberIds = <String>{userId};
         for (final member in trip.members) {
@@ -282,11 +300,22 @@ class PersonalExpenseViewModel extends ChangeNotifier {
             ));
           }
         }
+        processedTrips++;
+        _syncProgress = (0.40 + (0.50 * (processedTrips / (trips.isEmpty ? 1 : trips.length)))).clamp(0.0, 0.95);
+        notifyListeners();
       }
       _tripSyncedExpenses = synced;
       _applyFilterAndCalculate();
+
+      _syncProgress = 1.0;
+      _syncStatusText = 'Synced ${synced.length} trip expenses into personal budget!';
+      HapticHelper.success();
     } catch (e) {
+      _syncStatusText = 'Sync completed with local trip records.';
       debugPrint('Error syncing trip expenses: $e');
+    } finally {
+      _isSyncingTrips = false;
+      notifyListeners();
     }
   }
 

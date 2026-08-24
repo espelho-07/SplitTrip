@@ -18,6 +18,7 @@ import 'widgets/add_personal_expense_sheet.dart';
 import 'widgets/personal_expense_detail_sheet.dart';
 import 'widgets/record_repayment_sheet.dart';
 import 'widgets/set_budget_dialog.dart';
+import 'widgets/trip_sync_progress_sheet.dart';
 
 class PersonalHomeTab extends StatelessWidget {
   const PersonalHomeTab({super.key});
@@ -320,7 +321,12 @@ class PersonalHomeTab extends StatelessWidget {
                 onTap: () {
                   final user = context.read<AuthViewModel>().currentUser;
                   if (user != null) {
-                    vm.toggleIncludeTripExpenses(user.id);
+                    if (!vm.includeTripExpenses) {
+                      TripSyncProgressSheet.show(context);
+                      vm.toggleIncludeTripExpenses(user.id);
+                    } else {
+                      vm.toggleIncludeTripExpenses(user.id);
+                    }
                   }
                 },
                 borderRadius: BorderRadius.circular(16),
@@ -340,24 +346,44 @@ class PersonalHomeTab extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        Icons.sync_alt_rounded,
-                        size: 13,
-                        color: vm.includeTripExpenses
-                            ? AppColors.emeraldPrimary
-                            : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        vm.includeTripExpenses ? 'Trips Synced' : 'Sync from Trips',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
+                      if (vm.isSyncingTrips) ...[
+                        const SizedBox(
+                          width: 10,
+                          height: 10,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.emeraldPrimary,
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          'Syncing ${(vm.syncProgress * 100).toInt()}%',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.emeraldPrimary,
+                          ),
+                        ),
+                      ] else ...[
+                        Icon(
+                          Icons.sync_alt_rounded,
+                          size: 13,
                           color: vm.includeTripExpenses
                               ? AppColors.emeraldPrimary
                               : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
                         ),
-                      ),
+                        const SizedBox(width: 5),
+                        Text(
+                          vm.includeTripExpenses ? 'Trips Synced' : 'Sync from Trips',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: vm.includeTripExpenses
+                                ? AppColors.emeraldPrimary
+                                : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
