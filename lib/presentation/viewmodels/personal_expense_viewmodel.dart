@@ -242,19 +242,41 @@ class PersonalExpenseViewModel extends ChangeNotifier {
       final trips = await tripRepo!.getTrips();
       final synced = <PersonalExpense>[];
       for (final trip in trips) {
-        final currentMember = trip.members.where((m) => m.userId == userId).firstOrNull;
+        final userMemberIds = <String>{userId};
+        for (final member in trip.members) {
+          if (member.userId == userId || member.id == userId) {
+            userMemberIds.add(member.id);
+            userMemberIds.add(member.userId);
+          }
+        }
+        if (trip.creatorId == userId && trip.members.isNotEmpty) {
+          userMemberIds.add(trip.members.first.id);
+          userMemberIds.add(trip.members.first.userId);
+        }
+
         final tripExpenses = await expenseRepo!.getExpenses(trip.id);
         for (final exp in tripExpenses) {
-          final isPayer = exp.paidById == userId || (currentMember != null && exp.paidById == currentMember.id);
-          if (isPayer) {
+          if (exp.isDeleted) continue;
+
+          int userSharePaise = 0;
+          final userSplits = exp.splits.where((s) => userMemberIds.contains(s.memberId)).toList();
+          if (userSplits.isNotEmpty) {
+            for (final s in userSplits) {
+              userSharePaise += s.amountInPaise;
+            }
+          } else if (userMemberIds.contains(exp.paidById)) {
+            userSharePaise = exp.amountInPaise;
+          }
+
+          if (userSharePaise > 0) {
             synced.add(PersonalExpense(
               id: 'trip_exp_${exp.id}',
               userId: userId,
               title: '${exp.title} (${trip.name})',
-              amountInPaise: exp.amountInPaise,
+              amountInPaise: userSharePaise,
               category: exp.category,
               date: exp.createdAt,
-              notes: 'From ${trip.emoji} ${trip.name}',
+              notes: 'Your share from ${trip.emoji} ${trip.name}',
               createdAt: exp.createdAt,
               updatedAt: exp.updatedAt,
             ));

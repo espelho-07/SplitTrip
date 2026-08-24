@@ -495,7 +495,7 @@ class _TripDetailViewState extends State<TripDetailView> {
                 trip,
                 balanceSummary,
                 userNetPaise,
-                _calculateUserPaidPaise(tripDetailVm.expenses, user?.id, trip),
+                _calculateUserSpentPaise(tripDetailVm.expenses, user?.id, trip),
                 isDark,
                 gradientColors,
               ),
@@ -549,7 +549,7 @@ class _TripDetailViewState extends State<TripDetailView> {
     );
   }
 
-  int _calculateUserPaidPaise(List<Expense> expenses, String? currentUserId, Trip trip) {
+  int _calculateUserSpentPaise(List<Expense> expenses, String? currentUserId, Trip trip) {
     if (currentUserId == null) return 0;
     final userMemberIds = <String>{currentUserId};
     for (final member in trip.members) {
@@ -563,21 +563,26 @@ class _TripDetailViewState extends State<TripDetailView> {
       userMemberIds.add(trip.members.first.userId);
     }
 
-    int total = 0;
+    int totalUserShare = 0;
     for (final exp in expenses) {
       if (exp.isDeleted) continue;
-      if (userMemberIds.contains(exp.paidById)) {
-        total += exp.amountInPaise;
+      final userSplits = exp.splits.where((s) => userMemberIds.contains(s.memberId)).toList();
+      if (userSplits.isNotEmpty) {
+        for (final s in userSplits) {
+          totalUserShare += s.amountInPaise;
+        }
+      } else if (userMemberIds.contains(exp.paidById)) {
+        totalUserShare += exp.amountInPaise;
       }
     }
-    return total;
+    return totalUserShare;
   }
 
   Widget _buildHeroTripCard(
     Trip trip,
     BalanceSummary balanceSummary,
     int userNetPaise,
-    int userPaidPaise,
+    int userSpentPaise,
     bool isDark,
     List<Color> gradientColors,
   ) {
@@ -702,7 +707,7 @@ class _TripDetailViewState extends State<TripDetailView> {
                       fit: BoxFit.scaleDown,
                       child: Text(
                         CurrencyFormatter.formatPaise(
-                          userPaidPaise,
+                          userSpentPaise,
                           currencyCode: trip.currencyCode,
                         ),
                         style: const TextStyle(
