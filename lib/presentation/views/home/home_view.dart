@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
@@ -12,6 +13,7 @@ import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/member_avatar.dart';
 import '../../../core/widgets/surface_card.dart';
 import '../../../data/services/local_storage_service.dart';
+import '../../../data/services/sync_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/personal_expense_viewmodel.dart';
@@ -115,7 +117,50 @@ class _HomeViewState extends State<HomeView> {
                   ),
                 ],
               ),
-              const SizedBox(height: AppSpacing.xl),
+              if (!user.isLinkedToAccount) ...[
+                const SizedBox(height: AppSpacing.md),
+                SurfaceCard(
+                  backgroundColor: AppColors.emeraldPrimary.withValues(alpha: 0.12),
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.shield_outlined, color: AppColors.emeraldPrimary, size: 18),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Guest Account (Not Linked)',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                                color: AppColors.emeraldPrimary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Link your account with Email so all your trips, expenses, and balances sync permanently across all your devices.',
+                        style: AppTypography.bodySmall(isDark: isDark),
+                      ),
+                      const SizedBox(height: 10),
+                      AppButton(
+                        text: 'Link & Secure Account',
+                        icon: Icons.link_rounded,
+                        isFullWidth: true,
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _showLinkAccountDialog();
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: AppSpacing.lg),
               Text(
                 'Recovery Key',
                 style: AppTypography.titleSmall(isDark: isDark),
@@ -157,19 +202,37 @@ class _HomeViewState extends State<HomeView> {
               ),
               const SizedBox(height: AppSpacing.md),
               AppButton(
-                text: 'Server & Cloud Sync',
-                icon: Icons.cloud_sync_outlined,
+                text: 'Sync All Data with Cloud',
+                icon: Icons.cloud_sync_rounded,
                 isFullWidth: true,
-                variant: AppButtonVariant.outline,
-                onPressed: () {
+                variant: AppButtonVariant.secondary,
+                onPressed: () async {
                   Navigator.pop(ctx);
-                  _showServerConfigDialog();
+                  final messenger = ScaffoldMessenger.of(context);
+                  messenger.showSnackBar(
+                    const SnackBar(content: Text('⟳ Syncing all trips & expenses with cloud...')),
+                  );
+                  final apiClient = context.read<ApiClient>();
+                  final syncService = context.read<SyncService>();
+                  final homeVm = context.read<HomeViewModel>();
+                  final personalVm = context.read<PersonalExpenseViewModel>();
+
+                  await syncService.flushQueue(apiClient);
+                  await homeVm.loadTrips(user.id);
+                  await personalVm.loadData(user.id);
+                  await personalVm.syncTripExpenses(user.id);
+
+                  if (mounted) {
+                    messenger.showSnackBar(
+                      const SnackBar(content: Text('🎉 Everything is up to date and in sync with cloud!')),
+                    );
+                  }
                 },
               ),
               const SizedBox(height: AppSpacing.sm),
               AppButton(
                 text: 'Restore / Switch Account',
-                icon: Icons.sync_rounded,
+                icon: Icons.vpn_key_rounded,
                 isFullWidth: true,
                 variant: AppButtonVariant.outline,
                 onPressed: () {
@@ -179,10 +242,21 @@ class _HomeViewState extends State<HomeView> {
               ),
               const SizedBox(height: AppSpacing.sm),
               AppButton(
+                text: 'Server & Cloud Settings',
+                icon: Icons.dns_outlined,
+                isFullWidth: true,
+                variant: AppButtonVariant.outline,
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _showServerConfigDialog();
+                },
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              AppButton(
                 text: 'Send Beta Feedback',
                 icon: Icons.feedback_outlined,
                 isFullWidth: true,
-                variant: AppButtonVariant.secondary,
+                variant: AppButtonVariant.outline,
                 onPressed: () {
                   Navigator.pop(ctx);
                   showModalBottomSheet(
@@ -202,6 +276,106 @@ class _HomeViewState extends State<HomeView> {
               ),
             ],
           ),
+        );
+      },
+    );
+  }
+
+  void _showLinkAccountDialog() {
+    final emailController = TextEditingController();
+    final nameController = TextEditingController(text: context.read<AuthViewModel>().currentUser?.displayName ?? '');
+    final authVm = context.read<AuthViewModel>();
+    final homeVm = context.read<HomeViewModel>();
+    final personalVm = context.read<PersonalExpenseViewModel>();
+    final syncService = context.read<SyncService>();
+    final apiClient = context.read<ApiClient>();
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.link_rounded, color: AppColors.emeraldPrimary, size: 22),
+              SizedBox(width: 8),
+              Text('Link & Sync Account', style: TextStyle(fontSize: 18)),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Link your guest session to your email. All your existing trips, expenses, lending records, and budgets will be permanently backed up to the cloud.',
+                  style: TextStyle(fontSize: 13),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Display Name',
+                    prefixIcon: Icon(Icons.person_outline, size: 20),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'Email Address',
+                    hintText: 'you@example.com',
+                    prefixIcon: Icon(Icons.email_outlined, size: 20),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final email = emailController.text.trim();
+                final name = nameController.text.trim();
+                if (email.isEmpty || !email.contains('@')) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please enter a valid email address.')),
+                  );
+                  return;
+                }
+                Navigator.pop(ctx);
+
+                final messenger = ScaffoldMessenger.of(context);
+                messenger.showSnackBar(
+                  const SnackBar(content: Text('Linking account & syncing data with cloud...')),
+                );
+
+                final updated = await authVm.linkAccount(email: email, displayName: name.isEmpty ? null : name);
+                if (updated != null) {
+                  await syncService.flushQueue(apiClient);
+                  await homeVm.loadTrips(updated.id);
+                  await personalVm.loadData(updated.id);
+                  await personalVm.syncTripExpenses(updated.id);
+
+                  if (mounted) {
+                    messenger.showSnackBar(
+                      SnackBar(content: Text('🎉 Account linked to ${updated.email}! All trips & finances synced.')),
+                    );
+                  }
+                } else {
+                  if (mounted) {
+                    messenger.showSnackBar(
+                      SnackBar(content: Text(authVm.errorMessage ?? 'Could not link account.')),
+                    );
+                  }
+                }
+              },
+              child: const Text('Link & Sync All'),
+            ),
+          ],
         );
       },
     );
@@ -388,11 +562,15 @@ class _HomeViewState extends State<HomeView> {
                 final restoredUser = await authVm.recoverSession(key);
                 if (mounted) {
                   if (restoredUser != null) {
+                    final syncService = context.read<SyncService>();
+                    final apiClient = context.read<ApiClient>();
+                    await syncService.flushQueue(apiClient);
                     await homeVm.loadTrips(restoredUser.id);
                     await personalVm.loadData(restoredUser.id);
+                    await personalVm.syncTripExpenses(restoredUser.id);
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('🎉 Restored account for "${restoredUser.displayName}"!')),
+                        SnackBar(content: Text('🎉 Restored account for "${restoredUser.displayName}" & synced all trips!')),
                       );
                     }
                   } else {

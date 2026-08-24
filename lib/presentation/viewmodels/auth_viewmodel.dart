@@ -71,4 +71,29 @@ class AuthViewModel extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  Future<GuestUser?> linkAccount({
+    required String email,
+    String? displayName,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final user = await userRepo.linkAccount(
+        email: email,
+        provider: 'email',
+        displayName: displayName,
+      );
+      _currentUser = user;
+      return user;
+    } catch (e) {
+      _errorMessage = 'Could not link account: $e';
+      return null;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
 }

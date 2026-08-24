@@ -179,6 +179,53 @@ class AuthService {
     };
   }
 
+  linkAccount(userId, { email, displayName }) {
+    if (!userId) {
+      throw AppError.unauthorized('User ID required');
+    }
+    if (!email || !email.includes('@')) {
+      throw AppError.badRequest('A valid email address is required');
+    }
+
+    let user = db.get('users', userId);
+    if (!user) {
+      user = {
+        id: userId,
+        displayName: displayName ? displayName.trim() : 'Traveler',
+        avatarUrl: null,
+        recoveryKeyHash: null,
+        isGuest: false,
+        email: email.trim().toLowerCase(),
+        createdAt: new Date().toISOString(),
+        lastActiveAt: new Date().toISOString(),
+      };
+      db.insert('users', user);
+    } else {
+      const updates = {
+        email: email.trim().toLowerCase(),
+        isGuest: false,
+        lastActiveAt: new Date().toISOString(),
+      };
+      if (displayName && displayName.trim()) {
+        updates.displayName = displayName.trim();
+      }
+      db.update('users', userId, updates);
+      user = db.get('users', userId);
+    }
+
+    return {
+      user: {
+        id: user.id,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl,
+        email: user.email,
+        isGuest: user.isGuest,
+        isLinkedToAccount: true,
+        createdAt: user.createdAt,
+      },
+    };
+  }
+
   getProfile(userId) {
     const user = db.get('users', userId);
     if (!user) {

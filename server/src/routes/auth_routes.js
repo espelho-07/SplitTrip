@@ -67,6 +67,17 @@ router.post('/sync-guest', (req, res, next) => {
   }
 });
 
+// POST /api/auth/link - Link guest account to email and permanent credentials
+router.post('/link', authMiddleware, (req, res, next) => {
+  try {
+    const { email, displayName } = req.body;
+    const result = authService.linkAccount(req.user.id, { email, displayName });
+    res.status(200).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
 // GET /api/auth/me - Current authenticated user profile
 router.get('/me', authMiddleware, (req, res, next) => {
   try {

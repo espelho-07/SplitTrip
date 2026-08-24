@@ -148,19 +148,38 @@ class AuthService {
     return null;
   }
 
-  /// Links an existing guest identity to a permanent account (e.g. Google Sign-In)
+  /// Links an existing guest identity to a permanent account (e.g. Google Sign-In or Email)
   Future<GuestUser> linkToAccount({
     required String email,
     required String provider,
+    String? displayName,
   }) async {
     final current = getCurrentUser();
     if (current == null) {
       throw StateError('No active guest session to link');
     }
 
+    try {
+      final res = await apiClient.post('/auth/link', body: {
+        'email': email,
+        'provider': provider,
+        ...? (displayName != null ? {'displayName': displayName} : null),
+      });
+
+      if (res is Map<String, dynamic> && res.containsKey('user')) {
+        final userData = res['user'] as Map<String, dynamic>;
+        final user = GuestUser.fromJson(userData);
+        await storage.saveUser(user.toJson());
+        return user;
+      }
+    } catch (_) {
+      // Offline fallback: update local storage
+    }
+
     final updated = current.copyWith(
       isLinkedToAccount: true,
       email: email,
+      displayName: displayName ?? current.displayName,
     );
 
     await storage.saveUser(updated.toJson());

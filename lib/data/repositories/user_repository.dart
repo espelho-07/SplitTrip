@@ -27,10 +27,12 @@ class UserRepository {
   Future<GuestUser> linkAccount({
     required String email,
     required String provider,
+    String? displayName,
   }) {
     return authService.linkToAccount(
       email: email,
       provider: provider,
+      displayName: displayName,
     );
   }
 }
