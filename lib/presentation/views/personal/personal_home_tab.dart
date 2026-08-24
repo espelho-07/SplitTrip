@@ -139,12 +139,60 @@ class PersonalHomeTab extends StatelessWidget {
           child: Row(
             children: PersonalTimeFilter.values.map((filter) {
               final isSelected = vm.timeFilter == filter;
+              String chipLabel = filter.label;
+              if (filter == PersonalTimeFilter.custom && vm.customDateRange != null && isSelected) {
+                final startStr = DateFormat('d MMM').format(vm.customDateRange!.start);
+                final endStr = DateFormat('d MMM').format(vm.customDateRange!.end);
+                chipLabel = 'Custom: $startStr - $endStr';
+              }
+
               return Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: FilterChip(
-                  label: Text(filter.label),
+                  label: Text(chipLabel),
                   selected: isSelected,
-                  onSelected: (_) => vm.setTimeFilter(filter),
+                  onSelected: (_) async {
+                    if (filter == PersonalTimeFilter.custom) {
+                      final now = DateTime.now();
+                      final initialRange = vm.customDateRange ?? DateTimeRange(
+                        start: DateTime(now.year, now.month, 1),
+                        end: now,
+                      );
+                      final picked = await showDateRangePicker(
+                        context: context,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime(2030),
+                        initialDateRange: initialRange,
+                        builder: (ctx, child) {
+                          return Theme(
+                            data: isDark
+                                ? ThemeData.dark().copyWith(
+                                    colorScheme: const ColorScheme.dark(
+                                      primary: AppColors.emeraldPrimary,
+                                      onPrimary: Colors.white,
+                                      surface: AppColors.darkSurfaceCard,
+                                      onSurface: Colors.white,
+                                    ),
+                                  )
+                                : ThemeData.light().copyWith(
+                                    colorScheme: const ColorScheme.light(
+                                      primary: AppColors.emeraldPrimary,
+                                      onPrimary: Colors.white,
+                                      surface: Colors.white,
+                                      onSurface: Colors.black87,
+                                    ),
+                                  ),
+                            child: child!,
+                          );
+                        },
+                      );
+                      if (picked != null) {
+                        vm.setCustomDateRange(picked);
+                      }
+                    } else {
+                      vm.setTimeFilter(filter);
+                    }
+                  },
                   selectedColor: AppColors.emeraldPrimary.withValues(alpha: 0.18),
                   checkmarkColor: AppColors.emeraldPrimary,
                   labelStyle: TextStyle(

@@ -551,10 +551,22 @@ class _TripDetailViewState extends State<TripDetailView> {
 
   int _calculateUserPaidPaise(List<Expense> expenses, String? currentUserId, Trip trip) {
     if (currentUserId == null) return 0;
-    final currentMember = trip.members.where((m) => m.userId == currentUserId).firstOrNull;
+    final userMemberIds = <String>{currentUserId};
+    for (final member in trip.members) {
+      if (member.userId == currentUserId || member.id == currentUserId) {
+        userMemberIds.add(member.id);
+        userMemberIds.add(member.userId);
+      }
+    }
+    if (trip.creatorId == currentUserId && trip.members.isNotEmpty) {
+      userMemberIds.add(trip.members.first.id);
+      userMemberIds.add(trip.members.first.userId);
+    }
+
     int total = 0;
     for (final exp in expenses) {
-      if (exp.paidById == currentUserId || (currentMember != null && exp.paidById == currentMember.id)) {
+      if (exp.isDeleted) continue;
+      if (userMemberIds.contains(exp.paidById)) {
         total += exp.amountInPaise;
       }
     }
