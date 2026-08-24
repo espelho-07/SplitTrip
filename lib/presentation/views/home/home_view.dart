@@ -19,6 +19,7 @@ import '../../../domain/models/trip.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/theme_viewmodel.dart';
+import '../settings/widgets/beta_feedback_sheet.dart';
 
 class HomeView extends StatefulWidget {
   const HomeView({super.key});
@@ -130,11 +131,27 @@ class _HomeViewState extends State<HomeView> {
                   ],
                 ),
               ),
-              const SizedBox(height: AppSpacing.xl),
+              const SizedBox(height: AppSpacing.lg),
+              AppButton(
+                text: 'Send Beta Feedback',
+                icon: Icons.feedback_outlined,
+                isFullWidth: true,
+                variant: AppButtonVariant.secondary,
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => const BetaFeedbackSheet(currentScreenContext: 'Home Profile'),
+                  );
+                },
+              ),
+              const SizedBox(height: AppSpacing.sm),
               AppButton(
                 text: 'Done',
                 isFullWidth: true,
-                variant: AppButtonVariant.secondary,
+                variant: AppButtonVariant.ghost,
                 onPressed: () => Navigator.pop(ctx),
               ),
             ],
