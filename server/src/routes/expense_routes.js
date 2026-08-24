@@ -67,6 +67,33 @@ router.post('/', (req, res, next) => {
   }
 });
 
+// PUT /api/trips/:tripId/expenses/:expenseId
+router.put('/:expenseId', (req, res, next) => {
+  try {
+    const { title, amountInPaise, category, paidById, splitType, splits, voiceTranscript, receiptUrl } = req.body;
+    const result = expenseService.updateExpense(
+      req.user,
+      req.params.tripId,
+      req.params.expenseId,
+      {
+        title,
+        amountInPaise,
+        category,
+        paidById,
+        splitType,
+        splits,
+        voiceTranscript,
+        receiptUrl,
+      },
+      realtimeHub
+    );
+
+    res.status(200).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
 // DELETE /api/trips/:tripId/expenses/:expenseId
 router.delete('/:expenseId', (req, res, next) => {
   try {

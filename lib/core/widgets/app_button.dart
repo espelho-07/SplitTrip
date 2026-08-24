@@ -14,6 +14,7 @@ class AppButton extends StatefulWidget {
   final bool isLoading;
   final bool isFullWidth;
   final double height;
+  final EdgeInsetsGeometry? padding;
 
   const AppButton({
     super.key,
@@ -24,6 +25,7 @@ class AppButton extends StatefulWidget {
     this.isLoading = false,
     this.isFullWidth = false,
     this.height = 52.0,
+    this.padding,
   });
 
   @override
@@ -135,9 +137,13 @@ class _AppButtonState extends State<AppButton> with SingleTickerProviderStateMix
                 Icon(widget.icon, size: 18, color: textColor),
                 const SizedBox(width: 8),
               ],
-              Text(
-                widget.text,
-                style: AppTypography.buttonText(color: textColor),
+              Flexible(
+                child: Text(
+                  widget.text,
+                  style: AppTypography.buttonText(color: textColor),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
               ),
             ],
           );
@@ -157,7 +163,7 @@ class _AppButtonState extends State<AppButton> with SingleTickerProviderStateMix
         child: Container(
           height: widget.height,
           width: widget.isFullWidth ? double.infinity : null,
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding: widget.padding ?? const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
             color: backgroundColor,
             borderRadius: AppRadius.mdBorder,

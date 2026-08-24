@@ -78,6 +78,27 @@ class ApiClient {
     }
   }
 
+  Future<dynamic> put(String path, {dynamic body}) async {
+    try {
+      final uri = _buildUri(path);
+      final response = await _httpClient
+          .put(
+            uri,
+            headers: _buildHeaders(),
+            body: body != null ? jsonEncode(body) : null,
+          )
+          .timeout(const Duration(seconds: 12));
+      return _processResponse(response);
+    } on SocketException catch (_) {
+      throw const NetworkException();
+    } on TimeoutException catch (_) {
+      throw const NetworkException(message: 'Request timed out. Please try again.');
+    } catch (e) {
+      if (e is ApiException) rethrow;
+      throw NetworkException(message: e.toString());
+    }
+  }
+
   Future<dynamic> patch(String path, {dynamic body}) async {
     try {
       final uri = _buildUri(path);

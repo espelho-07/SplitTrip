@@ -92,7 +92,42 @@ class TripService {
       }
     }
 
+    this.logActivity(tripId, {
+      type: 'trip_created',
+      actorId: user.id,
+      actorName: user.displayName,
+      description: `${user.displayName} created the trip "${name.trim()}"`,
+      metadata: { tripId, emoji: trip.emoji },
+    });
+
     return this._enrichTrip(trip);
+  }
+
+  logActivity(tripId, { type, actorId, actorName, description, metadata = {} }) {
+    const id = `act_${crypto.randomUUID().replace(/-/g, '').substring(0, 12)}`;
+    const activity = {
+      id,
+      tripId,
+      type, // 'trip_created', 'member_joined', 'expense_added', 'expense_updated', 'expense_deleted', 'settlement_recorded', 'lifecycle_updated'
+      actorId,
+      actorName: actorName || 'Member',
+      description,
+      metadata,
+      createdAt: new Date().toISOString(),
+    };
+    db.insert('activity_logs', activity);
+    return activity;
+  }
+
+  getActivityLogs(tripId, userId) {
+    const trip = db.get('trips', tripId);
+    if (!trip) throw AppError.notFound('Trip not found');
+
+    const authMember = db.findOne('trip_members', (m) => m.tripId === tripId && m.userId === userId);
+    if (!authMember) throw AppError.forbidden('Not authorized to view activity logs for this trip');
+
+    const logs = db.find('activity_logs', (a) => a.tripId === tripId);
+    return logs.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }
 
   getTripById(tripId, userId) {
@@ -141,12 +176,13 @@ class TripService {
     const members = this._getMembersForTrip(trip.id);
 
     return {
+      id: trip.id,
       tripId: trip.id,
       name: trip.name,
       emoji: trip.emoji,
       coverGradientIndex: trip.coverGradientIndex,
       currencyCode: trip.currencyCode,
-      creatorName: creator ? creator.displayName : 'Trip Creator',
+      creatorName: creator?.displayName || 'A Kith user',
       memberCount: members.length,
       lifecycleState: trip.lifecycleState,
       inviteCode: trip.inviteCode,
@@ -190,6 +226,14 @@ class TripService {
     db.insert('trip_members', newMember);
     db.update('trips', trip.id, { updatedAt: now });
 
+    this.logActivity(trip.id, {
+      type: 'member_joined',
+      actorId: user.id,
+      actorName: user.displayName,
+      description: `${user.displayName} joined the trip`,
+      metadata: { memberId: newMember.id },
+    });
+
     const enriched = this._enrichTrip(trip);
 
     if (realtimeHub) {
@@ -232,6 +276,14 @@ class TripService {
     db.insert('trip_members', newMember);
     db.update('trips', tripId, { updatedAt: now });
 
+    this.logActivity(tripId, {
+      type: 'member_joined',
+      actorId: currentUserId,
+      actorName: authMember.displayName,
+      description: `${authMember.displayName} added ${displayName.trim()} to the trip`,
+      metadata: { memberId: newMember.id },
+    });
+
     const enriched = this._enrichTrip(trip);
 
     if (realtimeHub) {
@@ -266,6 +318,14 @@ class TripService {
     const updated = db.update('trips', tripId, {
       lifecycleState: newLifecycle,
       updatedAt: now,
+    });
+
+    this.logActivity(tripId, {
+      type: 'lifecycle_updated',
+      actorId: currentUserId,
+      actorName: authMember.displayName,
+      description: `${authMember.displayName} changed trip state to ${newLifecycle.toUpperCase()}`,
+      metadata: { lifecycleState: newLifecycle },
     });
 
     const enriched = this._enrichTrip(updated);

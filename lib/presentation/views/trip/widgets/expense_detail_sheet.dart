@@ -19,6 +19,7 @@ class ExpenseDetailSheet extends StatelessWidget {
   final Expense expense;
   final Trip trip;
   final String currentUserId;
+  final VoidCallback? onEdit;
   final VoidCallback? onDelete;
 
   const ExpenseDetailSheet({
@@ -26,6 +27,7 @@ class ExpenseDetailSheet extends StatelessWidget {
     required this.expense,
     required this.trip,
     required this.currentUserId,
+    this.onEdit,
     this.onDelete,
   });
 
@@ -227,23 +229,38 @@ class ExpenseDetailSheet extends StatelessWidget {
           const SizedBox(height: AppSpacing.xl),
 
           // Actions
-          if (canDelete && onDelete != null) ...[
-            AppButton(
-              text: 'Delete Expense',
-              variant: AppButtonVariant.danger,
-              icon: Icons.delete_outline_rounded,
-              isFullWidth: true,
-              onPressed: () {
-                HapticHelper.medium();
-                _confirmDelete(context);
-              },
-            ),
-            const SizedBox(height: AppSpacing.sm),
+          if (canDelete) ...[
+            if (onEdit != null) ...[
+              AppButton(
+                text: 'Edit Expense',
+                variant: AppButtonVariant.secondary,
+                icon: Icons.edit_note_rounded,
+                isFullWidth: true,
+                onPressed: () {
+                  Navigator.pop(context);
+                  onEdit?.call();
+                },
+              ),
+              const SizedBox(height: AppSpacing.sm),
+            ],
+            if (onDelete != null) ...[
+              AppButton(
+                text: 'Delete Expense',
+                variant: AppButtonVariant.danger,
+                icon: Icons.delete_outline_rounded,
+                isFullWidth: true,
+                onPressed: () {
+                  HapticHelper.medium();
+                  _confirmDelete(context);
+                },
+              ),
+              const SizedBox(height: AppSpacing.sm),
+            ],
           ],
 
           AppButton(
             text: 'Close',
-            variant: AppButtonVariant.secondary,
+            variant: AppButtonVariant.ghost,
             isFullWidth: true,
             onPressed: () => Navigator.pop(context),
           ),

@@ -25,6 +25,8 @@ import '../../../domain/services/trip_export_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/trip_detail_viewmodel.dart';
+import '../add_expense/add_expense_view.dart';
+import 'widgets/activity_log_sheet.dart';
 import 'widgets/expense_detail_sheet.dart';
 import 'widgets/settlement_sheet.dart';
 import 'widgets/trip_qr_sheet.dart';
@@ -243,6 +245,24 @@ class _TripDetailViewState extends State<TripDetailView> {
         expense: expense,
         trip: trip,
         currentUserId: currentUserId,
+        onEdit: () async {
+          final updated = await Navigator.of(context).push<bool>(
+            MaterialPageRoute(
+              builder: (_) => AddExpenseView(
+                tripId: trip.id,
+                existingExpense: expense,
+              ),
+            ),
+          );
+          if (updated == true && mounted) {
+            await tripDetailVm.refresh(currentUserId);
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Updated "${expense.title}"')),
+              );
+            }
+          }
+        },
         onDelete: () async {
           await tripDetailVm.deleteExpense(expense.id, currentUserId);
           if (mounted) {
@@ -251,6 +271,23 @@ class _TripDetailViewState extends State<TripDetailView> {
             );
           }
         },
+      ),
+    );
+  }
+
+  void _showActivityLogsSheet() {
+    final tripDetailVm = context.read<TripDetailViewModel>();
+    tripDetailVm.fetchActivityLogs();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Consumer<TripDetailViewModel>(
+        builder: (context, vm, _) => ActivityLogSheet(
+          logs: vm.activityLogs,
+          isLoading: vm.isLoadingActivity,
+          onRefresh: vm.fetchActivityLogs,
+        ),
       ),
     );
   }
@@ -398,6 +435,11 @@ class _TripDetailViewState extends State<TripDetailView> {
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.history_rounded, size: 20),
+            tooltip: 'Activity Logs',
+            onPressed: _showActivityLogsSheet,
+          ),
           IconButton(
             icon: const Icon(Icons.file_download_outlined, size: 20),
             tooltip: 'Export Financials',
@@ -1040,8 +1082,13 @@ class _TripDetailViewState extends State<TripDetailView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Personal Balances Section (Pairwise "What you owe / What they owe you")
+        _buildPersonalBalancesSection(trip, balanceSummary, isDark, currentUserId),
+
+        const SizedBox(height: AppSpacing.lg),
+
         Text(
-          'Member Net Balances',
+          'All Member Net Balances',
           style: AppTypography.titleSmall(isDark: isDark),
         ),
         const SizedBox(height: AppSpacing.sm),
@@ -1147,6 +1194,188 @@ class _TripDetailViewState extends State<TripDetailView> {
             icon: Icons.payments_outlined,
             isFullWidth: true,
             onPressed: _showSettlementSheet,
+          ),
+      ],
+    );
+  }
+
+  Widget _buildPersonalBalancesSection(
+    Trip trip,
+    BalanceSummary balanceSummary,
+    bool isDark,
+    String currentUserId,
+  ) {
+    final otherMembers = trip.members.where((m) => m.userId != currentUserId).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.person_pin_rounded, size: 18, color: AppColors.emeraldPrimary),
+            const SizedBox(width: 8),
+            Text(
+              'Your Personal Balances',
+              style: AppTypography.titleSmall(isDark: isDark),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Exact breakdown of what you owe to and receive from each person',
+          style: AppTypography.bodySmall(isDark: isDark),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        if (otherMembers.isEmpty)
+          SurfaceCard(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Icon(Icons.people_outline_rounded, color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'No other members yet. Invite friends to start splitting!',
+                    style: TextStyle(fontSize: 13, color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: otherMembers.length,
+            separatorBuilder: (context, index) => const SizedBox(height: AppSpacing.sm),
+            itemBuilder: (context, index) {
+              final member = otherMembers[index];
+
+              // What you owe this member
+              final oweTransfer = balanceSummary.debtsToPay.where((d) => d.toMemberId == member.id).firstOrNull;
+              final youOwePaise = oweTransfer?.amountInPaise ?? 0;
+
+              // What this member owes you
+              final receiveTransfer = balanceSummary.debtsToReceive.where((d) => d.fromMemberId == member.id).firstOrNull;
+              final theyOwePaise = receiveTransfer?.amountInPaise ?? 0;
+
+              final bool youOwe = youOwePaise > 0;
+              final bool theyOwe = theyOwePaise > 0;
+
+              final Color cardHighlightColor = youOwe
+                  ? (isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight)
+                  : (theyOwe
+                      ? (isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight)
+                      : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted));
+
+              return SurfaceCard(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
+                  children: [
+                    MemberAvatar(
+                      name: member.displayName,
+                      isCreator: member.isCreator,
+                      size: 38,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            member.displayName,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                              color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              Icon(
+                                youOwe
+                                    ? Icons.arrow_upward_rounded
+                                    : (theyOwe ? Icons.arrow_downward_rounded : Icons.check_circle_outline_rounded),
+                                size: 14,
+                                color: cardHighlightColor,
+                              ),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  youOwe
+                                      ? 'You owe ${CurrencyFormatter.formatPaise(youOwePaise, currencyCode: trip.currencyCode)}'
+                                      : (theyOwe
+                                          ? 'Owes you ${CurrencyFormatter.formatPaise(theyOwePaise, currencyCode: trip.currencyCode)}'
+                                          : 'Settled up'),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: cardHighlightColor,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (youOwe)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: (isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight).withValues(alpha: 0.15),
+                          borderRadius: AppRadius.smBorder,
+                        ),
+                        child: Text(
+                          CurrencyFormatter.formatPaise(youOwePaise, currencyCode: trip.currencyCode),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                            color: isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight,
+                          ),
+                        ),
+                      )
+                    else if (theyOwe)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: (isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight).withValues(alpha: 0.15),
+                          borderRadius: AppRadius.smBorder,
+                        ),
+                        child: Text(
+                          CurrencyFormatter.formatPaise(theyOwePaise, currencyCode: trip.currencyCode),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                            color: isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight,
+                          ),
+                        ),
+                      )
+                    else
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+                          borderRadius: AppRadius.smBorder,
+                        ),
+                        child: Text(
+                          '₹0',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                            color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            },
           ),
       ],
     );

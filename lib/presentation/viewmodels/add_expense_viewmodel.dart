@@ -36,6 +36,9 @@ class AddExpenseViewModel extends ChangeNotifier {
   String _voiceTranscript = '';
   VoiceExpenseIntent? _parsedIntent;
   ExpenseDraft? _activeDraft;
+  bool _isEditMode = false;
+  String? _editingExpenseId;
+  DateTime? _createdAt;
 
   bool _isSaving = false;
   String? _errorMessage;
@@ -43,6 +46,8 @@ class AddExpenseViewModel extends ChangeNotifier {
   AddExpenseViewModel({required this.expenseRepo});
 
   int get currentTab => _currentTab;
+  bool get isEditMode => _isEditMode;
+  String? get editingExpenseId => _editingExpenseId;
   String get title => _title;
   int get amountInPaise => _amountInPaise;
   ExpenseCategory get category => _category;
@@ -52,6 +57,10 @@ class AddExpenseViewModel extends ChangeNotifier {
   Map<String, int> get exactAmountsInPaise => _exactAmountsInPaise;
   Map<String, int> get shares => _shares;
   Map<String, double> get percentages => _percentages;
+
+  int get exactAllocatedPaise => _selectedParticipantMemberIds.fold(0, (sum, id) => sum + (_exactAmountsInPaise[id] ?? 0));
+  int get exactRemainingPaise => _amountInPaise - exactAllocatedPaise;
+  double get totalAllocatedPercentage => _selectedParticipantMemberIds.fold(0.0, (sum, id) => sum + (_percentages[id] ?? 0.0));
 
   bool get isListening => _isListening;
   String get voiceTranscript => _voiceTranscript;
@@ -72,6 +81,10 @@ class AddExpenseViewModel extends ChangeNotifier {
     required Trip trip,
     required String currentUserId,
   }) {
+    _isEditMode = false;
+    _editingExpenseId = null;
+    _createdAt = null;
+
     // Default payer to current user
     final currentMember = trip.members.where((m) => m.userId == currentUserId).firstOrNull;
     _paidById = currentMember?.id ?? (trip.members.isNotEmpty ? trip.members.first.id : '');
@@ -96,6 +109,54 @@ class AddExpenseViewModel extends ChangeNotifier {
     _splitType = SplitType.equal;
     _isListening = false;
     _voiceTranscript = '';
+    _parsedIntent = null;
+    _activeDraft = null;
+    _errorMessage = null;
+
+    notifyListeners();
+  }
+
+  void initForEdit({
+    required Expense expense,
+    required Trip trip,
+    required String currentUserId,
+  }) {
+    _isEditMode = true;
+    _editingExpenseId = expense.id;
+    _createdAt = expense.createdAt;
+    _currentTab = 2; // Always open Manual tab for editing
+
+    _title = expense.title;
+    _amountInPaise = expense.amountInPaise;
+    _category = expense.category;
+    _paidById = expense.paidById;
+    _splitType = expense.splitType;
+    _voiceTranscript = expense.voiceTranscript ?? '';
+
+    _selectedParticipantMemberIds.clear();
+    _shares.clear();
+    _percentages.clear();
+    _exactAmountsInPaise.clear();
+
+    // Initialize all trip members defaults
+    for (final member in trip.members) {
+      _shares[member.id] = 1;
+      _percentages[member.id] = 100.0 / (trip.members.isEmpty ? 1 : trip.members.length);
+    }
+
+    // Populate split allocations from existing expense
+    for (final split in expense.splits) {
+      _selectedParticipantMemberIds.add(split.memberId);
+      _exactAmountsInPaise[split.memberId] = split.amountInPaise;
+      if (split.shares != null) _shares[split.memberId] = split.shares!;
+      if (split.percentage != null) {
+        _percentages[split.memberId] = split.percentage!.toDouble();
+      } else if (expense.amountInPaise > 0) {
+        _percentages[split.memberId] = (split.amountInPaise / expense.amountInPaise) * 100.0;
+      }
+    }
+
+    _isListening = false;
     _parsedIntent = null;
     _activeDraft = null;
     _errorMessage = null;
@@ -140,7 +201,12 @@ class AddExpenseViewModel extends ChangeNotifier {
   }
 
   void setMemberExactAmount(String memberId, int paise) {
-    _exactAmountsInPaise[memberId] = paise;
+    _exactAmountsInPaise[memberId] = paise < 0 ? 0 : paise;
+    notifyListeners();
+  }
+
+  void setMemberPercentage(String memberId, double percent) {
+    _percentages[memberId] = percent < 0 ? 0 : percent;
     notifyListeners();
   }
 
@@ -258,7 +324,7 @@ class AddExpenseViewModel extends ChangeNotifier {
     final isValidSum = MoneyEngine.validateSplits(_amountInPaise, splits);
 
     if (!isValidSum) {
-      _errorMessage = 'Split total must equal total expense amount';
+      _errorMessage = 'Split total must strictly equal total expense amount';
       notifyListeners();
       return null;
     }
@@ -268,22 +334,41 @@ class AddExpenseViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final expense = Expense(
-        id: _uuid.v4(),
-        tripId: tripId,
-        title: _title.trim(),
-        amountInPaise: _amountInPaise,
-        category: _category,
-        paidById: _paidById,
-        splits: splits,
-        splitType: _splitType,
-        voiceTranscript: _voiceTranscript.isNotEmpty ? _voiceTranscript : null,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      );
+      if (_isEditMode && _editingExpenseId != null) {
+        final updatedExpense = Expense(
+          id: _editingExpenseId!,
+          tripId: tripId,
+          title: _title.trim(),
+          amountInPaise: _amountInPaise,
+          category: _category,
+          paidById: _paidById,
+          splits: splits,
+          splitType: _splitType,
+          voiceTranscript: _voiceTranscript.isNotEmpty ? _voiceTranscript : null,
+          createdAt: _createdAt ?? DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
 
-      final saved = await expenseRepo.addExpense(expense);
-      return saved;
+        final saved = await expenseRepo.updateExpense(updatedExpense);
+        return saved;
+      } else {
+        final expense = Expense(
+          id: _uuid.v4(),
+          tripId: tripId,
+          title: _title.trim(),
+          amountInPaise: _amountInPaise,
+          category: _category,
+          paidById: _paidById,
+          splits: splits,
+          splitType: _splitType,
+          voiceTranscript: _voiceTranscript.isNotEmpty ? _voiceTranscript : null,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+
+        final saved = await expenseRepo.addExpense(expense);
+        return saved;
+      }
     } catch (e) {
       _errorMessage = e.toString();
       return null;

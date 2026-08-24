@@ -118,4 +118,14 @@ router.get('/:id/settlements', (req, res, next) => {
   }
 });
 
+// GET /api/trips/:id/activity - Get chronological activity logs
+router.get('/:id/activity', (req, res, next) => {
+  try {
+    const logs = tripService.getActivityLogs(req.params.id, req.user.id);
+    res.status(200).json({ data: logs });
+  } catch (e) {
+    next(e);
+  }
+});
+
 module.exports = router;

@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 import '../../core/network/api_client.dart';
 import '../../core/network/realtime_client.dart';
 import '../../domain/enums/trip_lifecycle.dart';
+import '../../domain/models/activity_log.dart';
 import '../../domain/models/guest_user.dart';
 import '../../domain/models/trip.dart';
 import '../../domain/models/trip_member.dart';
@@ -317,6 +318,21 @@ class TripRepository {
     await storage.saveTrips(trips.map((t) => t.toJson()).toList());
 
     return updatedTrip;
+  }
+
+  /// Fetches chronological audit activity logs for the trip.
+  Future<List<ActivityLog>> getActivityLogs(String tripId) async {
+    try {
+      final res = await apiClient.get('/trips/$tripId/activity');
+      if (res is List) {
+        return res
+            .map((item) => ActivityLog.fromJson(item as Map<String, dynamic>))
+            .toList();
+      }
+    } catch (_) {
+      // Fallback
+    }
+    return [];
   }
 
   static String _generateInviteCode() {

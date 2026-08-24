@@ -1,0 +1,27 @@
+[
+  {
+    "id": "act_0ef50ef5a369",
+    "tripId": "trip_f586d32283a3",
+    "type": "trip_created",
+    "actorId": "usr_75745793a705",
+    "actorName": "Creator User",
+    "description": "Creator User created the trip \"Ladakh\"",
+    "metadata": {
+      "tripId": "trip_f586d32283a3",
+      "emoji": "✈️"
+    },
+    "createdAt": "2026-08-24T15:50:10.773Z"
+  },
+  {
+    "id": "act_14b3f1c71da1",
+    "tripId": "trip_f586d32283a3",
+    "type": "lifecycle_updated",
+    "actorId": "usr_75745793a705",
+    "actorName": "Creator User",
+    "description": "Creator User changed trip state to COMPLETED",
+    "metadata": {
+      "lifecycleState": "completed"
+    },
+    "createdAt": "2026-08-24T15:50:10.774Z"
+  }
+]

@@ -14,6 +14,7 @@ class Database {
       invites: new Map(),
       expenses: new Map(),
       settlements: new Map(),
+      activity_logs: new Map(),
     };
     if (!this.inMemory) {
       this._initStorage();

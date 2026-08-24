@@ -296,4 +296,36 @@ describe('Real Cloud Staging & Multi-User End-to-End QA Test Suite', () => {
     assert.ok(summaryRes.data.data.totalTripSpendingInPaise > 0);
     assert.ok(summaryRes.data.data.netBalancesInPaise !== undefined);
   });
+
+  // 12. Edit Expense Endpoint
+  it('12. PUT /api/trips/:tripId/expenses/:expenseId updates existing expense', async () => {
+    const updateRes = await api(`/api/trips/${tripId}/expenses/exp_cloud_train_001`, {
+      method: 'PUT',
+      token: tokenA,
+      body: {
+        title: 'Train to Mountains (First Class)',
+        amountInPaise: 700000,
+        paidById: memberAId,
+        splitType: 'equal',
+        splits: memberIds.map((mId) => ({ memberId: mId, amountInPaise: 140000 })),
+      },
+    });
+
+    assert.strictEqual(updateRes.status, 200);
+    assert.strictEqual(updateRes.data.data.expense.title, 'Train to Mountains (First Class)');
+    assert.strictEqual(updateRes.data.data.expense.amountInPaise, 700000);
+  });
+
+  // 13. Activity Logs Endpoint
+  it('13. GET /api/trips/:id/activity returns chronological activity logs', async () => {
+    const activityRes = await api(`/api/trips/${tripId}/activity`, { token: tokenA });
+    assert.strictEqual(activityRes.status, 200);
+    assert.ok(Array.isArray(activityRes.data.data));
+    assert.ok(activityRes.data.data.length > 0);
+
+    const types = activityRes.data.data.map((l) => l.type);
+    assert.ok(types.includes('trip_created'));
+    assert.ok(types.includes('expense_added'));
+    assert.ok(types.includes('expense_updated'));
+  });
 });

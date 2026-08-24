@@ -4,6 +4,7 @@ import '../../core/network/realtime_client.dart';
 import '../../data/repositories/expense_repository.dart';
 import '../../data/repositories/trip_repository.dart';
 import '../../domain/enums/trip_lifecycle.dart';
+import '../../domain/models/activity_log.dart';
 import '../../domain/models/balance_summary.dart';
 import '../../domain/models/expense.dart';
 import '../../domain/models/trip.dart';
@@ -16,7 +17,9 @@ class TripDetailViewModel extends ChangeNotifier {
   Trip? _trip;
   List<Expense> _expenses = [];
   BalanceSummary _balanceSummary = BalanceSummary.empty();
+  List<ActivityLog> _activityLogs = [];
   bool _isLoading = false;
+  bool _isLoadingActivity = false;
   String? _errorMessage;
   String? _currentUserId;
 
@@ -37,7 +40,9 @@ class TripDetailViewModel extends ChangeNotifier {
   Trip? get trip => _trip;
   List<Expense> get expenses => _expenses;
   BalanceSummary get balanceSummary => _balanceSummary;
+  List<ActivityLog> get activityLogs => _activityLogs;
   bool get isLoading => _isLoading;
+  bool get isLoadingActivity => _isLoadingActivity;
   String? get errorMessage => _errorMessage;
   String get searchQuery => _searchQuery;
   String? get selectedCategory => _selectedCategory;
@@ -239,6 +244,20 @@ class TripDetailViewModel extends ChangeNotifier {
       await refresh(currentUserId);
     } catch (e) {
       _errorMessage = e.toString();
+      notifyListeners();
+    }
+  }
+
+  Future<void> fetchActivityLogs() async {
+    if (_trip == null) return;
+    _isLoadingActivity = true;
+    notifyListeners();
+    try {
+      _activityLogs = await tripRepo.getActivityLogs(_trip!.id);
+    } catch (e) {
+      _errorMessage = e.toString();
+    } finally {
+      _isLoadingActivity = false;
       notifyListeners();
     }
   }

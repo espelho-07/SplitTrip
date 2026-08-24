@@ -106,6 +106,15 @@ class ExpenseService {
     db.insert('expenses', expense);
     db.update('trips', tripId, { updatedAt: now });
 
+    const tripService = require('./trip_service');
+    tripService.logActivity(tripId, {
+      type: 'expense_added',
+      actorId: user.id,
+      actorName: authMember.displayName,
+      description: `${authMember.displayName} added "${title.trim()}" for ₹${(amountInPaise / 100).toFixed(2)}`,
+      metadata: { expenseId: expense.id, amountInPaise },
+    });
+
     const balanceSummary = this.getBalanceSummary(tripId, user.id);
 
     if (realtimeHub) {
@@ -117,6 +126,110 @@ class ExpenseService {
     }
 
     return { expense, balanceSummary };
+  }
+
+  updateExpense(user, tripId, expenseId, { title, amountInPaise, category = 'general', paidById, splitType = 'equal', splits = [], voiceTranscript, receiptUrl }, realtimeHub = null) {
+    const trip = db.get('trips', tripId);
+    if (!trip) throw AppError.notFound('Trip not found');
+
+    const authMember = db.findOne('trip_members', (m) => m.tripId === tripId && m.userId === user.id);
+    if (!authMember) throw AppError.forbidden('Not a member of this trip');
+
+    if (trip.lifecycleState === 'completed' || trip.lifecycleState === 'settled') {
+      throw AppError.badRequest(`Cannot edit expense in a ${trip.lifecycleState} trip`);
+    }
+
+    const existing = db.get('expenses', expenseId);
+    if (!existing || existing.tripId !== tripId || existing.isDeleted) {
+      throw AppError.notFound('Expense not found');
+    }
+
+    const isTripCreator = trip.creatorId === user.id || authMember.role === 'creator';
+    const isExpenseCreator = existing.createdByUserId === user.id;
+    const isPayer = existing.paidById === authMember.id;
+
+    if (!isTripCreator && !isExpenseCreator && !isPayer) {
+      throw AppError.forbidden('You do not have permission to edit this expense');
+    }
+
+    if (!title || !title.trim()) {
+      throw AppError.badRequest('Expense title is required');
+    }
+
+    if (!Number.isInteger(amountInPaise) || amountInPaise <= 0) {
+      throw AppError.badRequest('Amount must be a positive integer in paise');
+    }
+
+    const payerMember = db.findOne('trip_members', (m) => m.tripId === tripId && (m.id === paidById || m.userId === paidById));
+    if (!payerMember) {
+      throw AppError.badRequest('Payer must be a member of this trip');
+    }
+
+    if (!Array.isArray(splits) || splits.length === 0) {
+      throw AppError.badRequest('At least one participant split is required');
+    }
+
+    let splitSum = 0;
+    const validatedSplits = [];
+    for (const split of splits) {
+      if (!split.memberId) throw AppError.badRequest('Each split must specify a valid memberId');
+      const member = db.findOne('trip_members', (m) => m.tripId === tripId && (m.id === split.memberId || m.userId === split.memberId));
+      if (!member) throw AppError.badRequest(`Split participant ${split.memberId} is not in this trip`);
+      if (!Number.isInteger(split.amountInPaise) || split.amountInPaise < 0) {
+        throw AppError.badRequest('Each split amount must be a non-negative integer in paise');
+      }
+      splitSum += split.amountInPaise;
+      validatedSplits.push({
+        memberId: member.id,
+        amountInPaise: split.amountInPaise,
+        shares: typeof split.shares === 'number' ? split.shares : null,
+        percentage: typeof split.percentage === 'number' ? split.percentage : null,
+      });
+    }
+
+    if (splitSum !== amountInPaise) {
+      throw AppError.badRequest(
+        `Split sum mismatch: Total is ₹${(amountInPaise / 100).toFixed(2)} but splits sum to ₹${(splitSum / 100).toFixed(2)}`
+      );
+    }
+
+    const now = new Date().toISOString();
+    const updated = {
+      ...existing,
+      title: title.trim(),
+      amountInPaise,
+      category,
+      paidById: payerMember.id,
+      splitType,
+      splits: validatedSplits,
+      voiceTranscript: voiceTranscript || existing.voiceTranscript || null,
+      receiptUrl: receiptUrl || existing.receiptUrl || null,
+      updatedAt: now,
+    };
+
+    db.update('expenses', expenseId, updated);
+    db.update('trips', tripId, { updatedAt: now });
+
+    const tripService = require('./trip_service');
+    tripService.logActivity(tripId, {
+      type: 'expense_updated',
+      actorId: user.id,
+      actorName: authMember.displayName,
+      description: `${authMember.displayName} updated "${title.trim()}" (₹${(amountInPaise / 100).toFixed(2)})`,
+      metadata: { expenseId, amountInPaise },
+    });
+
+    const balanceSummary = this.getBalanceSummary(tripId, user.id);
+
+    if (realtimeHub) {
+      realtimeHub.broadcastToTrip(tripId, 'expense_updated', {
+        tripId,
+        expense: updated,
+        balanceSummary,
+      });
+    }
+
+    return { expense: updated, balanceSummary };
   }
 
   getExpenses(tripId, userId) {
@@ -158,6 +271,15 @@ class ExpenseService {
     const now = new Date().toISOString();
     db.update('expenses', expenseId, { isDeleted: true, updatedAt: now });
     db.update('trips', tripId, { updatedAt: now });
+
+    const tripService = require('./trip_service');
+    tripService.logActivity(tripId, {
+      type: 'expense_deleted',
+      actorId: user.id,
+      actorName: authMember.displayName,
+      description: `${authMember.displayName} removed expense "${expense.title}"`,
+      metadata: { expenseId },
+    });
 
     const balanceSummary = this.getBalanceSummary(tripId, user.id);
 

@@ -83,6 +83,59 @@ class ExpenseRepository {
     return expense;
   }
 
+  /// Updates an existing expense after verifying deterministic zero-sum split equality.
+  Future<Expense> updateExpense(Expense expense) async {
+    final isValid = MoneyEngine.validateSplits(expense.amountInPaise, expense.splits);
+    if (!isValid) {
+      throw ArgumentError('The sum of expense splits must strictly equal the total expense amount');
+    }
+
+    try {
+      final res = await apiClient.put(
+        '/trips/${expense.tripId}/expenses/${expense.id}',
+        body: expense.toJson(),
+      );
+
+      if (res is Map<String, dynamic> && res.containsKey('expense')) {
+        final savedExpense = Expense.fromJson(res['expense'] as Map<String, dynamic>);
+        final currentExpenses = await getExpenses(expense.tripId);
+        final idx = currentExpenses.indexWhere((e) => e.id == savedExpense.id);
+        if (idx != -1) {
+          currentExpenses[idx] = savedExpense;
+        } else {
+          currentExpenses.insert(0, savedExpense);
+        }
+        await storage.saveExpenses(
+          expense.tripId,
+          currentExpenses.map((e) => e.toJson()).toList(),
+        );
+        return savedExpense;
+      }
+    } catch (_) {
+      // Offline fallback
+    }
+
+    final currentExpenses = await getExpenses(expense.tripId);
+    final idx = currentExpenses.indexWhere((e) => e.id == expense.id);
+    if (idx != -1) {
+      currentExpenses[idx] = expense;
+    } else {
+      currentExpenses.insert(0, expense);
+    }
+
+    await storage.saveExpenses(
+      expense.tripId,
+      currentExpenses.map((e) => e.toJson()).toList(),
+    );
+
+    await syncService.enqueueMutation(
+      MutationType.addExpense,
+      expense.toJson(),
+    );
+
+    return expense;
+  }
+
   /// Deletes or soft-deletes an expense.
   Future<void> deleteExpense({
     required String tripId,

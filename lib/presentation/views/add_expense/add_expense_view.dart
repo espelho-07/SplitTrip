@@ -14,6 +14,7 @@ import '../../../core/widgets/surface_card.dart';
 import '../../../core/widgets/waveform_visualizer.dart';
 import '../../../domain/enums/expense_category.dart';
 import '../../../domain/enums/split_type.dart';
+import '../../../domain/models/expense.dart';
 import '../../../domain/models/expense_draft.dart';
 import '../../../domain/models/trip.dart';
 import '../../../domain/models/trip_member.dart';
@@ -24,8 +25,13 @@ import 'widgets/expense_draft_confirmation_sheet.dart';
 
 class AddExpenseView extends StatefulWidget {
   final String tripId;
+  final Expense? existingExpense;
 
-  const AddExpenseView({super.key, required this.tripId});
+  const AddExpenseView({
+    super.key,
+    required this.tripId,
+    this.existingExpense,
+  });
 
   @override
   State<AddExpenseView> createState() => _AddExpenseViewState();
@@ -34,6 +40,9 @@ class AddExpenseView extends StatefulWidget {
 class _AddExpenseViewState extends State<AddExpenseView> {
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _titleController = TextEditingController();
+  final Map<String, TextEditingController> _exactControllers = {};
+  final Map<String, TextEditingController> _percentControllers = {};
+  bool _hasAttemptedSave = false;
 
   static const List<String> _sampleVoicePrompts = [
     'Maine 6000 train ke diye sabke liye',
@@ -73,7 +82,16 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     final user = authVm.currentUser;
 
     if (trip != null && user != null) {
-      context.read<AddExpenseViewModel>().init(trip: trip, currentUserId: user.id);
+      final addVm = context.read<AddExpenseViewModel>();
+      if (widget.existingExpense != null) {
+        addVm.initForEdit(expense: widget.existingExpense!, trip: trip, currentUserId: user.id);
+        _titleController.text = widget.existingExpense!.title;
+        _amountController.text = (widget.existingExpense!.amountInPaise / 100.0).toStringAsFixed(
+          widget.existingExpense!.amountInPaise % 100 == 0 ? 0 : 2,
+        );
+      } else {
+        addVm.init(trip: trip, currentUserId: user.id);
+      }
     }
   }
 
@@ -81,6 +99,12 @@ class _AddExpenseViewState extends State<AddExpenseView> {
   void dispose() {
     _amountController.dispose();
     _titleController.dispose();
+    for (final c in _exactControllers.values) {
+      c.dispose();
+    }
+    for (final c in _percentControllers.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -117,11 +141,112 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     final trip = tripDetailVm.trip;
     if (trip == null) return;
 
+    if (addVm.title.trim().isEmpty || addVm.amountInPaise <= 0 || addVm.selectedParticipantMemberIds.isEmpty) {
+      setState(() {
+        _hasAttemptedSave = true;
+      });
+      HapticHelper.medium();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            addVm.amountInPaise <= 0
+                ? 'Please enter an expense amount'
+                : (addVm.title.trim().isEmpty
+                    ? 'Please specify what this expense was for'
+                    : 'Please select at least one participant'),
+          ),
+          backgroundColor: AppColors.negativeRedDark,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
     final expense = await addVm.saveExpense(trip.id);
     if (expense != null && mounted) {
       HapticHelper.success();
       context.pop(true);
     }
+  }
+
+  void _showSplitMethodsHelp() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+      shape: RoundedRectangleBorder(borderRadius: AppRadius.topSheetBorder),
+      builder: (ctx) {
+        return Padding(
+          padding: AppSpacing.bottomSheetPadding,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.info_outline_rounded, color: AppColors.emeraldPrimary, size: 24),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Split Methods Explained',
+                      style: AppTypography.titleLarge(isDark: isDark),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+                _buildHelpMethodItem(
+                  title: '1. Equal Split',
+                  subtitle: 'Evenly divides the bill across all selected friends. Any 1-paise difference is automatically handled without penny loss.',
+                  isDark: isDark,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                _buildHelpMethodItem(
+                  title: '2. Exact Amount',
+                  subtitle: 'Enter the exact rupee amount each person owes (e.g. for specific food items ordered). Sum must equal the total amount.',
+                  isDark: isDark,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                _buildHelpMethodItem(
+                  title: '3. Percentage (% Split)',
+                  subtitle: 'Assign custom percentages to members (e.g. 60% / 40%). Percentages must sum to 100%.',
+                  isDark: isDark,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                _buildHelpMethodItem(
+                  title: '4. Shares (Proportional)',
+                  subtitle: 'Assign ratio shares to members (e.g. 2 shares for couples/families, 1 share for individuals).',
+                  isDark: isDark,
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                AppButton(
+                  text: 'Got It',
+                  isFullWidth: true,
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildHelpMethodItem({required String title, required String subtitle, required bool isDark}) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+        borderRadius: AppRadius.mdBorder,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+          const SizedBox(height: 4),
+          Text(subtitle, style: AppTypography.bodySmall(isDark: isDark)),
+        ],
+      ),
+    );
   }
 
   @override
@@ -140,7 +265,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: AppBar(
-        title: const Text('Add Expense'),
+        title: Text(addVm.isEditMode ? 'Edit Expense' : 'Add Expense'),
         leading: IconButton(
           icon: const Icon(Icons.close_rounded),
           onPressed: () => context.pop(),
@@ -149,24 +274,25 @@ class _AddExpenseViewState extends State<AddExpenseView> {
       body: SafeArea(
         child: Column(
           children: [
-            // Top Mode Tabs (Voice / Receipt Scan / Manual)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
-                  borderRadius: AppRadius.mdBorder,
-                ),
-                padding: const EdgeInsets.all(4),
-                child: Row(
-                  children: [
-                    _buildModeTab('Voice', Icons.mic_rounded, 0, addVm.currentTab, isDark),
-                    _buildModeTab('Receipt', Icons.receipt_long_rounded, 1, addVm.currentTab, isDark),
-                    _buildModeTab('Manual', Icons.edit_note_rounded, 2, addVm.currentTab, isDark),
-                  ],
+            // Top Mode Tabs (Voice / Receipt Scan / Manual) - Hidden in Edit Mode for simplicity
+            if (!addVm.isEditMode)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+                    borderRadius: AppRadius.mdBorder,
+                  ),
+                  padding: const EdgeInsets.all(4),
+                  child: Row(
+                    children: [
+                      _buildModeTab('Voice', Icons.mic_rounded, 0, addVm.currentTab, isDark),
+                      _buildModeTab('Receipt', Icons.receipt_long_rounded, 1, addVm.currentTab, isDark),
+                      _buildModeTab('Manual', Icons.edit_note_rounded, 2, addVm.currentTab, isDark),
+                    ],
+                  ),
                 ),
               ),
-            ),
 
             // Tab Body
             Expanded(
@@ -200,6 +326,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                       style: TextStyle(
                         color: isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight,
                         fontSize: 12,
+                        fontWeight: FontWeight.w600,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -221,14 +348,14 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                           ],
                         ),
                       ),
+                      const SizedBox(width: 12),
                       Expanded(
                         child: AppButton(
-                          text: 'Save Expense',
+                          text: addVm.isEditMode ? 'Update' : 'Save Expense',
                           icon: Icons.check_rounded,
                           isLoading: addVm.isSaving,
-                          onPressed: addVm.amountInPaise > 0 && addVm.title.isNotEmpty
-                              ? _handleSave
-                              : null,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          onPressed: _handleSave,
                         ),
                       ),
                     ],
@@ -572,11 +699,19 @@ class _AddExpenseViewState extends State<AddExpenseView> {
         TextField(
           controller: _titleController,
           textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             hintText: 'e.g. Train tickets, Dinner, Groceries',
-            prefixIcon: Icon(Icons.receipt_outlined, size: 20),
+            prefixIcon: const Icon(Icons.receipt_outlined, size: 20),
+            errorText: _hasAttemptedSave && addVm.title.trim().isEmpty
+                ? 'Please enter what this expense was for'
+                : null,
           ),
-          onChanged: addVm.setTitle,
+          onChanged: (val) {
+            addVm.setTitle(val);
+            if (_hasAttemptedSave && val.trim().isNotEmpty) {
+              setState(() {});
+            }
+          },
         ),
 
         const SizedBox(height: AppSpacing.lg),
@@ -648,11 +783,22 @@ class _AddExpenseViewState extends State<AddExpenseView> {
 
         const SizedBox(height: AppSpacing.lg),
 
-        // Split Type Mode Selector
+        // Split Type Mode Selector + Help Info
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Split Method', style: AppTypography.titleSmall(isDark: isDark)),
+            Row(
+              children: [
+                Text('Split Method', style: AppTypography.titleSmall(isDark: isDark)),
+                const SizedBox(width: 4),
+                IconButton(
+                  icon: const Icon(Icons.help_outline_rounded, size: 18, color: AppColors.emeraldPrimary),
+                  tooltip: 'Explain split methods',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: _showSplitMethodsHelp,
+                ),
+              ],
+            ),
             DropdownButton<SplitType>(
               value: addVm.splitType,
               underline: const SizedBox.shrink(),
@@ -668,6 +814,15 @@ class _AddExpenseViewState extends State<AddExpenseView> {
             ),
           ],
         ),
+
+        // Live Allocation Status Indicator for Exact and Percentage splits
+        if (addVm.splitType == SplitType.exact) ...[
+          const SizedBox(height: 4),
+          _buildExactAllocationBanner(addVm, trip.currencyCode, isDark),
+        ] else if (addVm.splitType == SplitType.percentage) ...[
+          const SizedBox(height: 4),
+          _buildPercentageAllocationBanner(addVm, isDark),
+        ],
 
         const SizedBox(height: AppSpacing.xs),
 
@@ -717,6 +872,85 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     );
   }
 
+  Widget _buildExactAllocationBanner(AddExpenseViewModel addVm, String currencyCode, bool isDark) {
+    final remaining = addVm.exactRemainingPaise;
+    final isMatched = remaining == 0 && addVm.amountInPaise > 0;
+    final isOver = remaining < 0;
+
+    final Color bannerColor = isMatched
+        ? (isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight)
+        : (isOver
+            ? (isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight)
+            : AppColors.amberAccent);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      margin: const EdgeInsets.only(bottom: 6),
+      decoration: BoxDecoration(
+        color: bannerColor.withValues(alpha: 0.12),
+        borderRadius: AppRadius.smBorder,
+        border: Border.all(color: bannerColor.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isMatched ? Icons.check_circle_outline_rounded : Icons.info_outline_rounded,
+            size: 16,
+            color: bannerColor,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              isMatched
+                  ? 'Exact split matches total ${CurrencyFormatter.formatPaise(addVm.amountInPaise, currencyCode: currencyCode)}'
+                  : (isOver
+                      ? 'Exceeds total by ${CurrencyFormatter.formatPaise(remaining.abs(), currencyCode: currencyCode)}'
+                      : '${CurrencyFormatter.formatPaise(remaining, currencyCode: currencyCode)} remaining to allocate'),
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: bannerColor),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPercentageAllocationBanner(AddExpenseViewModel addVm, bool isDark) {
+    final totalPct = addVm.totalAllocatedPercentage;
+    final isMatched = (totalPct - 100.0).abs() < 0.01;
+
+    final Color bannerColor = isMatched
+        ? (isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight)
+        : AppColors.amberAccent;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      margin: const EdgeInsets.only(bottom: 6),
+      decoration: BoxDecoration(
+        color: bannerColor.withValues(alpha: 0.12),
+        borderRadius: AppRadius.smBorder,
+        border: Border.all(color: bannerColor.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isMatched ? Icons.check_circle_outline_rounded : Icons.info_outline_rounded,
+            size: 16,
+            color: bannerColor,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              isMatched
+                  ? 'Percentages sum to 100.0%'
+                  : 'Total: ${totalPct.toStringAsFixed(1)}% (must equal 100%)',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: bannerColor),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSplitAllocationWidget(
     AddExpenseViewModel addVm,
     TripMember member,
@@ -762,6 +996,62 @@ class _AddExpenseViewState extends State<AddExpenseView> {
             onPressed: () => addVm.setMemberShare(member.id, currentShare + 1),
           ),
         ],
+      );
+    } else if (addVm.splitType == SplitType.exact) {
+      final currentPaise = addVm.exactAmountsInPaise[member.id] ?? 0;
+      if (!_exactControllers.containsKey(member.id)) {
+        _exactControllers[member.id] = TextEditingController(
+          text: currentPaise > 0 ? (currentPaise / 100.0).toStringAsFixed(currentPaise % 100 == 0 ? 0 : 2) : '',
+        );
+      }
+
+      return SizedBox(
+        width: 86,
+        height: 38,
+        child: TextField(
+          controller: _exactControllers[member.id],
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          textAlign: TextAlign.end,
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+          decoration: InputDecoration(
+            prefixText: currencyCode == 'USD' ? '\$' : '₹',
+            hintText: '0',
+            contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+            isDense: true,
+          ),
+          onChanged: (val) {
+            final amt = double.tryParse(val) ?? 0;
+            addVm.setMemberExactAmount(member.id, CurrencyFormatter.toPaise(amt));
+          },
+        ),
+      );
+    } else if (addVm.splitType == SplitType.percentage) {
+      final currentPct = addVm.percentages[member.id] ?? 0.0;
+      if (!_percentControllers.containsKey(member.id)) {
+        _percentControllers[member.id] = TextEditingController(
+          text: currentPct > 0 ? currentPct.toStringAsFixed(1) : '',
+        );
+      }
+
+      return SizedBox(
+        width: 72,
+        height: 38,
+        child: TextField(
+          controller: _percentControllers[member.id],
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          textAlign: TextAlign.end,
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+          decoration: const InputDecoration(
+            suffixText: '%',
+            hintText: '0',
+            contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+            isDense: true,
+          ),
+          onChanged: (val) {
+            final pct = double.tryParse(val) ?? 0.0;
+            addVm.setMemberPercentage(member.id, pct);
+          },
+        ),
       );
     } else {
       return const Text('Custom split', style: TextStyle(fontSize: 12));
