@@ -306,7 +306,7 @@ class PersonalService {
 
     const spentInPaise = expenses.reduce((sum, e) => sum + Number(e.amountInPaise), 0);
     const monthlyLimitInPaise = budget ? Number(budget.monthlyLimitInPaise) : 0;
-    const remainingInPaise = Math.max(0, monthlyLimitInPaise - spentInPaise);
+    const remainingInPaise = monthlyLimitInPaise - spentInPaise;
 
     return {
       monthYear: targetMonth,
@@ -314,7 +314,7 @@ class PersonalService {
       spentInPaise,
       remainingInPaise,
       hasBudget: monthlyLimitInPaise > 0,
-      percentageUsed: monthlyLimitInPaise > 0 ? Math.min(100, Math.round((spentInPaise / monthlyLimitInPaise) * 100)) : 0,
+      percentageUsed: monthlyLimitInPaise > 0 ? Math.round((spentInPaise / monthlyLimitInPaise) * 100) : 0,
     };
   }
 

@@ -278,5 +278,25 @@ void main() {
       expect(uncollected?.personName, 'Sameer');
       expect(uncollected?.remainingAmountInPaise, 120000);
     });
+
+    test('9. Budget overspending calculation and over-budget delta', () async {
+      final vm = PersonalExpenseViewModel(personalRepo: personalRepo);
+      await vm.loadData(testUserId);
+
+      // Set budget of ₹10,000
+      await vm.setMonthlyBudget(1000000);
+
+      // Add expense of ₹10,500 (Over budget by ₹500)
+      await vm.addExpense(
+        userId: testUserId,
+        title: 'New Laptop Stand & Monitor',
+        amountInPaise: 1050000,
+        category: ExpenseCategory.shopping,
+      );
+
+      expect(vm.budget.spentInPaise, 1050000);
+      expect(vm.budget.remainingInPaise, -50000);
+      expect(vm.budget.percentageUsed, 105);
+    });
   });
 }

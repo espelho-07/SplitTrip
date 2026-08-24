@@ -268,11 +268,15 @@ class PersonalHomeTab extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '${CurrencyFormatter.formatPaise(budget.remainingInPaise, currencyCode: 'INR')} left',
+                  budget.remainingInPaise < 0
+                      ? '${CurrencyFormatter.formatPaise(budget.remainingInPaise.abs(), currencyCode: 'INR')} over budget'
+                      : '${CurrencyFormatter.formatPaise(budget.remainingInPaise, currencyCode: 'INR')} left',
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
-                    color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                    color: budget.remainingInPaise < 0
+                        ? statusRed
+                        : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
                   ),
                 ),
               ],
@@ -381,7 +385,9 @@ class PersonalHomeTab extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                '${CurrencyFormatter.formatPaise(budget.remainingInPaise, currencyCode: 'INR')} left this month (${budget.percentageUsed}% spent)',
+                budget.remainingInPaise < 0
+                    ? '${CurrencyFormatter.formatPaise(budget.remainingInPaise.abs(), currencyCode: 'INR')} over budget this month (${budget.percentageUsed}% spent)'
+                    : '${CurrencyFormatter.formatPaise(budget.remainingInPaise, currencyCode: 'INR')} left this month (${budget.percentageUsed}% spent)',
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: statusRed),
               ),
             ),

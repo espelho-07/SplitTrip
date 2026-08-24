@@ -191,8 +191,8 @@ class PersonalExpenseViewModel extends ChangeNotifier {
           .where((e) => e.date.toIso8601String().startsWith(monthPrefix))
           .fold<int>(0, (sum, e) => sum + e.amountInPaise);
 
-      final remaining = (_budget.monthlyLimitInPaise - monthSpent).clamp(0, _budget.monthlyLimitInPaise);
-      final percentage = ((monthSpent / _budget.monthlyLimitInPaise) * 100).round().clamp(0, 100);
+      final remaining = _budget.monthlyLimitInPaise - monthSpent;
+      final percentage = ((monthSpent / _budget.monthlyLimitInPaise) * 100).round();
 
       _budget = PersonalBudget(
         monthYear: currentMonthKey,
