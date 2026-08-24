@@ -572,14 +572,21 @@ class PersonalExpenseViewModel extends ChangeNotifier {
   }
 
   Future<bool> deleteExpense(String expenseId) async {
+    // 1. Optimistic instant removal from UI
+    final original = List<PersonalExpense>.from(_expenses);
+    _expenses.removeWhere((e) => e.id == expenseId);
+    _applyFilterAndCalculate();
+    HapticHelper.medium();
+
     try {
       await personalRepo.deletePersonalExpense(expenseId);
-      _expenses.removeWhere((e) => e.id == expenseId);
-      _applyFilterAndCalculate();
-      HapticHelper.medium();
       return true;
     } catch (e) {
+      // Rollback on failure
+      _expenses = original;
+      _applyFilterAndCalculate();
       _errorMessage = 'Could not delete expense.';
+      HapticHelper.error();
       return false;
     }
   }
@@ -654,12 +661,37 @@ class PersonalExpenseViewModel extends ChangeNotifier {
   }
 
   Future<bool> deleteDebt(String debtId) async {
+    // 1. Optimistic instant removal from UI
+    final originalSummary = _debtsSummary;
+    final updatedDebts = List<PersonalDebt>.from(_debtsSummary.debts)..removeWhere((d) => d.id == debtId);
+    int totalLent = 0;
+    int totalBorrowed = 0;
+    for (final d in updatedDebts) {
+      if (!d.isSettled) {
+        if (d.debtType == PersonalDebtType.lent) {
+          totalLent += d.remainingAmountInPaise;
+        } else {
+          totalBorrowed += d.remainingAmountInPaise;
+        }
+      }
+    }
+    _debtsSummary = PersonalDebtsSummary(
+      debts: updatedDebts,
+      totalLentPaise: totalLent,
+      totalBorrowedPaise: totalBorrowed,
+      netBalancePaise: totalLent - totalBorrowed,
+    );
+    notifyListeners();
+    HapticHelper.medium();
+
     try {
       await personalRepo.deletePersonalDebt(debtId);
-      _debtsSummary = personalRepo.getCachedPersonalDebts();
-      HapticHelper.medium();
       return true;
     } catch (e) {
+      // Rollback on failure
+      _debtsSummary = originalSummary;
+      notifyListeners();
+      HapticHelper.error();
       return false;
     }
   }

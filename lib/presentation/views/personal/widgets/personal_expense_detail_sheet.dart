@@ -32,8 +32,6 @@ class PersonalExpenseDetailSheet extends StatefulWidget {
 }
 
 class _PersonalExpenseDetailSheetState extends State<PersonalExpenseDetailSheet> {
-  bool _isDeleting = false;
-
   void _showEditDialog() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final initialRupees = (widget.expense.amountInPaise / 100).toStringAsFixed(
@@ -209,23 +207,24 @@ class _PersonalExpenseDetailSheetState extends State<PersonalExpenseDetailSheet>
           AppButton(
             text: 'Delete',
             variant: AppButtonVariant.danger,
-            onPressed: () async {
+            onPressed: () {
               Navigator.of(ctx).pop();
-              setState(() => _isDeleting = true);
+              Navigator.of(context).pop(true);
               final vm = context.read<PersonalExpenseViewModel>();
-              final success = await vm.deleteExpense(widget.expense.id);
-              if (mounted) {
-                setState(() => _isDeleting = false);
-                if (success) {
-                  Navigator.of(context).pop(true);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Expense deleted.'),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                }
-              }
+              vm.deleteExpense(widget.expense.id);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Row(
+                    children: [
+                      const Icon(Icons.check_circle_rounded, color: Colors.white, size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text('Deleted "${widget.expense.title}"')),
+                    ],
+                  ),
+                  duration: const Duration(seconds: 2),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
             },
           ),
         ],
@@ -351,7 +350,7 @@ class _PersonalExpenseDetailSheetState extends State<PersonalExpenseDetailSheet>
                   text: 'Edit',
                   icon: Icons.edit_outlined,
                   variant: AppButtonVariant.outline,
-                  onPressed: _isDeleting ? null : _showEditDialog,
+                  onPressed: _showEditDialog,
                 ),
               ),
               const SizedBox(width: 12),
@@ -360,8 +359,7 @@ class _PersonalExpenseDetailSheetState extends State<PersonalExpenseDetailSheet>
                   text: 'Delete',
                   icon: Icons.delete_outline_rounded,
                   variant: AppButtonVariant.danger,
-                  isLoading: _isDeleting,
-                  onPressed: _isDeleting ? null : _confirmDelete,
+                  onPressed: _confirmDelete,
                 ),
               ),
             ],

@@ -429,7 +429,7 @@ class _LendingBorrowingViewState extends State<LendingBorrowingView> {
                                       context: context,
                                       builder: (dialogCtx) => AlertDialog(
                                         title: const Text('Delete Record'),
-                                        content: Text('Are you sure you want to delete the debt record for ""?'),
+                                        content: Text('Are you sure you want to delete the debt record for "${d.personName}"?'),
                                         actions: [
                                           TextButton(
                                             onPressed: () => Navigator.pop(dialogCtx, false),
@@ -443,8 +443,21 @@ class _LendingBorrowingViewState extends State<LendingBorrowingView> {
                                         ],
                                       ),
                                     );
-                                    if (confirm == true) {
-                                      await vm.deleteDebt(d.id);
+                                    if (confirm == true && context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Row(
+                                            children: [
+                                              const Icon(Icons.check_circle_rounded, color: Colors.white, size: 16),
+                                              const SizedBox(width: 8),
+                                              Expanded(child: Text('Deleted debt record for "${d.personName}"')),
+                                            ],
+                                          ),
+                                          duration: const Duration(seconds: 2),
+                                          behavior: SnackBarBehavior.floating,
+                                        ),
+                                      );
+                                      vm.deleteDebt(d.id);
                                     }
                                   },
                                 ),
