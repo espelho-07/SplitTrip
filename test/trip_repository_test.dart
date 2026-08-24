@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:kith_app/core/network/api_client.dart';
 import 'package:kith_app/data/repositories/trip_repository.dart';
 import 'package:kith_app/data/services/local_storage_service.dart';
 import 'package:kith_app/data/services/sync_service.dart';
@@ -17,7 +18,11 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     storage = await LocalStorageService.init();
     syncService = SyncService(storage);
-    tripRepo = TripRepository(storage: storage, syncService: syncService);
+    tripRepo = TripRepository(
+      storage: storage,
+      syncService: syncService,
+      apiClient: ApiClient(),
+    );
   });
 
   group('TripRepository Integration Tests', () {

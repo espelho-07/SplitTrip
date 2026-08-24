@@ -10,6 +10,7 @@ import '../../../core/widgets/surface_card.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/join_trip_viewmodel.dart';
+import 'widgets/join_preview_sheet.dart';
 
 class JoinTripView extends StatefulWidget {
   const JoinTripView({super.key});
@@ -27,21 +28,53 @@ class _JoinTripViewState extends State<JoinTripView> {
     super.dispose();
   }
 
-  Future<void> _handleJoin() async {
+  Future<void> _handlePreviewOrJoin() async {
     final joinVm = context.read<JoinTripViewModel>();
     final authVm = context.read<AuthViewModel>();
-    final homeVm = context.read<HomeViewModel>();
 
     final user = authVm.currentUser;
     if (user == null) return;
 
-    final trip = await joinVm.joinTrip(user);
-    if (trip != null && mounted) {
-      await homeVm.loadTrips(user.id);
-      if (mounted) {
-        context.go('/trip/${trip.id}');
-      }
+    final preview = await joinVm.fetchPreview();
+    if (preview != null && mounted) {
+      _showPreviewSheet(preview);
     }
+  }
+
+  void _showPreviewSheet(dynamic preview) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (bottomSheetContext) {
+        return Consumer<JoinTripViewModel>(
+          builder: (context, joinVm, child) {
+            return JoinPreviewSheet(
+              preview: preview,
+              isJoining: joinVm.isJoining,
+              onConfirmJoin: () async {
+                final authVm = context.read<AuthViewModel>();
+                final homeVm = context.read<HomeViewModel>();
+                final user = authVm.currentUser;
+                if (user == null) return;
+
+                Navigator.of(bottomSheetContext).pop();
+                final trip = await joinVm.joinTrip(user);
+                if (trip != null && mounted) {
+                  await homeVm.loadTrips(user.id);
+                  if (mounted) {
+                    context.go('/trip/${trip.id}');
+                  }
+                }
+              },
+              onCancel: () {
+                Navigator.of(bottomSheetContext).pop();
+              },
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -85,6 +118,7 @@ class _JoinTripViewState extends State<JoinTripView> {
                       controller: _codeController,
                       textCapitalization: TextCapitalization.characters,
                       textAlign: TextAlign.center,
+                      maxLength: 6,
                       style: const TextStyle(
                         fontSize: 26,
                         fontWeight: FontWeight.w800,
@@ -93,6 +127,7 @@ class _JoinTripViewState extends State<JoinTripView> {
                       ),
                       decoration: const InputDecoration(
                         hintText: 'KITH00',
+                        counterText: '',
                         hintStyle: TextStyle(
                           fontSize: 26,
                           fontWeight: FontWeight.w800,
@@ -100,7 +135,7 @@ class _JoinTripViewState extends State<JoinTripView> {
                         ),
                       ),
                       onChanged: joinVm.setCode,
-                      onSubmitted: (_) => _handleJoin(),
+                      onSubmitted: (_) => _handlePreviewOrJoin(),
                     ),
                     if (joinVm.errorMessage != null) ...[
                       const SizedBox(height: AppSpacing.md),
@@ -115,11 +150,11 @@ class _JoinTripViewState extends State<JoinTripView> {
                     ],
                     const SizedBox(height: AppSpacing.lg),
                     AppButton(
-                      text: 'Join Trip',
-                      icon: Icons.login_rounded,
+                      text: 'Find Trip',
+                      icon: Icons.search_rounded,
                       isFullWidth: true,
-                      isLoading: joinVm.isJoining,
-                      onPressed: _handleJoin,
+                      isLoading: joinVm.isLoadingPreview || joinVm.isJoining,
+                      onPressed: _handlePreviewOrJoin,
                     ),
                   ],
                 ),
@@ -151,7 +186,7 @@ class _JoinTripViewState extends State<JoinTripView> {
                     ),
                     const SizedBox(height: AppSpacing.md),
                     Text(
-                      'Or point camera at QR code',
+                      'Or point camera at QR code invite',
                       style: AppTypography.bodySmall(isDark: isDark),
                     ),
                   ],

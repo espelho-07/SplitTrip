@@ -1,34 +1,71 @@
 import 'dart:math';
 import 'package:uuid/uuid.dart';
+import '../../core/network/api_client.dart';
+import '../../core/network/realtime_client.dart';
 import '../../domain/models/guest_user.dart';
 import 'local_storage_service.dart';
 
 /// Manages Guest Anonymous identities, cryptographic recovery keys, and account linking.
 class AuthService {
-  final LocalStorageService _storage;
+  final LocalStorageService storage;
+  final ApiClient apiClient;
+  final RealtimeClient? realtimeClient;
   final Uuid _uuid = const Uuid();
 
-  AuthService(this._storage);
+  AuthService({
+    required this.storage,
+    required this.apiClient,
+    this.realtimeClient,
+  }) {
+    // Re-hydrate session token on startup
+    final user = getCurrentUser();
+    if (user != null && user.anonymousToken.isNotEmpty) {
+      apiClient.setAuthToken(user.anonymousToken);
+      realtimeClient?.setAuthToken(user.anonymousToken);
+    }
+  }
 
   /// Retrieves the existing cached session if present.
   GuestUser? getCurrentUser() {
-    final json = _storage.getSavedUser();
+    final json = storage.getSavedUser();
     if (json == null) return null;
     return GuestUser.fromJson(json);
   }
 
-  /// Creates a new guest anonymous user with server-resilient recovery key.
+  /// Creates a new guest anonymous user with server-side persistence and recovery key.
   Future<GuestUser> createGuestUser({
     required String displayName,
     String? avatarUrl,
   }) async {
-    final id = _uuid.v4();
+    final trimmedName = displayName.trim().isEmpty ? 'Traveler' : displayName.trim();
+
+    try {
+      final res = await apiClient.post('/auth/guest', body: {
+        'displayName': trimmedName,
+        'avatarUrl': avatarUrl,
+      });
+
+      if (res is Map<String, dynamic> && res.containsKey('user')) {
+        final userData = res['user'] as Map<String, dynamic>;
+        final token = res['token'] as String? ?? userData['anonymousToken'] as String? ?? '';
+
+        final user = GuestUser.fromJson(userData);
+        apiClient.setAuthToken(token);
+        realtimeClient?.setAuthToken(token);
+        await storage.saveUser(user.toJson());
+        return user;
+      }
+    } catch (_) {
+      // Offline fallback: generate local session and queue sync
+    }
+
+    final id = 'usr_${_uuid.v4().replaceAll('-', '').substring(0, 12)}';
     final recoveryKey = _generateRecoveryKey();
-    final token = 'anon_${_uuid.v4().replaceAll('-', '')}';
+    final token = 'kith_sess_${_uuid.v4().replaceAll('-', '')}';
 
     final user = GuestUser(
       id: id,
-      displayName: displayName.trim().isEmpty ? 'Traveler' : displayName.trim(),
+      displayName: trimmedName,
       avatarUrl: avatarUrl,
       recoveryKey: recoveryKey,
       anonymousToken: token,
@@ -36,32 +73,44 @@ class AuthService {
       isLinkedToAccount: false,
     );
 
-    await _storage.saveUser(user.toJson());
+    apiClient.setAuthToken(token);
+    realtimeClient?.setAuthToken(token);
+    await storage.saveUser(user.toJson());
     return user;
   }
 
-  /// Recovers a session via recovery key.
+  /// Recovers a session across devices via recovery key.
   Future<GuestUser?> recoverUser(String recoveryKey) async {
+    final cleanKey = recoveryKey.trim().toUpperCase();
+
+    try {
+      final res = await apiClient.post('/auth/recover', body: {
+        'recoveryKey': cleanKey,
+      });
+
+      if (res is Map<String, dynamic> && res.containsKey('user')) {
+        final userData = res['user'] as Map<String, dynamic>;
+        final token = res['token'] as String? ?? userData['anonymousToken'] as String? ?? '';
+
+        final user = GuestUser.fromJson(userData);
+        apiClient.setAuthToken(token);
+        realtimeClient?.setAuthToken(token);
+        await storage.saveUser(user.toJson());
+        return user;
+      }
+    } catch (_) {
+      // Offline fallback: check local match
+    }
+
     final existing = getCurrentUser();
-    if (existing != null && existing.recoveryKey.toUpperCase() == recoveryKey.toUpperCase()) {
+    if (existing != null && existing.recoveryKey.toUpperCase() == cleanKey) {
       return existing;
     }
-    // If user restored from a new install, reconstruct session
-    final id = _uuid.v4();
-    final recovered = GuestUser(
-      id: id,
-      displayName: 'Recovered Explorer',
-      recoveryKey: recoveryKey.toUpperCase(),
-      anonymousToken: 'anon_${_uuid.v4().replaceAll('-', '')}',
-      createdAt: DateTime.now(),
-      isLinkedToAccount: false,
-    );
-    await _storage.saveUser(recovered.toJson());
-    return recovered;
+
+    return null;
   }
 
   /// Links an existing guest identity to a permanent account (e.g. Google Sign-In)
-  /// preserving all existing trips and history.
   Future<GuestUser> linkToAccount({
     required String email,
     required String provider,
@@ -76,7 +125,7 @@ class AuthService {
       email: email,
     );
 
-    await _storage.saveUser(updated.toJson());
+    await storage.saveUser(updated.toJson());
     return updated;
   }
 

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
@@ -24,6 +23,7 @@ import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/trip_detail_viewmodel.dart';
 import 'widgets/settlement_sheet.dart';
+import 'widgets/trip_qr_sheet.dart';
 
 class TripDetailView extends StatefulWidget {
   final String tripId;
@@ -187,66 +187,11 @@ class _TripDetailViewState extends State<TripDetailView> {
   }
 
   void _showInviteShareDialog(Trip trip) {
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) {
-        final isDark = Theme.of(ctx).brightness == Brightness.dark;
-        return AlertDialog(
-          title: const Text('Invite Friends'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Share this 6-character code with your friends so they can join "${trip.name}" on Kith.',
-                style: AppTypography.bodySmall(isDark: isDark),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                decoration: BoxDecoration(
-                  color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
-                  borderRadius: AppRadius.mdBorder,
-                  border: Border.all(
-                    color: isDark ? AppColors.darkBorderStrong : AppColors.lightBorderStrong,
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      trip.inviteCode,
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 6.0,
-                        fontFamily: 'monospace',
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    IconButton(
-                      icon: const Icon(Icons.copy_rounded, size: 20),
-                      onPressed: () {
-                        Clipboard.setData(ClipboardData(text: trip.inviteCode));
-                        HapticHelper.success();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Trip code copied to clipboard!')),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            AppButton(
-              text: 'Done',
-              variant: AppButtonVariant.secondary,
-              onPressed: () => Navigator.pop(ctx),
-            ),
-          ],
-        );
-      },
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => TripQrSheet(trip: trip),
     );
   }
 

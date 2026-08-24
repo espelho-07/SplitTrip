@@ -1,0 +1,16 @@
+[
+  {
+    "id": "ce64f759-e82e-404a-ab2e-94790c1883ab",
+    "token": "kith_sess_db0f1acb99c332de1087e93b7bd7941275a0a729a42d1de8",
+    "userId": "usr_11a8df02b459",
+    "createdAt": "2026-08-24T04:34:15.272Z",
+    "expiresAt": "2027-08-24T04:34:15.272Z"
+  },
+  {
+    "id": "082112fc-5c9c-4bed-ac6b-a1e9e951cee4",
+    "token": "kith_sess_4afe1efb0d8f3591214a52fe9bd111b23cc8228d2ccfbf96",
+    "userId": "usr_6eb11d8cd96e",
+    "createdAt": "2026-08-24T04:34:15.273Z",
+    "expiresAt": "2027-08-24T04:34:15.273Z"
+  }
+]

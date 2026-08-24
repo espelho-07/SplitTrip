@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../core/network/realtime_client.dart';
 import '../../data/repositories/expense_repository.dart';
 import '../../data/repositories/trip_repository.dart';
 import '../../domain/enums/trip_lifecycle.dart';
@@ -9,17 +11,24 @@ import '../../domain/models/trip.dart';
 class TripDetailViewModel extends ChangeNotifier {
   final TripRepository tripRepo;
   final ExpenseRepository expenseRepo;
+  final RealtimeClient? realtimeClient;
 
   Trip? _trip;
   List<Expense> _expenses = [];
   BalanceSummary _balanceSummary = BalanceSummary.empty();
   bool _isLoading = false;
   String? _errorMessage;
+  String? _currentUserId;
+
+  StreamSubscription<RealtimeTripEvent>? _realtimeSubscription;
 
   TripDetailViewModel({
     required this.tripRepo,
     required this.expenseRepo,
-  });
+    this.realtimeClient,
+  }) {
+    _subscribeToRealtimeEvents();
+  }
 
   Trip? get trip => _trip;
   List<Expense> get expenses => _expenses;
@@ -27,10 +36,26 @@ class TripDetailViewModel extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
+  void _subscribeToRealtimeEvents() {
+    if (realtimeClient == null) return;
+    _realtimeSubscription = realtimeClient!.events.listen((event) {
+      if (_trip == null || event.tripId != _trip!.id) return;
+
+      if (_currentUserId != null) {
+        // Automatically reconcile trip state on realtime push
+        refresh(_currentUserId!);
+      }
+    });
+  }
+
   Future<void> loadTrip(String tripId, String currentUserId) async {
+    _currentUserId = currentUserId;
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
+
+    // Subscribe to WebSocket room
+    realtimeClient?.subscribeToTrip(tripId);
 
     try {
       _trip = await tripRepo.getTripById(tripId);
@@ -53,7 +78,20 @@ class TripDetailViewModel extends ChangeNotifier {
 
   Future<void> refresh(String currentUserId) async {
     if (_trip != null) {
-      await loadTrip(_trip!.id, currentUserId);
+      try {
+        final updatedTrip = await tripRepo.getTripById(_trip!.id);
+        if (updatedTrip != null) {
+          _trip = updatedTrip;
+          _expenses = await expenseRepo.getExpenses(_trip!.id);
+          _balanceSummary = await expenseRepo.getBalanceSummary(
+            trip: _trip!,
+            currentUserId: currentUserId,
+          );
+          notifyListeners();
+        }
+      } catch (_) {
+        // Silent background refresh failure
+      }
     }
   }
 
@@ -129,10 +167,19 @@ class TripDetailViewModel extends ChangeNotifier {
     if (_trip == null) return;
     try {
       await expenseRepo.deleteExpense(tripId: _trip!.id, expenseId: expenseId);
-      await loadTrip(_trip!.id, currentUserId);
+      await refresh(currentUserId);
     } catch (e) {
       _errorMessage = e.toString();
       notifyListeners();
     }
+  }
+
+  @override
+  void dispose() {
+    if (_trip != null) {
+      realtimeClient?.unsubscribeFromTrip(_trip!.id);
+    }
+    _realtimeSubscription?.cancel();
+    super.dispose();
   }
 }

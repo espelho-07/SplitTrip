@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'core/network/api_client.dart';
+import 'core/network/realtime_client.dart';
 import 'core/theme/app_theme.dart';
 import 'data/repositories/expense_repository.dart';
 import 'data/repositories/trip_repository.dart';
@@ -28,15 +31,37 @@ void main() async {
     ),
   );
 
-  // Initialize Local-First Persistent Storage
+  // Initialize Networking & Realtime Clients
+  final apiClient = ApiClient();
+  final realtimeClient = RealtimeClient();
+  realtimeClient.connect();
+
+  // Initialize Local-First Persistent Storage & Services
   final storageService = await LocalStorageService.init();
   final syncService = SyncService(storageService);
-  final authService = AuthService(storageService);
+  final authService = AuthService(
+    storage: storageService,
+    apiClient: apiClient,
+    realtimeClient: realtimeClient,
+  );
+
+  // Trigger background offline queue flush
+  unawaited(syncService.flushQueue(apiClient));
 
   // Repositories
   final userRepo = UserRepository(authService: authService);
-  final tripRepo = TripRepository(storage: storageService, syncService: syncService);
-  final expenseRepo = ExpenseRepository(storage: storageService, syncService: syncService);
+  final tripRepo = TripRepository(
+    storage: storageService,
+    syncService: syncService,
+    apiClient: apiClient,
+    realtimeClient: realtimeClient,
+  );
+  final expenseRepo = ExpenseRepository(
+    storage: storageService,
+    syncService: syncService,
+    apiClient: apiClient,
+    realtimeClient: realtimeClient,
+  );
 
   runApp(
     MultiProvider(
@@ -47,7 +72,11 @@ void main() async {
           create: (_) => HomeViewModel(tripRepo: tripRepo, expenseRepo: expenseRepo),
         ),
         ChangeNotifierProvider(
-          create: (_) => TripDetailViewModel(tripRepo: tripRepo, expenseRepo: expenseRepo),
+          create: (_) => TripDetailViewModel(
+            tripRepo: tripRepo,
+            expenseRepo: expenseRepo,
+            realtimeClient: realtimeClient,
+          ),
         ),
         ChangeNotifierProvider(create: (_) => CreateTripViewModel(tripRepo: tripRepo)),
         ChangeNotifierProvider(create: (_) => JoinTripViewModel(tripRepo: tripRepo)),

@@ -47,6 +47,44 @@ class BalanceSummary {
   bool get isCurrentUserInDebt => currentUserNetBalanceInPaise < 0;
   bool get isCurrentUserSettled => currentUserNetBalanceInPaise == 0;
 
+  Map<String, dynamic> toJson() => {
+    'totalTripSpendingInPaise': totalTripSpentInPaise,
+    'netBalancesInPaise': memberNetBalances,
+    'currentUserNetBalanceInPaise': currentUserNetBalanceInPaise,
+    'debtsToPay': debtsToPay.map((d) => d.toJson()).toList(),
+    'debtsToReceive': debtsToReceive.map((d) => d.toJson()).toList(),
+    'simplifiedSettlements': simplifiedSettlements.map((s) => s.toJson()).toList(),
+  };
+
+  factory BalanceSummary.fromJson(Map<String, dynamic> json) {
+    final rawNet = json['netBalancesInPaise'] as Map<String, dynamic>? ?? {};
+    final netBalances = rawNet.map((k, v) => MapEntry(k, (v as num).toInt()));
+
+    final rawSettlements = json['simplifiedSettlements'] as List? ?? [];
+    final settlements = rawSettlements
+        .map((s) => SettlementTransaction.fromJson(s as Map<String, dynamic>))
+        .toList();
+
+    final rawToPay = json['debtsToPay'] as List? ?? [];
+    final debtsToPay = rawToPay
+        .map((d) => DebtTransfer.fromJson(d as Map<String, dynamic>))
+        .toList();
+
+    final rawToReceive = json['debtsToReceive'] as List? ?? [];
+    final debtsToReceive = rawToReceive
+        .map((d) => DebtTransfer.fromJson(d as Map<String, dynamic>))
+        .toList();
+
+    return BalanceSummary(
+      totalTripSpentInPaise: (json['totalTripSpendingInPaise'] as num?)?.toInt() ?? 0,
+      memberNetBalances: netBalances,
+      currentUserNetBalanceInPaise: (json['currentUserNetBalanceInPaise'] as num?)?.toInt() ?? 0,
+      debtsToPay: debtsToPay,
+      debtsToReceive: debtsToReceive,
+      simplifiedSettlements: settlements,
+    );
+  }
+
   static BalanceSummary empty() {
     return const BalanceSummary(
       totalTripSpentInPaise: 0,

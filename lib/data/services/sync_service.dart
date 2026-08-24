@@ -1,4 +1,7 @@
+import 'dart:async';
 import 'package:uuid/uuid.dart';
+import '../../core/network/api_client.dart';
+import '../../core/network/api_exceptions.dart';
 import 'local_storage_service.dart';
 
 enum MutationType {
@@ -39,6 +42,14 @@ class SyncMutation {
     createdAt: DateTime.parse(json['createdAt'] as String),
     retryCount: json['retryCount'] as int? ?? 0,
   );
+
+  SyncMutation copyWith({int? retryCount}) => SyncMutation(
+    id: id,
+    type: type,
+    payload: payload,
+    createdAt: createdAt,
+    retryCount: retryCount ?? this.retryCount,
+  );
 }
 
 /// Offline-first synchronization queue service.
@@ -46,6 +57,7 @@ class SyncMutation {
 class SyncService {
   final LocalStorageService _storage;
   final Uuid _uuid = const Uuid();
+  bool _isProcessing = false;
 
   SyncService(this._storage);
 
@@ -71,5 +83,55 @@ class SyncService {
     final queue = getPendingMutations();
     queue.removeWhere((m) => m.id == id);
     await _storage.saveMutationQueue(queue.map((m) => m.toJson()).toList());
+  }
+
+  /// Processes all pending offline mutations against the remote backend.
+  Future<void> flushQueue(ApiClient apiClient) async {
+    if (_isProcessing) return;
+    _isProcessing = true;
+
+    try {
+      final queue = getPendingMutations();
+      for (final mutation in queue) {
+        try {
+          await _executeMutation(apiClient, mutation);
+          await removeMutation(mutation.id);
+        } on NetworkException catch (_) {
+          // Break loop and retry later when connection returns
+          break;
+        } on ApiException catch (_) {
+          // Remove unrecoverable client errors to prevent blocking the queue
+          await removeMutation(mutation.id);
+        } catch (_) {
+          break;
+        }
+      }
+    } finally {
+      _isProcessing = false;
+    }
+  }
+
+  Future<void> _executeMutation(ApiClient apiClient, SyncMutation mutation) async {
+    switch (mutation.type) {
+      case MutationType.createTrip:
+        await apiClient.post('/trips', body: mutation.payload);
+        break;
+      case MutationType.joinTrip:
+        await apiClient.post('/trips/join', body: mutation.payload);
+        break;
+      case MutationType.updateTripLifecycle:
+        final tripId = mutation.payload['tripId'] as String;
+        await apiClient.patch('/trips/$tripId/lifecycle', body: mutation.payload);
+        break;
+      case MutationType.addExpense:
+        final tripId = mutation.payload['tripId'] as String;
+        await apiClient.post('/trips/$tripId/expenses', body: mutation.payload);
+        break;
+      case MutationType.deleteExpense:
+        final tripId = mutation.payload['tripId'] as String;
+        final expenseId = mutation.payload['expenseId'] as String;
+        await apiClient.delete('/trips/$tripId/expenses/$expenseId');
+        break;
+    }
   }
 }

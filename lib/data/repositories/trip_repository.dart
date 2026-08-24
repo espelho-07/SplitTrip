@@ -1,35 +1,84 @@
 import 'dart:math';
 import 'package:uuid/uuid.dart';
+import '../../core/network/api_client.dart';
+import '../../core/network/realtime_client.dart';
 import '../../domain/enums/trip_lifecycle.dart';
 import '../../domain/models/guest_user.dart';
 import '../../domain/models/trip.dart';
 import '../../domain/models/trip_member.dart';
+import '../../domain/models/trip_preview.dart';
 import '../services/local_storage_service.dart';
 import '../services/sync_service.dart';
 
 class TripRepository {
   final LocalStorageService storage;
   final SyncService syncService;
+  final ApiClient apiClient;
+  final RealtimeClient? realtimeClient;
   final Uuid _uuid = const Uuid();
 
   TripRepository({
     required this.storage,
     required this.syncService,
+    required this.apiClient,
+    this.realtimeClient,
   });
 
-  /// Returns all cached trips.
+  /// Returns all trips, querying the backend when online and falling back to offline cache.
   Future<List<Trip>> getTrips() async {
+    try {
+      final res = await apiClient.get('/trips');
+      if (res is List) {
+        final trips = res.map((j) => Trip.fromJson(j as Map<String, dynamic>)).toList();
+        await storage.saveTrips(trips.map((t) => t.toJson()).toList());
+        return trips;
+      }
+    } catch (_) {
+      // Offline fallback: load from persistent local cache
+    }
+
     final raw = storage.getSavedTrips();
     return raw.map((json) => Trip.fromJson(json)).toList();
   }
 
   /// Returns a specific trip by its ID.
   Future<Trip?> getTripById(String tripId) async {
+    try {
+      final res = await apiClient.get('/trips/$tripId');
+      if (res is Map<String, dynamic>) {
+        final trip = Trip.fromJson(res);
+        final currentTrips = await getTrips();
+        final idx = currentTrips.indexWhere((t) => t.id == trip.id);
+        if (idx != -1) {
+          currentTrips[idx] = trip;
+        } else {
+          currentTrips.insert(0, trip);
+        }
+        await storage.saveTrips(currentTrips.map((t) => t.toJson()).toList());
+        return trip;
+      }
+    } catch (_) {
+      // Offline fallback
+    }
+
     final trips = await getTrips();
     return trips.where((t) => t.id == tripId).firstOrNull;
   }
 
-  /// Creates a new trip with the current user as creator and optional initial friend members.
+  /// Fetches a non-sensitive preview of a trip by invite code before joining.
+  Future<TripPreview?> getTripPreview(String inviteCode) async {
+    try {
+      final res = await apiClient.get('/trips/preview', queryParams: {'code': inviteCode.trim()});
+      if (res is Map<String, dynamic>) {
+        return TripPreview.fromJson(res);
+      }
+    } catch (_) {
+      // Offline fallback
+    }
+    return null;
+  }
+
+  /// Creates a new trip on the backend with the current user as creator.
   Future<Trip> createTrip({
     required String name,
     String? description,
@@ -39,12 +88,34 @@ class TripRepository {
     required GuestUser creator,
     List<String> initialFriendNames = const [],
   }) async {
-    final tripId = _uuid.v4();
+    final payload = {
+      'name': name.trim(),
+      'description': description?.trim(),
+      'emoji': emoji,
+      'coverGradientIndex': coverGradientIndex,
+      'currencyCode': currencyCode,
+      'initialFriendNames': initialFriendNames,
+    };
+
+    try {
+      final res = await apiClient.post('/trips', body: payload);
+      if (res is Map<String, dynamic>) {
+        final trip = Trip.fromJson(res);
+        final currentTrips = await getTrips();
+        currentTrips.insert(0, trip);
+        await storage.saveTrips(currentTrips.map((t) => t.toJson()).toList());
+        return trip;
+      }
+    } catch (_) {
+      // Offline fallback
+    }
+
+    final tripId = 'trip_${_uuid.v4().replaceAll('-', '').substring(0, 12)}';
     final inviteCode = _generateInviteCode();
 
     final members = <TripMember>[
       TripMember(
-        id: _uuid.v4(),
+        id: 'mbr_${_uuid.v4().replaceAll('-', '').substring(0, 10)}',
         userId: creator.id,
         displayName: creator.displayName,
         avatarUrl: creator.avatarUrl,
@@ -53,12 +124,11 @@ class TripRepository {
       ),
     ];
 
-    // Add initial friends if provided
     for (final friendName in initialFriendNames) {
       if (friendName.trim().isNotEmpty) {
         members.add(TripMember(
-          id: _uuid.v4(),
-          userId: 'guest_${_uuid.v4().substring(0, 8)}',
+          id: 'mbr_${_uuid.v4().replaceAll('-', '').substring(0, 10)}',
+          userId: 'guest_${_uuid.v4().replaceAll('-', '').substring(0, 8)}',
           displayName: friendName.trim(),
           role: 'member',
           joinedAt: DateTime.now(),
@@ -74,9 +144,9 @@ class TripRepository {
       coverGradientIndex: coverGradientIndex,
       currencyCode: currencyCode,
       creatorId: creator.id,
+      inviteCode: inviteCode,
       members: members,
       lifecycleState: TripLifecycle.active,
-      inviteCode: inviteCode,
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );
@@ -85,39 +155,53 @@ class TripRepository {
     currentTrips.insert(0, newTrip);
     await storage.saveTrips(currentTrips.map((t) => t.toJson()).toList());
 
-    // Enqueue sync mutation
-    await syncService.enqueueMutation(
-      MutationType.createTrip,
-      newTrip.toJson(),
-    );
+    await syncService.enqueueMutation(MutationType.createTrip, payload);
 
     return newTrip;
   }
 
-  /// Joins an existing trip using an invite code or trip ID.
+  /// Joins a trip via 6-digit alphanumeric invite code.
   Future<Trip?> joinTrip({
     required String inviteCodeOrId,
     required GuestUser user,
   }) async {
-    final trips = await getTrips();
     final cleanCode = inviteCodeOrId.trim().toUpperCase();
 
+    try {
+      final res = await apiClient.post('/trips/join', body: {'inviteCode': cleanCode});
+      if (res is Map<String, dynamic>) {
+        final trip = Trip.fromJson(res);
+        final currentTrips = await getTrips();
+        final idx = currentTrips.indexWhere((t) => t.id == trip.id);
+        if (idx != -1) {
+          currentTrips[idx] = trip;
+        } else {
+          currentTrips.insert(0, trip);
+        }
+        await storage.saveTrips(currentTrips.map((t) => t.toJson()).toList());
+        return trip;
+      }
+    } catch (_) {
+      // Offline fallback: check local match
+    }
+
+    final trips = await getTrips();
     final matchIndex = trips.indexWhere(
-      (t) => t.inviteCode.toUpperCase() == cleanCode || t.id == inviteCodeOrId.trim(),
+      (t) => t.inviteCode.toUpperCase() == cleanCode || t.id == cleanCode,
     );
 
-    if (matchIndex == -1) return null;
+    if (matchIndex == -1) {
+      return null;
+    }
 
     final targetTrip = trips[matchIndex];
-    final alreadyMember = targetTrip.members.any((m) => m.userId == user.id);
-
-    if (alreadyMember) {
+    if (targetTrip.members.any((m) => m.userId == user.id)) {
       return targetTrip;
     }
 
     final updatedMembers = List<TripMember>.from(targetTrip.members);
     final newMember = TripMember(
-      id: _uuid.v4(),
+      id: 'mbr_${_uuid.v4().replaceAll('-', '').substring(0, 10)}',
       userId: user.id,
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
@@ -136,7 +220,7 @@ class TripRepository {
 
     await syncService.enqueueMutation(
       MutationType.joinTrip,
-      {'tripId': targetTrip.id, 'member': newMember.toJson()},
+      {'inviteCode': cleanCode},
     );
 
     return updatedTrip;
@@ -147,6 +231,24 @@ class TripRepository {
     required String tripId,
     required TripLifecycle newLifecycle,
   }) async {
+    try {
+      final res = await apiClient.patch('/trips/$tripId/lifecycle', body: {
+        'lifecycleState': newLifecycle.name,
+      });
+      if (res is Map<String, dynamic>) {
+        final updatedTrip = Trip.fromJson(res);
+        final trips = await getTrips();
+        final idx = trips.indexWhere((t) => t.id == tripId);
+        if (idx != -1) {
+          trips[idx] = updatedTrip;
+          await storage.saveTrips(trips.map((t) => t.toJson()).toList());
+        }
+        return updatedTrip;
+      }
+    } catch (_) {
+      // Offline fallback
+    }
+
     final trips = await getTrips();
     final index = trips.indexWhere((t) => t.id == tripId);
     if (index == -1) {
@@ -163,7 +265,7 @@ class TripRepository {
 
     await syncService.enqueueMutation(
       MutationType.updateTripLifecycle,
-      {'tripId': tripId, 'lifecycle': newLifecycle.name},
+      {'tripId': tripId, 'lifecycleState': newLifecycle.name},
     );
 
     return updatedTrip;
@@ -174,14 +276,32 @@ class TripRepository {
     required String tripId,
     required String displayName,
   }) async {
+    try {
+      final res = await apiClient.post('/trips/$tripId/members', body: {
+        'displayName': displayName.trim(),
+      });
+      if (res is Map<String, dynamic>) {
+        final updatedTrip = Trip.fromJson(res);
+        final trips = await getTrips();
+        final idx = trips.indexWhere((t) => t.id == tripId);
+        if (idx != -1) {
+          trips[idx] = updatedTrip;
+          await storage.saveTrips(trips.map((t) => t.toJson()).toList());
+        }
+        return updatedTrip;
+      }
+    } catch (_) {
+      // Offline fallback
+    }
+
     final trips = await getTrips();
     final index = trips.indexWhere((t) => t.id == tripId);
     if (index == -1) throw StateError('Trip not found');
 
     final updatedMembers = List<TripMember>.from(trips[index].members);
     final newMember = TripMember(
-      id: _uuid.v4(),
-      userId: 'guest_${_uuid.v4().substring(0, 8)}',
+      id: 'mbr_${_uuid.v4().replaceAll('-', '').substring(0, 10)}',
+      userId: 'guest_${_uuid.v4().replaceAll('-', '').substring(0, 8)}',
       displayName: displayName.trim(),
       role: 'member',
       joinedAt: DateTime.now(),
