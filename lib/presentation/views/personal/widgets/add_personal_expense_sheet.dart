@@ -641,20 +641,26 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Row(
-                                children: [
-                                  const Icon(Icons.sync_alt_rounded, size: 18, color: AppColors.emeraldPrimary),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'Sync / Add to a Trip',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                      color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                              Expanded(
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.sync_alt_rounded, size: 18, color: AppColors.emeraldPrimary),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'Sync / Add to a Trip',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
+                              const SizedBox(width: 8),
                               Switch.adaptive(
                                 value: _syncToTrip,
                                 activeTrackColor: AppColors.emeraldPrimary,

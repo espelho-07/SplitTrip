@@ -654,42 +654,56 @@ class _TripDetailViewState extends State<TripDetailView> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Total Spent', style: TextStyle(color: Colors.white70, fontSize: 11)),
-                  const SizedBox(height: 2),
-                  Text(
-                    CurrencyFormatter.formatPaise(
-                      balanceSummary.totalTripSpentInPaise,
-                      currencyCode: trip.currencyCode,
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Total Spent', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                    const SizedBox(height: 2),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        CurrencyFormatter.formatPaise(
+                          balanceSummary.totalTripSpentInPaise,
+                          currencyCode: trip.currencyCode,
+                        ),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('You Spent', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 2),
-                  Text(
-                    CurrencyFormatter.formatPaise(
-                      userPaidPaise,
-                      currencyCode: trip.currencyCode,
+              const SizedBox(width: 6),
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('You Spent', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 2),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        CurrencyFormatter.formatPaise(
+                          userPaidPaise,
+                          currencyCode: trip.currencyCode,
+                        ),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                     ),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
+              const SizedBox(width: 6),
               InkWell(
                 onTap: () {
                   HapticHelper.light();
@@ -697,7 +711,7 @@ class _TripDetailViewState extends State<TripDetailView> {
                 },
                 borderRadius: BorderRadius.circular(8),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(8),
@@ -706,7 +720,7 @@ class _TripDetailViewState extends State<TripDetailView> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.qr_code_2_rounded, size: 15, color: Colors.white),
+                      const Icon(Icons.qr_code_2_rounded, size: 14, color: Colors.white),
                       const SizedBox(width: 4),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -716,10 +730,10 @@ class _TripDetailViewState extends State<TripDetailView> {
                             trip.inviteCode,
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 13,
+                              fontSize: 12,
                               fontWeight: FontWeight.w800,
                               fontFamily: 'monospace',
-                              letterSpacing: 1.5,
+                              letterSpacing: 1.2,
                             ),
                           ),
                         ],

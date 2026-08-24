@@ -182,101 +182,53 @@ class PersonalHomeTab extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'SPENT ${vm.timeFilter.label.toUpperCase()}',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.2,
-                  color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+              Expanded(
+                child: Text(
+                  'SPENT ${vm.timeFilter.label.toUpperCase()}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                    color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              Row(
-                children: [
-                  // Sync from Trips pill
-                  InkWell(
-                    onTap: () {
-                      final user = context.read<AuthViewModel>().currentUser;
-                      if (user != null) {
-                        vm.toggleIncludeTripExpenses(user.id);
-                      }
-                    },
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: vm.includeTripExpenses
-                            ? AppColors.emeraldPrimary.withValues(alpha: 0.15)
-                            : (isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05)),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: vm.includeTripExpenses
-                              ? AppColors.emeraldPrimary.withValues(alpha: 0.4)
-                              : Colors.transparent,
+              InkWell(
+                onTap: () {
+                  SetBudgetDialog.show(
+                    context,
+                    currentBudgetPaise: budget.monthlyLimitInPaise,
+                    monthYear: vm.currentMonthKey,
+                  );
+                },
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        budget.hasBudget
+                            ? Icons.tune_rounded
+                            : Icons.add_circle_outline_rounded,
+                        size: 14,
+                        color: AppColors.emeraldPrimary,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        budget.hasBudget
+                            ? 'Budget: ${CurrencyFormatter.formatPaise(budget.monthlyLimitInPaise, currencyCode: 'INR')}'
+                            : 'Set Budget',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.emeraldPrimary,
                         ),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.sync_alt_rounded,
-                            size: 13,
-                            color: vm.includeTripExpenses
-                                ? AppColors.emeraldPrimary
-                                : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            vm.includeTripExpenses ? 'Trips Synced' : 'Sync from Trips',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: vm.includeTripExpenses
-                                  ? AppColors.emeraldPrimary
-                                  : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  InkWell(
-                    onTap: () {
-                      SetBudgetDialog.show(
-                        context,
-                        currentBudgetPaise: budget.monthlyLimitInPaise,
-                        monthYear: vm.currentMonthKey,
-                      );
-                    },
-                    borderRadius: BorderRadius.circular(8),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      child: Row(
-                        children: [
-                          Icon(
-                            budget.hasBudget
-                                ? Icons.tune_rounded
-                                : Icons.add_circle_outline_rounded,
-                            size: 14,
-                            color: AppColors.emeraldPrimary,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            budget.hasBudget
-                                ? 'Budget: ${CurrencyFormatter.formatPaise(budget.monthlyLimitInPaise, currencyCode: 'INR')}'
-                                : 'Set Budget',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.emeraldPrimary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ],
           ),
@@ -285,33 +237,83 @@ class PersonalHomeTab extends StatelessWidget {
             amountInPaise: totalSpentPaise,
             size: CurrencyDisplaySize.hero,
           ),
-          const SizedBox(height: AppSpacing.xs),
+          const SizedBox(height: AppSpacing.sm),
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Text(
-                avgPerDayPaise > 0
-                    ? '${CurrencyFormatter.formatPaise(avgPerDayPaise, currencyCode: 'INR')} / day average'
-                    : 'No spending recorded for this period',
-                style: AppTypography.bodySmall(isDark: isDark),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      avgPerDayPaise > 0
+                          ? '${CurrencyFormatter.formatPaise(avgPerDayPaise, currencyCode: 'INR')} / day avg'
+                          : 'No spending recorded',
+                      style: AppTypography.bodySmall(isDark: isDark),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (vm.includeTripExpenses) ...[
+                      const SizedBox(height: 2),
+                      const Text(
+                        '✓ Trip spends included',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.emeraldPrimary,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-              if (vm.includeTripExpenses) ...[
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              const SizedBox(width: 8),
+              InkWell(
+                onTap: () {
+                  final user = context.read<AuthViewModel>().currentUser;
+                  if (user != null) {
+                    vm.toggleIncludeTripExpenses(user.id);
+                  }
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppColors.emeraldPrimary.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Text(
-                    '+ Trips included',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.emeraldPrimary,
+                    color: vm.includeTripExpenses
+                        ? AppColors.emeraldPrimary.withValues(alpha: 0.15)
+                        : (isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05)),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: vm.includeTripExpenses
+                          ? AppColors.emeraldPrimary.withValues(alpha: 0.5)
+                          : (isDark ? Colors.white24 : Colors.black12),
                     ),
                   ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.sync_alt_rounded,
+                        size: 13,
+                        color: vm.includeTripExpenses
+                            ? AppColors.emeraldPrimary
+                            : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        vm.includeTripExpenses ? 'Trips Synced' : 'Sync from Trips',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: vm.includeTripExpenses
+                              ? AppColors.emeraldPrimary
+                              : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ],
+              ),
             ],
           ),
           if (budget.hasBudget && budget.monthlyLimitInPaise > 0) ...[
