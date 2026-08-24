@@ -4,8 +4,9 @@ import '../theme/app_elevation.dart';
 import '../theme/app_radius.dart';
 import '../utils/haptic_feedback_helper.dart';
 
-/// Refined card surface that adapts cleanly between light and layered dark modes.
-class SurfaceCard extends StatelessWidget {
+/// Refined Apple-grade card surface that adapts cleanly between light and layered dark modes.
+/// Includes smooth tactile scale micro-interaction when tapped.
+class SurfaceCard extends StatefulWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
   final VoidCallback? onTap;
@@ -26,21 +27,65 @@ class SurfaceCard extends StatelessWidget {
   });
 
   @override
+  State<SurfaceCard> createState() => _SurfaceCardState();
+}
+
+class _SurfaceCardState extends State<SurfaceCard> with SingleTickerProviderStateMixin {
+  late AnimationController _animController;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.985).animate(
+      CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic),
+    );
+  }
+
+  @override
+  void dispose() {
+    _animController.dispose();
+    super.dispose();
+  }
+
+  void _onTapDown(TapDownDetails _) {
+    if (widget.onTap != null) {
+      _animController.forward();
+    }
+  }
+
+  void _onTapUp(TapUpDetails _) {
+    if (widget.onTap != null) {
+      _animController.reverse();
+    }
+  }
+
+  void _onTapCancel() {
+    if (widget.onTap != null) {
+      _animController.reverse();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final r = borderRadius ?? AppRadius.lgBorder;
+    final r = widget.borderRadius ?? AppRadius.lgBorder;
 
-    final bg = backgroundColor ??
+    final bg = widget.backgroundColor ??
         (isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard);
 
-    final b = border ??
+    final b = widget.border ??
         Border.all(
           color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
           width: 1,
         );
 
-    final shadows = hasElevation
-        ? (isDark ? AppElevation.darkSubtle : AppElevation.lightCard)
+    final shadows = widget.hasElevation
+        ? (isDark ? AppElevation.darkCard : AppElevation.lightCard)
         : null;
 
     Widget card = Container(
@@ -50,20 +95,21 @@ class SurfaceCard extends StatelessWidget {
         border: b,
         boxShadow: shadows,
       ),
-      padding: padding,
-      child: child,
+      padding: widget.padding,
+      child: widget.child,
     );
 
-    if (onTap != null) {
-      return Material(
-        color: Colors.transparent,
-        child: InkWell(
+    if (widget.onTap != null) {
+      return ScaleTransition(
+        scale: _scaleAnimation,
+        child: GestureDetector(
+          onTapDown: _onTapDown,
+          onTapUp: _onTapUp,
+          onTapCancel: _onTapCancel,
           onTap: () {
             HapticHelper.light();
-            onTap!();
+            widget.onTap!();
           },
-          borderRadius: r,
-          splashFactory: InkSparkle.splashFactory,
           child: card,
         ),
       );

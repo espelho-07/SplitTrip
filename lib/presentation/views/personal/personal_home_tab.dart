@@ -8,6 +8,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
+import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/currency_display.dart';
 import '../../../core/widgets/surface_card.dart';
@@ -1074,24 +1075,29 @@ class PersonalHomeTab extends StatelessWidget {
   }
 
   Widget _buildExpenseTile(BuildContext context, PersonalExpense expense, bool isDark) {
+    final dateStr = DateFormatter.isToday(expense.date)
+        ? 'Today'
+        : DateFormatter.formatDate(expense.date);
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+      padding: const EdgeInsets.only(bottom: 2),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: () {
+            HapticHelper.light();
             PersonalExpenseDetailSheet.show(context, expense: expense);
           },
           borderRadius: AppRadius.mdBorder,
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+            padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 6),
             child: Row(
               children: [
                 Container(
-                  width: 44,
-                  height: 44,
+                  width: 42,
+                  height: 42,
                   decoration: BoxDecoration(
-                    color: expense.category.color.withValues(alpha: 0.12),
+                    color: expense.category.color.withValues(alpha: isDark ? 0.16 : 0.10),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   alignment: Alignment.center,
@@ -1100,7 +1106,7 @@ class PersonalHomeTab extends StatelessWidget {
                     style: const TextStyle(fontSize: 20),
                   ),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1112,22 +1118,46 @@ class PersonalHomeTab extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                           color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 2),
-                      Text(
-                        DateFormatter.isToday(expense.date)
-                            ? 'Today'
-                            : DateFormatter.formatDate(expense.date),
-                        style: AppTypography.bodySmall(isDark: isDark),
+                      Row(
+                        children: [
+                          Text(
+                            '$dateStr · ${expense.category.displayName}',
+                            style: AppTypography.bodySmall(isDark: isDark),
+                          ),
+                          if (expense.id.startsWith('trip_') || (expense.notes?.contains('Trip Spend') ?? false)) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: AppColors.indigoAccent.withValues(alpha: 0.14),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                'Trip',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.indigoAccent,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ],
                   ),
                 ),
+                const SizedBox(width: 10),
                 Text(
                   CurrencyFormatter.formatPaise(expense.amountInPaise, currencyCode: 'INR'),
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
+                    fontFeatures: const [FontFeature.tabularFigures()],
                     color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                   ),
                 ),

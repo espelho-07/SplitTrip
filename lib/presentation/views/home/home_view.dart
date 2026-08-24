@@ -656,26 +656,41 @@ class _HomeViewState extends State<HomeView> {
           TripsHomeTab(),
         ],
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (index) {
-          if (_currentIndex != index) {
-            setState(() => _currentIndex = index);
-            HapticHelper.selection();
-          }
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.receipt_long_outlined),
-            selectedIcon: Icon(Icons.receipt_long_rounded),
-            label: 'Expense',
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+          border: Border(
+            top: BorderSide(
+              color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+              width: 1,
+            ),
           ),
-          NavigationDestination(
-            icon: Icon(Icons.flight_takeoff_outlined),
-            selectedIcon: Icon(Icons.flight_takeoff_rounded),
-            label: 'Trips',
-          ),
-        ],
+        ),
+        child: NavigationBar(
+          selectedIndex: _currentIndex,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          indicatorColor: AppColors.emeraldPrimary.withValues(alpha: 0.16),
+          height: 64,
+          onDestinationSelected: (index) {
+            if (_currentIndex != index) {
+              setState(() => _currentIndex = index);
+              HapticHelper.selection();
+            }
+          },
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.receipt_long_outlined, size: 22),
+              selectedIcon: Icon(Icons.receipt_long_rounded, size: 22, color: AppColors.emeraldPrimary),
+              label: 'Expenses',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.flight_takeoff_outlined, size: 22),
+              selectedIcon: Icon(Icons.flight_takeoff_rounded, size: 22, color: AppColors.emeraldPrimary),
+              label: 'Trips',
+            ),
+          ],
+        ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
@@ -688,7 +703,9 @@ class _HomeViewState extends State<HomeView> {
         },
         backgroundColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
         foregroundColor: isDark ? AppColors.darkBackground : Colors.white,
-        elevation: 4,
+        elevation: 3,
+        highlightElevation: 5,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         icon: const Icon(Icons.add_rounded, size: 20),
         label: Text(
           _currentIndex == 0 ? 'Add Expense' : 'New Trip',

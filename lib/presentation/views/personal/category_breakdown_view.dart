@@ -62,7 +62,7 @@ class CategoryBreakdownView extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  ' transactions across  active categories',
+                  '${vm.filteredExpenses.length} transactions across ${sortedCategories.where((c) => (totals[c] ?? 0) > 0).length} active categories',
                   style: AppTypography.bodySmall(isDark: isDark),
                 ),
               ],

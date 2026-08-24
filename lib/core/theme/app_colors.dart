@@ -25,27 +25,27 @@ class AppColors {
   static const Color neutralPillLight = Color(0xFFF3F4F6);
   static const Color neutralPillDark = Color(0xFF1F2937);
 
-  // --- Light Theme Palette (Calm, Warm, Crisp) ---
-  static const Color lightBackground = Color(0xFFF8F9FA);
+  // --- Light Theme Palette (Calm, Warm, Crisp Off-White Foundation) ---
+  static const Color lightBackground = Color(0xFFF7F7F5);
   static const Color lightSurfaceCard = Color(0xFFFFFFFF);
-  static const Color lightSurfaceSubtle = Color(0xFFF1F3F5);
+  static const Color lightSurfaceSubtle = Color(0xFFEFEFEA);
   static const Color lightSurfaceElevated = Color(0xFFFFFFFF);
-  static const Color lightBorderSubtle = Color(0xFFE9ECEF);
-  static const Color lightBorderStrong = Color(0xFFDEE2E6);
-  static const Color lightTextPrimary = Color(0xFF111827);
-  static const Color lightTextSecondary = Color(0xFF4B5563);
-  static const Color lightTextMuted = Color(0xFF9CA3AF);
+  static const Color lightBorderSubtle = Color(0x0F000000); // 6% black
+  static const Color lightBorderStrong = Color(0x1F000000); // 12% black
+  static const Color lightTextPrimary = Color(0xFF0F172A);  // Rich Slate Black
+  static const Color lightTextSecondary = Color(0xFF475569);// Slate Grey
+  static const Color lightTextMuted = Color(0xFF94A3B8);    // Soft Muted
 
-  // --- Dark Theme Palette (True Obsidian, Multi-layered Depth) ---
-  static const Color darkBackground = Color(0xFF0A0C0F);
-  static const Color darkSurfaceCard = Color(0xFF12161C);
-  static const Color darkSurfaceSubtle = Color(0xFF181D24);
-  static const Color darkSurfaceElevated = Color(0xFF222933);
-  static const Color darkBorderSubtle = Color(0xFF1E252F);
-  static const Color darkBorderStrong = Color(0xFF2E3846);
-  static const Color darkTextPrimary = Color(0xFFF9FAFB);
-  static const Color darkTextSecondary = Color(0xFF9CA3AF);
-  static const Color darkTextMuted = Color(0xFF6B7280);
+  // --- Dark Theme Palette (Obsidian Graphite Multi-layered Depth) ---
+  static const Color darkBackground = Color(0xFF0D0F12);
+  static const Color darkSurfaceCard = Color(0xFF16191E);
+  static const Color darkSurfaceSubtle = Color(0xFF1E2229);
+  static const Color darkSurfaceElevated = Color(0xFF262B34);
+  static const Color darkBorderSubtle = Color(0x14FFFFFF);  // 8% white
+  static const Color darkBorderStrong = Color(0x24FFFFFF);  // 14% white
+  static const Color darkTextPrimary = Color(0xFFF8FAFC);
+  static const Color darkTextSecondary = Color(0xFF94A3B8);
+  static const Color darkTextMuted = Color(0xFF64748B);
 
   // --- Trip Gradient Palettes ---
   static const List<List<Color>> tripGradients = [

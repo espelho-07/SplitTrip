@@ -6,64 +6,59 @@ class AppElevation {
 
   static List<BoxShadow> lightSubtle = [
     BoxShadow(
-      color: Colors.black.withValues(alpha: 0.03),
-      blurRadius: 10,
+      color: const Color(0x0A000000), // 4% opacity
+      blurRadius: 8,
       offset: const Offset(0, 2),
-    ),
-    BoxShadow(
-      color: Colors.black.withValues(alpha: 0.02),
-      blurRadius: 20,
-      offset: const Offset(0, 6),
     ),
   ];
 
   static List<BoxShadow> lightCard = [
     BoxShadow(
-      color: Colors.black.withValues(alpha: 0.04),
-      blurRadius: 14,
-      offset: const Offset(0, 4),
+      color: const Color(0x08000000), // 3% opacity
+      blurRadius: 6,
+      offset: const Offset(0, 2),
     ),
     BoxShadow(
-      color: Colors.black.withValues(alpha: 0.02),
-      blurRadius: 2,
-      offset: const Offset(0, 1),
+      color: const Color(0x05000000), // 2% opacity
+      blurRadius: 16,
+      offset: const Offset(0, 8),
     ),
   ];
 
   static List<BoxShadow> lightFloating = [
     BoxShadow(
-      color: Colors.black.withValues(alpha: 0.08),
-      blurRadius: 24,
-      offset: const Offset(0, 12),
+      color: const Color(0x12000000), // 7% opacity
+      blurRadius: 20,
+      offset: const Offset(0, 8),
     ),
     BoxShadow(
-      color: Colors.black.withValues(alpha: 0.04),
-      blurRadius: 8,
-      offset: const Offset(0, 4),
+      color: const Color(0x08000000), // 3% opacity
+      blurRadius: 40,
+      offset: const Offset(0, 16),
     ),
   ];
 
   static List<BoxShadow> darkSubtle = [
     BoxShadow(
-      color: Colors.black.withValues(alpha: 0.3),
-      blurRadius: 12,
-      offset: const Offset(0, 4),
+      color: const Color(0x28000000), // 16% opacity
+      blurRadius: 8,
+      offset: const Offset(0, 2),
     ),
   ];
 
   static List<BoxShadow> darkCard = [
     BoxShadow(
-      color: Colors.black.withValues(alpha: 0.4),
-      blurRadius: 16,
-      offset: const Offset(0, 6),
+      color: const Color(0x3D000000), // 24% opacity
+      blurRadius: 12,
+      offset: const Offset(0, 4),
     ),
   ];
 
   static List<BoxShadow> darkFloating = [
     BoxShadow(
-      color: Colors.black.withValues(alpha: 0.6),
-      blurRadius: 32,
-      offset: const Offset(0, 16),
+      color: const Color(0x66000000), // 40% opacity
+      blurRadius: 24,
+      offset: const Offset(0, 10),
     ),
   ];
 }

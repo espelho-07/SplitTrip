@@ -117,6 +117,22 @@ class AppTheme {
         thickness: 1,
         space: 1,
       ),
+      chipTheme: ChipThemeData(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        side: const BorderSide(color: AppColors.lightBorderSubtle, width: 1),
+        backgroundColor: AppColors.lightSurfaceSubtle,
+        selectedColor: AppColors.emeraldPrimary.withValues(alpha: 0.15),
+        labelStyle: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.lightTextPrimary),
+        secondaryLabelStyle: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.emeraldPrimary),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppColors.lightTextPrimary,
+        contentTextStyle: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        elevation: 6,
+      ),
       splashFactory: InkSparkle.splashFactory,
     );
   }
@@ -229,6 +245,22 @@ class AppTheme {
         color: AppColors.darkBorderSubtle,
         thickness: 1,
         space: 1,
+      ),
+      chipTheme: ChipThemeData(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        side: const BorderSide(color: AppColors.darkBorderSubtle, width: 1),
+        backgroundColor: AppColors.darkSurfaceSubtle,
+        selectedColor: AppColors.emeraldPrimary.withValues(alpha: 0.25),
+        labelStyle: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.darkTextPrimary),
+        secondaryLabelStyle: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.emeraldLight),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppColors.darkSurfaceElevated,
+        contentTextStyle: GoogleFonts.plusJakartaSans(color: AppColors.darkTextPrimary, fontSize: 13, fontWeight: FontWeight.w500),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        elevation: 8,
       ),
       splashFactory: InkSparkle.splashFactory,
     );
