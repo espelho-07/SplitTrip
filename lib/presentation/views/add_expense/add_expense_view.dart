@@ -277,22 +277,101 @@ class _AddExpenseViewState extends State<AddExpenseView> {
       return const Scaffold(body: Center(child: Text('Trip not found')));
     }
 
-    return Scaffold(
-      backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
-      appBar: AppBar(
-        title: Text(addVm.isEditMode ? 'Edit Expense' : 'Add Expense'),
-        leading: IconButton(
-          icon: const Icon(Icons.close_rounded),
-          onPressed: () => context.pop(),
+    final hasUnsavedData = addVm.amountInPaise > 0 || addVm.title.trim().isNotEmpty;
+
+    return PopScope(
+      canPop: !hasUnsavedData,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final shouldPop = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
+            backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+            title: Text('Discard expense?', style: AppTypography.titleLarge(isDark: isDark)),
+            content: Text(
+              'You have unsaved expense details.',
+              style: AppTypography.bodyMedium(isDark: isDark),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Keep Editing'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: AppColors.negativeRedDark),
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Discard'),
+              ),
+            ],
+          ),
+        );
+        if ((shouldPop ?? false) && context.mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
+        appBar: AppBar(
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                addVm.isEditMode ? 'Edit Group Expense' : 'Add Group Expense',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+              Text(
+                '${trip.emoji} ${trip.name} · Split with ${trip.members.length} members',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                ),
+              ),
+            ],
+          ),
+          leading: IconButton(
+            icon: const Icon(Icons.close_rounded),
+            onPressed: () async {
+              if (hasUnsavedData) {
+                final shouldPop = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
+                    backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+                    title: Text('Discard expense?', style: AppTypography.titleLarge(isDark: isDark)),
+                    content: Text(
+                      'You have unsaved expense details.',
+                      style: AppTypography.bodyMedium(isDark: isDark),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(false),
+                        child: const Text('Keep Editing'),
+                      ),
+                      FilledButton(
+                        style: FilledButton.styleFrom(backgroundColor: AppColors.negativeRedDark),
+                        onPressed: () => Navigator.of(ctx).pop(true),
+                        child: const Text('Discard'),
+                      ),
+                    ],
+                  ),
+                );
+                if ((shouldPop ?? false) && context.mounted) {
+                  context.pop();
+                }
+              } else {
+                context.pop();
+              }
+            },
+          ),
         ),
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Top Mode Tabs (Voice / Receipt Scan / Manual) - Hidden in Edit Mode for simplicity
-            if (!addVm.isEditMode)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
+        body: SafeArea(
+          child: Column(
+            children: [
+              // Top Mode Tabs (Voice / Receipt Scan / Manual) - Hidden in Edit Mode for simplicity
+              if (!addVm.isEditMode)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
                 child: Container(
                   decoration: BoxDecoration(
                     color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
@@ -380,6 +459,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

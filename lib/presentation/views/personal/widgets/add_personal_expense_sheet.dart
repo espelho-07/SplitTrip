@@ -75,6 +75,12 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
     super.dispose();
   }
 
+  bool get _hasUnsavedData {
+    return _amountController.text.trim().isNotEmpty ||
+        _titleController.text.trim().isNotEmpty ||
+        _personController.text.trim().isNotEmpty;
+  }
+
   void _onCategorySelected(ExpenseCategory cat) {
     setState(() => _category = cat);
     HapticHelper.selection();
@@ -148,7 +154,7 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
       HapticHelper.error();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please enter a valid amount.'),
+          content: Text('Please enter an amount.'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -160,7 +166,7 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
       HapticHelper.error();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please enter what this expense was for.'),
+          content: Text('Please specify what this expense was for.'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -242,181 +248,229 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
     }
   }
 
+  Future<bool> _handlePopScope() async {
+    if (!_hasUnsavedData || _isSaving) return true;
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final shouldDiscard = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
+        backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+        title: Text('Discard draft?', style: AppTypography.titleLarge(isDark: isDark)),
+        content: Text(
+          'You have entered details that haven\'t been saved yet.',
+          style: AppTypography.bodyMedium(isDark: isDark),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Keep Editing'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.negativeRedDark),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Discard'),
+          ),
+        ],
+      ),
+    );
+
+    return shouldDiscard ?? false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
-        borderRadius: AppRadius.topSheetBorder,
-      ),
-      padding: EdgeInsets.only(
-        left: AppSpacing.lg,
-        right: AppSpacing.lg,
-        top: AppSpacing.lg,
-        bottom: AppSpacing.lg + bottomInset,
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.white24 : Colors.black12,
-                  borderRadius: BorderRadius.circular(2),
+    return PopScope(
+      canPop: !_hasUnsavedData,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final shouldPop = await _handlePopScope();
+        if (shouldPop && context.mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+          borderRadius: AppRadius.topSheetBorder,
+        ),
+        padding: EdgeInsets.only(
+          left: AppSpacing.lg,
+          right: AppSpacing.lg,
+          top: AppSpacing.lg,
+          bottom: AppSpacing.lg + bottomInset,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white24 : Colors.black12,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: AppSpacing.md),
+              const SizedBox(height: AppSpacing.sm),
 
-            // Top Row: Title + Mode Toggle + Mic
-            Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
+              // Context Badge: Personal Expense (Clearly distinguishing from trip expenses)
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
-                      borderRadius: BorderRadius.circular(12),
+                      color: AppColors.emeraldPrimary.withValues(alpha: 0.12),
+                      borderRadius: AppRadius.smBorder,
                     ),
-                    child: Row(
-                      children: PersonalEntryMode.values.map((m) {
-                        final isSelected = _mode == m;
-                        return Expanded(
-                          child: GestureDetector(
-                            onTap: () {
-                              setState(() => _mode = m);
-                              HapticHelper.selection();
-                            },
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 150),
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? (isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard)
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(8),
-                                boxShadow: isSelected
-                                    ? [
-                                        BoxShadow(
-                                          color: Colors.black.withValues(alpha: 0.05),
-                                          blurRadius: 4,
-                                        ),
-                                      ]
-                                    : null,
-                              ),
-                              child: Text(
-                                m.label,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.lock_outline_rounded, size: 12, color: AppColors.emeraldPrimary),
+                        SizedBox(width: 4),
+                        Text(
+                          'Personal · Private to you',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.emeraldPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+
+              // Mode Toggle + Mic
+              Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: PersonalEntryMode.values.map((m) {
+                          final isSelected = _mode == m;
+                          return Expanded(
+                            child: GestureDetector(
+                              onTap: () {
+                                setState(() => _mode = m);
+                                HapticHelper.selection();
+                              },
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 150),
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                decoration: BoxDecoration(
                                   color: isSelected
-                                      ? (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary)
-                                      : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                                      ? (isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard)
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(8),
+                                  boxShadow: isSelected
+                                      ? [
+                                          BoxShadow(
+                                            color: Colors.black.withValues(alpha: 0.05),
+                                            blurRadius: 4,
+                                          ),
+                                        ]
+                                      : null,
+                                ),
+                                child: Text(
+                                  m.label,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                    color: isSelected
+                                        ? (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary)
+                                        : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: Icon(
-                    _isListening ? Icons.mic_rounded : Icons.mic_none_rounded,
-                    color: _isListening ? (isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight) : AppColors.emeraldPrimary,
-                  ),
-                  onPressed: _toggleVoiceRecording,
-                  tooltip: 'Voice entry',
-                ),
-              ],
-            ),
-
-            if (_isListening) ...[
-              const SizedBox(height: AppSpacing.sm),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: AppColors.emeraldPrimary.withValues(alpha: 0.1),
-                  borderRadius: AppRadius.mdBorder,
-                ),
-                child: Row(
-                  children: [
-                    const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        _voiceTranscript?.isNotEmpty == true
-                            ? 'Heard: "$_voiceTranscript"'
-                            : 'Listening... (e.g. "Spent 500 on lunch")',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                          );
+                        }).toList(),
                       ),
                     ),
-                  ],
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: Icon(
+                      _isListening ? Icons.mic_rounded : Icons.mic_none_rounded,
+                      color: _isListening ? (isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight) : AppColors.emeraldPrimary,
+                    ),
+                    onPressed: _toggleVoiceRecording,
+                    tooltip: 'Voice entry',
+                  ),
+                ],
+              ),
+
+              if (_isListening) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.emeraldPrimary.withValues(alpha: 0.1),
+                    borderRadius: AppRadius.mdBorder,
+                  ),
+                  child: Row(
+                    children: [
+                      const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _voiceTranscript?.isNotEmpty == true
+                              ? 'Heard: "$_voiceTranscript"'
+                              : 'Listening... (e.g. "Spent 500 on lunch")',
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
 
-            const SizedBox(height: AppSpacing.lg),
+              const SizedBox(height: AppSpacing.lg),
 
-            // Amount Input
-            TextField(
-              controller: _amountController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}'))],
-              autofocus: true,
-              style: TextStyle(
-                fontSize: 34,
-                fontWeight: FontWeight.w800,
-                color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-              ),
-              decoration: InputDecoration(
-                prefixText: '₹ ',
-                prefixStyle: TextStyle(
+              // Amount Input
+              TextField(
+                controller: _amountController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}'))],
+                autofocus: true,
+                style: TextStyle(
                   fontSize: 34,
                   fontWeight: FontWeight.w800,
                   color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                 ),
-                hintText: '0',
-                hintStyle: TextStyle(
-                  fontSize: 34,
-                  fontWeight: FontWeight.w400,
-                  color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                ),
-                filled: true,
-                fillColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
-                border: const OutlineInputBorder(
-                  borderRadius: AppRadius.mdBorder,
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-
-            const SizedBox(height: AppSpacing.md),
-
-            // Person Name (For Lent / Borrowed)
-            if (_mode == PersonalEntryMode.lent || _mode == PersonalEntryMode.borrowed) ...[
-              TextField(
-                controller: _personController,
-                textCapitalization: TextCapitalization.words,
-                style: AppTypography.bodyLarge(isDark: isDark),
                 decoration: InputDecoration(
-                  labelText: _mode == PersonalEntryMode.lent ? 'Who owes you?' : 'Who did you borrow from?',
-                  hintText: 'Enter name (e.g. Rahul)',
-                  prefixIcon: const Icon(Icons.person_outline_rounded, size: 20),
+                  prefixText: '₹ ',
+                  prefixStyle: TextStyle(
+                    fontSize: 34,
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                  ),
+                  hintText: '0',
+                  hintStyle: TextStyle(
+                    fontSize: 34,
+                    fontWeight: FontWeight.w400,
+                    color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                  ),
                   filled: true,
                   fillColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
                   border: const OutlineInputBorder(
@@ -425,104 +479,126 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
                   ),
                 ),
               ),
+
               const SizedBox(height: AppSpacing.md),
-            ],
 
-            // Title / Description
-            TextField(
-              controller: _titleController,
-              textCapitalization: TextCapitalization.sentences,
-              style: AppTypography.bodyLarge(isDark: isDark),
-              decoration: InputDecoration(
-                labelText: _mode == PersonalEntryMode.expense ? 'What was this for?' : 'Note (optional)',
-                hintText: _mode == PersonalEntryMode.expense ? 'e.g. Lunch with team' : 'e.g. Dinner share',
-                prefixIcon: const Icon(Icons.edit_note_rounded, size: 20),
-                filled: true,
-                fillColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
-                border: const OutlineInputBorder(
-                  borderRadius: AppRadius.mdBorder,
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-
-            const SizedBox(height: AppSpacing.lg),
-
-            // Categories (For Expense)
-            if (_mode == PersonalEntryMode.expense) ...[
-              Text('Category', style: AppTypography.titleSmall(isDark: isDark)),
-              const SizedBox(height: AppSpacing.xs),
-              SizedBox(
-                height: 40,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    ExpenseCategory.food,
-                    ExpenseCategory.transport,
-                    ExpenseCategory.groceries,
-                    ExpenseCategory.shopping,
-                    ExpenseCategory.stay,
-                    ExpenseCategory.drinks,
-                    ExpenseCategory.activities,
-                    ExpenseCategory.general,
-                  ].map((cat) {
-                    final isSelected = _category == cat;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text('${cat.emoji} ${cat.displayName}'),
-                        selected: isSelected,
-                        onSelected: (_) => _onCategorySelected(cat),
-                        selectedColor: AppColors.emeraldPrimary.withValues(alpha: 0.15),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-            ],
-
-            // Date Selection
-            Row(
-              children: [
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.calendar_today_rounded, size: 16),
-                  label: Text(
-                    DateFormatter.isToday(_selectedDate)
-                        ? 'Today'
-                        : DateFormatter.formatDate(_selectedDate),
+              // Person Name (For Lent / Borrowed)
+              if (_mode == PersonalEntryMode.lent || _mode == PersonalEntryMode.borrowed) ...[
+                TextField(
+                  controller: _personController,
+                  textCapitalization: TextCapitalization.words,
+                  style: AppTypography.bodyLarge(isDark: isDark),
+                  decoration: InputDecoration(
+                    labelText: _mode == PersonalEntryMode.lent ? 'Who owes you?' : 'Who did you borrow from?',
+                    hintText: 'Enter name (e.g. Rahul)',
+                    prefixIcon: const Icon(Icons.person_outline_rounded, size: 20),
+                    filled: true,
+                    fillColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+                    border: const OutlineInputBorder(
+                      borderRadius: AppRadius.mdBorder,
+                      borderSide: BorderSide.none,
+                    ),
                   ),
-                  style: OutlinedButton.styleFrom(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () async {
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate: _selectedDate,
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime(2030),
-                    );
-                    if (picked != null) {
-                      setState(() => _selectedDate = picked);
-                    }
-                  },
                 ),
+                const SizedBox(height: AppSpacing.md),
               ],
-            ),
 
-            const SizedBox(height: AppSpacing.xl),
+              // Title / Description
+              TextField(
+                controller: _titleController,
+                textCapitalization: TextCapitalization.sentences,
+                style: AppTypography.bodyLarge(isDark: isDark),
+                decoration: InputDecoration(
+                  labelText: _mode == PersonalEntryMode.expense ? 'What was this for?' : 'Note (optional)',
+                  hintText: _mode == PersonalEntryMode.expense ? 'e.g. Lunch with team' : 'e.g. Dinner share',
+                  prefixIcon: const Icon(Icons.edit_note_rounded, size: 20),
+                  filled: true,
+                  fillColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+                  border: const OutlineInputBorder(
+                    borderRadius: AppRadius.mdBorder,
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
 
-            // Save Button
-            AppButton(
-              text: _mode == PersonalEntryMode.expense
-                  ? 'Save Expense'
-                  : (_mode == PersonalEntryMode.lent ? 'Record Lending' : 'Record Borrowing'),
-              icon: Icons.check_rounded,
-              isLoading: _isSaving,
-              isFullWidth: true,
-              onPressed: _isSaving ? null : _handleSave,
-            ),
-          ],
+              const SizedBox(height: AppSpacing.lg),
+
+              // Categories (For Expense)
+              if (_mode == PersonalEntryMode.expense) ...[
+                Text('Category', style: AppTypography.titleSmall(isDark: isDark)),
+                const SizedBox(height: AppSpacing.xs),
+                SizedBox(
+                  height: 40,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      ExpenseCategory.food,
+                      ExpenseCategory.transport,
+                      ExpenseCategory.groceries,
+                      ExpenseCategory.shopping,
+                      ExpenseCategory.stay,
+                      ExpenseCategory.drinks,
+                      ExpenseCategory.activities,
+                      ExpenseCategory.general,
+                    ].map((cat) {
+                      final isSelected = _category == cat;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          label: Text('${cat.emoji} ${cat.displayName}'),
+                          selected: isSelected,
+                          onSelected: (_) => _onCategorySelected(cat),
+                          selectedColor: AppColors.emeraldPrimary.withValues(alpha: 0.15),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+              ],
+
+              // Date Selection
+              Row(
+                children: [
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.calendar_today_rounded, size: 16),
+                    label: Text(
+                      DateFormatter.isToday(_selectedDate)
+                          ? 'Today'
+                          : DateFormatter.formatDate(_selectedDate),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: _selectedDate,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime(2030),
+                      );
+                      if (picked != null) {
+                        setState(() => _selectedDate = picked);
+                      }
+                    },
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: AppSpacing.xl),
+
+              // Save Button
+              AppButton(
+                text: _mode == PersonalEntryMode.expense
+                    ? 'Save Expense'
+                    : (_mode == PersonalEntryMode.lent ? 'Record Lending' : 'Record Borrowing'),
+                icon: Icons.check_rounded,
+                isLoading: _isSaving,
+                isFullWidth: true,
+                onPressed: _isSaving ? null : _handleSave,
+              ),
+            ],
+          ),
         ),
       ),
     );

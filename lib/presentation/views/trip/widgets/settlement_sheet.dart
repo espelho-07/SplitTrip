@@ -56,11 +56,11 @@ class _SettlementSheetState extends State<SettlementSheet> {
         backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
         shape: RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
         title: Text(
-          'Confirm Settlement Payment',
+          'Record Payment',
           style: AppTypography.titleMedium(isDark: isDark),
         ),
         content: Text(
-          'Are you sure you want to record that $fromName paid $formattedAmount to $toName? This will update the trip ledger and reduce outstanding balances.',
+          'Record that $fromName paid $formattedAmount to $toName? This will update balances for everyone in the trip.',
           style: AppTypography.bodyMedium(isDark: isDark),
         ),
         actions: [
@@ -74,7 +74,7 @@ class _SettlementSheetState extends State<SettlementSheet> {
               foregroundColor: isDark ? Colors.black : Colors.white,
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Confirm Payment'),
+            child: const Text('Record Payment'),
           ),
         ],
       ),
@@ -116,12 +116,12 @@ class _SettlementSheetState extends State<SettlementSheet> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Simplified Settlement',
+                    'Settle Up',
                     style: AppTypography.titleLarge(isDark: isDark),
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Direct transfers calculated to settle all debts with fewest payments',
+                    'Fewest payments needed to balance everyone out',
                     style: AppTypography.bodySmall(isDark: isDark),
                   ),
                 ],
@@ -148,12 +148,12 @@ class _SettlementSheetState extends State<SettlementSheet> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'All Balances are Even!',
+                      'All Settled Up!',
                       style: AppTypography.titleSmall(isDark: isDark),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'No pending settlement payments required.',
+                      'Everyone is paid up. No transfers needed.',
                       style: AppTypography.bodySmall(isDark: isDark),
                     ),
                   ],

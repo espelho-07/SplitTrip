@@ -66,9 +66,9 @@ class TripsHomeTab extends StatelessWidget {
                   if (homeVm.trips.isEmpty)
                     EmptyStateView(
                       emoji: '🗺️',
-                      title: 'No active trips yet',
-                      subtitle: 'Create a trip for your upcoming vacation or dinner with friends to start tracking expenses effortlessly.',
-                      buttonText: 'Create First Trip',
+                      title: 'No trips yet',
+                      subtitle: 'Create a trip when you\'re ready to split group expenses with friends.',
+                      buttonText: 'New Trip',
                       buttonIcon: Icons.add_rounded,
                       onButtonPressed: () => context.push('/create-trip'),
                     )

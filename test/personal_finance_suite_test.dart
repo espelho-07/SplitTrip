@@ -242,5 +242,41 @@ void main() {
       final queue = syncService.getPendingMutations();
       expect(queue.any((m) => m.type == MutationType.createPersonalExpense), true);
     });
+
+    test('8. Smart Next Action triggers and budget threshold calculations', () async {
+      final vm = PersonalExpenseViewModel(personalRepo: personalRepo);
+      await vm.loadData(testUserId);
+
+      // Set budget of ₹5,000
+      await vm.setMonthlyBudget(500000);
+      expect(vm.budget.percentageUsed, 0);
+
+      // Spend ₹4,500 (>85% spent -> 90%)
+      await vm.addExpense(
+        userId: testUserId,
+        title: 'Flight Ticket Share',
+        amountInPaise: 450000,
+        category: ExpenseCategory.transport,
+      );
+
+      expect(vm.budget.percentageUsed, 90);
+      expect(vm.budget.remainingInPaise, 50000);
+
+      // Add lent debt
+      final debt = await vm.addDebt(
+        userId: testUserId,
+        personName: 'Sameer',
+        debtType: PersonalDebtType.lent,
+        amountInPaise: 120000,
+      );
+
+      expect(debt, isNotNull);
+      final uncollected = vm.debtsSummary.debts
+          .where((d) => d.debtType == PersonalDebtType.lent && !d.isSettled)
+          .firstOrNull;
+
+      expect(uncollected?.personName, 'Sameer');
+      expect(uncollected?.remainingAmountInPaise, 120000);
+    });
   });
 }

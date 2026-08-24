@@ -275,7 +275,7 @@ class ExpenseDetailSheet extends StatelessWidget {
       builder: (ctx) {
         return AlertDialog(
           title: const Text('Delete Expense?'),
-          content: Text('Are you sure you want to remove "${expense.title}"? This will recalculate all balances.'),
+          content: Text('Remove "${expense.title}" from this trip? Balances will update automatically.'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),

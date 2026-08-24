@@ -50,21 +50,25 @@ class PersonalHomeTab extends StatelessWidget {
 
           // 2. Hero Spend Card
           _buildHeroSpendCard(context, personalVm, isDark, totalSpentPaise, avgPerDayPaise, budget),
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.md),
 
-          // 3. Lending & Borrowing Section ("Who owes me / Who I owe")
+          // 3. Smart Contextual Next Action (At most ONE most relevant item)
+          _buildSmartNextAction(context, personalVm, isDark, debtsSummary, budget, expenses),
+          const SizedBox(height: AppSpacing.md),
+
+          // 4. Lending & Borrowing Section ("Who owes me / Who I owe")
           if (debtsSummary.debts.isNotEmpty) ...[
             _buildLendingBorrowingSection(context, personalVm, isDark, debtsSummary),
             const SizedBox(height: AppSpacing.lg),
           ],
 
-          // 4. Category Breakdown Section
+          // 5. Category Breakdown Section
           if (expenses.isNotEmpty) ...[
             _buildCategoryBreakdown(context, personalVm, isDark),
             const SizedBox(height: AppSpacing.lg),
           ],
 
-          // 5. Recent Activity / Expenses List Header
+          // 6. Recent Activity / Expenses List Header
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -254,7 +258,7 @@ class PersonalHomeTab extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  '${budget.percentageUsed}% of budget',
+                  '${budget.percentageUsed}% of monthly budget',
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
@@ -277,6 +281,131 @@ class PersonalHomeTab extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// Displays at most ONE relevant contextual action. Completely silent if nothing requires action.
+  Widget _buildSmartNextAction(
+    BuildContext context,
+    PersonalExpenseViewModel vm,
+    bool isDark,
+    PersonalDebtsSummary debtsSummary,
+    dynamic budget,
+    List<PersonalExpense> expenses,
+  ) {
+    // 1. Outstanding money owed to you
+    final uncollected = debtsSummary.debts
+        .where((d) => d.debtType == PersonalDebtType.lent && !d.isSettled)
+        .firstOrNull;
+
+    if (uncollected != null) {
+      final green = isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight;
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: green.withValues(alpha: 0.08),
+          borderRadius: AppRadius.mdBorder,
+          border: Border.all(color: green.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.arrow_downward_rounded, size: 18, color: green),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                '${uncollected.personName} owes you ${CurrencyFormatter.formatPaise(uncollected.remainingAmountInPaise, currencyCode: 'INR')}',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: green),
+              ),
+            ),
+            TextButton(
+              onPressed: () => RecordRepaymentSheet.show(context, debt: uncollected),
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+              ),
+              child: Text('Settle', style: TextStyle(fontWeight: FontWeight.w700, color: green)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // 2. Outstanding money you owe
+    final unpayed = debtsSummary.debts
+        .where((d) => d.debtType == PersonalDebtType.borrowed && !d.isSettled)
+        .firstOrNull;
+
+    if (unpayed != null) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.emeraldPrimary.withValues(alpha: 0.08),
+          borderRadius: AppRadius.mdBorder,
+          border: Border.all(color: AppColors.emeraldPrimary.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.arrow_upward_rounded, size: 18, color: AppColors.emeraldPrimary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'You owe ${unpayed.personName} ${CurrencyFormatter.formatPaise(unpayed.remainingAmountInPaise, currencyCode: 'INR')}',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.emeraldPrimary),
+              ),
+            ),
+            TextButton(
+              onPressed: () => RecordRepaymentSheet.show(context, debt: unpayed),
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+              ),
+              child: const Text('Repay', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.emeraldPrimary)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // 3. Budget nearing limit warning (>85%)
+    if (budget.hasBudget && budget.percentageUsed >= 85) {
+      final statusRed = isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight;
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: statusRed.withValues(alpha: 0.08),
+          borderRadius: AppRadius.mdBorder,
+          border: Border.all(color: statusRed.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, size: 18, color: statusRed),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                '${CurrencyFormatter.formatPaise(budget.remainingInPaise, currencyCode: 'INR')} left this month (${budget.percentageUsed}% spent)',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: statusRed),
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                SetBudgetDialog.show(
+                  context,
+                  currentBudgetPaise: budget.monthlyLimitInPaise,
+                  monthYear: vm.currentMonthKey,
+                );
+              },
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+              ),
+              child: Text('Budget', style: TextStyle(fontWeight: FontWeight.w700, color: statusRed)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // No active alerts: Return nothing to keep UI uncluttered
+    return const SizedBox.shrink();
   }
 
   Widget _buildLendingBorrowingSection(
@@ -626,12 +755,12 @@ class PersonalHomeTab extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.md),
             Text(
-              'No expenses recorded yet',
+              'No expenses yet',
               style: AppTypography.titleMedium(isDark: isDark),
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              'Tap + below to quickly record your personal spending or lending.',
+              'Your spending and lending will appear here.',
               textAlign: TextAlign.center,
               style: AppTypography.bodySmall(isDark: isDark),
             ),

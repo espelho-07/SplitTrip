@@ -89,19 +89,82 @@ class _CreateTripViewState extends State<CreateTripView> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final createVm = context.watch<CreateTripViewModel>();
+    final hasUnsavedData = createVm.name.trim().isNotEmpty || createVm.friendNames.isNotEmpty;
 
-    return Scaffold(
-      backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
-      appBar: AppBar(
-        title: const Text('Create a Trip'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => context.pop(),
+    return PopScope(
+      canPop: !hasUnsavedData,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final shouldPop = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
+            backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+            title: Text('Discard trip?', style: AppTypography.titleLarge(isDark: isDark)),
+            content: Text(
+              'You have entered trip details that haven\'t been saved yet.',
+              style: AppTypography.bodyMedium(isDark: isDark),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Keep Editing'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: AppColors.negativeRedDark),
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Discard'),
+              ),
+            ],
+          ),
+        );
+        if ((shouldPop ?? false) && context.mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
+        appBar: AppBar(
+          title: const Text('Create a Trip'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded),
+            onPressed: () async {
+              if (hasUnsavedData) {
+                final shouldPop = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
+                    backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+                    title: Text('Discard trip?', style: AppTypography.titleLarge(isDark: isDark)),
+                    content: Text(
+                      'You have entered trip details that haven\'t been saved yet.',
+                      style: AppTypography.bodyMedium(isDark: isDark),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(false),
+                        child: const Text('Keep Editing'),
+                      ),
+                      FilledButton(
+                        style: FilledButton.styleFrom(backgroundColor: AppColors.negativeRedDark),
+                        onPressed: () => Navigator.of(ctx).pop(true),
+                        child: const Text('Discard'),
+                      ),
+                    ],
+                  ),
+                );
+                if ((shouldPop ?? false) && context.mounted) {
+                  context.pop();
+                }
+              } else {
+                context.pop();
+              }
+            },
+          ),
         ),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -349,6 +412,7 @@ class _CreateTripViewState extends State<CreateTripView> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

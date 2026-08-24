@@ -57,8 +57,8 @@ class ActivityLogSheet extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Trip Activity Logs', style: AppTypography.titleLarge(isDark: isDark)),
-                    Text('Full chronological audit trail', style: AppTypography.bodySmall(isDark: isDark)),
+                    Text('Trip Activity', style: AppTypography.titleLarge(isDark: isDark)),
+                    Text('Everything that happened in this trip', style: AppTypography.bodySmall(isDark: isDark)),
                   ],
                 ),
               ),
