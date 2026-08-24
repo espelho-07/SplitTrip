@@ -12,6 +12,7 @@ const app = express();
 
 // Fast Zero-Dependency Health Probes for Cloud Load Balancers & Render Deployments
 const healthHandler = (req, res) => {
+  const start = process.hrtime();
   res.status(200).json({
     status: 'healthy',
     ok: true,
@@ -21,6 +22,12 @@ const healthHandler = (req, res) => {
     timestamp: new Date().toISOString(),
     uptimeSeconds: Math.floor(process.uptime()),
   });
+
+  if (env.NODE_ENV !== 'test') {
+    const diff = process.hrtime(start);
+    const ms = (diff[0] * 1e3 + diff[1] * 1e-6).toFixed(2);
+    console.log(`[Health] ${req.method} ${req.path} 200 (${ms}ms)`);
+  }
 };
 
 app.get('/health', healthHandler);
