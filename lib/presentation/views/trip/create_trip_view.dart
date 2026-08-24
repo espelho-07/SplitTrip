@@ -231,6 +231,26 @@ class _CreateTripViewState extends State<CreateTripView> {
 
               const SizedBox(height: AppSpacing.xl),
 
+              // Currency Selection
+              Text(
+                'Trip Currency',
+                style: AppTypography.titleSmall(isDark: isDark),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Row(
+                children: [
+                  _buildCurrencyChip('INR', '₹ INR', createVm, isDark),
+                  const SizedBox(width: 8),
+                  _buildCurrencyChip('USD', '\$ USD', createVm, isDark),
+                  const SizedBox(width: 8),
+                  _buildCurrencyChip('EUR', '€ EUR', createVm, isDark),
+                  const SizedBox(width: 8),
+                  _buildCurrencyChip('GBP', '£ GBP', createVm, isDark),
+                ],
+              ),
+
+              const SizedBox(height: AppSpacing.xl),
+
               // Add Initial Friends
               Text(
                 'Add Friends (Optional)',
@@ -299,6 +319,44 @@ class _CreateTripViewState extends State<CreateTripView> {
 
               const SizedBox(height: 32),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCurrencyChip(String code, String label, CreateTripViewModel createVm, bool isDark) {
+    final isSelected = createVm.currencyCode == code;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          HapticHelper.selection();
+          createVm.setCurrencyCode(code);
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.18)
+                : (isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle),
+            borderRadius: AppRadius.mdBorder,
+            border: Border.all(
+              color: isSelected
+                  ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
+                  : (isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle),
+              width: isSelected ? 1.5 : 1,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+              fontSize: 13,
+              color: isSelected
+                  ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
+                  : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
+            ),
           ),
         ),
       ),

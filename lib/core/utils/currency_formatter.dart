@@ -1,37 +1,42 @@
 import 'package:intl/intl.dart';
+import '../../domain/models/currency_config.dart';
 
-/// Formatter for monetary values stored as integer smallest units (paise/cents).
-/// Prevents IEEE-754 floating-point inaccuracies across the entire UI.
+/// Formatter for monetary values stored as integer smallest units (paise/cents/pence).
+/// Strictly prevents IEEE-754 floating-point inaccuracies across the entire UI.
 class CurrencyFormatter {
   CurrencyFormatter._();
 
-  static final NumberFormat _inrWholeFormatter = NumberFormat.currency(
-    locale: 'en_IN',
-    symbol: '₹',
-    decimalDigits: 0,
-  );
+  static final Map<String, NumberFormat> _wholeFormatters = {};
+  static final Map<String, NumberFormat> _decimalFormatters = {};
 
-  static final NumberFormat _inrDecimalFormatter = NumberFormat.currency(
-    locale: 'en_IN',
-    symbol: '₹',
-    decimalDigits: 2,
-  );
+  static NumberFormat _getFormatter(String code, bool withDecimals) {
+    final currency = AppCurrency.fromCode(code);
+    final key = '${currency.code}_$withDecimals';
 
-  static final NumberFormat _usdWholeFormatter = NumberFormat.currency(
-    locale: 'en_US',
-    symbol: '\$',
-    decimalDigits: 0,
-  );
+    if (withDecimals) {
+      return _decimalFormatters.putIfAbsent(key, () {
+        return NumberFormat.currency(
+          locale: currency.locale,
+          symbol: currency.symbol,
+          decimalDigits: currency.decimalDigits,
+        );
+      });
+    } else {
+      return _wholeFormatters.putIfAbsent(key, () {
+        return NumberFormat.currency(
+          locale: currency.locale,
+          symbol: currency.symbol,
+          decimalDigits: 0,
+        );
+      });
+    }
+  }
 
-  static final NumberFormat _usdDecimalFormatter = NumberFormat.currency(
-    locale: 'en_US',
-    symbol: '\$',
-    decimalDigits: 2,
-  );
-
-  /// Formats an integer amount in paise (1 INR = 100 paise) to a clean human string.
-  /// Example: 600000 -> "₹6,000"
-  /// Example: 46250 -> "₹462.50"
+  /// Formats an integer amount in smallest unit (e.g. paise/cents) to a clean human string.
+  /// Example (INR): 600000 -> "₹6,000"
+  /// Example (INR): 46250 -> "₹462.50"
+  /// Example (USD): 1250 -> "$12.50"
+  /// Example (EUR): 5000 -> "50 €"
   static String formatPaise(
     int amountInPaise, {
     String currencyCode = 'INR',
@@ -43,18 +48,9 @@ class CurrencyFormatter {
     final doubleValue = absPaise / 100.0;
     final hasFraction = (absPaise % 100) != 0;
 
-    NumberFormat formatter;
-    if (currencyCode.toUpperCase() == 'USD') {
-      formatter = (hasFraction || forceDecimals)
-          ? _usdDecimalFormatter
-          : _usdWholeFormatter;
-    } else {
-      formatter = (hasFraction || forceDecimals)
-          ? _inrDecimalFormatter
-          : _inrWholeFormatter;
-    }
-
+    final formatter = _getFormatter(currencyCode, hasFraction || forceDecimals);
     final formatted = formatter.format(doubleValue);
+
     if (isNegative) {
       return '-$formatted';
     } else if (showSign && amountInPaise > 0) {
@@ -63,12 +59,12 @@ class CurrencyFormatter {
     return formatted;
   }
 
-  /// Converts a user entered double or string to integer paise.
-  static int toPaise(double rupees) {
-    return (rupees * 100).round();
+  /// Converts a user entered double or string to integer smallest unit (paise/cents).
+  static int toPaise(double mainUnit) {
+    return (mainUnit * 100).round();
   }
 
-  /// Converts paise to standard double representation.
+  /// Converts smallest unit (paise/cents) to standard double representation.
   static double toRupees(int paise) {
     return paise / 100.0;
   }

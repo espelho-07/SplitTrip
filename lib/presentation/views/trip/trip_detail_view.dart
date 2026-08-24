@@ -531,14 +531,20 @@ class _TripDetailViewState extends State<TripDetailView> {
           const SizedBox(height: AppSpacing.lg),
 
           Text(
-            userNetPaise > 0
-                ? 'YOU ARE OWED'
-                : (userNetPaise < 0 ? 'YOU OWE' : 'YOUR BALANCE'),
+            (trip.lifecycleState == TripLifecycle.completed ||
+                    trip.lifecycleState == TripLifecycle.settling ||
+                    trip.lifecycleState == TripLifecycle.settled)
+                ? (userNetPaise > 0
+                    ? 'FINAL SETTLEMENT — TO RECEIVE'
+                    : (userNetPaise < 0 ? 'FINAL SETTLEMENT — TO PAY' : 'FINAL SETTLEMENT — SETTLED'))
+                : (userNetPaise > 0
+                    ? 'CURRENT BALANCE — YOU ARE OWED'
+                    : (userNetPaise < 0 ? 'CURRENT BALANCE — YOU OWE' : 'CURRENT BALANCE — SETTLED')),
             style: const TextStyle(
               color: Colors.white70,
-              fontSize: 12,
+              fontSize: 11,
               fontWeight: FontWeight.w700,
-              letterSpacing: 1.0,
+              letterSpacing: 0.8,
             ),
           ),
           const SizedBox(height: 2),
