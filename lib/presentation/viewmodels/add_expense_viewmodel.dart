@@ -358,6 +358,8 @@ class AddExpenseViewModel extends ChangeNotifier {
   }
 
   Future<Expense?> saveExpense(String tripId) async {
+    if (_isSaving) return null;
+
     if (!isValid) {
       _errorMessage = 'Please enter a valid title, amount, and at least one participant';
       notifyListeners();

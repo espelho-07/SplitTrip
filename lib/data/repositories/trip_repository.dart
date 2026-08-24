@@ -25,6 +25,17 @@ class TripRepository {
     this.realtimeClient,
   });
 
+  /// Synchronously returns cached trips from local storage without network latency.
+  List<Trip> getCachedTrips() {
+    final raw = storage.getSavedTrips();
+    return raw.map((json) => Trip.fromJson(json)).toList();
+  }
+
+  /// Synchronously returns a cached trip by ID from local storage.
+  Trip? getCachedTripById(String tripId) {
+    return getCachedTrips().where((t) => t.id == tripId).firstOrNull;
+  }
+
   /// Returns all trips, querying the backend when online and falling back to offline cache.
   Future<List<Trip>> getTrips() async {
     try {
@@ -38,8 +49,7 @@ class TripRepository {
       // Offline fallback: load from persistent local cache
     }
 
-    final raw = storage.getSavedTrips();
-    return raw.map((json) => Trip.fromJson(json)).toList();
+    return getCachedTrips();
   }
 
   /// Returns a specific trip by its ID.
@@ -48,7 +58,7 @@ class TripRepository {
       final res = await apiClient.get('/trips/$tripId');
       if (res is Map<String, dynamic>) {
         final trip = Trip.fromJson(res);
-        final currentTrips = await getTrips();
+        final currentTrips = getCachedTrips();
         final idx = currentTrips.indexWhere((t) => t.id == trip.id);
         if (idx != -1) {
           currentTrips[idx] = trip;
@@ -62,8 +72,7 @@ class TripRepository {
       // Offline fallback
     }
 
-    final trips = await getTrips();
-    return trips.where((t) => t.id == tripId).firstOrNull;
+    return getCachedTripById(tripId);
   }
 
   /// Fetches a non-sensitive preview of a trip by invite code before joining.
@@ -102,7 +111,8 @@ class TripRepository {
       final res = await apiClient.post('/trips', body: payload);
       if (res is Map<String, dynamic>) {
         final trip = Trip.fromJson(res);
-        final currentTrips = await getTrips();
+        final currentTrips = getCachedTrips();
+        currentTrips.removeWhere((t) => t.id == trip.id);
         currentTrips.insert(0, trip);
         await storage.saveTrips(currentTrips.map((t) => t.toJson()).toList());
         return trip;
@@ -152,7 +162,8 @@ class TripRepository {
       updatedAt: DateTime.now(),
     );
 
-    final currentTrips = await getTrips();
+    final currentTrips = getCachedTrips();
+    currentTrips.removeWhere((t) => t.id == newTrip.id);
     currentTrips.insert(0, newTrip);
     await storage.saveTrips(currentTrips.map((t) => t.toJson()).toList());
 
@@ -172,7 +183,7 @@ class TripRepository {
       final res = await apiClient.post('/trips/join', body: {'inviteCode': cleanCode});
       if (res is Map<String, dynamic>) {
         final trip = Trip.fromJson(res);
-        final currentTrips = await getTrips();
+        final currentTrips = getCachedTrips();
         final idx = currentTrips.indexWhere((t) => t.id == trip.id);
         if (idx != -1) {
           currentTrips[idx] = trip;
@@ -183,10 +194,10 @@ class TripRepository {
         return trip;
       }
     } catch (_) {
-      // Offline fallback: check local match
+      // Offline fallback
     }
 
-    final trips = await getTrips();
+    final trips = getCachedTrips();
     final matchIndex = trips.indexWhere(
       (t) => t.inviteCode.toUpperCase() == cleanCode || t.id == cleanCode,
     );

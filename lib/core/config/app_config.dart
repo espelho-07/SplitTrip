@@ -1,5 +1,3 @@
-import 'dart:io';
-
 /// Application configuration and environment separation.
 /// Supports runtime overrides and compile-time `--dart-define` injection for Staging / Production.
 class AppConfig {
@@ -30,29 +28,15 @@ class AppConfig {
     if (_overrideBaseUrl != null) return _overrideBaseUrl!;
     if (_envDefineApiUrl.isNotEmpty) return _envDefineApiUrl;
 
-    // Auto-detect Android emulator vs Desktop/Web/iOS for local dev
-    try {
-      if (Platform.isAndroid) {
-        return 'http://10.0.2.2:4000/api';
-      }
-    } catch (_) {
-      // Platform not supported (e.g. web)
-    }
-    return 'http://localhost:4000/api';
+    // By default, connect to the live cloud backend so real physical devices on Wi-Fi/Cellular work out of the box
+    return 'https://kith-staging-backend.onrender.com/api';
   }
 
   static String get wsUrl {
     if (_overrideWsUrl != null) return _overrideWsUrl!;
     if (_envDefineWsUrl.isNotEmpty) return _envDefineWsUrl;
 
-    try {
-      if (Platform.isAndroid) {
-        return 'ws://10.0.2.2:4000/ws';
-      }
-    } catch (_) {
-      // Platform not supported
-    }
-    return 'ws://localhost:4000/ws';
+    return 'wss://kith-staging-backend.onrender.com/ws';
   }
 
   static String buildInviteLink(String inviteCode) {

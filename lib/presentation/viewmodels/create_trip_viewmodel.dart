@@ -65,8 +65,20 @@ class CreateTripViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  void resetForm() {
+    _name = '';
+    _description = null;
+    _emoji = '✈️';
+    _coverGradientIndex = 0;
+    _currencyCode = 'INR';
+    _friendNames.clear();
+    _isCreating = false;
+    _errorMessage = null;
+    notifyListeners();
+  }
+
   Future<Trip?> createTrip(GuestUser creator) async {
-    if (!isValid) return null;
+    if (!isValid || _isCreating) return null;
     _isCreating = true;
     _errorMessage = null;
     notifyListeners();
@@ -81,6 +93,7 @@ class CreateTripViewModel extends ChangeNotifier {
         creator: creator,
         initialFriendNames: _friendNames,
       );
+      resetForm();
       return trip;
     } catch (e) {
       _errorMessage = e.toString();

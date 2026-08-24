@@ -45,15 +45,43 @@ class _CreateTripViewState extends State<CreateTripView> {
     final authVm = context.read<AuthViewModel>();
     final homeVm = context.read<HomeViewModel>();
 
+    if (createVm.isCreating) return;
+
     final user = authVm.currentUser;
     if (user == null) return;
 
+    if (!createVm.isValid) {
+      HapticHelper.medium();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a trip name'),
+          backgroundColor: AppColors.negativeRedDark,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    HapticHelper.light();
     final trip = await createVm.createTrip(user);
     if (trip != null && mounted) {
-      await homeVm.loadTrips(user.id);
-      if (mounted) {
-        context.go('/trip/${trip.id}');
-      }
+      homeVm.addTripLocally(trip, user.id);
+      HapticHelper.success();
+      context.go('/trip/${trip.id}');
+    } else if (mounted) {
+      HapticHelper.error();
+      final err = createVm.errorMessage ?? 'Could not create the trip. Please check your network and retry.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(err),
+          backgroundColor: AppColors.negativeRedDark,
+          action: SnackBarAction(
+            label: 'Retry',
+            textColor: Colors.white,
+            onPressed: _handleCreate,
+          ),
+        ),
+      );
     }
   }
 

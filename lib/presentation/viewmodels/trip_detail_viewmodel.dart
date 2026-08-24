@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/network/realtime_client.dart';
 import '../../data/repositories/expense_repository.dart';
 import '../../data/repositories/trip_repository.dart';
+import '../../domain/engine/balance_engine.dart';
 import '../../domain/enums/trip_lifecycle.dart';
 import '../../domain/models/activity_log.dart';
 import '../../domain/models/balance_summary.dart';
@@ -99,26 +100,43 @@ class TripDetailViewModel extends ChangeNotifier {
 
   Future<void> loadTrip(String tripId, String currentUserId) async {
     _currentUserId = currentUserId;
-    _isLoading = true;
+
+    // 1. FAST LOCAL HYDRATION: Render cached trip & expenses instantly (< 5ms)
+    final cachedTrip = tripRepo.getCachedTripById(tripId);
+    if (cachedTrip != null) {
+      _trip = cachedTrip;
+      _expenses = expenseRepo.getCachedExpenses(tripId);
+      _balanceSummary = BalanceEngine.calculateBalances(
+        members: cachedTrip.members,
+        expenses: _expenses,
+        currentUserId: currentUserId,
+      );
+      notifyListeners();
+    }
+
+    _isLoading = _trip == null;
     _errorMessage = null;
     notifyListeners();
 
-    // Subscribe to WebSocket room
+    // Subscribe to WebSocket room non-blocking
     realtimeClient?.subscribeToTrip(tripId);
 
     try {
-      _trip = await tripRepo.getTripById(tripId);
-      if (_trip != null) {
+      final remoteTrip = await tripRepo.getTripById(tripId);
+      if (remoteTrip != null) {
+        _trip = remoteTrip;
         _expenses = await expenseRepo.getExpenses(tripId);
         _balanceSummary = await expenseRepo.getBalanceSummary(
-          trip: _trip!,
+          trip: remoteTrip,
           currentUserId: currentUserId,
         );
-      } else {
+      } else if (_trip == null) {
         _errorMessage = 'Trip not found';
       }
     } catch (e) {
-      _errorMessage = e.toString();
+      if (_trip == null) {
+        _errorMessage = 'Could not load trip. Operating offline.';
+      }
     } finally {
       _isLoading = false;
       notifyListeners();

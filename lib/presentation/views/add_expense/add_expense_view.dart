@@ -139,7 +139,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     final addVm = context.read<AddExpenseViewModel>();
     final tripDetailVm = context.read<TripDetailViewModel>();
     final trip = tripDetailVm.trip;
-    if (trip == null) return;
+    if (trip == null || addVm.isSaving) return;
 
     if (addVm.title.trim().isEmpty || addVm.amountInPaise <= 0 || addVm.selectedParticipantMemberIds.isEmpty) {
       setState(() {
@@ -162,10 +162,25 @@ class _AddExpenseViewState extends State<AddExpenseView> {
       return;
     }
 
+    HapticHelper.light();
     final expense = await addVm.saveExpense(trip.id);
     if (expense != null && mounted) {
       HapticHelper.success();
       context.pop(true);
+    } else if (mounted) {
+      HapticHelper.error();
+      final err = addVm.errorMessage ?? 'Could not save the expense. Please try again.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(err),
+          backgroundColor: AppColors.negativeRedDark,
+          action: SnackBarAction(
+            label: 'Retry',
+            textColor: Colors.white,
+            onPressed: _handleSave,
+          ),
+        ),
+      );
     }
   }
 

@@ -40,17 +40,19 @@ class ApiClient {
     return Uri.parse(urlStr);
   }
 
+  static const Duration _defaultTimeout = Duration(seconds: 8);
+
   Future<dynamic> get(String path, {Map<String, dynamic>? queryParams}) async {
     try {
       final uri = _buildUri(path, queryParams);
       final response = await _httpClient
           .get(uri, headers: _buildHeaders())
-          .timeout(const Duration(seconds: 12));
+          .timeout(_defaultTimeout);
       return _processResponse(response);
     } on SocketException catch (_) {
-      throw const NetworkException();
+      throw const NetworkException(message: 'Unable to reach server. Operating in offline mode.');
     } on TimeoutException catch (_) {
-      throw const NetworkException(message: 'Request timed out. Please try again.');
+      throw const NetworkException(message: 'Request timed out. Please check your network and retry.');
     } catch (e) {
       if (e is ApiException) rethrow;
       throw NetworkException(message: e.toString());
@@ -66,12 +68,12 @@ class ApiClient {
             headers: _buildHeaders(),
             body: body != null ? jsonEncode(body) : null,
           )
-          .timeout(const Duration(seconds: 12));
+          .timeout(_defaultTimeout);
       return _processResponse(response);
     } on SocketException catch (_) {
-      throw const NetworkException();
+      throw const NetworkException(message: 'Unable to reach server. Operating in offline mode.');
     } on TimeoutException catch (_) {
-      throw const NetworkException(message: 'Request timed out. Please try again.');
+      throw const NetworkException(message: 'Request timed out. Please check your network and retry.');
     } catch (e) {
       if (e is ApiException) rethrow;
       throw NetworkException(message: e.toString());
@@ -87,12 +89,12 @@ class ApiClient {
             headers: _buildHeaders(),
             body: body != null ? jsonEncode(body) : null,
           )
-          .timeout(const Duration(seconds: 12));
+          .timeout(_defaultTimeout);
       return _processResponse(response);
     } on SocketException catch (_) {
-      throw const NetworkException();
+      throw const NetworkException(message: 'Unable to reach server. Operating in offline mode.');
     } on TimeoutException catch (_) {
-      throw const NetworkException(message: 'Request timed out. Please try again.');
+      throw const NetworkException(message: 'Request timed out. Please check your network and retry.');
     } catch (e) {
       if (e is ApiException) rethrow;
       throw NetworkException(message: e.toString());
@@ -108,12 +110,12 @@ class ApiClient {
             headers: _buildHeaders(),
             body: body != null ? jsonEncode(body) : null,
           )
-          .timeout(const Duration(seconds: 12));
+          .timeout(_defaultTimeout);
       return _processResponse(response);
     } on SocketException catch (_) {
-      throw const NetworkException();
+      throw const NetworkException(message: 'Unable to reach server. Operating in offline mode.');
     } on TimeoutException catch (_) {
-      throw const NetworkException(message: 'Request timed out. Please try again.');
+      throw const NetworkException(message: 'Request timed out. Please check your network and retry.');
     } catch (e) {
       if (e is ApiException) rethrow;
       throw NetworkException(message: e.toString());
@@ -125,12 +127,12 @@ class ApiClient {
       final uri = _buildUri(path);
       final response = await _httpClient
           .delete(uri, headers: _buildHeaders())
-          .timeout(const Duration(seconds: 12));
+          .timeout(_defaultTimeout);
       return _processResponse(response);
     } on SocketException catch (_) {
-      throw const NetworkException();
+      throw const NetworkException(message: 'Unable to reach server. Operating in offline mode.');
     } on TimeoutException catch (_) {
-      throw const NetworkException(message: 'Request timed out. Please try again.');
+      throw const NetworkException(message: 'Request timed out. Please check your network and retry.');
     } catch (e) {
       if (e is ApiException) rethrow;
       throw NetworkException(message: e.toString());

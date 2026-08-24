@@ -23,4 +23,12 @@ class HapticHelper {
   static void success() {
     HapticFeedback.mediumImpact();
   }
+
+  static void error() {
+    HapticFeedback.heavyImpact();
+  }
+
+  static void warning() {
+    HapticFeedback.mediumImpact();
+  }
 }

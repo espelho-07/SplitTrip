@@ -21,6 +21,12 @@ class ExpenseRepository {
     this.realtimeClient,
   });
 
+  /// Synchronously returns cached expenses for a trip without network latency.
+  List<Expense> getCachedExpenses(String tripId) {
+    final raw = storage.getSavedExpenses(tripId);
+    return raw.map((json) => Expense.fromJson(json)).toList();
+  }
+
   /// Loads all expenses recorded for a specific trip.
   Future<List<Expense>> getExpenses(String tripId) async {
     try {
@@ -34,8 +40,7 @@ class ExpenseRepository {
       // Offline fallback
     }
 
-    final raw = storage.getSavedExpenses(tripId);
-    return raw.map((json) => Expense.fromJson(json)).toList();
+    return getCachedExpenses(tripId);
   }
 
   /// Adds a new expense to the trip after verifying deterministic zero-sum split equality.
@@ -54,7 +59,7 @@ class ExpenseRepository {
 
       if (res is Map<String, dynamic> && res.containsKey('expense')) {
         final savedExpense = Expense.fromJson(res['expense'] as Map<String, dynamic>);
-        final currentExpenses = await getExpenses(expense.tripId);
+        final currentExpenses = getCachedExpenses(expense.tripId);
         currentExpenses.removeWhere((e) => e.id == savedExpense.id);
         currentExpenses.insert(0, savedExpense);
         await storage.saveExpenses(
@@ -67,7 +72,8 @@ class ExpenseRepository {
       // Offline fallback: save locally and queue sync mutation
     }
 
-    final currentExpenses = await getExpenses(expense.tripId);
+    final currentExpenses = getCachedExpenses(expense.tripId);
+    currentExpenses.removeWhere((e) => e.id == expense.id);
     currentExpenses.insert(0, expense);
 
     await storage.saveExpenses(
@@ -98,7 +104,7 @@ class ExpenseRepository {
 
       if (res is Map<String, dynamic> && res.containsKey('expense')) {
         final savedExpense = Expense.fromJson(res['expense'] as Map<String, dynamic>);
-        final currentExpenses = await getExpenses(expense.tripId);
+        final currentExpenses = getCachedExpenses(expense.tripId);
         final idx = currentExpenses.indexWhere((e) => e.id == savedExpense.id);
         if (idx != -1) {
           currentExpenses[idx] = savedExpense;
@@ -115,7 +121,7 @@ class ExpenseRepository {
       // Offline fallback
     }
 
-    final currentExpenses = await getExpenses(expense.tripId);
+    final currentExpenses = getCachedExpenses(expense.tripId);
     final idx = currentExpenses.indexWhere((e) => e.id == expense.id);
     if (idx != -1) {
       currentExpenses[idx] = expense;
@@ -150,7 +156,7 @@ class ExpenseRepository {
       );
     }
 
-    final currentExpenses = await getExpenses(tripId);
+    final currentExpenses = getCachedExpenses(tripId);
     final index = currentExpenses.indexWhere((e) => e.id == expenseId);
     if (index != -1) {
       currentExpenses.removeAt(index);
@@ -175,7 +181,7 @@ class ExpenseRepository {
       // Offline fallback
     }
 
-    final expenses = await getExpenses(trip.id);
+    final expenses = getCachedExpenses(trip.id);
     return BalanceEngine.calculateBalances(
       members: trip.members,
       expenses: expenses,
