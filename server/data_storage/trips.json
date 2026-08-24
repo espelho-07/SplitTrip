@@ -1,15 +1,15 @@
 [
   {
-    "id": "trip_1d9860043b2f",
+    "id": "trip_0bd2e647fc65",
     "name": "Ladakh",
     "description": null,
     "emoji": "✈️",
     "coverGradientIndex": 0,
     "currencyCode": "INR",
-    "creatorId": "usr_c90b8d4a4858",
-    "inviteCode": "Q4SSN7",
+    "creatorId": "usr_dc9bb045f829",
+    "inviteCode": "ZYBYCZ",
     "lifecycleState": "completed",
-    "createdAt": "2026-08-24T17:17:04.225Z",
-    "updatedAt": "2026-08-24T17:17:04.226Z"
+    "createdAt": "2026-08-24T17:34:26.252Z",
+    "updatedAt": "2026-08-24T17:34:26.253Z"
   }
 ]

@@ -30,9 +30,141 @@ class VoiceExpenseIntent {
   });
 }
 
+enum PersonalVoiceIntentType {
+  expense,
+  lend,
+  borrow,
+  repayment,
+}
+
+/// Intermediate structured draft for personal voice expenses and lending/borrowing.
+class PersonalVoiceDraft {
+  final PersonalVoiceIntentType type;
+  final int amountInPaise;
+  final String title;
+  final ExpenseCategory category;
+  final String? personName;
+  final double confidence;
+  final String rawInput;
+  final List<String> unresolvedFields;
+  final String? questionPrompt;
+
+  const PersonalVoiceDraft({
+    required this.type,
+    required this.amountInPaise,
+    required this.title,
+    required this.category,
+    this.personName,
+    required this.confidence,
+    required this.rawInput,
+    this.unresolvedFields = const [],
+    this.questionPrompt,
+  });
+
+  bool get isReady => amountInPaise > 0 && unresolvedFields.isEmpty;
+}
+
 /// Deterministic natural-language and regex parser for English, Hindi, and Hinglish voice inputs.
 class VoiceIntentParser {
   VoiceIntentParser._();
+
+  /// Parses voice transcript into structured [PersonalVoiceDraft] for personal expenses or peer lending.
+  static PersonalVoiceDraft parsePersonalDraft(String transcript) {
+    final lower = transcript.toLowerCase().trim();
+    final unresolved = <String>[];
+    String? prompt;
+
+    // 1. Detect Intent Type (Lending vs Borrowing vs Expense)
+    PersonalVoiceIntentType type = PersonalVoiceIntentType.expense;
+    String? personName;
+
+    // Lending keywords: "ko udhar diye", "lent to", "gave to", "ko paise diye", "ko 500 diye"
+    final lendMatch = RegExp(
+      r'(?:([a-zA-Z]+)\s+ko\s+.*(?:diye|udhar|bheje))|'
+      r'(?:lent\s+(?:.*to\s+)?([a-zA-Z]+))|'
+      r'(?:gave\s+.*to\s+([a-zA-Z]+))',
+    ).firstMatch(lower);
+
+    // Borrowing keywords: "ne mere liye", "borrowed from", "took from", "se udhar liye", "se paise liye"
+    final borrowMatch = RegExp(
+      r'(?:([a-zA-Z]+)\s+(?:se\s+.*(?:udhar|liye|paise)|ne\s+mere\s+liye))|'
+      r'(?:borrowed\s+.*from\s+([a-zA-Z]+))|'
+      r'(?:took\s+.*from\s+([a-zA-Z]+))',
+    ).firstMatch(lower);
+
+    // Repayment keywords: "returned", "wapas diye", "chuka diye", "settled"
+    final repayMatch = RegExp(
+      r'(?:([a-zA-Z]+)\s+.*(?:returned|wapas|chuka))|'
+      r'(?:received\s+.*from\s+([a-zA-Z]+))',
+    ).firstMatch(lower);
+
+    if (repayMatch != null) {
+      type = PersonalVoiceIntentType.repayment;
+      personName = (repayMatch.group(1) ?? repayMatch.group(2))?.trim();
+    } else if (lendMatch != null) {
+      type = PersonalVoiceIntentType.lend;
+      personName = (lendMatch.group(1) ?? lendMatch.group(2) ?? lendMatch.group(3))?.trim();
+    } else if (borrowMatch != null) {
+      type = PersonalVoiceIntentType.borrow;
+      personName = (borrowMatch.group(1) ?? borrowMatch.group(2) ?? borrowMatch.group(3))?.trim();
+    }
+
+    // Capitalize person name if found
+    if (personName != null && personName.isNotEmpty) {
+      personName = personName[0].toUpperCase() + personName.substring(1);
+    }
+
+    // 2. Extract Amount
+    final amount = _extractAmountInPaise(lower);
+    if (amount == null || amount <= 0) {
+      unresolved.add('missing_amount');
+      prompt = 'How much did you pay / spend?';
+    }
+
+    // 3. Extract Category & Title
+    final category = _extractCategory(lower);
+    String title;
+    if (type == PersonalVoiceIntentType.lend) {
+      title = personName != null ? 'Lent to $personName' : 'Money Lent';
+    } else if (type == PersonalVoiceIntentType.borrow) {
+      title = personName != null ? 'Borrowed from $personName' : 'Money Borrowed';
+    } else if (type == PersonalVoiceIntentType.repayment) {
+      title = personName != null ? 'Repayment from $personName' : 'Debt Repayment';
+    } else {
+      // Remove common prefix phrases from title
+      title = _generatePersonalTitle(lower, category);
+    }
+
+    final double confidence = (amount != null && amount > 0) ? 0.95 : 0.40;
+
+    return PersonalVoiceDraft(
+      type: type,
+      amountInPaise: amount ?? 0,
+      title: title,
+      category: category,
+      personName: personName,
+      confidence: confidence,
+      rawInput: transcript,
+      unresolvedFields: unresolved,
+      questionPrompt: prompt,
+    );
+  }
+
+  static String _generatePersonalTitle(String text, ExpenseCategory category) {
+    if (text.contains('dinner')) return 'Dinner';
+    if (text.contains('lunch')) return 'Lunch';
+    if (text.contains('breakfast') || text.contains('nasta')) return 'Breakfast';
+    if (text.contains('auto') || text.contains('rickshaw')) return 'Auto Ride';
+    if (text.contains('cab') || text.contains('taxi') || text.contains('uber') || text.contains('ola')) return 'Cab';
+    if (text.contains('petrol') || text.contains('fuel')) return 'Petrol';
+    if (text.contains('grocery') || text.contains('groceries') || text.contains('zepto') || text.contains('blinkit')) return 'Groceries';
+    if (text.contains('coffee') || text.contains('chai') || text.contains('tea')) return 'Coffee';
+    if (text.contains('movie') || text.contains('cinema')) return 'Movie';
+    if (text.contains('shopping') || text.contains('clothes')) return 'Shopping';
+    if (text.contains('recharge') || text.contains('bill') || text.contains('wifi') || text.contains('electricity')) return 'Bill Payment';
+    if (text.contains('medic') || text.contains('pharma') || text.contains('doctor')) return 'Health & Medical';
+    return '${category.displayName} Expense';
+  }
 
   /// Parses voice transcript into structured intermediate [ExpenseDraft] with entity resolution against trip members.
   static ExpenseDraft parseToDraft(

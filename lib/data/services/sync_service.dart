@@ -10,6 +10,13 @@ enum MutationType {
   updateTripLifecycle,
   addExpense,
   deleteExpense,
+  createPersonalExpense,
+  updatePersonalExpense,
+  deletePersonalExpense,
+  createPersonalDebt,
+  recordPersonalRepayment,
+  deletePersonalDebt,
+  setPersonalBudget,
 }
 
 class SyncMutation {
@@ -131,6 +138,31 @@ class SyncService {
         final tripId = mutation.payload['tripId'] as String;
         final expenseId = mutation.payload['expenseId'] as String;
         await apiClient.delete('/trips/$tripId/expenses/$expenseId');
+        break;
+      case MutationType.createPersonalExpense:
+        await apiClient.post('/personal/expenses', body: mutation.payload);
+        break;
+      case MutationType.updatePersonalExpense:
+        final id = mutation.payload['id'] as String;
+        await apiClient.put('/personal/expenses/$id', body: mutation.payload);
+        break;
+      case MutationType.deletePersonalExpense:
+        final id = mutation.payload['id'] as String;
+        await apiClient.delete('/personal/expenses/$id');
+        break;
+      case MutationType.createPersonalDebt:
+        await apiClient.post('/personal/debts', body: mutation.payload);
+        break;
+      case MutationType.recordPersonalRepayment:
+        final debtId = mutation.payload['debtId'] as String;
+        await apiClient.post('/personal/debts/$debtId/repayments', body: mutation.payload);
+        break;
+      case MutationType.deletePersonalDebt:
+        final id = mutation.payload['id'] as String;
+        await apiClient.delete('/personal/debts/$id');
+        break;
+      case MutationType.setPersonalBudget:
+        await apiClient.put('/personal/budget', body: mutation.payload);
         break;
     }
   }

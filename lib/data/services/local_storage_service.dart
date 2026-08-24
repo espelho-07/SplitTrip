@@ -95,4 +95,55 @@ class LocalStorageService {
   Future<bool> saveThemeMode(String mode) async {
     return _prefs.setString(_themeModeKey, mode);
   }
+
+  // --- Personal Expenses ---
+  static const String _personalExpensesKey = 'kith_personal_expenses';
+  static const String _personalDebtsKey = 'kith_personal_debts';
+  static const String _personalBudgetKeyPrefix = 'kith_personal_budget_';
+
+  List<Map<String, dynamic>> getSavedPersonalExpenses() {
+    final raw = _prefs.getString(_personalExpensesKey);
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      final list = jsonDecode(raw) as List<dynamic>;
+      return list.cast<Map<String, dynamic>>();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<bool> savePersonalExpenses(List<Map<String, dynamic>> expensesJson) async {
+    return _prefs.setString(_personalExpensesKey, jsonEncode(expensesJson));
+  }
+
+  // --- Personal Debts (Lending / Borrowing) ---
+  List<Map<String, dynamic>> getSavedPersonalDebts() {
+    final raw = _prefs.getString(_personalDebtsKey);
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      final list = jsonDecode(raw) as List<dynamic>;
+      return list.cast<Map<String, dynamic>>();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<bool> savePersonalDebts(List<Map<String, dynamic>> debtsJson) async {
+    return _prefs.setString(_personalDebtsKey, jsonEncode(debtsJson));
+  }
+
+  // --- Personal Budget ---
+  Map<String, dynamic>? getSavedPersonalBudget(String monthYear) {
+    final raw = _prefs.getString('$_personalBudgetKeyPrefix$monthYear');
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      return jsonDecode(raw) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<bool> savePersonalBudget(String monthYear, Map<String, dynamic> budgetJson) async {
+    return _prefs.setString('$_personalBudgetKeyPrefix$monthYear', jsonEncode(budgetJson));
+  }
 }

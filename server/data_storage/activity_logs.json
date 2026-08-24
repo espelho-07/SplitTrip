@@ -1,27 +1,27 @@
 [
   {
-    "id": "act_b3cc46f88fe0",
-    "tripId": "trip_1d9860043b2f",
+    "id": "act_aaccadbdfcd2",
+    "tripId": "trip_0bd2e647fc65",
     "type": "trip_created",
-    "actorId": "usr_c90b8d4a4858",
+    "actorId": "usr_dc9bb045f829",
     "actorName": "Creator User",
     "description": "Creator User created the trip \"Ladakh\"",
     "metadata": {
-      "tripId": "trip_1d9860043b2f",
+      "tripId": "trip_0bd2e647fc65",
       "emoji": "✈️"
     },
-    "createdAt": "2026-08-24T17:17:04.226Z"
+    "createdAt": "2026-08-24T17:34:26.253Z"
   },
   {
-    "id": "act_c7e6d860fd66",
-    "tripId": "trip_1d9860043b2f",
+    "id": "act_3051ff98ba51",
+    "tripId": "trip_0bd2e647fc65",
     "type": "lifecycle_updated",
-    "actorId": "usr_c90b8d4a4858",
+    "actorId": "usr_dc9bb045f829",
     "actorName": "Creator User",
     "description": "Creator User changed trip state to COMPLETED",
     "metadata": {
       "lifecycleState": "completed"
     },
-    "createdAt": "2026-08-24T17:17:04.227Z"
+    "createdAt": "2026-08-24T17:34:26.254Z"
   }
 ]

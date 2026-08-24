@@ -3,6 +3,7 @@ const cors = require('cors');
 const authRoutes = require('./routes/auth_routes');
 const tripRoutes = require('./routes/trip_routes');
 const expenseRoutes = require('./routes/expense_routes');
+const personalRoutes = require('./routes/personal_routes');
 const { errorHandler } = require('./middleware/error_handler');
 const { dbManager } = require('./db/db_manager');
 const env = require('./config/env');
@@ -89,6 +90,7 @@ app.get('/ready', async (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/trips', tripRoutes);
 app.use('/api/trips/:tripId/expenses', expenseRoutes);
+app.use('/api/personal', personalRoutes);
 
 // Fallback 404 for unhandled API routes
 app.use('/api/*', (req, res) => {

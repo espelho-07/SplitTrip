@@ -15,6 +15,10 @@ class Database {
       expenses: new Map(),
       settlements: new Map(),
       activity_logs: new Map(),
+      personal_expenses: new Map(),
+      personal_debts: new Map(),
+      personal_repayments: new Map(),
+      personal_budgets: new Map(),
     };
     if (!this.inMemory) {
       this._initStorage();

@@ -6,6 +6,7 @@ import 'core/network/api_client.dart';
 import 'core/network/realtime_client.dart';
 import 'core/theme/app_theme.dart';
 import 'data/repositories/expense_repository.dart';
+import 'data/repositories/personal_repository.dart';
 import 'data/repositories/trip_repository.dart';
 import 'data/repositories/user_repository.dart';
 import 'data/services/auth_service.dart';
@@ -17,6 +18,7 @@ import 'presentation/viewmodels/auth_viewmodel.dart';
 import 'presentation/viewmodels/create_trip_viewmodel.dart';
 import 'presentation/viewmodels/home_viewmodel.dart';
 import 'presentation/viewmodels/join_trip_viewmodel.dart';
+import 'presentation/viewmodels/personal_expense_viewmodel.dart';
 import 'presentation/viewmodels/theme_viewmodel.dart';
 import 'presentation/viewmodels/trip_detail_viewmodel.dart';
 
@@ -62,6 +64,11 @@ void main() async {
     apiClient: apiClient,
     realtimeClient: realtimeClient,
   );
+  final personalRepo = PersonalRepository(
+    storage: storageService,
+    syncService: syncService,
+    apiClient: apiClient,
+  );
 
   runApp(
     MultiProvider(
@@ -70,6 +77,9 @@ void main() async {
         ChangeNotifierProvider(create: (_) => AuthViewModel(userRepo: userRepo)),
         ChangeNotifierProvider(
           create: (_) => HomeViewModel(tripRepo: tripRepo, expenseRepo: expenseRepo),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => PersonalExpenseViewModel(personalRepo: personalRepo),
         ),
         ChangeNotifierProvider(
           create: (_) => TripDetailViewModel(

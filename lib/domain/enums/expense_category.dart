@@ -74,10 +74,36 @@ enum ExpenseCategory {
     }
   }
 
+  Color get color {
+    switch (this) {
+      case ExpenseCategory.transport:
+        return const Color(0xFF3B82F6); // Blue
+      case ExpenseCategory.food:
+        return const Color(0xFFF97316); // Orange
+      case ExpenseCategory.stay:
+        return const Color(0xFF8B5CF6); // Purple
+      case ExpenseCategory.drinks:
+        return const Color(0xFFEC4899); // Pink
+      case ExpenseCategory.activities:
+        return const Color(0xFF10B981); // Emerald
+      case ExpenseCategory.shopping:
+        return const Color(0xFFEAB308); // Amber
+      case ExpenseCategory.groceries:
+        return const Color(0xFF06B6D4); // Cyan
+      case ExpenseCategory.general:
+        return const Color(0xFF6B7280); // Gray
+    }
+  }
+
   static ExpenseCategory fromString(String value) {
     return ExpenseCategory.values.firstWhere(
       (e) => e.name.toLowerCase() == value.toLowerCase(),
       orElse: () => ExpenseCategory.general,
     );
+  }
+
+  static ExpenseCategory fromName(String? value) {
+    if (value == null || value.isEmpty) return ExpenseCategory.general;
+    return fromString(value);
   }
 }

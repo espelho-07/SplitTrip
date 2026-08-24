@@ -23,6 +23,15 @@ class DateFormatter {
     }
   }
 
+  static String formatDate(DateTime date) {
+    return DateFormat('d MMM yyyy').format(date);
+  }
+
+  static bool isToday(DateTime date) {
+    final now = DateTime.now();
+    return date.year == now.year && date.month == now.month && date.day == now.day;
+  }
+
   static String formatTripDateRange(DateTime start, [DateTime? end]) {
     if (end == null || start.isAtSameMomentAs(end)) {
       return DateFormat('MMM d, yyyy').format(start);
