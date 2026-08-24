@@ -331,19 +331,115 @@ class TripRepository {
     return updatedTrip;
   }
 
-  /// Fetches chronological audit activity logs for the trip.
+  /// Synchronously returns cached activity logs or synthesizes from trip and expenses if empty.
+  List<ActivityLog> getCachedActivityLogs(String tripId) {
+    final raw = storage.getSavedActivityLogs(tripId);
+    if (raw.isNotEmpty) {
+      final logs = raw.map((j) => ActivityLog.fromJson(j)).toList();
+      logs.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return logs;
+    }
+
+    // Synthesize logs from local trip & expenses so activity feed is never blank
+    final trip = getCachedTripById(tripId);
+    if (trip == null) return [];
+
+    final synthesized = <ActivityLog>[];
+
+    // Trip creation event
+    final creator = trip.members.where((m) => m.role == 'creator').firstOrNull ?? trip.members.firstOrNull;
+    synthesized.add(
+      ActivityLog(
+        id: 'act_init_${trip.id}',
+        tripId: trip.id,
+        type: 'trip_created',
+        actorId: creator?.userId ?? '',
+        actorName: creator?.displayName ?? 'Trip Creator',
+        description: '${creator?.displayName ?? "Creator"} created the trip "${trip.name}"',
+        metadata: {'tripId': trip.id, 'emoji': trip.emoji},
+        createdAt: trip.createdAt,
+      ),
+    );
+
+    // Member joins
+    for (final member in trip.members) {
+      if (member.role != 'creator') {
+        synthesized.add(
+          ActivityLog(
+            id: 'act_mbr_${member.id}',
+            tripId: trip.id,
+            type: 'member_joined',
+            actorId: member.userId,
+            actorName: member.displayName,
+            description: '${member.displayName} joined the trip',
+            metadata: {'memberId': member.id},
+            createdAt: member.joinedAt,
+          ),
+        );
+      }
+    }
+
+    // Expenses
+    final expenses = storage.getSavedExpenses(tripId);
+    for (final expJson in expenses) {
+      final title = expJson['title'] as String? ?? 'Expense';
+      final amountInPaise = expJson['amountInPaise'] as int? ?? 0;
+      final paidById = expJson['paidById'] as String? ?? '';
+      final payer = trip.members.where((m) => m.id == paidById || m.userId == paidById).firstOrNull;
+      final expDate = expJson['createdAt'] != null
+          ? DateTime.tryParse(expJson['createdAt'] as String) ?? DateTime.now()
+          : DateTime.now();
+
+      synthesized.add(
+        ActivityLog(
+          id: 'act_exp_${expJson['id'] ?? expDate.millisecondsSinceEpoch}',
+          tripId: trip.id,
+          type: 'expense_added',
+          actorId: payer?.userId ?? '',
+          actorName: payer?.displayName ?? 'Member',
+          description: '${payer?.displayName ?? "Member"} added "$title" for ₹${(amountInPaise / 100).toStringAsFixed(2)}',
+          metadata: {'expenseId': expJson['id'], 'amountInPaise': amountInPaise},
+          createdAt: expDate,
+        ),
+      );
+    }
+
+    synthesized.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    storage.saveActivityLogs(tripId, synthesized.map((l) => l.toJson()).toList());
+    return synthesized;
+  }
+
+  /// Appends a new activity log locally to persistent cache.
+  Future<void> addLocalActivityLog(String tripId, ActivityLog log) async {
+    final logs = getCachedActivityLogs(tripId);
+    logs.removeWhere((l) => l.id == log.id);
+    logs.insert(0, log);
+    await storage.saveActivityLogs(tripId, logs.map((l) => l.toJson()).toList());
+  }
+
+  /// Fetches chronological audit activity logs for the trip with local fallback and merge.
   Future<List<ActivityLog>> getActivityLogs(String tripId) async {
     try {
       final res = await apiClient.get('/trips/$tripId/activity');
+      List<dynamic>? rawList;
       if (res is List) {
-        return res
+        rawList = res;
+      } else if (res is Map<String, dynamic> && res['data'] is List) {
+        rawList = res['data'] as List<dynamic>;
+      }
+
+      if (rawList != null && rawList.isNotEmpty) {
+        final serverLogs = rawList
             .map((item) => ActivityLog.fromJson(item as Map<String, dynamic>))
             .toList();
+        await storage.saveActivityLogs(tripId, serverLogs.map((l) => l.toJson()).toList());
+        return serverLogs;
       }
     } catch (_) {
-      // Fallback
+      // Offline fallback
     }
-    return [];
+
+    return getCachedActivityLogs(tripId);
   }
 
   static String _generateInviteCode() {

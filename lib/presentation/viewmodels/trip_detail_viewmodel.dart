@@ -106,6 +106,7 @@ class TripDetailViewModel extends ChangeNotifier {
     if (cachedTrip != null) {
       _trip = cachedTrip;
       _expenses = expenseRepo.getCachedExpenses(tripId);
+      _activityLogs = tripRepo.getCachedActivityLogs(tripId);
       _balanceSummary = BalanceEngine.calculateBalances(
         members: cachedTrip.members,
         expenses: _expenses,
@@ -130,7 +131,7 @@ class TripDetailViewModel extends ChangeNotifier {
           trip: remoteTrip,
           currentUserId: currentUserId,
         );
-        fetchActivityLogs();
+        await fetchActivityLogs();
       } else if (_trip == null) {
         _errorMessage = 'Trip not found';
       }
@@ -146,6 +147,7 @@ class TripDetailViewModel extends ChangeNotifier {
 
   Future<void> refresh(String currentUserId) async {
     if (_trip != null) {
+      _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
       try {
         final updatedTrip = await tripRepo.getTripById(_trip!.id);
         if (updatedTrip != null) {
@@ -155,7 +157,7 @@ class TripDetailViewModel extends ChangeNotifier {
             trip: _trip!,
             currentUserId: currentUserId,
           );
-          fetchActivityLogs();
+          await fetchActivityLogs();
           notifyListeners();
         }
       } catch (_) {
@@ -182,6 +184,7 @@ class TripDetailViewModel extends ChangeNotifier {
         paymentReference: paymentReference,
         note: note,
       );
+      _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
       await refresh(currentUserId);
     } catch (e) {
       _errorMessage = e.toString();
@@ -200,6 +203,7 @@ class TripDetailViewModel extends ChangeNotifier {
         trip: _trip!,
         currentUserId: currentUserId,
       );
+      _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
       notifyListeners();
     } catch (e) {
       _errorMessage = e.toString();
@@ -218,6 +222,7 @@ class TripDetailViewModel extends ChangeNotifier {
         trip: _trip!,
         currentUserId: currentUserId,
       );
+      _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
       notifyListeners();
     } catch (e) {
       _errorMessage = e.toString();
@@ -236,6 +241,7 @@ class TripDetailViewModel extends ChangeNotifier {
         trip: _trip!,
         currentUserId: currentUserId,
       );
+      _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
       notifyListeners();
     } catch (e) {
       _errorMessage = e.toString();
@@ -250,6 +256,7 @@ class TripDetailViewModel extends ChangeNotifier {
         tripId: _trip!.id,
         newLifecycle: TripLifecycle.settled,
       );
+      _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
       notifyListeners();
     } catch (e) {
       _errorMessage = e.toString();
@@ -261,6 +268,7 @@ class TripDetailViewModel extends ChangeNotifier {
     if (_trip == null) return;
     try {
       await expenseRepo.deleteExpense(tripId: _trip!.id, expenseId: expenseId);
+      _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
       await refresh(currentUserId);
     } catch (e) {
       _errorMessage = e.toString();

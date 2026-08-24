@@ -9,6 +9,7 @@ enum MutationType {
   joinTrip,
   updateTripLifecycle,
   addExpense,
+  updateExpense,
   deleteExpense,
   createPersonalExpense,
   updatePersonalExpense,
@@ -133,6 +134,11 @@ class SyncService {
       case MutationType.addExpense:
         final tripId = mutation.payload['tripId'] as String;
         await apiClient.post('/trips/$tripId/expenses', body: mutation.payload);
+        break;
+      case MutationType.updateExpense:
+        final tripId = mutation.payload['tripId'] as String;
+        final expenseId = mutation.payload['id'] as String;
+        await apiClient.put('/trips/$tripId/expenses/$expenseId', body: mutation.payload);
         break;
       case MutationType.deleteExpense:
         final tripId = mutation.payload['tripId'] as String;

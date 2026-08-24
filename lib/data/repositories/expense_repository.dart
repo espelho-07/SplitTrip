@@ -81,6 +81,13 @@ class ExpenseRepository {
       currentExpenses.map((e) => e.toJson()).toList(),
     );
 
+    _logLocalActivity(
+      tripId: expense.tripId,
+      type: 'expense_added',
+      description: 'Added "${expense.title}" for ₹${(expense.amountInPaise / 100).toStringAsFixed(2)}',
+      metadata: {'expenseId': expense.id, 'amountInPaise': expense.amountInPaise},
+    );
+
     await syncService.enqueueMutation(
       MutationType.addExpense,
       expense.toJson(),
@@ -108,12 +115,16 @@ class ExpenseRepository {
         final idx = currentExpenses.indexWhere((e) => e.id == savedExpense.id);
         if (idx != -1) {
           currentExpenses[idx] = savedExpense;
-        } else {
-          currentExpenses.insert(0, savedExpense);
+          await storage.saveExpenses(
+            expense.tripId,
+            currentExpenses.map((e) => e.toJson()).toList(),
+          );
         }
-        await storage.saveExpenses(
-          expense.tripId,
-          currentExpenses.map((e) => e.toJson()).toList(),
+        _logLocalActivity(
+          tripId: expense.tripId,
+          type: 'expense_updated',
+          description: 'Updated "${savedExpense.title}" for ₹${(savedExpense.amountInPaise / 100).toStringAsFixed(2)}',
+          metadata: {'expenseId': savedExpense.id, 'amountInPaise': savedExpense.amountInPaise},
         );
         return savedExpense;
       }
@@ -125,44 +136,57 @@ class ExpenseRepository {
     final idx = currentExpenses.indexWhere((e) => e.id == expense.id);
     if (idx != -1) {
       currentExpenses[idx] = expense;
-    } else {
-      currentExpenses.insert(0, expense);
+      await storage.saveExpenses(
+        expense.tripId,
+        currentExpenses.map((e) => e.toJson()).toList(),
+      );
     }
 
-    await storage.saveExpenses(
-      expense.tripId,
-      currentExpenses.map((e) => e.toJson()).toList(),
+    _logLocalActivity(
+      tripId: expense.tripId,
+      type: 'expense_updated',
+      description: 'Updated "${expense.title}" for ₹${(expense.amountInPaise / 100).toStringAsFixed(2)}',
+      metadata: {'expenseId': expense.id, 'amountInPaise': expense.amountInPaise},
     );
 
     await syncService.enqueueMutation(
-      MutationType.addExpense,
+      MutationType.updateExpense,
       expense.toJson(),
     );
 
     return expense;
   }
 
-  /// Deletes or soft-deletes an expense.
+  /// Deletes an expense by ID and updates local cache.
   Future<void> deleteExpense({
     required String tripId,
     required String expenseId,
   }) async {
+    final currentExpenses = getCachedExpenses(tripId);
+    final index = currentExpenses.indexWhere((e) => e.id == expenseId);
+    String deletedTitle = 'Expense';
+    if (index != -1) {
+      deletedTitle = currentExpenses[index].title;
+      currentExpenses.removeAt(index);
+      await storage.saveExpenses(
+        tripId,
+        currentExpenses.map((e) => e.toJson()).toList(),
+      );
+    }
+
+    _logLocalActivity(
+      tripId: tripId,
+      type: 'expense_deleted',
+      description: 'Deleted expense "$deletedTitle"',
+      metadata: {'expenseId': expenseId},
+    );
+
     try {
       await apiClient.delete('/trips/$tripId/expenses/$expenseId');
     } catch (_) {
       await syncService.enqueueMutation(
         MutationType.deleteExpense,
         {'tripId': tripId, 'expenseId': expenseId},
-      );
-    }
-
-    final currentExpenses = getCachedExpenses(tripId);
-    final index = currentExpenses.indexWhere((e) => e.id == expenseId);
-    if (index != -1) {
-      currentExpenses.removeAt(index);
-      await storage.saveExpenses(
-        tripId,
-        currentExpenses.map((e) => e.toJson()).toList(),
       );
     }
   }
@@ -198,6 +222,17 @@ class ExpenseRepository {
     String? paymentReference,
     String? note,
   }) async {
+    _logLocalActivity(
+      tripId: tripId,
+      type: 'settlement_recorded',
+      description: 'Payment settled for ₹${(amountInPaise / 100).toStringAsFixed(2)}',
+      metadata: {
+        'fromMemberId': fromMemberId,
+        'toMemberId': toMemberId,
+        'amountInPaise': amountInPaise,
+      },
+    );
+
     try {
       await apiClient.post(
         '/trips/$tripId/settlements',
@@ -212,5 +247,27 @@ class ExpenseRepository {
     } catch (_) {
       // Offline fallback
     }
+  }
+
+  void _logLocalActivity({
+    required String tripId,
+    required String type,
+    required String description,
+    required Map<String, dynamic> metadata,
+  }) {
+    final raw = storage.getSavedActivityLogs(tripId);
+    final now = DateTime.now();
+    final log = {
+      'id': 'act_loc_${now.millisecondsSinceEpoch}',
+      'tripId': tripId,
+      'type': type,
+      'actorId': metadata['actorId'] ?? '',
+      'actorName': metadata['actorName'] ?? 'You',
+      'description': description,
+      'metadata': metadata,
+      'createdAt': now.toIso8601String(),
+    };
+    raw.insert(0, log);
+    storage.saveActivityLogs(tripId, raw);
   }
 }

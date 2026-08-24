@@ -146,4 +146,22 @@ class LocalStorageService {
   Future<bool> savePersonalBudget(String monthYear, Map<String, dynamic> budgetJson) async {
     return _prefs.setString('$_personalBudgetKeyPrefix$monthYear', jsonEncode(budgetJson));
   }
+
+  // --- Trip Activity Logs ---
+  static const String _activityLogsPrefix = 'kith_activity_';
+
+  List<Map<String, dynamic>> getSavedActivityLogs(String tripId) {
+    final raw = _prefs.getString('$_activityLogsPrefix$tripId');
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      final list = jsonDecode(raw) as List<dynamic>;
+      return list.cast<Map<String, dynamic>>();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<bool> saveActivityLogs(String tripId, List<Map<String, dynamic>> logsJson) async {
+    return _prefs.setString('$_activityLogsPrefix$tripId', jsonEncode(logsJson));
+  }
 }
