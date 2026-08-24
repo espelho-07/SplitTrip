@@ -9,10 +9,15 @@ import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/date_formatter.dart';
 import '../../../../core/utils/haptic_feedback_helper.dart';
 import '../../../../core/widgets/app_button.dart';
+import '../../../../core/widgets/surface_card.dart';
+import '../../../../data/repositories/expense_repository.dart';
+import '../../../../domain/engine/money_engine.dart';
 import '../../../../domain/engine/voice_parser.dart';
 import '../../../../domain/enums/expense_category.dart';
+import '../../../../domain/models/expense.dart';
 import '../../../../domain/models/personal_debt.dart';
 import '../../../viewmodels/auth_viewmodel.dart';
+import '../../../viewmodels/home_viewmodel.dart';
 import '../../../viewmodels/personal_expense_viewmodel.dart';
 
 enum PersonalEntryMode {
@@ -61,6 +66,8 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
 
   bool _isSaving = false;
   bool _isListening = false;
+  bool _syncToTrip = false;
+  String? _selectedTripId;
   String? _voiceTranscript;
 
   final VoiceSpeechService _speechService = VoiceSpeechService();
@@ -203,15 +210,46 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
         voiceTranscript: _voiceTranscript,
       );
 
+      // Also sync to chosen Trip if enabled
+      if (_syncToTrip && _selectedTripId != null && mounted) {
+        final homeVm = context.read<HomeViewModel>();
+        final targetTrip = homeVm.trips.where((t) => t.id == _selectedTripId).firstOrNull;
+        if (targetTrip != null && targetTrip.members.isNotEmpty) {
+          final expenseRepo = context.read<ExpenseRepository>();
+          final payer = targetTrip.members.where((m) => m.userId == user.id).firstOrNull ?? targetTrip.members.first;
+          final memberIds = targetTrip.members.map((m) => m.id).toList();
+          final splits = MoneyEngine.calculateEqualSplits(
+            totalPaise: amountPaise,
+            participantMemberIds: memberIds,
+            priorityMemberId: payer.id,
+          );
+          final tripExpense = Expense(
+            id: 'exp_${DateTime.now().millisecondsSinceEpoch}',
+            tripId: targetTrip.id,
+            title: title,
+            amountInPaise: amountPaise,
+            category: _category,
+            paidById: payer.id,
+            splits: splits,
+            createdAt: _selectedDate,
+            updatedAt: _selectedDate,
+          );
+          await expenseRepo.addExpense(tripExpense);
+          homeVm.loadTrips(user.id);
+        }
+      }
+
       if (mounted) {
         setState(() => _isSaving = false);
         if (expense != null) {
           Navigator.of(context).pop(true);
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Expense added ✓'),
+            SnackBar(
+              content: Text(_syncToTrip
+                  ? 'Expense saved & added to trip ✓'
+                  : 'Personal expense added ✓'),
               behavior: SnackBarBehavior.floating,
-              duration: Duration(seconds: 2),
+              duration: const Duration(seconds: 2),
             ),
           );
         }
@@ -583,6 +621,86 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
                     },
                   ),
                 ],
+              ),
+
+              // Optional: Sync to Trip
+              Builder(
+                builder: (context) {
+                  final availableTrips = context.watch<HomeViewModel>().trips.where((t) => t.lifecycleState.allowsExpenses).toList();
+                  if (_mode != PersonalEntryMode.expense || availableTrips.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+
+                  return Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.md),
+                    child: SurfaceCard(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.sync_alt_rounded, size: 18, color: AppColors.emeraldPrimary),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Sync / Add to a Trip',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Switch.adaptive(
+                                value: _syncToTrip,
+                                activeTrackColor: AppColors.emeraldPrimary,
+                                onChanged: (val) {
+                                  setState(() {
+                                    _syncToTrip = val;
+                                    if (val && (_selectedTripId == null || _selectedTripId!.isEmpty)) {
+                                      _selectedTripId = availableTrips.first.id;
+                                    }
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                          if (_syncToTrip) ...[
+                            const SizedBox(height: 8),
+                            DropdownButtonFormField<String>(
+                              initialValue: (_selectedTripId != null && availableTrips.any((t) => t.id == _selectedTripId))
+                                  ? _selectedTripId
+                                  : availableTrips.first.id,
+                              decoration: InputDecoration(
+                                labelText: 'Select Trip',
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                              items: availableTrips.map((t) {
+                                return DropdownMenuItem(
+                                  value: t.id,
+                                  child: Text('${t.emoji} ${t.name}', overflow: TextOverflow.ellipsis),
+                                );
+                              }).toList(),
+                              onChanged: (val) {
+                                setState(() => _selectedTripId = val);
+                              },
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Splits equally among trip members and shows up in the trip feed.',
+                              style: TextStyle(fontSize: 11, color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
 
               const SizedBox(height: AppSpacing.xl),

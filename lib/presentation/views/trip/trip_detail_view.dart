@@ -491,7 +491,14 @@ class _TripDetailViewState extends State<TripDetailView> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Hero Trip Card
-              _buildHeroTripCard(trip, balanceSummary, userNetPaise, isDark, gradientColors),
+              _buildHeroTripCard(
+                trip,
+                balanceSummary,
+                userNetPaise,
+                _calculateUserPaidPaise(tripDetailVm.expenses, user?.id, trip),
+                isDark,
+                gradientColors,
+              ),
 
               const SizedBox(height: AppSpacing.lg),
 
@@ -542,10 +549,23 @@ class _TripDetailViewState extends State<TripDetailView> {
     );
   }
 
+  int _calculateUserPaidPaise(List<Expense> expenses, String? currentUserId, Trip trip) {
+    if (currentUserId == null) return 0;
+    final currentMember = trip.members.where((m) => m.userId == currentUserId).firstOrNull;
+    int total = 0;
+    for (final exp in expenses) {
+      if (exp.paidById == currentUserId || (currentMember != null && exp.paidById == currentMember.id)) {
+        total += exp.amountInPaise;
+      }
+    }
+    return total;
+  }
+
   Widget _buildHeroTripCard(
     Trip trip,
     BalanceSummary balanceSummary,
     int userNetPaise,
+    int userPaidPaise,
     bool isDark,
     List<Color> gradientColors,
   ) {
@@ -646,8 +666,26 @@ class _TripDetailViewState extends State<TripDetailView> {
                     ),
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 15,
+                      fontSize: 14,
                       fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('You Spent', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 2),
+                  Text(
+                    CurrencyFormatter.formatPaise(
+                      userPaidPaise,
+                      currencyCode: trip.currencyCode,
+                    ),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ],
@@ -659,7 +697,7 @@ class _TripDetailViewState extends State<TripDetailView> {
                 },
                 borderRadius: BorderRadius.circular(8),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(8),
@@ -668,20 +706,20 @@ class _TripDetailViewState extends State<TripDetailView> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.qr_code_2_rounded, size: 16, color: Colors.white),
-                      const SizedBox(width: 6),
+                      const Icon(Icons.qr_code_2_rounded, size: 15, color: Colors.white),
+                      const SizedBox(width: 4),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('CODE & QR', style: TextStyle(color: Colors.white70, fontSize: 9, fontWeight: FontWeight.w700)),
+                          const Text('CODE & QR', style: TextStyle(color: Colors.white70, fontSize: 8, fontWeight: FontWeight.w700)),
                           Text(
                             trip.inviteCode,
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 14,
+                              fontSize: 13,
                               fontWeight: FontWeight.w800,
                               fontFamily: 'monospace',
-                              letterSpacing: 2,
+                              letterSpacing: 1.5,
                             ),
                           ),
                         ],
