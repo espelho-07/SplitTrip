@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
@@ -10,12 +11,14 @@ import '../../../core/utils/date_formatter.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/currency_display.dart';
 import '../../../core/widgets/surface_card.dart';
+import '../../../domain/enums/expense_category.dart';
 import '../../../domain/models/personal_debt.dart';
 import '../../../domain/models/personal_expense.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/personal_expense_viewmodel.dart';
 import 'widgets/add_personal_expense_sheet.dart';
 import 'widgets/personal_expense_detail_sheet.dart';
+import 'widgets/personal_expense_filter_sheet.dart';
 import 'widgets/record_repayment_sheet.dart';
 import 'widgets/set_budget_dialog.dart';
 import 'widgets/trip_sync_progress_sheet.dart';
@@ -69,21 +72,8 @@ class PersonalHomeTab extends StatelessWidget {
             const SizedBox(height: AppSpacing.lg),
           ],
 
-          // 6. Recent Activity / Expenses List Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Recent Expenses',
-                style: AppTypography.titleMedium(isDark: isDark),
-              ),
-              if (expenses.isNotEmpty)
-                Text(
-                  '${expenses.length} total',
-                  style: AppTypography.bodySmall(isDark: isDark),
-                ),
-            ],
-          ),
+          // 6. Recent Activity / Expenses List Header & Search Filter Bar
+          _buildExpenseSearchAndFilters(context, personalVm, isDark, expenses.length),
           const SizedBox(height: AppSpacing.sm),
 
           // Expenses List or Empty State
@@ -570,10 +560,9 @@ class PersonalHomeTab extends StatelessWidget {
     bool isDark,
     PersonalDebtsSummary summary,
   ) {
-    final lentDebts = summary.debts.where((d) => d.debtType == PersonalDebtType.lent && !d.isSettled).toList();
-    final borrowedDebts = summary.debts.where((d) => d.debtType == PersonalDebtType.borrowed && !d.isSettled).toList();
+    final lentDebts = summary.debts.where((d) => d.debtType == PersonalDebtType.lent).toList();
+    final borrowedDebts = summary.debts.where((d) => d.debtType == PersonalDebtType.borrowed).toList();
     final green = isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight;
-    final red = isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -582,17 +571,19 @@ class PersonalHomeTab extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text('Lending & Borrowing', style: AppTypography.titleMedium(isDark: isDark)),
-            if (summary.netBalancePaise != 0)
-              Text(
-                summary.netBalancePaise > 0
-                    ? '+${CurrencyFormatter.formatPaise(summary.netBalancePaise, currencyCode: 'INR')} net'
-                    : '${CurrencyFormatter.formatPaise(summary.netBalancePaise, currencyCode: 'INR')} net',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: summary.netBalancePaise >= 0 ? green : red,
-                ),
+            TextButton.icon(
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
+              onPressed: () => context.push('/personal/debts'),
+              icon: const Icon(Icons.arrow_forward_rounded, size: 14, color: AppColors.emeraldPrimary),
+              label: Text(
+                'View Detailed (${summary.debts.length})',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.emeraldPrimary),
+              ),
+            ),
           ],
         ),
         const SizedBox(height: AppSpacing.sm),
@@ -636,7 +627,7 @@ class PersonalHomeTab extends StatelessWidget {
                 const SizedBox(height: AppSpacing.xs),
                 const Divider(height: 1),
                 const SizedBox(height: AppSpacing.xs),
-                ...lentDebts.map((d) => _buildDebtItem(context, d, isDark)),
+                ...lentDebts.take(2).map((d) => _buildDebtItem(context, d, isDark)),
               ],
             ),
           ),
@@ -682,7 +673,7 @@ class PersonalHomeTab extends StatelessWidget {
                 const SizedBox(height: AppSpacing.xs),
                 const Divider(height: 1),
                 const SizedBox(height: AppSpacing.xs),
-                ...borrowedDebts.map((d) => _buildDebtItem(context, d, isDark)),
+                ...borrowedDebts.take(2).map((d) => _buildDebtItem(context, d, isDark)),
               ],
             ),
           ),
@@ -803,7 +794,25 @@ class PersonalHomeTab extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Category Breakdown', style: AppTypography.titleMedium(isDark: isDark)),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Category Breakdown', style: AppTypography.titleMedium(isDark: isDark)),
+            TextButton.icon(
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              onPressed: () => context.push('/personal/categories'),
+              icon: const Icon(Icons.arrow_forward_rounded, size: 14, color: AppColors.emeraldPrimary),
+              label: const Text(
+                'View Detailed',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.emeraldPrimary),
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: AppSpacing.sm),
         SurfaceCard(
           backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
@@ -813,46 +822,252 @@ class PersonalHomeTab extends StatelessWidget {
               final cat = entry.key;
               final amount = entry.value;
               final percentage = ((amount / totalSpent) * 100).round();
+              final isSelected = vm.selectedCategoryFilter == cat;
 
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Text(cat.emoji, style: const TextStyle(fontSize: 16)),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            cat.displayName,
-                            style: AppTypography.titleSmall(isDark: isDark),
+              return InkWell(
+                onTap: () => vm.setCategoryFilter(cat),
+                borderRadius: BorderRadius.circular(6),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Text(cat.emoji, style: const TextStyle(fontSize: 16)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Row(
+                              children: [
+                                Text(
+                                  cat.displayName,
+                                  style: AppTypography.titleSmall(isDark: isDark),
+                                ),
+                                if (isSelected) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.emeraldPrimary.withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: const Text('Filtered', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.emeraldPrimary)),
+                                  ),
+                                ],
+                              ],
+                            ),
                           ),
-                        ),
-                        Text(
-                          CurrencyFormatter.formatPaise(amount, currencyCode: 'INR'),
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                          Text(
+                            CurrencyFormatter.formatPaise(amount, currencyCode: 'INR'),
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(2),
-                      child: LinearProgressIndicator(
-                        value: (percentage / 100).clamp(0.0, 1.0),
-                        minHeight: 4,
-                        backgroundColor: isDark ? Colors.white10 : Colors.black12,
-                        color: cat.color,
+                        ],
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(2),
+                        child: LinearProgressIndicator(
+                          value: (percentage / 100).clamp(0.0, 1.0),
+                          minHeight: 4,
+                          backgroundColor: isDark ? Colors.white10 : Colors.black12,
+                          color: cat.color,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               );
             }).toList(),
           ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildExpenseSearchAndFilters(
+    BuildContext context,
+    PersonalExpenseViewModel vm,
+    bool isDark,
+    int expenseCount,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                height: 40,
+                decoration: BoxDecoration(
+                  color: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+                  borderRadius: AppRadius.mdBorder,
+                  border: Border.all(
+                    color: isDark ? Colors.white12 : Colors.black12,
+                  ),
+                ),
+                child: TextField(
+                  onChanged: vm.setSearchQuery,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Search expenses, merchant, notes...',
+                    hintStyle: TextStyle(
+                      fontSize: 13,
+                      color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                    ),
+                    prefixIcon: const Icon(Icons.search_rounded, size: 18),
+                    prefixIconConstraints: const BoxConstraints(minWidth: 34),
+                    suffixIcon: vm.searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear_rounded, size: 16),
+                            onPressed: () => vm.setSearchQuery(''),
+                          )
+                        : null,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                    border: InputBorder.none,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            InkWell(
+              onTap: () => PersonalExpenseFilterSheet.show(context),
+              borderRadius: AppRadius.mdBorder,
+              child: Container(
+                height: 40,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: vm.hasActiveFilters
+                      ? AppColors.emeraldPrimary.withValues(alpha: 0.15)
+                      : (isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard),
+                  borderRadius: AppRadius.mdBorder,
+                  border: Border.all(
+                    color: vm.hasActiveFilters
+                        ? AppColors.emeraldPrimary
+                        : (isDark ? Colors.white12 : Colors.black12),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.tune_rounded,
+                      size: 16,
+                      color: vm.hasActiveFilters
+                          ? AppColors.emeraldPrimary
+                          : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Filters',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: vm.hasActiveFilters
+                            ? AppColors.emeraldPrimary
+                            : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
+                      ),
+                    ),
+                    if (vm.hasActiveFilters) ...[
+                      const SizedBox(width: 4),
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          color: AppColors.emeraldPrimary,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xs),
+
+        // Category Horizontal Quick-Filter Chips
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              ChoiceChip(
+                label: const Text('All', style: TextStyle(fontSize: 12)),
+                selected: vm.selectedCategoryFilter == null,
+                onSelected: (_) => vm.setCategoryFilter(null),
+                visualDensity: VisualDensity.compact,
+              ),
+              const SizedBox(width: 6),
+              ...ExpenseCategory.values.map((cat) {
+                final isSelected = vm.selectedCategoryFilter == cat;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ChoiceChip(
+                    avatar: Text(cat.emoji, style: const TextStyle(fontSize: 13)),
+                    label: Text(cat.displayName, style: const TextStyle(fontSize: 12)),
+                    selected: isSelected,
+                    onSelected: (_) => vm.setCategoryFilter(cat),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                );
+              }),
+            ],
+          ),
+        ),
+
+        if (vm.hasActiveFilters) ...[
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  'Filters active (${vm.filteredExpenses.length} results)',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.emeraldPrimary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              InkWell(
+                onTap: vm.resetAllFilters,
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  child: Text(
+                    'Clear All',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.redAccent,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+
+        const SizedBox(height: AppSpacing.sm),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Expenses',
+              style: AppTypography.titleMedium(isDark: isDark),
+            ),
+            Text(
+              '$expenseCount total',
+              style: AppTypography.bodySmall(isDark: isDark),
+            ),
+          ],
         ),
       ],
     );

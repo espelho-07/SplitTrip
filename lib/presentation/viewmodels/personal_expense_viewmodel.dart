@@ -28,6 +28,43 @@ enum PersonalTimeFilter {
   }
 }
 
+enum PersonalExpenseSourceFilter {
+  all,
+  personalOnly,
+  tripSyncedOnly;
+
+  String get label {
+    switch (this) {
+      case PersonalExpenseSourceFilter.all:
+        return 'All Expenses';
+      case PersonalExpenseSourceFilter.personalOnly:
+        return 'Personal Only';
+      case PersonalExpenseSourceFilter.tripSyncedOnly:
+        return 'Trip Spends Only';
+    }
+  }
+}
+
+enum PersonalExpenseSortOption {
+  newestFirst,
+  oldestFirst,
+  highestAmount,
+  lowestAmount;
+
+  String get label {
+    switch (this) {
+      case PersonalExpenseSortOption.newestFirst:
+        return 'Newest First';
+      case PersonalExpenseSortOption.oldestFirst:
+        return 'Oldest First';
+      case PersonalExpenseSortOption.highestAmount:
+        return 'Highest Amount';
+      case PersonalExpenseSortOption.lowestAmount:
+        return 'Lowest Amount';
+    }
+  }
+}
+
 class PersonalExpenseViewModel extends ChangeNotifier {
   final PersonalRepository personalRepo;
   final TripRepository? tripRepo;
@@ -42,6 +79,11 @@ class PersonalExpenseViewModel extends ChangeNotifier {
   PersonalTimeFilter _timeFilter = PersonalTimeFilter.thisMonth;
   DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
   DateTimeRange? _customDateRange;
+
+  String _searchQuery = '';
+  ExpenseCategory? _selectedCategoryFilter;
+  PersonalExpenseSourceFilter _sourceFilter = PersonalExpenseSourceFilter.all;
+  PersonalExpenseSortOption _sortOption = PersonalExpenseSortOption.newestFirst;
 
   List<PersonalExpense> _expenses = [];
   List<PersonalExpense> _tripSyncedExpenses = [];
@@ -59,6 +101,17 @@ class PersonalExpenseViewModel extends ChangeNotifier {
   PersonalTimeFilter get timeFilter => _timeFilter;
   DateTime get selectedMonth => _selectedMonth;
   DateTimeRange? get customDateRange => _customDateRange;
+  String get searchQuery => _searchQuery;
+  ExpenseCategory? get selectedCategoryFilter => _selectedCategoryFilter;
+  PersonalExpenseSourceFilter get sourceFilter => _sourceFilter;
+  PersonalExpenseSortOption get sortOption => _sortOption;
+  bool get hasActiveFilters =>
+      _searchQuery.isNotEmpty ||
+      _selectedCategoryFilter != null ||
+      _sourceFilter != PersonalExpenseSourceFilter.all ||
+      _timeFilter != PersonalTimeFilter.thisMonth ||
+      _sortOption != PersonalExpenseSortOption.newestFirst;
+
   List<PersonalExpense> get expenses => _expenses;
   bool get includeTripExpenses => _includeTripExpenses;
   PersonalDebtsSummary get debtsSummary => _debtsSummary;
@@ -75,6 +128,47 @@ class PersonalExpenseViewModel extends ChangeNotifier {
     if (_timeFilter == filter) return;
     _timeFilter = filter;
     HapticHelper.selection();
+    _applyFilterAndCalculate();
+  }
+
+  void setSearchQuery(String query) {
+    if (_searchQuery == query) return;
+    _searchQuery = query;
+    notifyListeners();
+  }
+
+  void setCategoryFilter(ExpenseCategory? category) {
+    if (_selectedCategoryFilter == category) {
+      _selectedCategoryFilter = null;
+    } else {
+      _selectedCategoryFilter = category;
+    }
+    HapticHelper.selection();
+    _applyFilterAndCalculate();
+  }
+
+  void setSourceFilter(PersonalExpenseSourceFilter filter) {
+    if (_sourceFilter == filter) return;
+    _sourceFilter = filter;
+    HapticHelper.selection();
+    _applyFilterAndCalculate();
+  }
+
+  void setSortOption(PersonalExpenseSortOption sort) {
+    if (_sortOption == sort) return;
+    _sortOption = sort;
+    HapticHelper.selection();
+    _applyFilterAndCalculate();
+  }
+
+  void resetAllFilters() {
+    _searchQuery = '';
+    _selectedCategoryFilter = null;
+    _sourceFilter = PersonalExpenseSourceFilter.all;
+    _timeFilter = PersonalTimeFilter.thisMonth;
+    _sortOption = PersonalExpenseSortOption.newestFirst;
+    _customDateRange = null;
+    HapticHelper.medium();
     _applyFilterAndCalculate();
   }
 
@@ -204,10 +298,54 @@ class PersonalExpenseViewModel extends ChangeNotifier {
         break;
     }
 
-    return allEffectiveExpenses.where((e) {
-      return (e.date.isAfter(start) || e.date.isAtSameMomentAs(start)) &&
+    final result = allEffectiveExpenses.where((e) {
+      final inTime = (e.date.isAfter(start) || e.date.isAtSameMomentAs(start)) &&
           (e.date.isBefore(end) || e.date.isAtSameMomentAs(end));
+      if (!inTime) return false;
+
+      // Search Query Filter
+      if (_searchQuery.trim().isNotEmpty) {
+        final query = _searchQuery.trim().toLowerCase();
+        final matchesTitle = e.title.toLowerCase().contains(query);
+        final matchesCategory = e.category.displayName.toLowerCase().contains(query);
+        final matchesNotes = e.notes?.toLowerCase().contains(query) ?? false;
+        if (!matchesTitle && !matchesCategory && !matchesNotes) return false;
+      }
+
+      // Category Filter
+      if (_selectedCategoryFilter != null && e.category != _selectedCategoryFilter) {
+        return false;
+      }
+
+      // Source Filter
+      final isTripExp = e.id.startsWith('trip_exp_');
+      if (_sourceFilter == PersonalExpenseSourceFilter.personalOnly && isTripExp) {
+        return false;
+      }
+      if (_sourceFilter == PersonalExpenseSourceFilter.tripSyncedOnly && !isTripExp) {
+        return false;
+      }
+
+      return true;
     }).toList();
+
+    // Sorting
+    switch (_sortOption) {
+      case PersonalExpenseSortOption.newestFirst:
+        result.sort((a, b) => b.date.compareTo(a.date));
+        break;
+      case PersonalExpenseSortOption.oldestFirst:
+        result.sort((a, b) => a.date.compareTo(b.date));
+        break;
+      case PersonalExpenseSortOption.highestAmount:
+        result.sort((a, b) => b.amountInPaise.compareTo(a.amountInPaise));
+        break;
+      case PersonalExpenseSortOption.lowestAmount:
+        result.sort((a, b) => a.amountInPaise.compareTo(b.amountInPaise));
+        break;
+    }
+
+    return result;
   }
 
   void _applyFilterAndCalculate() {
