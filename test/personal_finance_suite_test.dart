@@ -6,7 +6,6 @@ import 'package:kith_app/data/services/sync_service.dart';
 import 'package:kith_app/domain/engine/voice_parser.dart';
 import 'package:kith_app/domain/enums/expense_category.dart';
 import 'package:kith_app/domain/models/personal_debt.dart';
-import 'package:kith_app/domain/models/personal_expense.dart';
 import 'package:kith_app/presentation/viewmodels/personal_expense_viewmodel.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
