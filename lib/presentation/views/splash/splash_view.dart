@@ -62,7 +62,7 @@ class _SplashViewState extends State<SplashView> {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withOpacity(0.35),
+                    color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.35),
                     blurRadius: 28,
                     offset: const Offset(0, 10),
                   ),

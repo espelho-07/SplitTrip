@@ -13,11 +13,12 @@ import '../../../../domain/models/balance_summary.dart';
 import '../../../../domain/models/trip.dart';
 import '../../../../domain/models/trip_member.dart';
 
-class SettlementSheet extends StatelessWidget {
+class SettlementSheet extends StatefulWidget {
   final Trip trip;
   final BalanceSummary balanceSummary;
   final String currentUserId;
   final VoidCallback? onMarkSettled;
+  final Future<void> Function(String fromMemberId, String toMemberId, int amountInPaise)? onRecordTransfer;
 
   const SettlementSheet({
     super.key,
@@ -25,16 +26,24 @@ class SettlementSheet extends StatelessWidget {
     required this.balanceSummary,
     required this.currentUserId,
     this.onMarkSettled,
+    this.onRecordTransfer,
   });
 
+  @override
+  State<SettlementSheet> createState() => _SettlementSheetState();
+}
+
+class _SettlementSheetState extends State<SettlementSheet> {
+  final Set<String> _processingTransferIds = {};
+
   TripMember? _findMember(String memberId) {
-    return trip.members.where((m) => m.id == memberId).firstOrNull;
+    return widget.trip.members.where((m) => m.id == memberId).firstOrNull;
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final settlements = balanceSummary.simplifiedSettlements;
+    final settlements = widget.balanceSummary.simplifiedSettlements;
 
     return Container(
       decoration: BoxDecoration(
@@ -110,8 +119,11 @@ class SettlementSheet extends StatelessWidget {
 
                   final fromName = fromMember?.displayName ?? 'Member';
                   final toName = toMember?.displayName ?? 'Member';
-                  final isPayerCurrentUser = fromMember?.userId == currentUserId;
-                  final isReceiverCurrentUser = toMember?.userId == currentUserId;
+                  final isPayerCurrentUser = fromMember?.userId == widget.currentUserId;
+                  final isReceiverCurrentUser = toMember?.userId == widget.currentUserId;
+                  final isTripCreator = widget.trip.creatorId == widget.currentUserId;
+                  final canRecord = isPayerCurrentUser || isReceiverCurrentUser || isTripCreator;
+                  final isProcessing = _processingTransferIds.contains(s.fromMemberId + s.toMemberId);
 
                   return SurfaceCard(
                     backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
@@ -152,7 +164,7 @@ class SettlementSheet extends StatelessWidget {
                                   amountInPaise: s.amountInPaise,
                                   size: CurrencyDisplaySize.medium,
                                   colorMode: CurrencyColorMode.neutral,
-                                  currencyCode: trip.currencyCode,
+                                  currencyCode: widget.trip.currencyCode,
                                 ),
                               ],
                             ),
@@ -181,19 +193,11 @@ class SettlementSheet extends StatelessWidget {
                           ],
                         ),
 
-                        // Copy UPI ID action if recipient has a UPI handle or default
+                        // Action Bar: Record payment & UPI Copy
                         const SizedBox(height: AppSpacing.md),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              'UPI: ${toName.toLowerCase().replaceAll(' ', '')}@upi',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                                fontFamily: 'monospace',
-                              ),
-                            ),
                             InkWell(
                               onTap: () {
                                 final handle = '${toName.toLowerCase().replaceAll(' ', '')}@upi';
@@ -203,21 +207,60 @@ class SettlementSheet extends StatelessWidget {
                                   SnackBar(content: Text('Copied $handle to clipboard!')),
                                 );
                               },
-                              child: const Row(
+                              child: Row(
                                 children: [
-                                  Icon(Icons.copy_rounded, size: 14, color: AppColors.emeraldPrimary),
-                                  SizedBox(width: 4),
+                                  const Icon(Icons.copy_rounded, size: 13, color: AppColors.emeraldPrimary),
+                                  const SizedBox(width: 4),
                                   Text(
-                                    'Copy UPI',
+                                    'UPI: ${toName.toLowerCase().replaceAll(' ', '')}@upi',
                                     style: TextStyle(
-                                      color: AppColors.emeraldPrimary,
                                       fontSize: 12,
-                                      fontWeight: FontWeight.w600,
+                                      color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                                      fontFamily: 'monospace',
                                     ),
                                   ),
                                 ],
                               ),
                             ),
+
+                            if (canRecord && widget.onRecordTransfer != null)
+                              SizedBox(
+                                height: 32,
+                                child: ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                                    backgroundColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                                    foregroundColor: isDark ? Colors.black : Colors.white,
+                                    shape: RoundedRectangleBorder(borderRadius: AppRadius.fullBorder),
+                                  ),
+                                  icon: isProcessing
+                                      ? const SizedBox(
+                                          width: 12,
+                                          height: 12,
+                                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                        )
+                                      : const Icon(Icons.check_rounded, size: 14),
+                                  label: const Text('Mark Paid', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                                  onPressed: isProcessing
+                                      ? null
+                                      : () async {
+                                          final transferKey = s.fromMemberId + s.toMemberId;
+                                          setState(() => _processingTransferIds.add(transferKey));
+                                          HapticHelper.medium();
+                                          try {
+                                            await widget.onRecordTransfer!(
+                                              s.fromMemberId,
+                                              s.toMemberId,
+                                              s.amountInPaise,
+                                            );
+                                          } finally {
+                                            if (mounted) {
+                                              setState(() => _processingTransferIds.remove(transferKey));
+                                            }
+                                          }
+                                        },
+                                ),
+                              ),
                           ],
                         ),
                       ],
@@ -229,14 +272,14 @@ class SettlementSheet extends StatelessWidget {
 
           const SizedBox(height: AppSpacing.lg),
 
-          if (onMarkSettled != null)
+          if (widget.onMarkSettled != null)
             AppButton(
               text: 'Mark Entire Trip as Settled',
               icon: Icons.check_circle_rounded,
               isFullWidth: true,
               onPressed: () {
                 Navigator.pop(context);
-                onMarkSettled!();
+                widget.onMarkSettled!();
               },
             ),
         ],

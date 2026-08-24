@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
@@ -18,10 +19,13 @@ import '../../../core/widgets/shimmer_skeleton.dart';
 import '../../../core/widgets/surface_card.dart';
 import '../../../domain/enums/trip_lifecycle.dart';
 import '../../../domain/models/balance_summary.dart';
+import '../../../domain/models/expense.dart';
 import '../../../domain/models/trip.dart';
+import '../../../domain/services/trip_export_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/trip_detail_viewmodel.dart';
+import 'widgets/expense_detail_sheet.dart';
 import 'widgets/settlement_sheet.dart';
 import 'widgets/trip_qr_sheet.dart';
 
@@ -35,55 +39,89 @@ class TripDetailView extends StatefulWidget {
 }
 
 class _TripDetailViewState extends State<TripDetailView> {
-  int _activeTab = 0; // 0: Expenses, 1: Balances & People
+  int _activeTab = 0; // 0 = Expenses, 1 = Balances & People
+  final TextEditingController _searchController = TextEditingController();
+
+  static const List<Map<String, String?>> _categories = [
+    {'label': 'All', 'value': null, 'emoji': '✨'},
+    {'label': 'Food', 'value': 'food', 'emoji': '🍕'},
+    {'label': 'Transport', 'value': 'transport', 'emoji': '🚗'},
+    {'label': 'Stay', 'value': 'stay', 'emoji': '🏨'},
+    {'label': 'Fuel', 'value': 'fuel', 'emoji': '⛽'},
+    {'label': 'Activity', 'value': 'activity', 'emoji': '🎟️'},
+    {'label': 'Shopping', 'value': 'shopping', 'emoji': '🛍️'},
+    {'label': 'Other', 'value': 'general', 'emoji': '📦'},
+  ];
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadData();
+      final user = context.read<AuthViewModel>().currentUser;
+      if (user != null) {
+        context.read<TripDetailViewModel>().loadTrip(widget.tripId, user.id);
+      }
     });
   }
 
-  void _loadData() {
-    final authVm = context.read<AuthViewModel>();
-    final user = authVm.currentUser;
-    if (user != null) {
-      context.read<TripDetailViewModel>().loadTrip(widget.tripId, user.id);
-    }
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   void _showAddFriendDialog() {
-    final nameCtrl = TextEditingController();
+    final nameController = TextEditingController();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     showDialog(
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          title: const Text('Add Friend to Trip'),
-          content: TextField(
-            controller: nameCtrl,
-            textCapitalization: TextCapitalization.words,
-            decoration: const InputDecoration(
-              hintText: "Friend's name (e.g. Priya)",
-              prefixIcon: Icon(Icons.person_add_outlined),
-            ),
+          backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
+          title: Text(
+            'Add Friend to Trip',
+            style: AppTypography.titleMedium(isDark: isDark),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Enter friend\'s name to add them as a trip member and split expenses.',
+                style: AppTypography.bodySmall(isDark: isDark),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: nameController,
+                autofocus: true,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(
+                  hintText: 'Friend\'s name (e.g. Rahul, Tanya)',
+                  prefixIcon: Icon(Icons.person_outline_rounded, size: 20),
+                ),
+              ),
+            ],
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: const Text('Cancel'),
             ),
-            AppButton(
-              text: 'Add',
-              height: 44,
-              onPressed: () {
-                final name = nameCtrl.text.trim();
+            ElevatedButton(
+              onPressed: () async {
+                final name = nameController.text.trim();
                 if (name.isNotEmpty) {
-                  final authVm = context.read<AuthViewModel>();
-                  context.read<TripDetailViewModel>().addMember(name, authVm.currentUser?.id ?? '');
                   Navigator.pop(ctx);
+                  final tripDetailVm = context.read<TripDetailViewModel>();
+                  final authVm = context.read<AuthViewModel>();
+                  final user = authVm.currentUser;
+                  if (user != null) {
+                    await tripDetailVm.addMember(name, user.id);
+                  }
                 }
               },
+              child: const Text('Add Member'),
             ),
           ],
         );
@@ -94,12 +132,13 @@ class _TripDetailViewState extends State<TripDetailView> {
   void _showCompleteTripConfirmation() {
     final tripDetailVm = context.read<TripDetailViewModel>();
     final authVm = context.read<AuthViewModel>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true,
+      backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+      shape: RoundedRectangleBorder(borderRadius: AppRadius.topSheetBorder),
       builder: (ctx) {
-        final isDark = Theme.of(ctx).brightness == Brightness.dark;
         return Padding(
           padding: AppSpacing.bottomSheetPadding,
           child: Column(
@@ -111,7 +150,7 @@ class _TripDetailViewState extends State<TripDetailView> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: AppColors.indigoAccent.withOpacity(0.15),
+                      color: AppColors.indigoAccent.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(Icons.lock_clock_outlined, color: AppColors.indigoAccent, size: 24),
@@ -125,18 +164,18 @@ class _TripDetailViewState extends State<TripDetailView> {
                   ),
                 ],
               ),
-              const SizedBox(height: AppSpacing.lg),
+              const SizedBox(height: AppSpacing.md),
               Text(
-                'Completing the trip locks normal expense additions and generates the final simplified settlement for everyone.',
+                'Completing this trip locks expense creation and generates simplified settlement transfers for all members to settle debts.',
                 style: AppTypography.bodyMedium(isDark: isDark),
               ),
-              const SizedBox(height: AppSpacing.xxl),
+              const SizedBox(height: AppSpacing.xl),
               Row(
                 children: [
                   Expanded(
                     child: AppButton(
                       text: 'Keep Active',
-                      variant: AppButtonVariant.secondary,
+                      variant: AppButtonVariant.outline,
                       onPressed: () => Navigator.pop(ctx),
                     ),
                   ),
@@ -176,6 +215,14 @@ class _TripDetailViewState extends State<TripDetailView> {
         trip: trip,
         balanceSummary: tripDetailVm.balanceSummary,
         currentUserId: authVm.currentUser?.id ?? '',
+        onRecordTransfer: (fromMemberId, toMemberId, amountInPaise) async {
+          await tripDetailVm.recordSettlement(
+            fromMemberId: fromMemberId,
+            toMemberId: toMemberId,
+            amountInPaise: amountInPaise,
+            currentUserId: authVm.currentUser?.id ?? '',
+          );
+        },
         onMarkSettled: () {
           tripDetailVm.markAsSettled(authVm.currentUser?.id ?? '');
           ScaffoldMessenger.of(context).showSnackBar(
@@ -183,6 +230,106 @@ class _TripDetailViewState extends State<TripDetailView> {
           );
         },
       ),
+    );
+  }
+
+  void _showExpenseDetailSheet(Expense expense, Trip trip, String currentUserId) {
+    final tripDetailVm = context.read<TripDetailViewModel>();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => ExpenseDetailSheet(
+        expense: expense,
+        trip: trip,
+        currentUserId: currentUserId,
+        onDelete: () async {
+          await tripDetailVm.deleteExpense(expense.id, currentUserId);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Deleted "${expense.title}"')),
+            );
+          }
+        },
+      ),
+    );
+  }
+
+  void _showExportSheet(Trip trip, List<Expense> expenses, BalanceSummary balanceSummary) {
+    final textSummary = TripExportService.generateTextSummary(
+      trip: trip,
+      expenses: expenses,
+      balanceSummary: balanceSummary,
+    );
+    final csvSummary = TripExportService.generateCsvSummary(
+      trip: trip,
+      expenses: expenses,
+    );
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        return Container(
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+            borderRadius: AppRadius.topSheetBorder,
+          ),
+          padding: AppSpacing.bottomSheetPadding,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Export Trip Financials', style: AppTypography.titleLarge(isDark: isDark)),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'Copy or share clean formatted summaries and CSV reports for ${trip.name}.',
+                style: AppTypography.bodySmall(isDark: isDark),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              AppButton(
+                text: 'Copy Text Summary',
+                icon: Icons.copy_rounded,
+                isFullWidth: true,
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: textSummary));
+                  HapticHelper.success();
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Copied financial summary to clipboard!')),
+                  );
+                },
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              AppButton(
+                text: 'Copy CSV Report',
+                variant: AppButtonVariant.outline,
+                icon: Icons.table_chart_outlined,
+                isFullWidth: true,
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: csvSummary));
+                  HapticHelper.success();
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Copied CSV report to clipboard!')),
+                  );
+                },
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -252,6 +399,11 @@ class _TripDetailViewState extends State<TripDetailView> {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.file_download_outlined, size: 20),
+            tooltip: 'Export Financials',
+            onPressed: () => _showExportSheet(trip, tripDetailVm.expenses, balanceSummary),
+          ),
+          IconButton(
             icon: const Icon(Icons.share_outlined, size: 20),
             tooltip: 'Invite Friends',
             onPressed: () => _showInviteShareDialog(trip),
@@ -306,11 +458,12 @@ class _TripDetailViewState extends State<TripDetailView> {
           ? FloatingActionButton.extended(
               onPressed: () async {
                 HapticHelper.light();
+                final homeVm = context.read<HomeViewModel>();
                 final result = await context.push('/trip/${trip.id}/add-expense');
                 if (result == true && user != null && mounted) {
                   await tripDetailVm.loadTrip(trip.id, user.id);
                   if (mounted) {
-                    context.read<HomeViewModel>().loadTrips(user.id);
+                    homeVm.loadTrips(user.id);
                   }
                 }
               },
@@ -345,7 +498,7 @@ class _TripDetailViewState extends State<TripDetailView> {
         borderRadius: AppRadius.xlBorder,
         boxShadow: [
           BoxShadow(
-            color: gradientColors[0].withOpacity(0.35),
+            color: gradientColors[0].withValues(alpha: 0.35),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -361,7 +514,7 @@ class _TripDetailViewState extends State<TripDetailView> {
               PillBadge(
                 label: trip.lifecycleState.displayName.toUpperCase(),
                 color: Colors.white,
-                backgroundColor: Colors.black.withOpacity(0.25),
+                backgroundColor: Colors.black.withValues(alpha: 0.25),
               ),
               Row(
                 children: [
@@ -406,7 +559,7 @@ class _TripDetailViewState extends State<TripDetailView> {
           const SizedBox(height: AppSpacing.md),
           Container(
             height: 1,
-            color: Colors.white.withOpacity(0.15),
+            color: Colors.white.withValues(alpha: 0.15),
           ),
           const SizedBox(height: AppSpacing.md),
 
@@ -425,7 +578,7 @@ class _TripDetailViewState extends State<TripDetailView> {
                     ),
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 16,
+                      fontSize: 15,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -461,21 +614,13 @@ class _TripDetailViewState extends State<TripDetailView> {
         return SurfaceCard(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              const Icon(Icons.info_outline_rounded, size: 18, color: AppColors.indigoAccent),
+              const SizedBox(width: 10),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Trip is Active',
-                      style: AppTypography.titleSmall(isDark: isDark),
-                    ),
-                    Text(
-                      'Members can add expenses. Complete when trip ends.',
-                      style: AppTypography.bodySmall(isDark: isDark),
-                    ),
-                  ],
+                child: Text(
+                  'Trip is active. You can add expenses and invite members.',
+                  style: AppTypography.bodySmall(isDark: isDark),
                 ),
               ),
               const SizedBox(width: 8),
@@ -494,10 +639,10 @@ class _TripDetailViewState extends State<TripDetailView> {
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: (isDark ? AppColors.indigoAccent : AppColors.indigoAccent).withOpacity(0.12),
+          color: AppColors.indigoAccent.withValues(alpha: 0.12),
           borderRadius: AppRadius.lgBorder,
           border: Border.all(
-            color: AppColors.indigoAccent.withOpacity(0.3),
+            color: AppColors.indigoAccent.withValues(alpha: 0.3),
             width: 1,
           ),
         ),
@@ -540,7 +685,7 @@ class _TripDetailViewState extends State<TripDetailView> {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: (isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight).withOpacity(0.12),
+          color: (isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight).withValues(alpha: 0.12),
           borderRadius: AppRadius.lgBorder,
         ),
         child: Row(
@@ -641,103 +786,241 @@ class _TripDetailViewState extends State<TripDetailView> {
       );
     }
 
-    return ListView.separated(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: vm.expenses.length,
-      separatorBuilder: (context, index) => const SizedBox(height: AppSpacing.sm),
-      itemBuilder: (context, index) {
-        final expense = vm.expenses[index];
-        final payer = trip.members.where((m) => m.id == expense.paidById).firstOrNull;
-        final isPayerCurrentUser = payer != null && payer.userId == currentUserId;
+    final filtered = vm.filteredExpenses;
 
-        // User's share of this expense
-        final userMember = trip.members.where((m) => m.userId == currentUserId).firstOrNull;
-        final userSplit = userMember != null
-            ? expense.splits.where((s) => s.memberId == userMember.id).firstOrNull
-            : null;
-
-        return SurfaceCard(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Search Input Field
+        Container(
+          height: 42,
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+            borderRadius: AppRadius.mdBorder,
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Category Emoji & Icon
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
-                  borderRadius: AppRadius.mdBorder,
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  expense.category.emoji,
-                  style: const TextStyle(fontSize: 22),
+              Icon(
+                Icons.search_rounded,
+                size: 18,
+                color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: vm.setSearchQuery,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Search title or payer...',
+                    hintStyle: TextStyle(
+                      fontSize: 13,
+                      color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                    ),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
                 ),
               ),
-              const SizedBox(width: 14),
+              if (vm.searchQuery.isNotEmpty)
+                GestureDetector(
+                  onTap: () {
+                    _searchController.clear();
+                    vm.setSearchQuery('');
+                  },
+                  child: Icon(
+                    Icons.close_rounded,
+                    size: 16,
+                    color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                  ),
+                ),
+            ],
+          ),
+        ),
 
-              // Title & Payer Details
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      expense.title,
-                      style: AppTypography.titleSmall(isDark: isDark),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${isPayerCurrentUser ? 'You' : (payer?.displayName ?? 'Someone')} paid • ${DateFormatter.formatRelative(expense.createdAt)}',
-                      style: AppTypography.bodySmall(isDark: isDark),
-                    ),
-                    if (expense.splits.length < trip.members.length) ...[
-                      const SizedBox(height: 2),
+        const SizedBox(height: AppSpacing.sm),
+
+        // Horizontal Category Filter Pills
+        SizedBox(
+          height: 34,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: _categories.length,
+            separatorBuilder: (context, index) => const SizedBox(width: 6),
+            itemBuilder: (context, index) {
+              final cat = _categories[index];
+              final isSelected = vm.selectedCategory == cat['value'];
+              return GestureDetector(
+                onTap: () {
+                  HapticHelper.selection();
+                  vm.setSelectedCategory(cat['value']);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
+                        : (isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle),
+                    borderRadius: AppRadius.fullBorder,
+                  ),
+                  alignment: Alignment.center,
+                  child: Row(
+                    children: [
+                      Text(cat['emoji']!, style: const TextStyle(fontSize: 12)),
+                      const SizedBox(width: 4),
                       Text(
-                        'Split between ${expense.splits.length} people',
+                        cat['label']!,
                         style: TextStyle(
-                          fontSize: 11,
-                          color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                          fontSize: 12,
+                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                          color: isSelected
+                              ? (isDark ? Colors.black : Colors.white)
+                              : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
                         ),
                       ),
                     ],
-                  ],
-                ),
-              ),
-
-              // Amount & User Share
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  CurrencyDisplay(
-                    amountInPaise: expense.amountInPaise,
-                    size: CurrencyDisplaySize.medium,
-                    colorMode: CurrencyColorMode.neutral,
-                    currencyCode: trip.currencyCode,
                   ),
-                  const SizedBox(height: 2),
-                  if (userSplit != null)
-                    Text(
-                      isPayerCurrentUser
-                          ? 'You lent ${CurrencyFormatter.formatPaise(expense.amountInPaise - userSplit.amountInPaise, currencyCode: trip.currencyCode)}'
-                          : 'Your share: ${CurrencyFormatter.formatPaise(userSplit.amountInPaise, currencyCode: trip.currencyCode)}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        color: isPayerCurrentUser
-                            ? (isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight)
-                            : (isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight),
-                      ),
-                    ),
+                ),
+              );
+            },
+          ),
+        ),
+
+        const SizedBox(height: AppSpacing.md),
+
+        if (filtered.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24.0),
+            child: Center(
+              child: Column(
+                children: [
+                  const Text('🔍', style: TextStyle(fontSize: 32)),
+                  const SizedBox(height: 8),
+                  Text(
+                    'No expenses match your filter',
+                    style: AppTypography.titleSmall(isDark: isDark),
+                  ),
+                  const SizedBox(height: 4),
+                  TextButton(
+                    onPressed: () {
+                      _searchController.clear();
+                      vm.clearFilters();
+                    },
+                    child: const Text('Clear All Filters'),
+                  ),
                 ],
               ),
-            ],
+            ),
+          )
+        else
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: filtered.length,
+            separatorBuilder: (context, index) => const SizedBox(height: AppSpacing.sm),
+            itemBuilder: (context, index) {
+              final expense = filtered[index];
+              final payer = trip.members.where((m) => m.id == expense.paidById).firstOrNull;
+              final isPayerCurrentUser = payer != null && payer.userId == currentUserId;
+
+              // User's share of this expense
+              final userMember = trip.members.where((m) => m.userId == currentUserId).firstOrNull;
+              final userSplit = userMember != null
+                  ? expense.splits.where((s) => s.memberId == userMember.id).firstOrNull
+                  : null;
+
+              return InkWell(
+                onTap: () => _showExpenseDetailSheet(expense, trip, currentUserId),
+                borderRadius: AppRadius.lgBorder,
+                child: SurfaceCard(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      // Category Emoji & Icon
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+                          borderRadius: AppRadius.mdBorder,
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          expense.category.emoji,
+                          style: const TextStyle(fontSize: 22),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+
+                      // Title & Payer Details
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              expense.title,
+                              style: AppTypography.titleSmall(isDark: isDark),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${isPayerCurrentUser ? 'You' : (payer?.displayName ?? 'Someone')} paid • ${DateFormatter.formatRelative(expense.createdAt)}',
+                              style: AppTypography.bodySmall(isDark: isDark),
+                            ),
+                            if (expense.splits.length < trip.members.length) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                'Split between ${expense.splits.length} people',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+
+                      // Amount & User Share
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          CurrencyDisplay(
+                            amountInPaise: expense.amountInPaise,
+                            size: CurrencyDisplaySize.medium,
+                            colorMode: CurrencyColorMode.neutral,
+                            currencyCode: trip.currencyCode,
+                          ),
+                          const SizedBox(height: 2),
+                          if (userSplit != null)
+                            Text(
+                              isPayerCurrentUser
+                                  ? 'You lent ${CurrencyFormatter.formatPaise(expense.amountInPaise - userSplit.amountInPaise, currencyCode: trip.currencyCode)}'
+                                  : 'Your share: ${CurrencyFormatter.formatPaise(userSplit.amountInPaise, currencyCode: trip.currencyCode)}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: isPayerCurrentUser
+                                    ? (isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight)
+                                    : (isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
-        );
-      },
+      ],
     );
   }
 
@@ -777,45 +1060,61 @@ class _TripDetailViewState extends State<TripDetailView> {
                         Row(
                           children: [
                             Text(
-                              member.displayName,
-                              style: AppTypography.titleSmall(isDark: isDark),
+                              isSelf ? '${member.displayName} (You)' : member.displayName,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14,
+                                color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                              ),
                             ),
-                            if (isSelf) ...[
+                            if (member.isCreator) ...[
                               const SizedBox(width: 6),
-                              PillBadge(
-                                label: 'You',
-                                color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.15),
+                                  borderRadius: AppRadius.smBorder,
+                                ),
+                                child: Text(
+                                  'CREATOR',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.5,
+                                    color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                                  ),
+                                ),
                               ),
                             ],
                           ],
                         ),
+                        const SizedBox(height: 2),
                         Text(
-                          member.isCreator ? 'Trip Creator' : 'Member',
-                          style: AppTypography.bodySmall(isDark: isDark),
+                          net > 0
+                              ? 'Gets back ${CurrencyFormatter.formatPaise(net, currencyCode: trip.currencyCode)}'
+                              : (net < 0
+                                  ? 'Owes ${CurrencyFormatter.formatPaise(net.abs(), currencyCode: trip.currencyCode)}'
+                                  : 'Settled up'),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: net > 0
+                                ? (isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight)
+                                : (net < 0
+                                    ? (isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight)
+                                    : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted)),
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        net > 0 ? 'Gets back' : (net < 0 ? 'Owes' : 'Settled'),
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      CurrencyDisplay(
-                        amountInPaise: net.abs(),
-                        size: CurrencyDisplaySize.medium,
-                        colorMode: net > 0
-                            ? CurrencyColorMode.positive
-                            : (net < 0 ? CurrencyColorMode.negative : CurrencyColorMode.neutral),
-                        currencyCode: trip.currencyCode,
-                      ),
-                    ],
+                  CurrencyDisplay(
+                    amountInPaise: net.abs(),
+                    size: CurrencyDisplaySize.medium,
+                    colorMode: net > 0
+                        ? CurrencyColorMode.positive
+                        : (net < 0 ? CurrencyColorMode.negative : CurrencyColorMode.neutral),
+                    currencyCode: trip.currencyCode,
                   ),
                 ],
               ),
@@ -823,23 +1122,16 @@ class _TripDetailViewState extends State<TripDetailView> {
           },
         ),
 
-        const SizedBox(height: AppSpacing.xl),
+        const SizedBox(height: AppSpacing.lg),
 
-        // Quick Settlement Preview Action
-        if (balanceSummary.simplifiedSettlements.isNotEmpty) ...[
-          Text(
-            'Simplified Transfers',
-            style: AppTypography.titleSmall(isDark: isDark),
-          ),
-          const SizedBox(height: AppSpacing.sm),
+        // Settle Up Button
+        if (balanceSummary.simplifiedSettlements.isNotEmpty)
           AppButton(
-            text: 'View ${balanceSummary.simplifiedSettlements.length} Direct Settlement Payments',
-            icon: Icons.alt_route_rounded,
-            variant: AppButtonVariant.secondary,
+            text: 'View Simplified Settlements (${balanceSummary.simplifiedSettlements.length})',
+            icon: Icons.payments_outlined,
             isFullWidth: true,
             onPressed: _showSettlementSheet,
           ),
-        ],
       ],
     );
   }

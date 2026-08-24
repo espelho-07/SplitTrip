@@ -63,7 +63,7 @@ class _JoinTripViewState extends State<JoinTripView> {
                 if (trip != null && mounted) {
                   await homeVm.loadTrips(user.id);
                   if (mounted) {
-                    context.go('/trip/${trip.id}');
+                    GoRouter.of(this.context).go('/trip/${trip.id}');
                   }
                 }
               },

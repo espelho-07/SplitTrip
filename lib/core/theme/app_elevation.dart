@@ -6,12 +6,12 @@ class AppElevation {
 
   static List<BoxShadow> lightSubtle = [
     BoxShadow(
-      color: Colors.black.withOpacity(0.03),
+      color: Colors.black.withValues(alpha: 0.03),
       blurRadius: 10,
       offset: const Offset(0, 2),
     ),
     BoxShadow(
-      color: Colors.black.withOpacity(0.02),
+      color: Colors.black.withValues(alpha: 0.02),
       blurRadius: 20,
       offset: const Offset(0, 6),
     ),
@@ -19,12 +19,12 @@ class AppElevation {
 
   static List<BoxShadow> lightCard = [
     BoxShadow(
-      color: Colors.black.withOpacity(0.04),
+      color: Colors.black.withValues(alpha: 0.04),
       blurRadius: 14,
       offset: const Offset(0, 4),
     ),
     BoxShadow(
-      color: Colors.black.withOpacity(0.02),
+      color: Colors.black.withValues(alpha: 0.02),
       blurRadius: 2,
       offset: const Offset(0, 1),
     ),
@@ -32,12 +32,12 @@ class AppElevation {
 
   static List<BoxShadow> lightFloating = [
     BoxShadow(
-      color: Colors.black.withOpacity(0.08),
+      color: Colors.black.withValues(alpha: 0.08),
       blurRadius: 24,
       offset: const Offset(0, 12),
     ),
     BoxShadow(
-      color: Colors.black.withOpacity(0.04),
+      color: Colors.black.withValues(alpha: 0.04),
       blurRadius: 8,
       offset: const Offset(0, 4),
     ),
@@ -45,7 +45,7 @@ class AppElevation {
 
   static List<BoxShadow> darkSubtle = [
     BoxShadow(
-      color: Colors.black.withOpacity(0.3),
+      color: Colors.black.withValues(alpha: 0.3),
       blurRadius: 12,
       offset: const Offset(0, 4),
     ),
@@ -53,7 +53,7 @@ class AppElevation {
 
   static List<BoxShadow> darkCard = [
     BoxShadow(
-      color: Colors.black.withOpacity(0.4),
+      color: Colors.black.withValues(alpha: 0.4),
       blurRadius: 16,
       offset: const Offset(0, 6),
     ),
@@ -61,7 +61,7 @@ class AppElevation {
 
   static List<BoxShadow> darkFloating = [
     BoxShadow(
-      color: Colors.black.withOpacity(0.6),
+      color: Colors.black.withValues(alpha: 0.6),
       blurRadius: 32,
       offset: const Offset(0, 16),
     ),

@@ -81,7 +81,7 @@ class _OnboardingViewState extends State<OnboardingView> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withOpacity(0.12),
+                  color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.12),
                   borderRadius: AppRadius.fullBorder,
                 ),
                 child: Row(

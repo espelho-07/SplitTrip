@@ -20,6 +20,10 @@ class TripDetailViewModel extends ChangeNotifier {
   String? _errorMessage;
   String? _currentUserId;
 
+  // Search & Filtering State
+  String _searchQuery = '';
+  String? _selectedCategory;
+
   StreamSubscription<RealtimeTripEvent>? _realtimeSubscription;
 
   TripDetailViewModel({
@@ -35,6 +39,46 @@ class TripDetailViewModel extends ChangeNotifier {
   BalanceSummary get balanceSummary => _balanceSummary;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+  String get searchQuery => _searchQuery;
+  String? get selectedCategory => _selectedCategory;
+
+  List<Expense> get filteredExpenses {
+    return _expenses.where((expense) {
+      // Category filter
+      if (_selectedCategory != null && _selectedCategory!.isNotEmpty) {
+        if (expense.category.name.toLowerCase() != _selectedCategory!.toLowerCase()) {
+          return false;
+        }
+      }
+
+      // Text search filter
+      if (_searchQuery.trim().isNotEmpty) {
+        final query = _searchQuery.trim().toLowerCase();
+        final matchesTitle = expense.title.toLowerCase().contains(query);
+        final payer = _trip?.members.where((m) => m.id == expense.paidById).firstOrNull;
+        final matchesPayer = payer?.displayName.toLowerCase().contains(query) ?? false;
+        return matchesTitle || matchesPayer;
+      }
+
+      return true;
+    }).toList();
+  }
+
+  void setSearchQuery(String query) {
+    _searchQuery = query;
+    notifyListeners();
+  }
+
+  void setSelectedCategory(String? category) {
+    _selectedCategory = category;
+    notifyListeners();
+  }
+
+  void clearFilters() {
+    _searchQuery = '';
+    _selectedCategory = null;
+    notifyListeners();
+  }
 
   void _subscribeToRealtimeEvents() {
     if (realtimeClient == null) return;
@@ -92,6 +136,31 @@ class TripDetailViewModel extends ChangeNotifier {
       } catch (_) {
         // Silent background refresh failure
       }
+    }
+  }
+
+  Future<void> recordSettlement({
+    required String fromMemberId,
+    required String toMemberId,
+    required int amountInPaise,
+    String? paymentReference,
+    String? note,
+    required String currentUserId,
+  }) async {
+    if (_trip == null) return;
+    try {
+      await expenseRepo.recordSettlement(
+        tripId: _trip!.id,
+        fromMemberId: fromMemberId,
+        toMemberId: toMemberId,
+        amountInPaise: amountInPaise,
+        paymentReference: paymentReference,
+        note: note,
+      );
+      await refresh(currentUserId);
+    } catch (e) {
+      _errorMessage = e.toString();
+      notifyListeners();
     }
   }
 

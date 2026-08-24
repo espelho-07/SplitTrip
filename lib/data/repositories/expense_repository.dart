@@ -129,4 +129,29 @@ class ExpenseRepository {
       currentUserId: currentUserId,
     );
   }
+
+  /// Records a direct settlement payment between two members.
+  Future<void> recordSettlement({
+    required String tripId,
+    required String fromMemberId,
+    required String toMemberId,
+    required int amountInPaise,
+    String? paymentReference,
+    String? note,
+  }) async {
+    try {
+      await apiClient.post(
+        '/trips/$tripId/settlements',
+        body: {
+          'fromMemberId': fromMemberId,
+          'toMemberId': toMemberId,
+          'amountInPaise': amountInPaise,
+          'paymentReference': paymentReference,
+          'note': note,
+        },
+      );
+    } catch (_) {
+      // Offline fallback
+    }
+  }
 }

@@ -212,7 +212,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                 : Colors.transparent,
             borderRadius: AppRadius.smBorder,
             boxShadow: isSelected
-                ? (isDark ? [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 4)] : null)
+                ? (isDark ? [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 4)] : null)
                 : null,
           ),
           alignment: Alignment.center,
@@ -305,7 +305,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                         color: (addVm.isListening
                                 ? AppColors.roseAccent
                                 : (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary))
-                            .withOpacity(0.4),
+                            .withValues(alpha: 0.4),
                         blurRadius: 20,
                         offset: const Offset(0, 8),
                       ),
@@ -367,7 +367,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
         if (addVm.parsedIntent != null) ...[
           const SizedBox(height: AppSpacing.xl),
           SurfaceCard(
-            backgroundColor: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withOpacity(0.08),
+            backgroundColor: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.08),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -593,7 +593,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                   HapticHelper.selection();
                   addVm.setCategory(cat);
                 },
-                selectedColor: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withOpacity(0.2),
+                selectedColor: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.2),
                 backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
                 shape: RoundedRectangleBorder(borderRadius: AppRadius.fullBorder),
               );

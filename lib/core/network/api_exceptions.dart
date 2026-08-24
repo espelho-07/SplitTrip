@@ -16,31 +16,31 @@ class ApiException implements Exception {
 }
 
 class NetworkException extends ApiException {
-  const NetworkException({String message = 'Unable to connect to the server. Please check your internet connection.'})
-      : super(message: message, code: 'NETWORK_ERROR', statusCode: 0);
+  const NetworkException({super.message = 'Unable to connect to the server. Please check your internet connection.'})
+      : super(code: 'NETWORK_ERROR', statusCode: 0);
 }
 
 class UnauthorizedException extends ApiException {
-  const UnauthorizedException({String message = 'Session expired or invalid. Please sign in again.'})
-      : super(message: message, code: 'UNAUTHORIZED', statusCode: 401);
+  const UnauthorizedException({super.message = 'Session expired or invalid. Please sign in again.'})
+      : super(code: 'UNAUTHORIZED', statusCode: 401);
 }
 
 class ForbiddenException extends ApiException {
-  const ForbiddenException({String message = 'You do not have permission to perform this action.'})
-      : super(message: message, code: 'FORBIDDEN', statusCode: 403);
+  const ForbiddenException({super.message = 'You do not have permission to perform this action.'})
+      : super(code: 'FORBIDDEN', statusCode: 403);
 }
 
 class NotFoundException extends ApiException {
-  const NotFoundException({String message = 'The requested resource was not found.'})
-      : super(message: message, code: 'NOT_FOUND', statusCode: 404);
+  const NotFoundException({super.message = 'The requested resource was not found.'})
+      : super(code: 'NOT_FOUND', statusCode: 404);
 }
 
 class ConflictException extends ApiException {
-  const ConflictException({String message = 'A conflict occurred while processing the request.', dynamic details})
-      : super(message: message, code: 'CONFLICT', statusCode: 409, details: details);
+  const ConflictException({super.message = 'A conflict occurred while processing the request.', super.details})
+      : super(code: 'CONFLICT', statusCode: 409);
 }
 
 class ValidationException extends ApiException {
-  const ValidationException({String message = 'Validation error occurred.', dynamic details})
-      : super(message: message, code: 'VALIDATION_ERROR', statusCode: 400, details: details);
+  const ValidationException({super.message = 'Validation error occurred.', super.details})
+      : super(code: 'VALIDATION_ERROR', statusCode: 400);
 }

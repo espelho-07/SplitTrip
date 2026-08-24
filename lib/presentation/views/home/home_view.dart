@@ -334,7 +334,7 @@ class _HomeViewState extends State<HomeView> {
                   Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.12),
+                      color: statusColor.withValues(alpha: 0.12),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(statusIcon, size: 16, color: statusColor),
@@ -405,7 +405,7 @@ class _HomeViewState extends State<HomeView> {
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
+                        color: Colors.white.withValues(alpha: 0.2),
                         shape: BoxShape.circle,
                       ),
                       alignment: Alignment.center,
@@ -431,7 +431,7 @@ class _HomeViewState extends State<HomeView> {
                         Text(
                           '${trip.members.length} members',
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.85),
+                            color: Colors.white.withValues(alpha: 0.85),
                             fontSize: 12,
                           ),
                         ),
@@ -442,7 +442,7 @@ class _HomeViewState extends State<HomeView> {
                 PillBadge(
                   label: trip.lifecycleState.displayName,
                   color: Colors.white,
-                  backgroundColor: Colors.black.withOpacity(0.25),
+                  backgroundColor: Colors.black.withValues(alpha: 0.25),
                 ),
               ],
             ),

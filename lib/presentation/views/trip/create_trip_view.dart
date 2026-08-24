@@ -97,7 +97,7 @@ class _CreateTripViewState extends State<CreateTripView> {
                       width: 54,
                       height: 54,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.25),
+                        color: Colors.white.withValues(alpha: 0.25),
                         shape: BoxShape.circle,
                       ),
                       alignment: Alignment.center,
@@ -166,7 +166,7 @@ class _CreateTripViewState extends State<CreateTripView> {
                         height: 46,
                         decoration: BoxDecoration(
                           color: isSelected
-                              ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withOpacity(0.2)
+                              ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.2)
                               : (isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle),
                           borderRadius: AppRadius.mdBorder,
                           border: isSelected
@@ -214,7 +214,7 @@ class _CreateTripViewState extends State<CreateTripView> {
                         boxShadow: isSelected
                             ? [
                                 BoxShadow(
-                                  color: gradient[0].withOpacity(0.5),
+                                  color: gradient[0].withValues(alpha: 0.5),
                                   blurRadius: 10,
                                   offset: const Offset(0, 4),
                                 )

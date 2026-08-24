@@ -31,7 +31,7 @@ class ErrorStateView extends StatelessWidget {
               height: 64,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: (isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight).withOpacity(0.12),
+                color: (isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight).withValues(alpha: 0.12),
               ),
               alignment: Alignment.center,
               child: Icon(

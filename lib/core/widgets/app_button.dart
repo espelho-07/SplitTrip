@@ -107,8 +107,8 @@ class _AppButtonState extends State<AppButton> with SingleTickerProviderStateMix
         break;
       case AppButtonVariant.danger:
         backgroundColor = isDark
-            ? AppColors.negativeRedDark.withOpacity(0.15)
-            : AppColors.negativeRedLight.withOpacity(0.1);
+            ? AppColors.negativeRedDark.withValues(alpha: 0.15)
+            : AppColors.negativeRedLight.withValues(alpha: 0.1);
         textColor = isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight;
         break;
     }

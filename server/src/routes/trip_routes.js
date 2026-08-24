@@ -90,4 +90,32 @@ router.post('/:id/members', (req, res, next) => {
   }
 });
 
+// POST /api/trips/:id/settlements - Record a settlement transfer
+router.post('/:id/settlements', (req, res, next) => {
+  try {
+    const settlementService = require('../services/settlement_service');
+    const { fromMemberId, toMemberId, amountInPaise, paymentReference, note } = req.body;
+    const result = settlementService.recordSettlement(
+      req.user,
+      req.params.id,
+      { fromMemberId, toMemberId, amountInPaise, paymentReference, note },
+      realtimeHub
+    );
+    res.status(201).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// GET /api/trips/:id/settlements - Get all recorded settlements
+router.get('/:id/settlements', (req, res, next) => {
+  try {
+    const settlementService = require('../services/settlement_service');
+    const settlements = settlementService.getSettlementsForTrip(req.params.id);
+    res.status(200).json({ data: settlements });
+  } catch (e) {
+    next(e);
+  }
+});
+
 module.exports = router;

@@ -59,7 +59,7 @@ class MemberAvatar extends StatelessWidget {
           height: size,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: bgColor.withOpacity(isDark ? 0.25 : 0.15),
+            color: bgColor.withValues(alpha: isDark ? 0.25 : 0.15),
             border: showBorder
                 ? Border.all(
                     color: isDark ? AppColors.darkBorderStrong : Colors.white,
@@ -89,7 +89,7 @@ class MemberAvatar extends StatelessWidget {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
+                    color: Colors.black.withValues(alpha: 0.15),
                     blurRadius: 4,
                   ),
                 ],

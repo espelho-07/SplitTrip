@@ -5,6 +5,7 @@ const settlementService = require('./settlement_service');
 
 class ExpenseService {
   createExpense(user, tripId, {
+    id = null,
     title,
     amountInPaise,
     category = 'general',
@@ -14,6 +15,14 @@ class ExpenseService {
     voiceTranscript = null,
     receiptUrl = null,
   }, realtimeHub = null) {
+    // Idempotency: return existing expense if already created with this ID
+    if (id) {
+      const existing = db.get('expenses', id);
+      if (existing && existing.tripId === tripId && !existing.isDeleted) {
+        const balanceSummary = this.getBalanceSummary(tripId, user.id);
+        return { expense: existing, balanceSummary };
+      }
+    }
     if (!title || !title.trim()) {
       throw AppError.badRequest('Expense title is required');
     }
@@ -78,7 +87,7 @@ class ExpenseService {
 
     const now = new Date().toISOString();
     const expense = {
-      id: `exp_${crypto.randomUUID().replace(/-/g, '').substring(0, 12)}`,
+      id: id || `exp_${crypto.randomUUID().replace(/-/g, '').substring(0, 12)}`,
       tripId,
       title: title.trim(),
       amountInPaise,
@@ -203,7 +212,8 @@ class ExpenseService {
       netBalances[m.id] = totalPaidByMember[m.id] - totalOwedByMember[m.id];
     }
 
-    const simplifiedSettlements = settlementService.simplifyDebts(netBalances);
+    const recordedSettlements = settlementService.getSettlementsForTrip(tripId);
+    const simplifiedSettlements = settlementService.simplifyDebts(netBalances, recordedSettlements);
 
     // Current user context
     const currentMember = members.find((m) => m.userId === currentUserId || m.id === currentUserId);
@@ -230,6 +240,7 @@ class ExpenseService {
       currentUserOwedInPaise,
       currentUserReceivableInPaise,
       simplifiedSettlements,
+      recordedSettlements,
     };
   }
 }

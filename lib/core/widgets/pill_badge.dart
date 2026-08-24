@@ -25,7 +25,7 @@ class PillBadge extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final primaryColor = color ?? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary);
-    final bg = backgroundColor ?? primaryColor.withOpacity(isDark ? 0.16 : 0.10);
+    final bg = backgroundColor ?? primaryColor.withValues(alpha: isDark ? 0.16 : 0.10);
 
     Widget pill = Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
