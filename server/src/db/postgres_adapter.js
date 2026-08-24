@@ -12,18 +12,22 @@ class PostgresAdapter {
   _initPool() {
     const isCloud = this.connectionString.includes('supabase') ||
                     this.connectionString.includes('render.com') ||
-                    this.connectionString.includes('amazonaws.com');
+                    this.connectionString.includes('amazonaws.com') ||
+                    this.connectionString.includes('pooler.supabase.com') ||
+                    process.env.NODE_ENV === 'staging' ||
+                    process.env.NODE_ENV === 'production';
 
     this.pool = new Pool({
       connectionString: this.connectionString,
       ssl: isCloud ? { rejectUnauthorized: false } : false,
-      max: 20,
+      max: 10,
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 10000,
+      connectionTimeoutMillis: 8000,
+      statement_timeout: 10000,
     });
 
     this.pool.on('error', (err) => {
-      console.error('Unexpected error on idle PostgreSQL client', err);
+      console.error('[DB] Unexpected error on idle PostgreSQL client:', err.message);
     });
   }
 

@@ -19,15 +19,24 @@ class DatabaseManager {
 
     if (this.isPostgresActive) {
       try {
-        await this.pgAdapter.query('SELECT 1');
-        console.log('[DB] connection established');
+        // Finite 15-second timeout for DB connect and migration
+        const initPromise = (async () => {
+          await this.pgAdapter.query('SELECT 1');
+          console.log('[DB] connection established');
 
-        console.log('[Kith Database] Running database schema migrations...');
-        const migrationResult = await MigrationRunner.runMigrations(this.pgAdapter);
-        console.log('[DB] migrations completed');
-        console.log('[Kith Database] Migration summary:', migrationResult);
-        this.isReady = true;
-        this.lastError = null;
+          console.log('[Kith Database] Running database schema migrations...');
+          const migrationResult = await MigrationRunner.runMigrations(this.pgAdapter);
+          console.log('[DB] migrations completed');
+          console.log('[Kith Database] Migration summary:', migrationResult);
+          this.isReady = true;
+          this.lastError = null;
+        })();
+
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('PostgreSQL initialization timed out after 15s')), 15000)
+        );
+
+        await Promise.race([initPromise, timeoutPromise]);
       } catch (err) {
         this.isReady = false;
         this.lastError = err.message;
@@ -53,7 +62,12 @@ class DatabaseManager {
   async checkReadiness() {
     if (this.isPostgresActive) {
       try {
-        await this.pgAdapter.query('SELECT 1');
+        const queryPromise = this.pgAdapter.query('SELECT 1');
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Readiness check query timed out')), 3000)
+        );
+        await Promise.race([queryPromise, timeoutPromise]);
+
         return {
           status: 'ready',
           service: 'kith-backend',

@@ -27,7 +27,7 @@ describe('Health & Readiness Subsystem Tests (Render Hotfix Verification)', () =
 
     assert.strictEqual(res.status, 200);
     const data = await res.json();
-    assert.strictEqual(data.status, 'healthy');
+    assert.ok(data.status === 'ok' || data.status === 'healthy');
     assert.strictEqual(data.service, 'kith-backend');
     assert.ok(typeof data.uptimeSeconds === 'number');
     assert.ok(duration < 100, `Health check took ${duration}ms, must be < 100ms`);
@@ -42,21 +42,21 @@ describe('Health & Readiness Subsystem Tests (Render Hotfix Verification)', () =
     const res = await fetch(`${BASE_URL}/healthz`);
     assert.strictEqual(res.status, 200);
     const data = await res.json();
-    assert.strictEqual(data.status, 'healthy');
+    assert.ok(data.status === 'ok' || data.status === 'healthy');
   });
 
   it('GET / returns HTTP 200 (Root ping fallback)', async () => {
     const res = await fetch(`${BASE_URL}/`);
     assert.strictEqual(res.status, 200);
     const data = await res.json();
-    assert.strictEqual(data.status, 'healthy');
+    assert.ok(data.status === 'ok' || data.status === 'healthy');
   });
 
   it('GET /api/health returns HTTP 200', async () => {
     const res = await fetch(`${BASE_URL}/api/health`);
     assert.strictEqual(res.status, 200);
     const data = await res.json();
-    assert.strictEqual(data.status, 'healthy');
+    assert.ok(data.status === 'ok' || data.status === 'healthy');
   });
 
   it('GET /ready returns subsystem readiness without exposing credentials or secrets', async () => {

@@ -49,6 +49,7 @@ if (env.NODE_ENV !== 'test') {
 const healthHandler = (req, res) => {
   res.status(200).json({
     status: 'healthy',
+    ok: true,
     service: 'kith-backend',
     environment: env.NODE_ENV,
     version: '1.0.0',
