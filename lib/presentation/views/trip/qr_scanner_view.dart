@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -15,9 +17,13 @@ class QrScannerView extends StatefulWidget {
 }
 
 class _QrScannerViewState extends State<QrScannerView> with SingleTickerProviderStateMixin {
-  bool _isTorchOn = false;
-  final TextEditingController _manualInputController = TextEditingController();
+  late MobileScannerController _scannerController;
   late AnimationController _sweepAnimController;
+  final TextEditingController _manualInputController = TextEditingController();
+
+  bool _isTorchOn = false;
+  bool _hasCameraPermission = true;
+  bool _isProcessingCode = false;
 
   @override
   void initState() {
@@ -26,25 +32,47 @@ class _QrScannerViewState extends State<QrScannerView> with SingleTickerProvider
       vsync: this,
       duration: const Duration(milliseconds: 2000),
     )..repeat(reverse: true);
+
+    _scannerController = MobileScannerController(
+      detectionSpeed: DetectionSpeed.normal,
+      facing: CameraFacing.back,
+      torchEnabled: false,
+    );
+
+    _initCameraPermission();
+  }
+
+  Future<void> _initCameraPermission() async {
+    final status = await Permission.camera.request();
+    if (mounted) {
+      setState(() {
+        _hasCameraPermission = status.isGranted;
+      });
+    }
   }
 
   @override
   void dispose() {
     _sweepAnimController.dispose();
     _manualInputController.dispose();
+    _scannerController.dispose();
     super.dispose();
   }
 
-  void _onCodeDetected(String rawCode) {
-    final cleanCode = QrCodeParser.extractInviteCode(rawCode);
-    if (cleanCode != null) {
-      HapticHelper.success();
-      context.pop(cleanCode);
-    } else {
-      HapticHelper.light();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unrecognized QR code or link format')),
-      );
+  void _onDetect(BarcodeCapture capture) {
+    if (_isProcessingCode) return;
+
+    for (final barcode in capture.barcodes) {
+      final rawValue = barcode.rawValue;
+      if (rawValue != null && rawValue.trim().isNotEmpty) {
+        final cleanCode = QrCodeParser.extractInviteCode(rawValue);
+        if (cleanCode != null) {
+          _isProcessingCode = true;
+          HapticHelper.success();
+          context.pop(cleanCode);
+          return;
+        }
+      }
     }
   }
 
@@ -72,7 +100,15 @@ class _QrScannerViewState extends State<QrScannerView> with SingleTickerProvider
               final code = _manualInputController.text.trim();
               Navigator.of(ctx).pop();
               if (code.isNotEmpty) {
-                _onCodeDetected(code);
+                final cleanCode = QrCodeParser.extractInviteCode(code);
+                if (cleanCode != null) {
+                  HapticHelper.success();
+                  context.pop(cleanCode);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Invalid 6-character trip code')),
+                  );
+                }
               }
             },
             child: const Text('Join'),
@@ -87,124 +123,217 @@ class _QrScannerViewState extends State<QrScannerView> with SingleTickerProvider
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.black54,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.close_rounded, color: Colors.white),
           onPressed: () => context.pop(),
         ),
-        title: const Text('Scan Trip Invite', style: TextStyle(color: Colors.white)),
+        title: const Text('Scan Trip Invite', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
         actions: [
           IconButton(
             icon: Icon(
               _isTorchOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
               color: _isTorchOn ? AppColors.amberAccent : Colors.white70,
             ),
-            onPressed: () {
+            onPressed: () async {
               HapticHelper.light();
+              await _scannerController.toggleTorch();
               setState(() => _isTorchOn = !_isTorchOn);
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.flip_camera_android_rounded, color: Colors.white70),
+            onPressed: () async {
+              HapticHelper.light();
+              await _scannerController.switchCamera();
             },
           ),
         ],
       ),
       body: SafeArea(
-        child: Column(
+        child: Stack(
           children: [
-            const Spacer(),
-
-            // Viewfinder scanning frame
-            Center(
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Container(
-                    width: 260,
-                    height: 260,
-                    decoration: BoxDecoration(
-                      color: Colors.black38,
-                      borderRadius: AppRadius.lgBorder,
-                      border: Border.all(
-                        color: AppColors.emeraldPrimary.withValues(alpha: 0.8),
-                        width: 2.5,
+            // Live Camera Feed or Permission Fallback
+            if (_hasCameraPermission)
+              Positioned.fill(
+                child: MobileScanner(
+                  controller: _scannerController,
+                  onDetect: _onDetect,
+                  errorBuilder: (context, error) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.camera_alt_outlined, size: 48, color: Colors.white54),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'Unable to initialize camera preview',
+                              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              error.errorDetails?.message ?? 'Please check camera permissions in Settings.',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.white70, fontSize: 13),
+                            ),
+                            const SizedBox(height: 20),
+                            AppButton(
+                              text: 'Enter Code Instead',
+                              variant: AppButtonVariant.primary,
+                              onPressed: _showManualEntryDialog,
+                            ),
+                          ],
+                        ),
                       ),
+                    );
+                  },
+                ),
+              )
+            else
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.no_photography_rounded, size: 54, color: AppColors.amberAccent),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Camera Permission Needed',
+                        style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Kith requires camera access to scan QR invite codes. Grant camera permission or enter the code manually.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.white70, fontSize: 13),
+                      ),
+                      const SizedBox(height: 24),
+                      AppButton(
+                        text: 'Allow Camera Access',
+                        variant: AppButtonVariant.primary,
+                        onPressed: () async {
+                          await openAppSettings();
+                          _initCameraPermission();
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      AppButton(
+                        text: 'Enter Code Manually',
+                        variant: AppButtonVariant.secondary,
+                        onPressed: _showManualEntryDialog,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+            // Camera Overlay & Viewfinder Framing
+            if (_hasCameraPermission)
+              Column(
+                children: [
+                  const Spacer(),
+
+                  // Viewfinder Box
+                  Center(
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Container(
+                          width: 260,
+                          height: 260,
+                          decoration: BoxDecoration(
+                            borderRadius: AppRadius.lgBorder,
+                            border: Border.all(
+                              color: AppColors.emeraldPrimary.withValues(alpha: 0.9),
+                              width: 3.0,
+                            ),
+                          ),
+                        ),
+
+                        // Animated laser scan line
+                        AnimatedBuilder(
+                          animation: _sweepAnimController,
+                          builder: (context, child) {
+                            return Positioned(
+                              top: 20 + (_sweepAnimController.value * 220),
+                              child: Container(
+                                width: 240,
+                                height: 2.5,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Colors.transparent,
+                                      AppColors.emeraldLight,
+                                      Colors.transparent,
+                                    ],
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.emeraldLight.withValues(alpha: 0.8),
+                                      blurRadius: 8,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+
+                        // Align Label
+                        Positioned(
+                          bottom: 12,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.black87,
+                              borderRadius: AppRadius.fullBorder,
+                            ),
+                            child: const Text(
+                              'Align QR within frame',
+                              style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
 
-                  // Animated laser scan line
-                  AnimatedBuilder(
-                    animation: _sweepAnimController,
-                    builder: (context, child) {
-                      return Positioned(
-                        top: 20 + (_sweepAnimController.value * 220),
-                        child: Container(
-                          width: 240,
-                          height: 2,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                Colors.transparent,
-                                AppColors.emeraldLight,
-                                Colors.transparent,
-                              ],
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.emeraldLight.withValues(alpha: 0.8),
-                                blurRadius: 6,
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
+                  const SizedBox(height: AppSpacing.xl),
+
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 32.0),
+                    child: Text(
+                      'Hold camera steady over a friend\'s Kith QR invite code to join their trip instantly.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white, fontSize: 13, height: 1.4, shadows: [
+                        Shadow(color: Colors.black, blurRadius: 4),
+                      ]),
+                    ),
                   ),
 
-                  // Camera viewfinder overlay label
-                  Positioned(
-                    bottom: 12,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.black54,
-                        borderRadius: AppRadius.fullBorder,
-                      ),
-                      child: const Text(
-                        'Align QR within frame',
-                        style: TextStyle(color: Colors.white70, fontSize: 11),
-                      ),
+                  const Spacer(),
+
+                  // Manual Entry Shortcut
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+                    child: AppButton(
+                      text: 'Enter Code Instead',
+                      icon: Icons.keyboard_rounded,
+                      variant: AppButtonVariant.secondary,
+                      isFullWidth: true,
+                      onPressed: _showManualEntryDialog,
                     ),
                   ),
                 ],
               ),
-            ),
-
-            const SizedBox(height: AppSpacing.xxl),
-
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 32.0),
-              child: Text(
-                'Hold camera steady over a friend\'s Kith QR invite code to join their trip instantly.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
-              ),
-            ),
-
-            const Spacer(),
-
-            // Manual Code Entry fallback
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-              child: AppButton(
-                text: 'Enter Code Instead',
-                icon: Icons.keyboard_rounded,
-                variant: AppButtonVariant.secondary,
-                isFullWidth: true,
-                onPressed: _showManualEntryDialog,
-              ),
-            ),
           ],
         ),
       ),
     );
   }
 }
+

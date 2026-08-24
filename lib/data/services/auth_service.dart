@@ -17,11 +17,29 @@ class AuthService {
     required this.apiClient,
     this.realtimeClient,
   }) {
-    // Re-hydrate session token on startup
+    // Re-hydrate session token on startup and sync identity non-blocking
     final user = getCurrentUser();
     if (user != null && user.anonymousToken.isNotEmpty) {
       apiClient.setAuthToken(user.anonymousToken);
       realtimeClient?.setAuthToken(user.anonymousToken);
+      syncLocalGuestSession(user);
+    }
+  }
+
+  /// Syncs local guest user registration and recovery key to server
+  Future<void> syncLocalGuestSession([GuestUser? targetUser]) async {
+    final user = targetUser ?? getCurrentUser();
+    if (user == null) return;
+    try {
+      await apiClient.post('/auth/sync-guest', body: {
+        'id': user.id,
+        'displayName': user.displayName,
+        'recoveryKey': user.recoveryKey,
+        'token': user.anonymousToken,
+        'avatarUrl': user.avatarUrl,
+      });
+    } catch (_) {
+      // Non-blocking background sync
     }
   }
 
@@ -76,10 +94,11 @@ class AuthService {
     apiClient.setAuthToken(token);
     realtimeClient?.setAuthToken(token);
     await storage.saveUser(user.toJson());
+    syncLocalGuestSession(user);
     return user;
   }
 
-  /// Normalizes a recovery key format regardless of casing, spaces or missing KITH- prefix.
+  /// Normalizes a recovery key format regardless of casing, spaces, underscores, or missing KITH- prefix.
   static String normalizeRecoveryKey(String raw) {
     final trimmed = raw.trim().toUpperCase();
     String clean = trimmed.replaceAll(RegExp(r'[\s\-_:]'), '');
@@ -89,12 +108,19 @@ class AuthService {
     if (clean.length == 8) {
       return 'KITH-${clean.substring(0, 4)}-${clean.substring(4, 8)}';
     }
-    return trimmed;
+    return trimmed.isEmpty ? '' : (clean.length > 8 ? 'KITH-${clean.substring(0, 4)}-${clean.substring(4, 8)}' : clean);
   }
 
   /// Recovers a session across devices via recovery key.
   Future<GuestUser?> recoverUser(String recoveryKey) async {
     final cleanKey = normalizeRecoveryKey(recoveryKey);
+    if (cleanKey.isEmpty) return null;
+
+    // Check local match first for instant recovery
+    final existing = getCurrentUser();
+    if (existing != null && normalizeRecoveryKey(existing.recoveryKey) == cleanKey) {
+      return existing;
+    }
 
     try {
       final res = await apiClient.post('/auth/recover', body: {
@@ -115,7 +141,6 @@ class AuthService {
       // Offline fallback: check local match
     }
 
-    final existing = getCurrentUser();
     if (existing != null && normalizeRecoveryKey(existing.recoveryKey) == cleanKey) {
       return existing;
     }

@@ -75,7 +75,15 @@ void main() {
           );
         }
 
-        if (request.url.path.contains('/trips/$tripId')) {
+        if (request.url.path.contains('/trips/$tripId/activity')) {
+          return http.Response(
+            jsonEncode({'data': []}),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+
+        if (request.url.path.endsWith('/trips/$tripId') || request.url.path == '/api/trips/$tripId') {
           tripFetchCount++;
           return http.Response(
             jsonEncode({'data': initialTrip.toJson()}),

@@ -39,4 +39,30 @@ describe('Auth Service Tests', () => {
       (err) => err.statusCode === 401
     );
   });
+
+  test('Syncs locally generated offline guest user and allows recovery', () => {
+    const offlineId = 'usr_offline1234';
+    const offlineKey = 'KITH-AB12-CD34';
+    const offlineToken = 'kith_sess_localoffline99';
+
+    const syncRes = authService.syncGuest({
+      id: offlineId,
+      displayName: 'Offline Traveler',
+      recoveryKey: offlineKey,
+      token: offlineToken,
+    });
+
+    assert.equal(syncRes.success, true);
+    assert.equal(syncRes.user.id, offlineId);
+
+    // Verify recovery with various formats (lowercase, spaces, without KITH prefix)
+    const recovered1 = authService.recoverGuest({ recoveryKey: 'kith-ab12-cd34' });
+    assert.equal(recovered1.user.id, offlineId);
+
+    const recovered2 = authService.recoverGuest({ recoveryKey: 'AB12CD34' });
+    assert.equal(recovered2.user.id, offlineId);
+
+    const recovered3 = authService.recoverGuest({ recoveryKey: 'ab12 cd34' });
+    assert.equal(recovered3.user.id, offlineId);
+  });
 });

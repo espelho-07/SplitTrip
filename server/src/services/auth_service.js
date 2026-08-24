@@ -119,6 +119,66 @@ class AuthService {
     };
   }
 
+  syncGuest({ id, displayName, recoveryKey, token, avatarUrl }) {
+    if (!id || !displayName) {
+      throw AppError.badRequest('User ID and display name are required');
+    }
+
+    const normalizedKey = recoveryKey ? this._normalizeRecoveryKey(recoveryKey) : null;
+    const recoveryKeyHash = normalizedKey ? this._hashKey(normalizedKey) : null;
+    const now = new Date().toISOString();
+
+    let user = db.get('users', id);
+    if (!user) {
+      user = {
+        id,
+        displayName: displayName.trim(),
+        avatarUrl: avatarUrl || null,
+        recoveryKeyHash,
+        isGuest: true,
+        email: null,
+        createdAt: now,
+        lastActiveAt: now,
+      };
+      db.insert('users', user);
+    } else {
+      const updates = { lastActiveAt: now };
+      if (recoveryKeyHash && !user.recoveryKeyHash) {
+        updates.recoveryKeyHash = recoveryKeyHash;
+      }
+      if (displayName && displayName.trim()) {
+        updates.displayName = displayName.trim();
+      }
+      db.update('users', id, updates);
+      user = db.get('users', id);
+    }
+
+    if (token) {
+      const existingSession = db.findOne('sessions', (s) => s.token === token);
+      if (!existingSession) {
+        db.insert('sessions', {
+          id: crypto.randomUUID(),
+          token,
+          userId: id,
+          createdAt: now,
+          expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+        });
+      }
+    }
+
+    return {
+      success: true,
+      user: {
+        id: user.id,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl,
+        recoveryKey: normalizedKey,
+        isGuest: user.isGuest,
+        createdAt: user.createdAt,
+      },
+    };
+  }
+
   getProfile(userId) {
     const user = db.get('users', userId);
     if (!user) {

@@ -130,6 +130,7 @@ class TripDetailViewModel extends ChangeNotifier {
           trip: remoteTrip,
           currentUserId: currentUserId,
         );
+        fetchActivityLogs();
       } else if (_trip == null) {
         _errorMessage = 'Trip not found';
       }
@@ -154,6 +155,7 @@ class TripDetailViewModel extends ChangeNotifier {
             trip: _trip!,
             currentUserId: currentUserId,
           );
+          fetchActivityLogs();
           notifyListeners();
         }
       } catch (_) {
@@ -266,8 +268,17 @@ class TripDetailViewModel extends ChangeNotifier {
     }
   }
 
+  bool _isDisposed = false;
+
+  @override
+  void notifyListeners() {
+    if (!_isDisposed) {
+      super.notifyListeners();
+    }
+  }
+
   Future<void> fetchActivityLogs() async {
-    if (_trip == null) return;
+    if (_trip == null || _isDisposed) return;
     _isLoadingActivity = true;
     notifyListeners();
     try {
@@ -275,13 +286,16 @@ class TripDetailViewModel extends ChangeNotifier {
     } catch (e) {
       _errorMessage = e.toString();
     } finally {
-      _isLoadingActivity = false;
-      notifyListeners();
+      if (!_isDisposed) {
+        _isLoadingActivity = false;
+        notifyListeners();
+      }
     }
   }
 
   @override
   void dispose() {
+    _isDisposed = true;
     if (_trip != null) {
       realtimeClient?.unsubscribeFromTrip(_trip!.id);
     }

@@ -57,6 +57,16 @@ router.post('/recover', recoveryRateLimiter, (req, res, next) => {
   }
 });
 
+// POST /api/auth/sync-guest - Sync local guest registration & recovery key to server
+router.post('/sync-guest', (req, res, next) => {
+  try {
+    const result = authService.syncGuest(req.body);
+    res.status(200).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
 // GET /api/auth/me - Current authenticated user profile
 router.get('/me', authMiddleware, (req, res, next) => {
   try {
