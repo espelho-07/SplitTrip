@@ -940,88 +940,92 @@ class _TripDetailViewState extends State<TripDetailView> {
                   ? expense.splits.where((s) => s.memberId == userMember.id).firstOrNull
                   : null;
 
-              return InkWell(
+              return SurfaceCard(
                 onTap: () => _showExpenseDetailSheet(expense, trip, currentUserId),
-                borderRadius: AppRadius.lgBorder,
-                child: SurfaceCard(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      // Category Emoji & Icon
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
-                          borderRadius: AppRadius.mdBorder,
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          expense.category.emoji,
-                          style: const TextStyle(fontSize: 22),
-                        ),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Category Emoji & Icon
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+                        borderRadius: AppRadius.mdBorder,
                       ),
-                      const SizedBox(width: 14),
-
-                      // Title & Payer Details
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              expense.title,
-                              style: AppTypography.titleSmall(isDark: isDark),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '${isPayerCurrentUser ? 'You' : (payer?.displayName ?? 'Someone')} paid • ${DateFormatter.formatRelative(expense.createdAt)}',
-                              style: AppTypography.bodySmall(isDark: isDark),
-                            ),
-                            if (expense.splits.length < trip.members.length) ...[
-                              const SizedBox(height: 2),
-                              Text(
-                                'Split between ${expense.splits.length} people',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        expense.category.emoji,
+                        style: const TextStyle(fontSize: 22),
                       ),
+                    ),
+                    const SizedBox(width: 14),
 
-                      // Amount & User Share
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
+                    // Title & Payer Details
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          CurrencyDisplay(
-                            amountInPaise: expense.amountInPaise,
-                            size: CurrencyDisplaySize.medium,
-                            colorMode: CurrencyColorMode.neutral,
-                            currencyCode: trip.currencyCode,
+                          Text(
+                            expense.title,
+                            style: AppTypography.titleSmall(isDark: isDark),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 2),
-                          if (userSplit != null)
+                          Text(
+                            '${isPayerCurrentUser ? 'You' : (payer?.displayName ?? 'Someone')} paid • ${DateFormatter.formatRelative(expense.createdAt)}',
+                            style: AppTypography.bodySmall(isDark: isDark),
+                          ),
+                          if (expense.splits.length < trip.members.length) ...[
+                            const SizedBox(height: 2),
                             Text(
-                              isPayerCurrentUser
-                                  ? 'You lent ${CurrencyFormatter.formatPaise(expense.amountInPaise - userSplit.amountInPaise, currencyCode: trip.currencyCode)}'
-                                  : 'Your share: ${CurrencyFormatter.formatPaise(userSplit.amountInPaise, currencyCode: trip.currencyCode)}',
+                              'Split between ${expense.splits.length} people',
                               style: TextStyle(
                                 fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                                color: isPayerCurrentUser
-                                    ? (isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight)
-                                    : (isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight),
+                                color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
                               ),
                             ),
+                          ],
                         ],
                       ),
-                    ],
-                  ),
+                    ),
+
+                    // Amount & User Share
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        CurrencyDisplay(
+                          amountInPaise: expense.amountInPaise,
+                          size: CurrencyDisplaySize.medium,
+                          currencyCode: trip.currencyCode,
+                        ),
+                        const SizedBox(height: 2),
+                        if (userSplit != null)
+                          Text(
+                            isPayerCurrentUser
+                                ? 'you lent ${CurrencyFormatter.formatPaise(expense.amountInPaise - userSplit.amountInPaise, currencyCode: trip.currencyCode)}'
+                                : 'your share ${CurrencyFormatter.formatPaise(userSplit.amountInPaise, currencyCode: trip.currencyCode)}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: isPayerCurrentUser
+                                  ? (isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight)
+                                  : (isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight),
+                            ),
+                          )
+                        else
+                          Text(
+                            'not involved',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
                 ),
               );
             },
