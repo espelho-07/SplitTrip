@@ -7,9 +7,9 @@ This document tracks the verified status required before deploying Kith to stagi
 ## 1. Code & Verification Status
 - [x] **Static Analysis (PASS)**: `flutter analyze` reports 0 errors and 0 warnings.
 - [x] **Flutter Unit & Integration Tests (PASS)**: All 49+ tests pass (`flutter test`).
-- [x] **Backend Tests (PASS)**: All 16+ Node.js test suites pass (`npm test`).
+- [x] **Backend Tests (PASS)**: All 19+ Node.js test suites pass (`npm test`).
 - [x] **CI/CD Pipeline (PASS)**: GitHub Actions CI workflow configured for analyze, tests, and artifact builds on `main`.
-- [x] **Zero Floating Point Math (PASS)**: All financial computations utilize integer smallest units (`paise`, `cents`, `pence`) via `MoneyEngine`.
+- [x] **Zero Floating Point Math (PASS)**: All financial computations utilize integer smallest units (`paise`, `cents`, `pence`) via `MoneyEngine` and PostgreSQL `BIGINT`.
 
 ---
 
@@ -25,7 +25,9 @@ This document tracks the verified status required before deploying Kith to stagi
 
 ---
 
-## 3. Backend & Infrastructure Status
+## 3. Backend & Database Infrastructure Status
+- [x] **PostgreSQL Schema (PASS)**: Versioned migration (`001_initial_schema.sql`) with tables, foreign keys, cascades, and indexes.
+- [x] **Data Migration Tool (PASS)**: `migrate_json_to_pg.js` extracts, validates, and imports JSON data into relational tables with conflict handling.
 - [x] **Liveness Endpoint (PASS)**: `GET /health` returns HTTP 200 `{ "status": "healthy" }`.
 - [x] **Readiness Endpoint (PASS)**: `GET /ready` returns HTTP 200 `{ "status": "ready" }` confirming database and storage volume accessibility.
 - [x] **Structured Logging (PASS)**: Request method, route, status code, and duration logged as JSON to `stdout`.
@@ -47,5 +49,5 @@ This document tracks the verified status required before deploying Kith to stagi
 
 ## 5. Rollback & Disaster Recovery Strategy
 - **Backend Rollback**: Revert deployment container/process to previous release tag.
-- **Data Restoration**: `BackupManager.restoreBackup` restores timestamped backup snapshot from `./data_storage/backups/`.
+- **Database Restoration**: Restore PostgreSQL snapshot or replay JSON migration via `migrate_json_to_pg.js`.
 - **Client Rollback**: Halt staged rollout in Google Play Console and revert active release track.
