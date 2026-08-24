@@ -104,7 +104,7 @@ class JoinPreviewSheet extends StatelessWidget {
                 ),
                 _buildInfoItem(
                   context,
-                  icon: Icons.currency_rupee,
+                  icon: Icons.payments_outlined,
                   label: 'Currency',
                   value: preview.currencyCode,
                   isDark: isDark,

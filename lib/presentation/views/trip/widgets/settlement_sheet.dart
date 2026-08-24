@@ -67,7 +67,7 @@ class _SettlementSheetState extends State<SettlementSheet> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Min-cash-flow algorithm reduced debts to ${settlements.length} direct transfers',
+                    'Direct transfers calculated to settle all debts with fewest payments',
                     style: AppTypography.bodySmall(isDark: isDark),
                   ),
                 ],
