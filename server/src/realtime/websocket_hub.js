@@ -70,7 +70,8 @@ class RealtimeHub {
   }
 
   _handleClientMessage(ws, message) {
-    const { action, tripId, token } = message;
+    const action = message.action || message.type;
+    const { tripId, token } = message;
 
     // Handle authentication message
     if (action === 'auth') {

@@ -21,6 +21,7 @@ router.get('/', (req, res, next) => {
 router.post('/', (req, res, next) => {
   try {
     const {
+      id,
       title,
       amountInPaise,
       category,
@@ -35,6 +36,7 @@ router.post('/', (req, res, next) => {
       req.user,
       req.params.tripId,
       {
+        id,
         title,
         amountInPaise,
         category,
@@ -59,7 +61,7 @@ router.delete('/:expenseId', (req, res, next) => {
     const result = expenseService.deleteExpense(
       req.params.tripId,
       req.params.expenseId,
-      req.user,
+      req.user.id,
       realtimeHub
     );
     res.status(200).json({ data: result });
@@ -68,11 +70,24 @@ router.delete('/:expenseId', (req, res, next) => {
   }
 });
 
-// GET /api/trips/:tripId/balance
-router.get('/balance/summary', (req, res, next) => {
+// POST /api/trips/:tripId/expenses/settle
+router.post('/settle', (req, res, next) => {
   try {
-    const summary = expenseService.getBalanceSummary(req.params.tripId, req.user.id);
-    res.status(200).json({ data: summary });
+    const { fromMemberId, toMemberId, amountInPaise, paymentReference, note } = req.body;
+    const settlementService = require('../services/settlement_service');
+    const result = settlementService.recordSettlement(
+      req.user,
+      req.params.tripId,
+      {
+        fromMemberId,
+        toMemberId,
+        amountInPaise,
+        paymentReference,
+        note,
+      },
+      realtimeHub
+    );
+    res.status(201).json({ data: result });
   } catch (e) {
     next(e);
   }
