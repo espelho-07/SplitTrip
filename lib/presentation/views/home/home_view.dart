@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+import '../../../core/config/app_config.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
@@ -9,6 +11,7 @@ import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/member_avatar.dart';
 import '../../../core/widgets/surface_card.dart';
+import '../../../data/services/local_storage_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/personal_expense_viewmodel.dart';
@@ -154,6 +157,17 @@ class _HomeViewState extends State<HomeView> {
               ),
               const SizedBox(height: AppSpacing.md),
               AppButton(
+                text: 'Server & Cloud Sync',
+                icon: Icons.cloud_sync_outlined,
+                isFullWidth: true,
+                variant: AppButtonVariant.outline,
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _showServerConfigDialog();
+                },
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              AppButton(
                 text: 'Restore / Switch Account',
                 icon: Icons.sync_rounded,
                 isFullWidth: true,
@@ -188,6 +202,143 @@ class _HomeViewState extends State<HomeView> {
               ),
             ],
           ),
+        );
+      },
+    );
+  }
+
+  void _showServerConfigDialog() {
+    final storage = context.read<LocalStorageService>();
+    final currentCustomUrl = storage.getSavedServerUrl() ?? '';
+    final urlController = TextEditingController(text: currentCustomUrl);
+    String statusMessage = '';
+    bool isTesting = false;
+    bool isSuccess = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (dialogCtx, setDialogState) {
+            return AlertDialog(
+              title: const Row(
+                children: [
+                  Icon(Icons.cloud_sync_rounded, color: AppColors.emeraldPrimary, size: 22),
+                  SizedBox(width: 8),
+                  Text('Server & Cloud Sync', style: TextStyle(fontSize: 18)),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Configure your Render or backend server URL. Leave empty to use default staging cloud.',
+                      style: TextStyle(fontSize: 13),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: urlController,
+                      keyboardType: TextInputType.url,
+                      decoration: const InputDecoration(
+                        labelText: 'Backend URL',
+                        hintText: 'https://your-service.onrender.com',
+                        prefixIcon: Icon(Icons.link_rounded, size: 20),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Active URL: ${AppConfig.baseUrl}',
+                      style: const TextStyle(fontSize: 11, fontFamily: 'monospace', color: Colors.grey),
+                    ),
+                    if (statusMessage.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isSuccess ? Colors.green.withValues(alpha: 0.15) : Colors.red.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: isSuccess ? Colors.green : Colors.red),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(isSuccess ? Icons.check_circle_outline : Icons.error_outline, size: 18, color: isSuccess ? Colors.green : Colors.red),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                statusMessage,
+                                style: TextStyle(fontSize: 12, color: isSuccess ? Colors.green : Colors.red, fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isTesting ? null : () async {
+                    setDialogState(() {
+                      isTesting = true;
+                      statusMessage = 'Testing connection...';
+                    });
+
+                    final testUrl = urlController.text.trim();
+                    final targetBase = testUrl.isNotEmpty
+                        ? (testUrl.endsWith('/') ? testUrl.substring(0, testUrl.length - 1) : testUrl)
+                        : 'https://kith-staging-backend.onrender.com';
+                    final healthUrl = Uri.parse('$targetBase/health');
+
+                    try {
+                      final client = http.Client();
+                      final res = await client.get(healthUrl).timeout(const Duration(seconds: 6));
+                      if (res.statusCode == 200) {
+                        setDialogState(() {
+                          isTesting = false;
+                          isSuccess = true;
+                          statusMessage = 'Connected! Server is healthy (200 OK)';
+                        });
+                      } else {
+                        setDialogState(() {
+                          isTesting = false;
+                          isSuccess = false;
+                          statusMessage = 'Server responded with status HTTP ${res.statusCode}';
+                        });
+                      }
+                    } catch (e) {
+                      setDialogState(() {
+                        isTesting = false;
+                        isSuccess = false;
+                        statusMessage = 'Could not reach server: $e';
+                      });
+                    }
+                  },
+                  child: isTesting
+                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Text('Test Connection'),
+                ),
+                FilledButton(
+                  onPressed: () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    final navigator = Navigator.of(dialogCtx);
+                    final entered = urlController.text.trim();
+                    await storage.saveServerUrl(entered.isEmpty ? null : entered);
+                    AppConfig.setCustomServerUrl(entered.isEmpty ? null : entered);
+                    if (mounted) {
+                      navigator.pop();
+                      messenger.showSnackBar(
+                        SnackBar(content: Text('Server URL updated to: ${AppConfig.baseUrl}')),
+                      );
+                    }
+                  },
+                  child: const Text('Save & Apply'),
+                ),
+              ],
+            );
+          },
         );
       },
     );

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'core/config/app_config.dart';
 import 'core/network/api_client.dart';
 import 'core/network/realtime_client.dart';
 import 'core/theme/app_theme.dart';
@@ -33,13 +34,18 @@ void main() async {
     ),
   );
 
+  // Initialize Local-First Persistent Storage & Services
+  final storageService = await LocalStorageService.init();
+  final savedServerUrl = storageService.getSavedServerUrl();
+  if (savedServerUrl != null && savedServerUrl.isNotEmpty) {
+    AppConfig.setCustomServerUrl(savedServerUrl);
+  }
+
   // Initialize Networking & Realtime Clients
   final apiClient = ApiClient();
   final realtimeClient = RealtimeClient();
   realtimeClient.connect();
 
-  // Initialize Local-First Persistent Storage & Services
-  final storageService = await LocalStorageService.init();
   final syncService = SyncService(storageService);
   final authService = AuthService(
     storage: storageService,

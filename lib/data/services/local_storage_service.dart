@@ -164,4 +164,18 @@ class LocalStorageService {
   Future<bool> saveActivityLogs(String tripId, List<Map<String, dynamic>> logsJson) async {
     return _prefs.setString('$_activityLogsPrefix$tripId', jsonEncode(logsJson));
   }
+
+  // --- Custom Server URL ---
+  static const String _customServerUrlKey = 'kith_custom_server_url';
+
+  String? getSavedServerUrl() {
+    return _prefs.getString(_customServerUrlKey);
+  }
+
+  Future<bool> saveServerUrl(String? url) async {
+    if (url == null || url.trim().isEmpty) {
+      return _prefs.remove(_customServerUrlKey);
+    }
+    return _prefs.setString(_customServerUrlKey, url.trim());
+  }
 }

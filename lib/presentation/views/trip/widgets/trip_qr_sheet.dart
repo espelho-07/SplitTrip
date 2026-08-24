@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
@@ -26,122 +27,164 @@ class TripQrSheet extends StatelessWidget {
         borderRadius: AppRadius.topSheetBorder,
       ),
       padding: AppSpacing.bottomSheetPadding,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
-                borderRadius: BorderRadius.circular(2),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
+            const SizedBox(height: AppSpacing.lg),
 
-          Text(
-            'Invite Friends',
-            textAlign: TextAlign.center,
-            style: AppTypography.titleLarge(isDark: isDark),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Share this code or link with friends to let them join ${trip.name}.',
-            textAlign: TextAlign.center,
-            style: AppTypography.bodySmall(isDark: isDark),
-          ),
-          const SizedBox(height: AppSpacing.xl),
-
-          // 6-Character Join Code Card
-          SurfaceCard(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('TRIP CODE', style: AppTypography.bodySmall(isDark: isDark)),
-                    const SizedBox(height: 4),
-                    Text(
-                      trip.inviteCode,
-                      style: const TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 6.0,
-                        fontFamily: 'monospace',
-                      ),
+                const Icon(Icons.qr_code_2_rounded, size: 24, color: AppColors.emeraldPrimary),
+                const SizedBox(width: 8),
+                Text(
+                  'Join ${trip.name}',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.titleLarge(isDark: isDark),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Scan this QR code with another phone, or enter the 6-character code.',
+              textAlign: TextAlign.center,
+              style: AppTypography.bodySmall(isDark: isDark),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+
+            // High-Contrast QR Code Visual Card
+            Center(
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.12),
+                      blurRadius: 16,
+                      offset: const Offset(0, 4),
                     ),
                   ],
                 ),
-                IconButton.filledTonal(
-                  icon: const Icon(Icons.copy_rounded),
-                  onPressed: () {
-                    HapticHelper.medium();
-                    Clipboard.setData(ClipboardData(text: trip.inviteCode));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Trip code ${trip.inviteCode} copied to clipboard!'),
-                        duration: const Duration(seconds: 2),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-
-          // Deep Link Card
-          SurfaceCard(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.link_rounded,
-                  size: 20,
-                  color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    inviteLink,
-                    style: AppTypography.bodySmall(isDark: isDark).copyWith(
-                      color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-                      fontFamily: 'monospace',
-                    ),
-                    overflow: TextOverflow.ellipsis,
+                child: QrImageView(
+                  data: inviteLink,
+                  version: QrVersions.auto,
+                  size: 200.0,
+                  backgroundColor: Colors.white,
+                  eyeStyle: const QrEyeStyle(
+                    eyeShape: QrEyeShape.square,
+                    color: Color(0xFF0F172A),
+                  ),
+                  dataModuleStyle: const QrDataModuleStyle(
+                    dataModuleShape: QrDataModuleShape.square,
+                    color: Color(0xFF0F172A),
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.copy_rounded, size: 18),
-                  onPressed: () {
-                    HapticHelper.medium();
-                    Clipboard.setData(ClipboardData(text: inviteLink));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Invite link copied!'),
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                  },
-                ),
-              ],
+              ),
             ),
-          ),
-          const SizedBox(height: AppSpacing.xl),
+            const SizedBox(height: AppSpacing.lg),
 
-          // Close button
-          AppButton(
-            text: 'Done',
-            variant: AppButtonVariant.secondary,
-            isFullWidth: true,
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-        ],
+            // 6-Character Join Code Card
+            SurfaceCard(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('6-LETTER INVITE CODE', style: AppTypography.bodySmall(isDark: isDark).copyWith(fontSize: 11, fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 4),
+                      Text(
+                        trip.inviteCode,
+                        style: const TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 6.0,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ],
+                  ),
+                  IconButton.filledTonal(
+                    icon: const Icon(Icons.copy_rounded),
+                    onPressed: () {
+                      HapticHelper.medium();
+                      Clipboard.setData(ClipboardData(text: trip.inviteCode));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Trip code ${trip.inviteCode} copied to clipboard!'),
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+
+            // Deep Link Card
+            SurfaceCard(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.link_rounded,
+                    size: 20,
+                    color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      inviteLink,
+                      style: AppTypography.bodySmall(isDark: isDark).copyWith(
+                        color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                        fontFamily: 'monospace',
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.copy_rounded, size: 18),
+                    onPressed: () {
+                      HapticHelper.medium();
+                      Clipboard.setData(ClipboardData(text: inviteLink));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Invite link copied!'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+
+            // Done button
+            AppButton(
+              text: 'Done',
+              variant: AppButtonVariant.secondary,
+              isFullWidth: true,
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        ),
       ),
     );
   }

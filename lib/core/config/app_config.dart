@@ -18,14 +18,33 @@ class AppConfig {
   // Configurable runtime overrides (used in integration tests)
   static String? _overrideBaseUrl;
   static String? _overrideWsUrl;
+  static String? _customServerUrl;
 
   static void setOverrideUrls({String? baseUrl, String? wsUrl}) {
     _overrideBaseUrl = baseUrl;
     _overrideWsUrl = wsUrl;
   }
 
+  static void setCustomServerUrl(String? url) {
+    if (url == null || url.trim().isEmpty) {
+      _customServerUrl = null;
+      return;
+    }
+    var clean = url.trim();
+    if (clean.endsWith('/')) {
+      clean = clean.substring(0, clean.length - 1);
+    }
+    _customServerUrl = clean;
+  }
+
+  static String? get customServerUrl => _customServerUrl;
+
   static String get baseUrl {
     if (_overrideBaseUrl != null) return _overrideBaseUrl!;
+    if (_customServerUrl != null && _customServerUrl!.isNotEmpty) {
+      final clean = _customServerUrl!;
+      return clean.endsWith('/api') ? clean : '$clean/api';
+    }
     if (_envDefineApiUrl.isNotEmpty) return _envDefineApiUrl;
 
     // By default, connect to the live cloud backend so real physical devices on Wi-Fi/Cellular work out of the box
@@ -34,6 +53,18 @@ class AppConfig {
 
   static String get wsUrl {
     if (_overrideWsUrl != null) return _overrideWsUrl!;
+    if (_customServerUrl != null && _customServerUrl!.isNotEmpty) {
+      var clean = _customServerUrl!;
+      if (clean.endsWith('/api')) {
+        clean = clean.substring(0, clean.length - 4);
+      }
+      if (clean.startsWith('https://')) {
+        clean = 'wss://${clean.substring(8)}';
+      } else if (clean.startsWith('http://')) {
+        clean = 'ws://${clean.substring(7)}';
+      }
+      return '$clean/ws';
+    }
     if (_envDefineWsUrl.isNotEmpty) return _envDefineWsUrl;
 
     return 'wss://kith-staging-backend.onrender.com/ws';

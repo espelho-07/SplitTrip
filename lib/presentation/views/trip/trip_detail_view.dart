@@ -466,8 +466,8 @@ class _TripDetailViewState extends State<TripDetailView> {
             onPressed: () => _showExportSheet(trip, tripDetailVm.expenses, balanceSummary),
           ),
           IconButton(
-            icon: const Icon(Icons.share_outlined, size: 20),
-            tooltip: 'Invite Friends',
+            icon: const Icon(Icons.qr_code_2_rounded, size: 22),
+            tooltip: 'Trip QR Code & Invite',
             onPressed: () => _showInviteShareDialog(trip),
           ),
           IconButton(
@@ -652,22 +652,43 @@ class _TripDetailViewState extends State<TripDetailView> {
                   ),
                 ],
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  const Text('Invite Code', style: TextStyle(color: Colors.white70, fontSize: 11)),
-                  const SizedBox(height: 2),
-                  Text(
-                    trip.inviteCode,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      fontFamily: 'monospace',
-                      letterSpacing: 2,
-                    ),
+              InkWell(
+                onTap: () {
+                  HapticHelper.light();
+                  _showInviteShareDialog(trip);
+                },
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
                   ),
-                ],
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.qr_code_2_rounded, size: 16, color: Colors.white),
+                      const SizedBox(width: 6),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('CODE & QR', style: TextStyle(color: Colors.white70, fontSize: 9, fontWeight: FontWeight.w700)),
+                          Text(
+                            trip.inviteCode,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              fontFamily: 'monospace',
+                              letterSpacing: 2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
