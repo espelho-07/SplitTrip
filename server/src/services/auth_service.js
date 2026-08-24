@@ -3,8 +3,21 @@ const { db } = require('../db/database');
 const { AppError } = require('../middleware/error_handler');
 
 class AuthService {
+  _normalizeRecoveryKey(rawKey) {
+    if (!rawKey) return '';
+    const trimmed = rawKey.trim().toUpperCase();
+    let clean = trimmed.replace(/[\s\-_:]/g, '');
+    if (clean.startsWith('KITH')) {
+      clean = clean.substring(4);
+    }
+    if (clean.length === 8) {
+      return `KITH-${clean.substring(0, 4)}-${clean.substring(4, 8)}`;
+    }
+    return trimmed;
+  }
+
   _hashKey(key) {
-    const normalized = key.trim().toUpperCase();
+    const normalized = this._normalizeRecoveryKey(key);
     return crypto.createHash('sha256').update(normalized).digest('hex');
   }
 
@@ -75,8 +88,15 @@ class AuthService {
       throw AppError.badRequest('Recovery key is required');
     }
 
-    const keyHash = this._hashKey(recoveryKey);
-    const user = db.findOne('users', (u) => u.recoveryKeyHash === keyHash);
+    const normalizedKey = this._normalizeRecoveryKey(recoveryKey);
+    const candidateHashes = new Set([
+      this._hashKey(recoveryKey),
+      this._hashKey(normalizedKey),
+      crypto.createHash('sha256').update(recoveryKey.trim().toUpperCase()).digest('hex'),
+      crypto.createHash('sha256').update(recoveryKey.trim().toUpperCase().replace(/[\s\-_:]/g, '')).digest('hex'),
+    ]);
+
+    const user = db.findOne('users', (u) => candidateHashes.has(u.recoveryKeyHash));
 
     if (!user) {
       throw AppError.unauthorized('Invalid recovery key. No account matches this key.');
@@ -90,7 +110,7 @@ class AuthService {
         id: user.id,
         displayName: user.displayName,
         avatarUrl: user.avatarUrl,
-        recoveryKey: recoveryKey.trim().toUpperCase(),
+        recoveryKey: normalizedKey,
         anonymousToken: session.token,
         isGuest: user.isGuest,
         createdAt: user.createdAt,

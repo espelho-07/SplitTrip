@@ -10,6 +10,7 @@ import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/surface_card.dart';
 import '../../viewmodels/auth_viewmodel.dart';
+import '../../viewmodels/home_viewmodel.dart';
 
 class OnboardingView extends StatefulWidget {
   const OnboardingView({super.key});
@@ -56,7 +57,7 @@ class _OnboardingViewState extends State<OnboardingView> {
     final key = _recoveryKeyController.text.trim().toUpperCase();
     if (key.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your 12-character recovery key')),
+        const SnackBar(content: Text('Please enter your recovery key (e.g. KITH-XXXX-YYYY)')),
       );
       return;
     }
@@ -65,7 +66,14 @@ class _OnboardingViewState extends State<OnboardingView> {
     final user = await authVm.recoverSession(key);
     if (mounted) {
       if (user != null) {
-        context.go('/home');
+        final homeVm = context.read<HomeViewModel>();
+        await homeVm.loadTrips(user.id);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('🎉 Welcome back, ${user.displayName}! Account restored.')),
+          );
+          context.go('/home');
+        }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Could not restore session with this key. Please check the code and try again.')),

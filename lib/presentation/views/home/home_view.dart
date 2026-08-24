@@ -131,7 +131,18 @@ class _HomeViewState extends State<HomeView> {
                   ],
                 ),
               ),
-              const SizedBox(height: AppSpacing.lg),
+              const SizedBox(height: AppSpacing.md),
+              AppButton(
+                text: 'Restore / Switch Account',
+                icon: Icons.sync_rounded,
+                isFullWidth: true,
+                variant: AppButtonVariant.outline,
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _showRestoreAccountDialog();
+                },
+              ),
+              const SizedBox(height: AppSpacing.sm),
               AppButton(
                 text: 'Send Beta Feedback',
                 icon: Icons.feedback_outlined,
@@ -156,6 +167,70 @@ class _HomeViewState extends State<HomeView> {
               ),
             ],
           ),
+        );
+      },
+    );
+  }
+
+  void _showRestoreAccountDialog() {
+    final keyController = TextEditingController();
+    final authVm = context.read<AuthViewModel>();
+    final homeVm = context.read<HomeViewModel>();
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Restore from Recovery Key'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Enter the recovery key of the account you want to restore or switch to.',
+                style: TextStyle(fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: keyController,
+                textCapitalization: TextCapitalization.characters,
+                decoration: const InputDecoration(
+                  hintText: 'e.g. KITH-XXXX-YYYY or XXXX-YYYY',
+                  prefixIcon: Icon(Icons.key_rounded, size: 20),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final key = keyController.text.trim();
+                if (key.isEmpty) return;
+                Navigator.pop(ctx);
+
+                final restoredUser = await authVm.recoverSession(key);
+                if (mounted) {
+                  if (restoredUser != null) {
+                    await homeVm.loadTrips(restoredUser.id);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('🎉 Restored account for "${restoredUser.displayName}"!')),
+                      );
+                    }
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Could not restore session. Please verify your recovery code.')),
+                    );
+                  }
+                }
+              },
+              child: const Text('Restore'),
+            ),
+          ],
         );
       },
     );

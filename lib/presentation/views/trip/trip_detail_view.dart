@@ -391,7 +391,12 @@ class _TripDetailViewState extends State<TripDetailView> {
 
     if (tripDetailVm.isLoading && trip == null) {
       return Scaffold(
-        appBar: AppBar(),
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded),
+            onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
+          ),
+        ),
         body: const Padding(
           padding: EdgeInsets.all(20.0),
           child: Column(
@@ -409,7 +414,12 @@ class _TripDetailViewState extends State<TripDetailView> {
 
     if (trip == null) {
       return Scaffold(
-        appBar: AppBar(),
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded),
+            onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
+          ),
+        ),
         body: const Center(child: Text('Trip not found')),
       );
     }
@@ -421,6 +431,16 @@ class _TripDetailViewState extends State<TripDetailView> {
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/home');
+            }
+          },
+        ),
         title: Row(
           children: [
             Text(trip.emoji, style: const TextStyle(fontSize: 20)),

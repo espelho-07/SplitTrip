@@ -79,9 +79,22 @@ class AuthService {
     return user;
   }
 
+  /// Normalizes a recovery key format regardless of casing, spaces or missing KITH- prefix.
+  static String normalizeRecoveryKey(String raw) {
+    final trimmed = raw.trim().toUpperCase();
+    String clean = trimmed.replaceAll(RegExp(r'[\s\-_:]'), '');
+    if (clean.startsWith('KITH')) {
+      clean = clean.substring(4);
+    }
+    if (clean.length == 8) {
+      return 'KITH-${clean.substring(0, 4)}-${clean.substring(4, 8)}';
+    }
+    return trimmed;
+  }
+
   /// Recovers a session across devices via recovery key.
   Future<GuestUser?> recoverUser(String recoveryKey) async {
-    final cleanKey = recoveryKey.trim().toUpperCase();
+    final cleanKey = normalizeRecoveryKey(recoveryKey);
 
     try {
       final res = await apiClient.post('/auth/recover', body: {
@@ -103,7 +116,7 @@ class AuthService {
     }
 
     final existing = getCurrentUser();
-    if (existing != null && existing.recoveryKey.toUpperCase() == cleanKey) {
+    if (existing != null && normalizeRecoveryKey(existing.recoveryKey) == cleanKey) {
       return existing;
     }
 
