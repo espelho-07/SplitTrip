@@ -85,7 +85,11 @@ void main() async {
           create: (_) => HomeViewModel(tripRepo: tripRepo, expenseRepo: expenseRepo),
         ),
         ChangeNotifierProvider(
-          create: (_) => PersonalExpenseViewModel(personalRepo: personalRepo),
+          create: (_) => PersonalExpenseViewModel(
+            personalRepo: personalRepo,
+            tripRepo: tripRepo,
+            expenseRepo: expenseRepo,
+          ),
         ),
         ChangeNotifierProvider(
           create: (_) => TripDetailViewModel(

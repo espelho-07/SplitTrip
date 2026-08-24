@@ -191,40 +191,92 @@ class PersonalHomeTab extends StatelessWidget {
                   color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
                 ),
               ),
-              InkWell(
-                onTap: () {
-                  SetBudgetDialog.show(
-                    context,
-                    currentBudgetPaise: budget.monthlyLimitInPaise,
-                    monthYear: vm.currentMonthKey,
-                  );
-                },
-                borderRadius: BorderRadius.circular(8),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  child: Row(
-                    children: [
-                      Icon(
-                        budget.hasBudget
-                            ? Icons.tune_rounded
-                            : Icons.add_circle_outline_rounded,
-                        size: 14,
-                        color: AppColors.emeraldPrimary,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        budget.hasBudget
-                            ? 'Budget: ${CurrencyFormatter.formatPaise(budget.monthlyLimitInPaise, currencyCode: 'INR')}'
-                            : 'Set Budget',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.emeraldPrimary,
+              Row(
+                children: [
+                  // Sync from Trips pill
+                  InkWell(
+                    onTap: () {
+                      final user = context.read<AuthViewModel>().currentUser;
+                      if (user != null) {
+                        vm.toggleIncludeTripExpenses(user.id);
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: vm.includeTripExpenses
+                            ? AppColors.emeraldPrimary.withValues(alpha: 0.15)
+                            : (isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.05)),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: vm.includeTripExpenses
+                              ? AppColors.emeraldPrimary.withValues(alpha: 0.4)
+                              : Colors.transparent,
                         ),
                       ),
-                    ],
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.sync_alt_rounded,
+                            size: 13,
+                            color: vm.includeTripExpenses
+                                ? AppColors.emeraldPrimary
+                                : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            vm.includeTripExpenses ? 'Trips Synced' : 'Sync from Trips',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: vm.includeTripExpenses
+                                  ? AppColors.emeraldPrimary
+                                  : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: () {
+                      SetBudgetDialog.show(
+                        context,
+                        currentBudgetPaise: budget.monthlyLimitInPaise,
+                        monthYear: vm.currentMonthKey,
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      child: Row(
+                        children: [
+                          Icon(
+                            budget.hasBudget
+                                ? Icons.tune_rounded
+                                : Icons.add_circle_outline_rounded,
+                            size: 14,
+                            color: AppColors.emeraldPrimary,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            budget.hasBudget
+                                ? 'Budget: ${CurrencyFormatter.formatPaise(budget.monthlyLimitInPaise, currencyCode: 'INR')}'
+                                : 'Set Budget',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.emeraldPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -234,11 +286,33 @@ class PersonalHomeTab extends StatelessWidget {
             size: CurrencyDisplaySize.hero,
           ),
           const SizedBox(height: AppSpacing.xs),
-          Text(
-            avgPerDayPaise > 0
-                ? '${CurrencyFormatter.formatPaise(avgPerDayPaise, currencyCode: 'INR')} / day average'
-                : 'No spending recorded for this period',
-            style: AppTypography.bodySmall(isDark: isDark),
+          Row(
+            children: [
+              Text(
+                avgPerDayPaise > 0
+                    ? '${CurrencyFormatter.formatPaise(avgPerDayPaise, currencyCode: 'INR')} / day average'
+                    : 'No spending recorded for this period',
+                style: AppTypography.bodySmall(isDark: isDark),
+              ),
+              if (vm.includeTripExpenses) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: AppColors.emeraldPrimary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text(
+                    '+ Trips included',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.emeraldPrimary,
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
           if (budget.hasBudget && budget.monthlyLimitInPaise > 0) ...[
             const SizedBox(height: AppSpacing.md),

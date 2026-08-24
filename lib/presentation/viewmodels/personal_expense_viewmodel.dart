@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../core/utils/haptic_feedback_helper.dart';
+import '../../data/repositories/expense_repository.dart';
 import '../../data/repositories/personal_repository.dart';
+import '../../data/repositories/trip_repository.dart';
 import '../../domain/enums/expense_category.dart';
 import '../../domain/models/personal_budget.dart';
 import '../../domain/models/personal_debt.dart';
@@ -28,14 +30,22 @@ enum PersonalTimeFilter {
 
 class PersonalExpenseViewModel extends ChangeNotifier {
   final PersonalRepository personalRepo;
+  final TripRepository? tripRepo;
+  final ExpenseRepository? expenseRepo;
 
-  PersonalExpenseViewModel({required this.personalRepo});
+  PersonalExpenseViewModel({
+    required this.personalRepo,
+    this.tripRepo,
+    this.expenseRepo,
+  });
 
   PersonalTimeFilter _timeFilter = PersonalTimeFilter.thisMonth;
   DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
   DateTimeRange? _customDateRange;
 
   List<PersonalExpense> _expenses = [];
+  List<PersonalExpense> _tripSyncedExpenses = [];
+  bool _includeTripExpenses = false;
   PersonalDebtsSummary _debtsSummary = PersonalDebtsSummary.empty();
   PersonalBudget _budget = PersonalBudget.empty(
     '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}',
@@ -50,6 +60,7 @@ class PersonalExpenseViewModel extends ChangeNotifier {
   DateTime get selectedMonth => _selectedMonth;
   DateTimeRange? get customDateRange => _customDateRange;
   List<PersonalExpense> get expenses => _expenses;
+  bool get includeTripExpenses => _includeTripExpenses;
   PersonalDebtsSummary get debtsSummary => _debtsSummary;
   PersonalBudget get budget => _budget;
   bool get isLoading => _isLoading;
@@ -134,6 +145,26 @@ class PersonalExpenseViewModel extends ChangeNotifier {
     return map;
   }
 
+  List<PersonalExpense> get allEffectiveExpenses {
+    if (!_includeTripExpenses || _tripSyncedExpenses.isEmpty) {
+      return _expenses;
+    }
+    final combined = List<PersonalExpense>.from(_expenses);
+    for (final te in _tripSyncedExpenses) {
+      final alreadyExists = combined.any((ce) =>
+          ce.id == te.id ||
+          (ce.title == te.title &&
+              ce.amountInPaise == te.amountInPaise &&
+              ce.date.day == te.date.day &&
+              ce.date.month == te.date.month &&
+              ce.date.year == te.date.year));
+      if (!alreadyExists) {
+        combined.add(te);
+      }
+    }
+    return combined;
+  }
+
   List<PersonalExpense> get filteredExpenses => _filteredExpenses;
 
   List<PersonalExpense> get _filteredExpenses {
@@ -173,7 +204,7 @@ class PersonalExpenseViewModel extends ChangeNotifier {
         break;
     }
 
-    return _expenses.where((e) {
+    return allEffectiveExpenses.where((e) {
       return (e.date.isAfter(start) || e.date.isAtSameMomentAs(start)) &&
           (e.date.isBefore(end) || e.date.isAtSameMomentAs(end));
     }).toList();
@@ -187,7 +218,7 @@ class PersonalExpenseViewModel extends ChangeNotifier {
   void _refreshBudgetCalculation() {
     if (_budget.hasBudget && _budget.monthlyLimitInPaise > 0) {
       final monthPrefix = currentMonthKey;
-      final monthSpent = _expenses
+      final monthSpent = allEffectiveExpenses
           .where((e) => e.date.toIso8601String().startsWith(monthPrefix))
           .fold<int>(0, (sum, e) => sum + e.amountInPaise);
 
@@ -205,6 +236,50 @@ class PersonalExpenseViewModel extends ChangeNotifier {
     }
   }
 
+  Future<void> syncTripExpenses(String userId) async {
+    if (tripRepo == null || expenseRepo == null) return;
+    try {
+      final trips = await tripRepo!.getTrips();
+      final synced = <PersonalExpense>[];
+      for (final trip in trips) {
+        final currentMember = trip.members.where((m) => m.userId == userId).firstOrNull;
+        final tripExpenses = await expenseRepo!.getExpenses(trip.id);
+        for (final exp in tripExpenses) {
+          final isPayer = exp.paidById == userId || (currentMember != null && exp.paidById == currentMember.id);
+          if (isPayer) {
+            synced.add(PersonalExpense(
+              id: 'trip_exp_${exp.id}',
+              userId: userId,
+              title: '${exp.title} (${trip.name})',
+              amountInPaise: exp.amountInPaise,
+              category: exp.category,
+              date: exp.createdAt,
+              notes: 'From ${trip.emoji} ${trip.name}',
+              createdAt: exp.createdAt,
+              updatedAt: exp.updatedAt,
+            ));
+          }
+        }
+      }
+      _tripSyncedExpenses = synced;
+      _applyFilterAndCalculate();
+    } catch (e) {
+      debugPrint('Error syncing trip expenses: $e');
+    }
+  }
+
+  void toggleIncludeTripExpenses(String userId) {
+    _includeTripExpenses = !_includeTripExpenses;
+    if (_includeTripExpenses) {
+      syncTripExpenses(userId);
+    } else {
+      _tripSyncedExpenses = [];
+      _applyFilterAndCalculate();
+    }
+    HapticHelper.selection();
+    notifyListeners();
+  }
+
   // --- Data Loading ---
   Future<void> loadData(String userId) async {
     // 1. FAST LOCAL HYDRATION (< 5ms)
@@ -213,6 +288,10 @@ class PersonalExpenseViewModel extends ChangeNotifier {
     _budget = personalRepo.getCachedPersonalBudget(currentMonthKey);
     _refreshBudgetCalculation();
     notifyListeners();
+
+    if (_includeTripExpenses) {
+      syncTripExpenses(userId);
+    }
 
     _isLoading = _expenses.isEmpty && _debtsSummary.debts.isEmpty;
     _errorMessage = null;
@@ -226,6 +305,9 @@ class PersonalExpenseViewModel extends ChangeNotifier {
       _debtsSummary = remoteDebts;
       _budget = remoteBudget;
       _refreshBudgetCalculation();
+      if (_includeTripExpenses) {
+        await syncTripExpenses(userId);
+      }
     } catch (e) {
       if (_expenses.isEmpty) {
         _errorMessage = 'Operating offline. Saved data loaded.';
