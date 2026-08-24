@@ -4,6 +4,7 @@ import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/currency_formatter.dart';
+import '../../../../core/utils/date_formatter.dart';
 import '../../../../core/utils/haptic_feedback_helper.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/currency_display.dart';
@@ -31,8 +32,6 @@ class ExpenseDetailSheet extends StatelessWidget {
   TripMember? _findMember(String memberId) {
     return trip.members.where((m) => m.id == memberId).firstOrNull;
   }
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -116,7 +115,7 @@ class ExpenseDetailSheet extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        _formatTimestamp(expense.createdAt),
+                        DateFormatter.formatRelative(expense.createdAt),
                         style: AppTypography.bodySmall(isDark: isDark),
                       ),
                     ],
@@ -277,15 +276,5 @@ class ExpenseDetailSheet extends StatelessWidget {
         );
       },
     );
-  }
-
-  String _formatTimestamp(DateTime dt) {
-    final now = DateTime.now();
-    final diff = now.difference(dt);
-
-    if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${dt.day}/${dt.month}/${dt.year}';
   }
 }

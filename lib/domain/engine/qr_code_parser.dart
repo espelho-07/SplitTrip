@@ -2,8 +2,19 @@
 class QrCodeParser {
   QrCodeParser._();
 
+  static const List<String> _allowedHosts = [
+    'kith.app',
+    'www.kith.app',
+    'splittrip.app',
+  ];
+
+  static const List<String> _allowedSchemes = [
+    'kith',
+    'splittrip',
+  ];
+
   /// Extracts clean invite code from a QR payload or deep link URL.
-  /// Returns null if the payload is invalid or unrecognized.
+  /// Returns null if the payload is invalid, unrecognized, or from an unauthorized domain.
   static String? extractInviteCode(String rawPayload) {
     if (rawPayload.trim().isEmpty) return null;
     final trimmed = rawPayload.trim();
@@ -11,18 +22,30 @@ class QrCodeParser {
     // 1. Try URI parsing for deep links (https://kith.app/join?code=... or kith://join?code=...)
     try {
       final uri = Uri.parse(trimmed);
-      if (uri.hasQuery && uri.queryParameters.containsKey('code')) {
-        final code = uri.queryParameters['code'];
-        if (code != null && _isValidCode(code)) {
-          return code.trim().toUpperCase();
+      if (uri.hasScheme) {
+        final scheme = uri.scheme.toLowerCase();
+        if (scheme == 'http' || scheme == 'https') {
+          final host = uri.host.toLowerCase();
+          if (!_allowedHosts.contains(host)) {
+            return null; // Reject external or untrusted domains
+          }
+        } else if (!_allowedSchemes.contains(scheme)) {
+          return null; // Reject non-Kith schemes
         }
-      }
 
-      // Check path segments e.g. https://kith.app/join/ABC123
-      if (uri.pathSegments.isNotEmpty) {
-        final lastSegment = uri.pathSegments.last;
-        if (_isValidCode(lastSegment)) {
-          return lastSegment.trim().toUpperCase();
+        if (uri.hasQuery && uri.queryParameters.containsKey('code')) {
+          final code = uri.queryParameters['code'];
+          if (code != null && _isValidCode(code)) {
+            return code.trim().toUpperCase();
+          }
+        }
+
+        // Check path segments e.g. https://kith.app/join/ABC123
+        if (uri.pathSegments.isNotEmpty) {
+          final lastSegment = uri.pathSegments.last;
+          if (_isValidCode(lastSegment)) {
+            return lastSegment.trim().toUpperCase();
+          }
         }
       }
     } catch (_) {

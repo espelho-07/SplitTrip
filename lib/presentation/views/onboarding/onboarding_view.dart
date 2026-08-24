@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/surface_card.dart';
 import '../../viewmodels/auth_viewmodel.dart';
@@ -30,6 +31,9 @@ class _OnboardingViewState extends State<OnboardingView> {
   }
 
   Future<void> _handleStart() async {
+    final authVm = context.read<AuthViewModel>();
+    if (authVm.isLoading) return;
+
     final name = _nameController.text.trim();
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -38,7 +42,7 @@ class _OnboardingViewState extends State<OnboardingView> {
       return;
     }
 
-    final authVm = context.read<AuthViewModel>();
+    HapticHelper.medium();
     await authVm.createGuestSession(name);
     if (mounted) {
       context.go('/home');
@@ -46,17 +50,25 @@ class _OnboardingViewState extends State<OnboardingView> {
   }
 
   Future<void> _handleRecover() async {
-    final key = _recoveryKeyController.text.trim();
-    if (key.isEmpty) return;
-
     final authVm = context.read<AuthViewModel>();
+    if (authVm.isLoading) return;
+
+    final key = _recoveryKeyController.text.trim().toUpperCase();
+    if (key.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your 12-character recovery key')),
+      );
+      return;
+    }
+
+    HapticHelper.medium();
     final user = await authVm.recoverSession(key);
     if (mounted) {
       if (user != null) {
         context.go('/home');
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Invalid recovery key. Please check and try again.')),
+          const SnackBar(content: Text('Could not restore session with this key. Please check the code and try again.')),
         );
       }
     }
@@ -159,13 +171,18 @@ class _OnboardingViewState extends State<OnboardingView> {
                       'What should your friends call you?',
                       style: AppTypography.titleSmall(isDark: isDark),
                     ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      'No passwords or phone numbers required to start.',
+                      style: AppTypography.bodySmall(isDark: isDark),
+                    ),
                     const SizedBox(height: AppSpacing.md),
                     TextField(
                       controller: _nameController,
                       textCapitalization: TextCapitalization.words,
-                      decoration: InputDecoration(
+                      decoration: const InputDecoration(
                         hintText: 'e.g. Darpan or Alex',
-                        prefixIcon: const Icon(Icons.person_outline_rounded, size: 20),
+                        prefixIcon: Icon(Icons.person_outline_rounded, size: 20),
                       ),
                       onSubmitted: (_) => _handleStart(),
                     ),
@@ -192,7 +209,7 @@ class _OnboardingViewState extends State<OnboardingView> {
                     });
                   },
                   child: Text(
-                    _showRecoveryField ? 'Hide Recovery Option' : 'Have a recovery key? Restore account',
+                    _showRecoveryField ? 'Hide Recovery Option' : 'Have a recovery code? Restore identity',
                     style: TextStyle(
                       color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                       fontSize: 13,
@@ -206,7 +223,18 @@ class _OnboardingViewState extends State<OnboardingView> {
                 SurfaceCard(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      Text(
+                        'Restore from 12-character Code',
+                        style: AppTypography.titleSmall(isDark: isDark),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Enter your KITH-XXXX-YYYY recovery code to restore your trips on this device.',
+                        style: AppTypography.bodySmall(isDark: isDark),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
                       TextField(
                         controller: _recoveryKeyController,
                         textCapitalization: TextCapitalization.characters,

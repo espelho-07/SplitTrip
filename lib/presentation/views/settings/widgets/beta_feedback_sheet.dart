@@ -32,6 +32,7 @@ class _BetaFeedbackSheetState extends State<BetaFeedbackSheet> {
   BetaFeedbackCategory _selectedCategory = BetaFeedbackCategory.bug;
   final TextEditingController _feedbackController = TextEditingController();
   bool _isSubmitted = false;
+  bool _isSubmitting = false;
 
   @override
   void dispose() {
@@ -40,10 +41,13 @@ class _BetaFeedbackSheetState extends State<BetaFeedbackSheet> {
   }
 
   void _handleSubmit() {
-    if (_feedbackController.text.trim().isEmpty) return;
+    if (_feedbackController.text.trim().isEmpty || _isSubmitting) return;
 
     HapticHelper.success();
-    setState(() => _isSubmitted = true);
+    setState(() {
+      _isSubmitting = true;
+      _isSubmitted = true;
+    });
 
     Future.delayed(const Duration(milliseconds: 1400), () {
       if (mounted) {
@@ -74,12 +78,12 @@ class _BetaFeedbackSheetState extends State<BetaFeedbackSheet> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Thank You for Your Feedback!',
+                  'Feedback Draft Saved',
                   style: AppTypography.titleMedium(isDark: isDark),
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Your input helps make Kith calmer, faster, and more reliable.',
+                  'Thank you! Your feedback draft has been logged locally on this device for the alpha development team.',
                   textAlign: TextAlign.center,
                   style: AppTypography.bodySmall(isDark: isDark),
                 ),
@@ -97,7 +101,7 @@ class _BetaFeedbackSheetState extends State<BetaFeedbackSheet> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Beta Feedback',
+                          'Alpha Feedback',
                           style: AppTypography.titleLarge(isDark: isDark),
                         ),
                         Text(
@@ -157,9 +161,10 @@ class _BetaFeedbackSheetState extends State<BetaFeedbackSheet> {
 
                 // Submit Button
                 AppButton(
-                  text: 'Submit Feedback',
+                  text: 'Save Feedback Draft',
                   icon: Icons.send_rounded,
-                  onPressed: _handleSubmit,
+                  isLoading: _isSubmitting,
+                  onPressed: _feedbackController.text.trim().isNotEmpty ? _handleSubmit : null,
                 ),
                 const SizedBox(height: 12),
               ],

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/utils/haptic_feedback_helper.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/currency_display.dart';
@@ -38,6 +38,60 @@ class _SettlementSheetState extends State<SettlementSheet> {
 
   TripMember? _findMember(String memberId) {
     return widget.trip.members.where((m) => m.id == memberId).firstOrNull;
+  }
+
+  Future<void> _confirmAndRecordTransfer(
+    String fromMemberId,
+    String toMemberId,
+    String fromName,
+    String toName,
+    int amountInPaise,
+  ) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final formattedAmount = CurrencyFormatter.formatPaise(amountInPaise, currencyCode: widget.trip.currencyCode);
+
+    final shouldRecord = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
+        title: Text(
+          'Confirm Settlement Payment',
+          style: AppTypography.titleMedium(isDark: isDark),
+        ),
+        content: Text(
+          'Are you sure you want to record that $fromName paid $formattedAmount to $toName? This will update the trip ledger and reduce outstanding balances.',
+          style: AppTypography.bodyMedium(isDark: isDark),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+              foregroundColor: isDark ? Colors.black : Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Confirm Payment'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldRecord == true && widget.onRecordTransfer != null) {
+      final transferKey = fromMemberId + toMemberId;
+      setState(() => _processingTransferIds.add(transferKey));
+      HapticHelper.medium();
+      try {
+        await widget.onRecordTransfer!(fromMemberId, toMemberId, amountInPaise);
+      } finally {
+        if (mounted) {
+          setState(() => _processingTransferIds.remove(transferKey));
+        }
+      }
+    }
   }
 
   @override
@@ -193,33 +247,16 @@ class _SettlementSheetState extends State<SettlementSheet> {
                           ],
                         ),
 
-                        // Action Bar: Record payment & UPI Copy
+                        // Action Bar: Record payment & deliberate confirmation
                         const SizedBox(height: AppSpacing.md),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            InkWell(
-                              onTap: () {
-                                final handle = '${toName.toLowerCase().replaceAll(' ', '')}@upi';
-                                Clipboard.setData(ClipboardData(text: handle));
-                                HapticHelper.success();
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Copied $handle to clipboard!')),
-                                );
-                              },
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.copy_rounded, size: 13, color: AppColors.emeraldPrimary),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'UPI: ${toName.toLowerCase().replaceAll(' ', '')}@upi',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                                      fontFamily: 'monospace',
-                                    ),
-                                  ),
-                                ],
+                            Text(
+                              'Direct member payment',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
                               ),
                             ),
 
@@ -243,22 +280,13 @@ class _SettlementSheetState extends State<SettlementSheet> {
                                   label: const Text('Mark Paid', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
                                   onPressed: isProcessing
                                       ? null
-                                      : () async {
-                                          final transferKey = s.fromMemberId + s.toMemberId;
-                                          setState(() => _processingTransferIds.add(transferKey));
-                                          HapticHelper.medium();
-                                          try {
-                                            await widget.onRecordTransfer!(
-                                              s.fromMemberId,
-                                              s.toMemberId,
-                                              s.amountInPaise,
-                                            );
-                                          } finally {
-                                            if (mounted) {
-                                              setState(() => _processingTransferIds.remove(transferKey));
-                                            }
-                                          }
-                                        },
+                                      : () => _confirmAndRecordTransfer(
+                                            s.fromMemberId,
+                                            s.toMemberId,
+                                            fromName,
+                                            toName,
+                                            s.amountInPaise,
+                                          ),
                                 ),
                               ),
                           ],
