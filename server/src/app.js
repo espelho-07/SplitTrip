@@ -1,10 +1,10 @@
 const express = require('express');
 const cors = require('cors');
-const fs = require('fs');
 const authRoutes = require('./routes/auth_routes');
 const tripRoutes = require('./routes/trip_routes');
 const expenseRoutes = require('./routes/expense_routes');
 const { errorHandler } = require('./middleware/error_handler');
+const { dbManager } = require('./db/db_manager');
 const env = require('./config/env');
 
 const app = express();
@@ -59,25 +59,18 @@ app.get('/health', healthHandler);
 app.get('/api/health', healthHandler);
 
 // Readiness Check
-app.get('/ready', (req, res) => {
+app.get('/ready', async (req, res) => {
   try {
-    // Verify storage directory readiness
-    if (fs.existsSync(env.DATA_DIR)) {
-      res.status(200).json({
-        status: 'ready',
-        service: 'kith-backend',
-        storage: 'accessible',
-        timestamp: new Date().toISOString(),
-      });
+    const result = await dbManager.checkReadiness();
+    if (result.status === 'ready') {
+      res.status(200).json(result);
     } else {
-      res.status(503).json({
-        status: 'not_ready',
-        error: 'Storage directory inaccessible',
-      });
+      res.status(503).json(result);
     }
   } catch (err) {
     res.status(503).json({
       status: 'not_ready',
+      service: 'kith-backend',
       error: err.message,
     });
   }
