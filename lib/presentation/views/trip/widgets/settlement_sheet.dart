@@ -35,6 +35,7 @@ class SettlementSheet extends StatefulWidget {
 
 class _SettlementSheetState extends State<SettlementSheet> {
   final Set<String> _processingTransferIds = {};
+  final Set<String> _paidTransferKeys = {};
 
   TripMember? _findMember(String memberId) {
     return widget.trip.members.where((m) => m.id == memberId).firstOrNull;
@@ -86,6 +87,11 @@ class _SettlementSheetState extends State<SettlementSheet> {
       HapticHelper.medium();
       try {
         await widget.onRecordTransfer!(fromMemberId, toMemberId, amountInPaise);
+        if (mounted) {
+          setState(() {
+            _paidTransferKeys.add(transferKey);
+          });
+        }
       } finally {
         if (mounted) {
           setState(() => _processingTransferIds.remove(transferKey));
@@ -177,7 +183,9 @@ class _SettlementSheetState extends State<SettlementSheet> {
                   final isReceiverCurrentUser = toMember?.userId == widget.currentUserId;
                   final isTripCreator = widget.trip.creatorId == widget.currentUserId;
                   final canRecord = isPayerCurrentUser || isReceiverCurrentUser || isTripCreator;
-                  final isProcessing = _processingTransferIds.contains(s.fromMemberId + s.toMemberId);
+                  final transferKey = s.fromMemberId + s.toMemberId;
+                  final isProcessing = _processingTransferIds.contains(transferKey);
+                  final isPaid = _paidTransferKeys.contains(transferKey);
 
                   return SurfaceCard(
                     backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
@@ -277,35 +285,67 @@ class _SettlementSheetState extends State<SettlementSheet> {
                               ),
                             ),
 
-                            if (canRecord && widget.onRecordTransfer != null)
-                              SizedBox(
-                                height: 32,
-                                child: ElevatedButton.icon(
-                                  style: ElevatedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                                    backgroundColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-                                    foregroundColor: isDark ? Colors.black : Colors.white,
-                                    shape: RoundedRectangleBorder(borderRadius: AppRadius.fullBorder),
+                            if (canRecord && widget.onRecordTransfer != null) ...[
+                              if (isPaid)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: (isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight).withValues(alpha: 0.15),
+                                    borderRadius: AppRadius.fullBorder,
+                                    border: Border.all(
+                                      color: (isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight).withValues(alpha: 0.6),
+                                    ),
                                   ),
-                                  icon: isProcessing
-                                      ? const SizedBox(
-                                          width: 12,
-                                          height: 12,
-                                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                        )
-                                      : const Icon(Icons.check_rounded, size: 14),
-                                  label: const Text('Mark Paid', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                                  onPressed: isProcessing
-                                      ? null
-                                      : () => _confirmAndRecordTransfer(
-                                            s.fromMemberId,
-                                            s.toMemberId,
-                                            fromName,
-                                            toName,
-                                            s.amountInPaise,
-                                          ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.check_circle_rounded,
+                                        size: 14,
+                                        color: isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Paid',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              else
+                                SizedBox(
+                                  height: 32,
+                                  child: ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                                      backgroundColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                                      foregroundColor: isDark ? Colors.black : Colors.white,
+                                      shape: RoundedRectangleBorder(borderRadius: AppRadius.fullBorder),
+                                    ),
+                                    icon: isProcessing
+                                        ? const SizedBox(
+                                            width: 12,
+                                            height: 12,
+                                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                          )
+                                        : const Icon(Icons.check_rounded, size: 14),
+                                    label: const Text('Mark Paid', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                                    onPressed: isProcessing
+                                        ? null
+                                        : () => _confirmAndRecordTransfer(
+                                              s.fromMemberId,
+                                              s.toMemberId,
+                                              fromName,
+                                              toName,
+                                              s.amountInPaise,
+                                            ),
+                                  ),
                                 ),
-                              ),
+                            ],
                           ],
                         ),
                       ],

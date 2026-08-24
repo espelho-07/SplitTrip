@@ -710,22 +710,51 @@ class PersonalHomeTab extends StatelessWidget {
                   color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                 ),
               ),
-              InkWell(
-                onTap: () {
-                  RecordRepaymentSheet.show(context, debt: debt);
-                },
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 2),
-                  child: Text(
-                    'Settle',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.emeraldPrimary,
+              const SizedBox(height: 2),
+              if (debt.isSettled || debt.remainingAmountInPaise <= 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: (isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.check_circle_rounded,
+                        size: 11,
+                        color: isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight,
+                      ),
+                      const SizedBox(width: 3),
+                      Text(
+                        'Paid',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                InkWell(
+                  onTap: () {
+                    RecordRepaymentSheet.show(context, debt: debt);
+                  },
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 2),
+                    child: Text(
+                      'Mark Paid',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.emeraldPrimary,
+                      ),
                     ),
                   ),
                 ),
-              ),
             ],
           ),
         ],

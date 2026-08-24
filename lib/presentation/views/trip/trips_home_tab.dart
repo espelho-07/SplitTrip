@@ -6,6 +6,7 @@ import '../../../core/theme/app_elevation.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/currency_formatter.dart';
 import '../../../core/widgets/currency_display.dart';
 import '../../../core/widgets/empty_state_view.dart';
 import '../../../core/widgets/member_avatar.dart';
@@ -93,6 +94,7 @@ class TripsHomeTab extends StatelessWidget {
   }
 
   Widget _buildBalanceCard(HomeViewModel homeVm, bool isDark) {
+    final totalSpentPaise = homeVm.totalSpentOnTripsInPaise;
     final net = homeVm.overallNetBalanceInPaise;
     final isOwed = net > 0;
     final isDebt = net < 0;
@@ -102,15 +104,15 @@ class TripsHomeTab extends StatelessWidget {
     IconData statusIcon;
 
     if (isOwed) {
-      subtitleText = 'You are owed overall';
+      subtitleText = 'You are owed ${CurrencyFormatter.formatPaise(net, currencyCode: 'INR')} overall';
       statusColor = isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight;
       statusIcon = Icons.arrow_downward_rounded;
     } else if (isDebt) {
-      subtitleText = 'You owe overall';
+      subtitleText = 'You owe ${CurrencyFormatter.formatPaise(net.abs(), currencyCode: 'INR')} overall';
       statusColor = isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight;
       statusIcon = Icons.arrow_upward_rounded;
     } else {
-      subtitleText = 'All settled up';
+      subtitleText = 'All trip balances settled up';
       statusColor = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
       statusIcon = Icons.check_circle_outline_rounded;
     }
@@ -133,26 +135,14 @@ class TripsHomeTab extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: statusColor.withValues(alpha: 0.12),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(statusIcon, size: 16, color: statusColor),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    subtitleText,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: statusColor,
-                    ),
-                  ),
-                ],
+              Text(
+                'TOTAL SPENT ON TRIPS',
+                style: TextStyle(
+                  fontSize: 12,
+                  letterSpacing: 1.1,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                ),
               ),
               PillBadge(
                 label: '${homeVm.trips.length} ${homeVm.trips.length == 1 ? 'Trip' : 'Trips'}',
@@ -160,17 +150,35 @@ class TripsHomeTab extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.sm),
           CurrencyDisplay(
-            amountInPaise: net,
+            amountInPaise: totalSpentPaise,
             size: CurrencyDisplaySize.hero,
-            colorMode: CurrencyColorMode.auto,
-            showPlusSign: true,
+            colorMode: CurrencyColorMode.neutral,
           ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'Live aggregate balance across all your trips and activities',
-            style: AppTypography.bodySmall(isDark: isDark),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(statusIcon, size: 14, color: statusColor),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  subtitleText,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: statusColor,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

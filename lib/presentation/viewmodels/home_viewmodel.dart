@@ -12,6 +12,7 @@ class HomeViewModel extends ChangeNotifier {
   List<Trip> _trips = [];
   final Map<String, BalanceSummary> _tripBalances = {};
   int _overallNetBalanceInPaise = 0;
+  int _totalSpentOnTripsInPaise = 0;
   bool _isLoading = false;
   String? _errorMessage;
 
@@ -23,6 +24,7 @@ class HomeViewModel extends ChangeNotifier {
   List<Trip> get trips => _trips;
   Map<String, BalanceSummary> get tripBalances => _tripBalances;
   int get overallNetBalanceInPaise => _overallNetBalanceInPaise;
+  int get totalSpentOnTripsInPaise => _totalSpentOnTripsInPaise;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
@@ -37,6 +39,8 @@ class HomeViewModel extends ChangeNotifier {
   void _computeLocalBalances(List<Trip> tripsList, String currentUserId) {
     _tripBalances.clear();
     int netSum = 0;
+    int totalSpent = 0;
+
     for (final trip in tripsList) {
       final cachedExpenses = expenseRepo.getCachedExpenses(trip.id);
       final summary = BalanceEngine.calculateBalances(
@@ -46,8 +50,31 @@ class HomeViewModel extends ChangeNotifier {
       );
       _tripBalances[trip.id] = summary;
       netSum += summary.currentUserNetBalanceInPaise;
+
+      // Compute user's actual consumed share across all expenses in this trip
+      final memberIds = <String>{currentUserId};
+      for (final m in trip.members) {
+        if (m.userId == currentUserId || m.id == currentUserId) {
+          memberIds.add(m.id);
+          memberIds.add(m.userId);
+        }
+      }
+      if (trip.creatorId == currentUserId && trip.members.isNotEmpty) {
+        memberIds.add(trip.members.first.id);
+      }
+
+      for (final exp in cachedExpenses) {
+        if (exp.isDeleted) continue;
+        for (final split in exp.splits) {
+          if (memberIds.contains(split.memberId)) {
+            totalSpent += split.amountInPaise;
+          }
+        }
+      }
     }
+
     _overallNetBalanceInPaise = netSum;
+    _totalSpentOnTripsInPaise = totalSpent;
   }
 
   Future<void> loadTrips(String currentUserId) async {
