@@ -42,96 +42,41 @@ class _OnboardingViewState extends State<OnboardingView> {
 
     HapticHelper.medium();
 
-    String? email;
-    String? name;
-    String? googleId;
-    String? photoUrl;
+    GoogleAuthResult? googleResult;
 
     try {
-      final googleResult = await GoogleAuthService.signIn();
-      if (googleResult != null) {
-        email = googleResult.email;
-        name = googleResult.displayName;
-        googleId = googleResult.googleId;
-        photoUrl = googleResult.avatarUrl;
-      } else {
-        // User cancelled native prompt
-        return;
+      googleResult = await GoogleAuthService.signIn();
+      if (googleResult == null) return; // User cancelled — silent no-op
+    } on GoogleSignInException catch (e) {
+      if (!mounted) return;
+      switch (e.failure) {
+        case GoogleSignInFailure.cancelled:
+          return;
+        case GoogleSignInFailure.networkError:
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No internet connection. Please try again.'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          return;
+        case GoogleSignInFailure.signInFailed:
+        case GoogleSignInFailure.supabaseError:
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(e.message),
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+          return;
       }
     } catch (e) {
-      debugPrint('Native Google sign in threw exception: $e. Falling back to account entry.');
       if (!mounted) return;
-
-      final emailController = TextEditingController();
-      final nameController = TextEditingController();
-
-      final result = await showDialog<Map<String, String>>(
-        context: context,
-        builder: (dCtx) => AlertDialog(
-          shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
-          title: const Row(
-            children: [
-              Icon(Icons.g_mobiledata_rounded, color: AppColors.emeraldPrimary, size: 28),
-              SizedBox(width: 6),
-              Text('Continue with Google', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Enter your Google account to sync all trips, expenses, and balances across devices.',
-                style: TextStyle(fontSize: 13),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: nameController,
-                textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  labelText: 'Your Name',
-                  prefixIcon: Icon(Icons.person_outline, size: 20),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: emailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(
-                  labelText: 'Google Email Address',
-                  hintText: 'you@gmail.com',
-                  prefixIcon: Icon(Icons.email_outlined, size: 20),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dCtx),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final em = emailController.text.trim();
-                final nm = nameController.text.trim();
-                if (em.isEmpty || !em.contains('@')) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please enter a valid Google email address.')),
-                  );
-                  return;
-                }
-                Navigator.pop(dCtx, {'email': em, 'name': nm});
-              },
-              child: const Text('Continue'),
-            ),
-          ],
-        ),
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Sign-in failed: $e'), behavior: SnackBarBehavior.floating),
       );
-
-      if (result == null || !mounted) return;
-      email = result['email']!;
-      name = result['name']!.isEmpty ? email.split('@')[0] : result['name']!;
-      googleId = 'g_${email.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}';
+      return;
     }
 
     if (!mounted) return;
@@ -178,10 +123,11 @@ class _OnboardingViewState extends State<OnboardingView> {
     });
 
     final user = await authVm.signInWithGoogle(
-      email: email,
-      displayName: name,
-      googleId: googleId,
-      photoUrl: photoUrl,
+      email: googleResult.email,
+      displayName: googleResult.displayName,
+      googleId: googleResult.googleId,
+      photoUrl: googleResult.avatarUrl,
+      supabaseUserId: googleResult.supabaseUserId,
     );
 
     if (mounted) {

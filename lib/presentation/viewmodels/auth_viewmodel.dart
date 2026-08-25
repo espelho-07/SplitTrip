@@ -116,6 +116,7 @@ class AuthViewModel extends ChangeNotifier {
     required String displayName,
     String? photoUrl,
     String? googleId,
+    String? supabaseUserId,
   }) async {
     _isLoading = true;
     _errorMessage = null;
@@ -127,6 +128,7 @@ class AuthViewModel extends ChangeNotifier {
         displayName: displayName,
         photoUrl: photoUrl,
         googleId: googleId,
+        supabaseUserId: supabaseUserId,
       );
       _currentUser = user;
       return user;
@@ -136,6 +138,20 @@ class AuthViewModel extends ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  /// Attempts to silently restore a Supabase session on app startup.
+  /// Does NOT show loading state — this is a background restoration.
+  Future<void> tryRestoreSupabaseSession() async {
+    try {
+      final user = await userRepo.restoreSupabaseSession();
+      if (user != null && _currentUser == null) {
+        _currentUser = user;
+        notifyListeners();
+      }
+    } catch (_) {
+      // Non-blocking: session restoration failure is not fatal
     }
   }
 

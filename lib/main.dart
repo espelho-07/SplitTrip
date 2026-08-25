@@ -2,9 +2,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/config/app_config.dart';
+import 'core/config/supabase_config.dart';
 import 'core/network/api_client.dart';
-import 'core/network/realtime_client.dart';
+import 'core/network/realtime_client.dart' as kith_realtime;
 import 'core/theme/app_theme.dart';
 import 'data/repositories/expense_repository.dart';
 import 'data/repositories/personal_repository.dart';
@@ -34,6 +36,15 @@ void main() async {
     ),
   );
 
+  // Initialize Supabase for Google identity verification (signInWithIdToken).
+  // The anon key is public — Row Level Security controls data access.
+  if (SupabaseConfig.isConfigured) {
+    await Supabase.initialize(
+      url: SupabaseConfig.url,
+      anonKey: SupabaseConfig.anonKey, // ignore: deprecated_member_use
+    );
+  }
+
   // Initialize Local-First Persistent Storage & Services
   final storageService = await LocalStorageService.init();
   final savedServerUrl = storageService.getSavedServerUrl();
@@ -43,7 +54,7 @@ void main() async {
 
   // Initialize Networking & Realtime Clients
   final apiClient = ApiClient();
-  final realtimeClient = RealtimeClient();
+  final realtimeClient = kith_realtime.RealtimeClient();
   realtimeClient.connect();
 
   final syncService = SyncService(storageService);

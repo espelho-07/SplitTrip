@@ -41,13 +41,20 @@ class UserRepository {
     required String displayName,
     String? photoUrl,
     String? googleId,
+    String? supabaseUserId,
   }) {
     return authService.signInWithGoogle(
       email: email,
       displayName: displayName,
       photoUrl: photoUrl,
       googleId: googleId,
+      supabaseUserId: supabaseUserId,
     );
+  }
+
+  /// Attempts to restore a session from an active Supabase JWT on app startup.
+  Future<GuestUser?> restoreSupabaseSession() {
+    return authService.restoreSupabaseSession();
   }
 
   Future<void> logout() {

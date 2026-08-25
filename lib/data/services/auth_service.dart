@@ -187,12 +187,14 @@ class AuthService {
     return updated;
   }
 
-  /// Signs in or canonicalizes account via Google credentials
+  /// Signs in or canonicalizes account via Google credentials.
+  /// [supabaseUserId] is the Supabase-verified identity — stored for future use.
   Future<GuestUser> signInWithGoogle({
     required String email,
     required String displayName,
     String? photoUrl,
     String? googleId,
+    String? supabaseUserId,
   }) async {
     final currentGuest = getCurrentUser();
     try {
@@ -224,7 +226,48 @@ class AuthService {
     throw StateError('Failed to authenticate with Google');
   }
 
-  /// Revokes backend session, disconnects realtime, and clears local credentials
+  /// Attempts to restore an authenticated session from a live Supabase session.
+  /// Call this on app startup when no local GuestUser session exists.
+  /// Returns null if no Supabase session is active.
+  Future<GuestUser?> restoreSupabaseSession() async {
+    final session = GoogleAuthService.currentSession;
+    if (session == null) return null;
+
+    final supabaseUser = session.user;
+    final email = supabaseUser.email;
+    if (email == null || email.isEmpty) return null;
+
+    // Check if we already have a cached local session for this email
+    final cached = getCurrentUser();
+    if (cached != null && cached.email?.toLowerCase() == email.toLowerCase()) {
+      // Refresh the token
+      apiClient.setAuthToken(cached.anonymousToken);
+      realtimeClient?.setAuthToken(cached.anonymousToken);
+      return cached;
+    }
+
+    // Re-authenticate with backend using the Supabase-verified identity
+    try {
+      final displayName = supabaseUser.userMetadata?['full_name'] as String? ??
+          supabaseUser.userMetadata?['name'] as String? ??
+          email.split('@')[0];
+      final photoUrl = supabaseUser.userMetadata?['avatar_url'] as String?;
+      final googleId = supabaseUser.userMetadata?['sub'] as String? ?? supabaseUser.id;
+
+      return await signInWithGoogle(
+        email: email,
+        displayName: displayName,
+        photoUrl: photoUrl,
+        googleId: googleId,
+        supabaseUserId: supabaseUser.id,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Revokes backend session, disconnects realtime, clears Supabase session,
+  /// and clears all local credentials.
   Future<void> logout() async {
     try {
       await apiClient.post('/auth/logout', body: {});
@@ -234,6 +277,7 @@ class AuthService {
     apiClient.setAuthToken(null);
     realtimeClient?.setAuthToken(null);
     realtimeClient?.disconnect();
+    // GoogleAuthService.signOut() handles both Google + Supabase sign-out
     try {
       await GoogleAuthService.signOut();
     } catch (_) {}
