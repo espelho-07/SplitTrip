@@ -226,6 +226,140 @@ class AuthService {
     };
   }
 
+  loginWithGoogle({ email, displayName, photoUrl, googleId, currentGuestUserId }) {
+    if (!email || !email.includes('@')) {
+      throw AppError.badRequest('A valid Google email address is required');
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanGoogleId = googleId ? googleId.trim() : null;
+    const now = new Date().toISOString();
+
+    // 1. Check for existing canonical user by googleId or email
+    let user = db.findOne('users', (u) => {
+      if (cleanGoogleId && u.googleId === cleanGoogleId) return true;
+      if (u.email && u.email.toLowerCase() === cleanEmail) return true;
+      return false;
+    });
+
+    if (user) {
+      // Existing canonical user found
+      const updates = {
+        lastActiveAt: now,
+        isGuest: false,
+        email: cleanEmail,
+      };
+      if (cleanGoogleId && !user.googleId) updates.googleId = cleanGoogleId;
+      if (displayName && displayName.trim()) updates.displayName = displayName.trim();
+      if (photoUrl && !user.avatarUrl) updates.avatarUrl = photoUrl;
+
+      db.update('users', user.id, updates);
+      user = db.get('users', user.id);
+
+      // If guest session was passed and is distinct from canonical user, migrate local data
+      if (currentGuestUserId && currentGuestUserId !== user.id) {
+        this._migrateGuestData(currentGuestUserId, user.id);
+      }
+    } else {
+      // 2. Check if we should upgrade the current active guest user
+      const guestUser = currentGuestUserId ? db.get('users', currentGuestUserId) : null;
+      if (guestUser && guestUser.isGuest) {
+        db.update('users', guestUser.id, {
+          email: cleanEmail,
+          googleId: cleanGoogleId,
+          displayName: displayName && displayName.trim() ? displayName.trim() : guestUser.displayName,
+          avatarUrl: photoUrl || guestUser.avatarUrl,
+          isGuest: false,
+          lastActiveAt: now,
+        });
+        user = db.get('users', guestUser.id);
+      } else {
+        // Create new permanent canonical user
+        const newId = `usr_g_${crypto.randomUUID().replace(/-/g, '').substring(0, 12)}`;
+        user = {
+          id: newId,
+          displayName: displayName && displayName.trim() ? displayName.trim() : cleanEmail.split('@')[0],
+          avatarUrl: photoUrl || null,
+          googleId: cleanGoogleId,
+          recoveryKeyHash: null,
+          isGuest: false,
+          email: cleanEmail,
+          createdAt: now,
+          lastActiveAt: now,
+        };
+        db.insert('users', user);
+      }
+    }
+
+    const session = this._createSession(user.id);
+
+    return {
+      user: {
+        id: user.id,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl,
+        email: user.email,
+        isGuest: user.isGuest,
+        isLinkedToAccount: true,
+        anonymousToken: session.token,
+        createdAt: user.createdAt,
+      },
+      token: session.token,
+    };
+  }
+
+  _migrateGuestData(guestUserId, canonicalUserId) {
+    try {
+      // Migrate personal expenses
+      const personalExpenses = db.find('personal_expenses', (e) => e.userId === guestUserId);
+      for (const exp of personalExpenses) {
+        db.update('personal_expenses', exp.id, { userId: canonicalUserId });
+      }
+
+      // Migrate personal debts
+      const personalDebts = db.find('personal_debts', (d) => d.userId === guestUserId);
+      for (const debt of personalDebts) {
+        db.update('personal_debts', debt.id, { userId: canonicalUserId });
+      }
+
+      // Migrate personal repayments
+      const personalRepayments = db.find('personal_repayments', (r) => r.userId === guestUserId);
+      for (const rep of personalRepayments) {
+        db.update('personal_repayments', rep.id, { userId: canonicalUserId });
+      }
+
+      // Migrate personal budgets
+      const personalBudgets = db.find('personal_budgets', (b) => b.userId === guestUserId);
+      for (const b of personalBudgets) {
+        db.update('personal_budgets', b.id, { userId: canonicalUserId });
+      }
+
+      // Migrate trips created by guest
+      const trips = db.find('trips', (t) => t.createdBy === guestUserId);
+      for (const t of trips) {
+        db.update('trips', t.id, { createdBy: canonicalUserId });
+      }
+
+      // Migrate trip members
+      const members = db.find('trip_members', (m) => m.userId === guestUserId);
+      for (const m of members) {
+        db.update('trip_members', m.id, { userId: canonicalUserId });
+      }
+    } catch (e) {
+      console.error('[AuthService] Guest data migration warning:', e.message);
+    }
+  }
+
+  logout(token) {
+    if (!token) return { success: true };
+    const cleanToken = token.startsWith('Bearer ') ? token.substring(7).trim() : token.trim();
+    const session = db.findOne('sessions', (s) => s.token === cleanToken);
+    if (session) {
+      db.delete('sessions', session.id);
+    }
+    return { success: true };
+  }
+
   getProfile(userId) {
     const user = db.get('users', userId);
     if (!user) {

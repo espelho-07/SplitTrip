@@ -36,6 +36,24 @@ class UserRepository {
     );
   }
 
+  Future<GuestUser> signInWithGoogle({
+    required String email,
+    required String displayName,
+    String? photoUrl,
+    String? googleId,
+  }) {
+    return authService.signInWithGoogle(
+      email: email,
+      displayName: displayName,
+      photoUrl: photoUrl,
+      googleId: googleId,
+    );
+  }
+
+  Future<void> logout() {
+    return authService.logout();
+  }
+
   String? getAppExperienceMode() {
     return authService.storage.getSavedAppExperienceMode();
   }

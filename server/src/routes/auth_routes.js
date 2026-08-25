@@ -78,6 +78,34 @@ router.post('/link', authMiddleware, (req, res, next) => {
   }
 });
 
+// POST /api/auth/google - Authenticate or canonicalize Google account
+router.post('/google', (req, res, next) => {
+  try {
+    const { email, displayName, photoUrl, googleId, currentGuestUserId } = req.body;
+    const result = authService.loginWithGoogle({
+      email,
+      displayName,
+      photoUrl,
+      googleId,
+      currentGuestUserId,
+    });
+    res.status(200).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// POST /api/auth/logout - Invalidate session token
+router.post('/logout', (req, res, next) => {
+  try {
+    const token = req.headers.authorization;
+    const result = authService.logout(token);
+    res.status(200).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
 // GET /api/auth/me - Current authenticated user profile
 router.get('/me', authMiddleware, (req, res, next) => {
   try {

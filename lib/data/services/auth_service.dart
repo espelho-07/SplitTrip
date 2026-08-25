@@ -186,6 +186,55 @@ class AuthService {
     return updated;
   }
 
+  /// Signs in or canonicalizes account via Google credentials
+  Future<GuestUser> signInWithGoogle({
+    required String email,
+    required String displayName,
+    String? photoUrl,
+    String? googleId,
+  }) async {
+    final currentGuest = getCurrentUser();
+    try {
+      final res = await apiClient.post('/auth/google', body: {
+        'email': email.trim().toLowerCase(),
+        'displayName': displayName.trim(),
+        'photoUrl': photoUrl,
+        'googleId': googleId,
+        'currentGuestUserId': currentGuest?.id,
+      });
+
+      if (res is Map<String, dynamic> && res.containsKey('user')) {
+        final userData = res['user'] as Map<String, dynamic>;
+        final token = res['token'] as String? ?? userData['anonymousToken'] as String? ?? '';
+
+        final user = GuestUser.fromJson(userData);
+        apiClient.setAuthToken(token);
+        realtimeClient?.setAuthToken(token);
+        await storage.saveUser(user.toJson());
+        return user;
+      }
+    } catch (e) {
+      // If offline, check if existing cached Google user matches
+      if (currentGuest != null && currentGuest.email?.toLowerCase() == email.trim().toLowerCase()) {
+        return currentGuest;
+      }
+      rethrow;
+    }
+    throw StateError('Failed to authenticate with Google');
+  }
+
+  /// Revokes backend session and clears local credentials
+  Future<void> logout() async {
+    try {
+      await apiClient.post('/auth/logout', body: {});
+    } catch (_) {
+      // Non-blocking network logout
+    }
+    apiClient.setAuthToken(null);
+    realtimeClient?.setAuthToken(null);
+    await storage.clearUser();
+  }
+
   static String _generateRecoveryKey() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     final rand = Random.secure();

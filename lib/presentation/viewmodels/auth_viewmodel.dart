@@ -110,4 +110,48 @@ class AuthViewModel extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  Future<GuestUser?> signInWithGoogle({
+    required String email,
+    required String displayName,
+    String? photoUrl,
+    String? googleId,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final user = await userRepo.signInWithGoogle(
+        email: email,
+        displayName: displayName,
+        photoUrl: photoUrl,
+        googleId: googleId,
+      );
+      _currentUser = user;
+      return user;
+    } catch (e) {
+      _errorMessage = 'Could not sign in with Google: $e';
+      return null;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> logout() async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      await userRepo.logout();
+      _currentUser = null;
+    } catch (e) {
+      _errorMessage = 'Could not logout: $e';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
 }
