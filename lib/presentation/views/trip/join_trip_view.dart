@@ -15,7 +15,9 @@ import 'qr_scanner_view.dart';
 import 'widgets/join_preview_sheet.dart';
 
 class JoinTripView extends StatefulWidget {
-  const JoinTripView({super.key});
+  final String? initialCode;
+
+  const JoinTripView({super.key, this.initialCode});
 
   @override
   State<JoinTripView> createState() => _JoinTripViewState();
@@ -23,6 +25,17 @@ class JoinTripView extends StatefulWidget {
 
 class _JoinTripViewState extends State<JoinTripView> {
   final TextEditingController _codeController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialCode != null && widget.initialCode!.isNotEmpty) {
+      _codeController.text = widget.initialCode!.trim().toUpperCase();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _handlePreviewOrJoin(widget.initialCode!.trim().toUpperCase());
+      });
+    }
+  }
 
   @override
   void dispose() {

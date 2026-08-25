@@ -548,8 +548,8 @@ class TripRepository {
       await apiClient.post('/trips/$tripId/moments', body: moment.toJson());
     } catch (_) {
       await syncService.enqueueMutation(
-        MutationType.addExpense, // or generic mutation
-        {'action': 'add_moment', 'tripId': tripId, 'moment': moment.toJson()},
+        MutationType.createJourneyMoment,
+        {'tripId': tripId, 'moment': moment.toJson()},
       );
     }
   }
@@ -564,8 +564,8 @@ class TripRepository {
       await apiClient.delete('/trips/$tripId/moments/$momentId');
     } catch (_) {
       await syncService.enqueueMutation(
-        MutationType.deleteExpense,
-        {'action': 'delete_moment', 'tripId': tripId, 'momentId': momentId},
+        MutationType.deleteJourneyMoment,
+        {'tripId': tripId, 'momentId': momentId},
       );
     }
   }

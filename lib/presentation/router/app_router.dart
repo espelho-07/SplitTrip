@@ -41,7 +41,17 @@ class AppRouter {
       ),
       GoRoute(
         path: '/join-trip',
-        builder: (context, state) => const JoinTripView(),
+        builder: (context, state) {
+          final code = state.uri.queryParameters['code'];
+          return JoinTripView(initialCode: code);
+        },
+      ),
+      GoRoute(
+        path: '/join',
+        builder: (context, state) {
+          final code = state.uri.queryParameters['code'];
+          return JoinTripView(initialCode: code);
+        },
       ),
       GoRoute(
         path: '/trip/:tripId',

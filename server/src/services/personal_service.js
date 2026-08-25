@@ -226,9 +226,19 @@ class PersonalService {
       throw AppError.forbidden('You are not authorized to modify this debt');
     }
 
+    if (debt.isSettled || debt.remainingAmountInPaise <= 0) {
+      throw AppError.badRequest('This debt record is already settled and has no outstanding balance');
+    }
+
     const amountInPaise = parseInt(data.amountInPaise, 10);
     if (isNaN(amountInPaise) || amountInPaise <= 0) {
       throw AppError.badRequest('Repayment amount must be greater than zero');
+    }
+
+    if (amountInPaise > debt.remainingAmountInPaise) {
+      throw AppError.badRequest(
+        `Repayment amount ₹${(amountInPaise / 100).toFixed(2)} exceeds the remaining balance of ₹${(debt.remainingAmountInPaise / 100).toFixed(2)}`
+      );
     }
 
     const repaymentId = `prepay_${crypto.randomUUID().replace(/-/g, '').substring(0, 12)}`;

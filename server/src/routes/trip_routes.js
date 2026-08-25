@@ -111,7 +111,7 @@ router.post('/:id/settlements', (req, res, next) => {
 router.get('/:id/settlements', (req, res, next) => {
   try {
     const settlementService = require('../services/settlement_service');
-    const settlements = settlementService.getSettlementsForTrip(req.params.id);
+    const settlements = settlementService.getSettlementsForTrip(req.user, req.params.id);
     res.status(200).json({ data: settlements });
   } catch (e) {
     next(e);

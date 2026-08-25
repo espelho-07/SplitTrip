@@ -178,9 +178,25 @@ class SettlementService {
   }
 
   /**
-   * Retrieves all settlements recorded for a trip.
+   * Retrieves all settlements recorded for a trip with optional user membership verification.
    */
-  getSettlementsForTrip(tripId) {
+  getSettlementsForTrip(userOrTripId, possibleTripId) {
+    let user = null;
+    let tripId = null;
+    if (possibleTripId !== undefined) {
+      user = userOrTripId;
+      tripId = possibleTripId;
+    } else {
+      tripId = userOrTripId;
+    }
+
+    if (user && tripId) {
+      const trip = db.get('trips', tripId);
+      if (!trip) throw AppError.notFound('Trip not found');
+      const isMember = db.findOne('trip_members', (m) => m.tripId === tripId && m.userId === user.id);
+      if (!isMember) throw AppError.forbidden('You are not a member of this trip');
+    }
+
     const settlements = db.find('settlements', (s) => s.tripId === tripId);
     return settlements.sort((a, b) => new Date(b.settledAt || b.createdAt) - new Date(a.settledAt || a.createdAt));
   }
