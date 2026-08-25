@@ -5,8 +5,10 @@ import '../../core/network/realtime_client.dart';
 import '../../domain/enums/trip_lifecycle.dart';
 import '../../domain/models/activity_log.dart';
 import '../../domain/models/guest_user.dart';
+import '../../domain/models/journey_stop.dart';
 import '../../domain/models/trip.dart';
 import '../../domain/models/trip_member.dart';
+import '../../domain/models/trip_memory.dart';
 import '../../domain/models/trip_preview.dart';
 import '../services/local_storage_service.dart';
 import '../services/sync_service.dart';
@@ -440,6 +442,66 @@ class TripRepository {
     }
 
     return getCachedActivityLogs(tripId);
+  }
+
+  /// Synchronously returns cached journey stops for a trip.
+  List<JourneyStop> getCachedJourneyStops(String tripId) {
+    final raw = storage.getSavedJourneyStops(tripId);
+    final stops = raw.map((json) => JourneyStop.fromJson(json)).toList();
+    stops.sort((a, b) {
+      final dayComp = a.dayNumber.compareTo(b.dayNumber);
+      if (dayComp != 0) return dayComp;
+      return a.createdAt.compareTo(b.createdAt);
+    });
+    return stops;
+  }
+
+  /// Persists journey stops for a trip locally.
+  Future<void> saveJourneyStops(String tripId, List<JourneyStop> stops) async {
+    await storage.saveJourneyStops(tripId, stops.map((s) => s.toJson()).toList());
+  }
+
+  /// Appends or updates a single journey stop.
+  Future<void> addOrUpdateJourneyStop(String tripId, JourneyStop stop) async {
+    final list = getCachedJourneyStops(tripId);
+    list.removeWhere((s) => s.id == stop.id);
+    list.add(stop);
+    await saveJourneyStops(tripId, list);
+  }
+
+  /// Deletes a journey stop.
+  Future<void> deleteJourneyStop(String tripId, String stopId) async {
+    final list = getCachedJourneyStops(tripId);
+    list.removeWhere((s) => s.id == stopId);
+    await saveJourneyStops(tripId, list);
+  }
+
+  /// Synchronously returns cached memories for a trip.
+  List<TripMemory> getCachedTripMemories(String tripId) {
+    final raw = storage.getSavedTripMemories(tripId);
+    final memories = raw.map((json) => TripMemory.fromJson(json)).toList();
+    memories.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return memories;
+  }
+
+  /// Persists memories for a trip locally.
+  Future<void> saveTripMemories(String tripId, List<TripMemory> memories) async {
+    await storage.saveTripMemories(tripId, memories.map((m) => m.toJson()).toList());
+  }
+
+  /// Appends or updates a single memory.
+  Future<void> addOrUpdateTripMemory(String tripId, TripMemory memory) async {
+    final list = getCachedTripMemories(tripId);
+    list.removeWhere((m) => m.id == memory.id);
+    list.insert(0, memory);
+    await saveTripMemories(tripId, list);
+  }
+
+  /// Deletes a memory.
+  Future<void> deleteTripMemory(String tripId, String memoryId) async {
+    final list = getCachedTripMemories(tripId);
+    list.removeWhere((m) => m.id == memoryId);
+    await saveTripMemories(tripId, list);
   }
 
   static String _generateInviteCode() {

@@ -189,4 +189,40 @@ class LocalStorageService {
   Future<bool> saveAppExperienceMode(String mode) async {
     return _prefs.setString(_appExperienceModeKey, mode);
   }
+
+  // --- Trip Journey Stops ---
+  static const String _journeyStopsPrefix = 'kith_journey_';
+
+  List<Map<String, dynamic>> getSavedJourneyStops(String tripId) {
+    final raw = _prefs.getString('$_journeyStopsPrefix$tripId');
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      final list = jsonDecode(raw) as List<dynamic>;
+      return list.cast<Map<String, dynamic>>();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<bool> saveJourneyStops(String tripId, List<Map<String, dynamic>> stopsJson) async {
+    return _prefs.setString('$_journeyStopsPrefix$tripId', jsonEncode(stopsJson));
+  }
+
+  // --- Trip Memories ---
+  static const String _tripMemoriesPrefix = 'kith_memories_';
+
+  List<Map<String, dynamic>> getSavedTripMemories(String tripId) {
+    final raw = _prefs.getString('$_tripMemoriesPrefix$tripId');
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      final list = jsonDecode(raw) as List<dynamic>;
+      return list.cast<Map<String, dynamic>>();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<bool> saveTripMemories(String tripId, List<Map<String, dynamic>> memoriesJson) async {
+    return _prefs.setString('$_tripMemoriesPrefix$tripId', jsonEncode(memoriesJson));
+  }
 }

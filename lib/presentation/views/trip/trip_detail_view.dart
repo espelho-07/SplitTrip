@@ -20,6 +20,7 @@ import '../../../core/widgets/surface_card.dart';
 import '../../../domain/enums/trip_lifecycle.dart';
 import '../../../domain/models/balance_summary.dart';
 import '../../../domain/models/expense.dart';
+import '../../../domain/models/journey_stop.dart';
 import '../../../domain/models/trip.dart';
 import '../../../domain/services/trip_export_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
@@ -27,6 +28,8 @@ import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/trip_detail_viewmodel.dart';
 import '../add_expense/add_expense_view.dart';
 import 'widgets/activity_log_sheet.dart';
+import 'widgets/add_journey_stop_sheet.dart';
+import 'widgets/add_trip_memory_sheet.dart';
 import 'widgets/expense_detail_sheet.dart';
 import 'widgets/member_spend_breakdown_sheet.dart';
 import 'widgets/settlement_sheet.dart';
@@ -42,7 +45,8 @@ class TripDetailView extends StatefulWidget {
 }
 
 class _TripDetailViewState extends State<TripDetailView> {
-  int _activeTab = 0; // 0 = Expenses, 1 = Balances & People
+  int _topLevelTab = 0; // 0 = Spending, 1 = Journey, 2 = Memories
+  int _spendingSubTab = 0; // 0 = Expenses, 1 = People, 2 = Categories
   final TextEditingController _searchController = TextEditingController();
 
   static const List<Map<String, String?>> _categories = [
@@ -380,6 +384,38 @@ class _TripDetailViewState extends State<TripDetailView> {
     );
   }
 
+  void _showAddJourneyStopSheet(Trip trip) {
+    AddJourneyStopSheet.show(
+      context,
+      trip: trip,
+      onAdd: (stop) {
+        context.read<TripDetailViewModel>().addJourneyStop(stop);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Added "${stop.locationName}" to Journey!'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      },
+    );
+  }
+
+  void _showAddTripMemorySheet(Trip trip) {
+    AddTripMemorySheet.show(
+      context,
+      trip: trip,
+      onAdd: (memory) {
+        context.read<TripDetailViewModel>().addTripMemory(memory);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Saved "${memory.title}" to Memories!'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -491,7 +527,7 @@ class _TripDetailViewState extends State<TripDetailView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Hero Trip Card
+              // Hero Trip Financial Overview Card
               _buildHeroTripCard(
                 trip,
                 balanceSummary,
@@ -501,52 +537,69 @@ class _TripDetailViewState extends State<TripDetailView> {
                 gradientColors,
               ),
 
-              const SizedBox(height: AppSpacing.lg),
+              const SizedBox(height: AppSpacing.md),
 
               // Contextual Lifecycle Action Bar
               _buildLifecycleActionBar(trip, isCreator, isDark),
 
               const SizedBox(height: AppSpacing.lg),
 
-              // Segmented Tab Switcher (Expenses vs Balances & People)
-              _buildTabSwitcher(isDark, tripDetailVm.expenses.length, trip.members.length),
+              // Top-Level Segmented Navigation [ 💳 Spending ] [ 🗺️ Journey ] [ ✨ Memories ]
+              _buildTopTabSwitcher(isDark),
 
               const SizedBox(height: AppSpacing.lg),
 
-              // Tab View Content
-              if (_activeTab == 0)
-                _buildExpensesTab(tripDetailVm, trip, isDark, user?.id ?? '')
+              // Active Tab Content
+              if (_topLevelTab == 0)
+                _buildSpendingSection(tripDetailVm, trip, balanceSummary, isDark, user?.id ?? '')
+              else if (_topLevelTab == 1)
+                _buildJourneySection(tripDetailVm, trip, isDark)
               else
-                _buildBalancesAndPeopleTab(trip, balanceSummary, tripDetailVm.expenses, isDark, user?.id ?? ''),
+                _buildMemoriesSection(tripDetailVm, trip, isDark),
 
               const SizedBox(height: 90),
             ],
           ),
         ),
       ),
-      floatingActionButton: trip.lifecycleState.allowsExpenses
-          ? FloatingActionButton.extended(
-              onPressed: () async {
-                HapticHelper.light();
-                final homeVm = context.read<HomeViewModel>();
-                final result = await context.push('/trip/${trip.id}/add-expense');
-                if (result == true && user != null && mounted) {
-                  await tripDetailVm.loadTrip(trip.id, user.id);
-                  if (mounted) {
-                    homeVm.loadTrips(user.id);
-                  }
-                }
-              },
-              backgroundColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-              foregroundColor: isDark ? AppColors.darkBackground : Colors.white,
-              elevation: 4,
-              icon: const Icon(Icons.add_rounded, size: 20),
-              label: const Text(
-                'Add Expense',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-              ),
-            )
-          : null,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () async {
+          HapticHelper.light();
+          if (_topLevelTab == 0) {
+            if (!trip.lifecycleState.allowsExpenses) {
+              _showSettlementSheet();
+              return;
+            }
+            final homeVm = context.read<HomeViewModel>();
+            final result = await context.push('/trip/${trip.id}/add-expense');
+            if (result == true && user != null && mounted) {
+              await tripDetailVm.loadTrip(trip.id, user.id);
+              if (mounted) {
+                homeVm.loadTrips(user.id);
+              }
+            }
+          } else if (_topLevelTab == 1) {
+            _showAddJourneyStopSheet(trip);
+          } else {
+            _showAddTripMemorySheet(trip);
+          }
+        },
+        backgroundColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+        foregroundColor: isDark ? AppColors.darkBackground : Colors.white,
+        elevation: 4,
+        icon: Icon(
+          _topLevelTab == 0
+              ? (trip.lifecycleState.allowsExpenses ? Icons.add_rounded : Icons.payments_outlined)
+              : (_topLevelTab == 1 ? Icons.add_location_alt_rounded : Icons.bookmark_add_rounded),
+          size: 20,
+        ),
+        label: Text(
+          _topLevelTab == 0
+              ? (trip.lifecycleState.allowsExpenses ? 'Add Expense' : 'Settle Up')
+              : (_topLevelTab == 1 ? 'Add Stop' : 'Save Memory'),
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+        ),
+      ),
     );
   }
 
@@ -587,6 +640,10 @@ class _TripDetailViewState extends State<TripDetailView> {
     bool isDark,
     List<Color> gradientColors,
   ) {
+    final youAreOwedPaise = userNetPaise > 0 ? userNetPaise : 0;
+    final youOwePaise = userNetPaise < 0 ? userNetPaise.abs() : 0;
+    final totalTripPaise = balanceSummary.totalTripSpentInPaise;
+
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -604,7 +661,7 @@ class _TripDetailViewState extends State<TripDetailView> {
           ),
         ],
       ),
-      padding: const EdgeInsets.all(22.0),
+      padding: const EdgeInsets.all(20.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -628,92 +685,32 @@ class _TripDetailViewState extends State<TripDetailView> {
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.lg),
-
-          Text(
-            (trip.lifecycleState == TripLifecycle.completed ||
-                    trip.lifecycleState == TripLifecycle.settling ||
-                    trip.lifecycleState == TripLifecycle.settled)
-                ? (userNetPaise > 0
-                    ? 'FINAL SETTLEMENT — TO RECEIVE'
-                    : (userNetPaise < 0 ? 'FINAL SETTLEMENT — TO PAY' : 'FINAL SETTLEMENT — SETTLED'))
-                : (userNetPaise > 0
-                    ? 'CURRENT BALANCE — YOU ARE OWED'
-                    : (userNetPaise < 0 ? 'CURRENT BALANCE — YOU OWE' : 'CURRENT BALANCE — SETTLED')),
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.8,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            CurrencyFormatter.formatPaise(
-              userNetPaise.abs(),
-              currencyCode: trip.currencyCode,
-            ),
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 34,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -1.0,
-              fontFeatures: [FontFeature.tabularFigures()],
-            ),
-          ),
-
-          const SizedBox(height: AppSpacing.md),
-          Container(
-            height: 1,
-            color: Colors.white.withValues(alpha: 0.15),
-          ),
           const SizedBox(height: AppSpacing.md),
 
+          // 3-Metric Clean Financial Row
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Flexible(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('Total Spent', style: TextStyle(color: Colors.white70, fontSize: 11)),
-                    const SizedBox(height: 2),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        CurrencyFormatter.formatPaise(
-                          balanceSummary.totalTripSpentInPaise,
-                          currencyCode: trip.currencyCode,
-                        ),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                        ),
+                    const Text(
+                      "YOU'RE OWED",
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.8,
                       ),
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('You Spent', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 2),
                     FittedBox(
                       fit: BoxFit.scaleDown,
                       child: Text(
-                        CurrencyFormatter.formatPaise(
-                          userSpentPaise,
-                          currencyCode: trip.currencyCode,
-                        ),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
+                        CurrencyFormatter.formatPaise(youAreOwedPaise, currencyCode: trip.currencyCode),
+                        style: TextStyle(
+                          color: youAreOwedPaise > 0 ? const Color(0xFF6EE7B7) : Colors.white,
+                          fontSize: 20,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -721,47 +718,101 @@ class _TripDetailViewState extends State<TripDetailView> {
                   ],
                 ),
               ),
-              const SizedBox(width: 6),
-              InkWell(
-                onTap: () {
-                  HapticHelper.light();
-                  _showInviteShareDialog(trip);
-                },
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.18),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.qr_code_2_rounded, size: 14, color: Colors.white),
-                      const SizedBox(width: 4),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('CODE & QR', style: TextStyle(color: Colors.white70, fontSize: 8, fontWeight: FontWeight.w700)),
-                          Text(
-                            trip.inviteCode,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w800,
-                              fontFamily: 'monospace',
-                              letterSpacing: 1.2,
-                            ),
-                          ),
-                        ],
+              Container(width: 1, height: 32, color: Colors.white24),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "YOU OWE",
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.8,
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 2),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        CurrencyFormatter.formatPaise(youOwePaise, currencyCode: trip.currencyCode),
+                        style: TextStyle(
+                          color: youOwePaise > 0 ? const Color(0xFFFCA5A5) : Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(width: 1, height: 32, color: Colors.white24),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "TRIP SPEND",
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        CurrencyFormatter.formatPaise(totalTripPaise, currencyCode: trip.currencyCode),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
+
+          if (balanceSummary.simplifiedSettlements.isNotEmpty || trip.lifecycleState != TripLifecycle.active) ...[
+            const SizedBox(height: AppSpacing.md),
+            InkWell(
+              onTap: _showSettlementSheet,
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.22),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white30),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.payments_outlined, size: 16, color: Colors.white),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Settle Up (${balanceSummary.simplifiedSettlements.length} transfers)',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const Spacer(),
+                    const Icon(Icons.chevron_right_rounded, size: 18, color: Colors.white),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -866,7 +917,13 @@ class _TripDetailViewState extends State<TripDetailView> {
     }
   }
 
-  Widget _buildTabSwitcher(bool isDark, int expenseCount, int memberCount) {
+  Widget _buildTopTabSwitcher(bool isDark) {
+    final tabs = [
+      {'label': 'Spending', 'icon': Icons.credit_card_rounded},
+      {'label': 'Journey', 'icon': Icons.map_outlined},
+      {'label': 'Memories', 'icon': Icons.auto_awesome_rounded},
+    ];
+
     return Container(
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
@@ -874,65 +931,468 @@ class _TripDetailViewState extends State<TripDetailView> {
       ),
       padding: const EdgeInsets.all(4),
       child: Row(
-        children: [
-          Expanded(
+        children: List.generate(tabs.length, (index) {
+          final isSelected = _topLevelTab == index;
+          final tab = tabs[index];
+          return Expanded(
             child: GestureDetector(
-              onTap: () => setState(() => _activeTab = 0),
+              onTap: () {
+                HapticHelper.selection();
+                setState(() => _topLevelTab = index);
+              },
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 8),
+                padding: const EdgeInsets.symmetric(vertical: 9),
                 decoration: BoxDecoration(
-                  color: _activeTab == 0
+                  color: isSelected
                       ? (isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard)
                       : Colors.transparent,
                   borderRadius: AppRadius.smBorder,
-                  boxShadow: _activeTab == 0
+                  boxShadow: isSelected
                       ? (isDark ? AppElevation.darkSubtle : AppElevation.lightSubtle)
                       : null,
                 ),
                 alignment: Alignment.center,
-                child: Text(
-                  'Expenses ($expenseCount)',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                    color: _activeTab == 0
-                        ? (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary)
-                        : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
-                  ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      tab['icon'] as IconData,
+                      size: 16,
+                      color: isSelected
+                          ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
+                          : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      tab['label'] as String,
+                      style: TextStyle(
+                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                        fontSize: 13,
+                        color: isSelected
+                            ? (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary)
+                            : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-          ),
-          Expanded(
-            child: GestureDetector(
-              onTap: () => setState(() => _activeTab = 1),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(
-                  color: _activeTab == 1
-                      ? (isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard)
-                      : Colors.transparent,
-                  borderRadius: AppRadius.smBorder,
-                  boxShadow: _activeTab == 1
-                      ? (isDark ? AppElevation.darkSubtle : AppElevation.lightSubtle)
-                      : null,
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  'Spending & Balances ($memberCount)',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                    color: _activeTab == 1
-                        ? (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary)
-                        : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
+          );
+        }),
       ),
+    );
+  }
+
+  Widget _buildSpendingSection(
+    TripDetailViewModel vm,
+    Trip trip,
+    BalanceSummary balanceSummary,
+    bool isDark,
+    String currentUserId,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSpendingSubSwitcher(isDark, vm.expenses.length, trip.members.length),
+        const SizedBox(height: AppSpacing.md),
+        if (_spendingSubTab == 0)
+          _buildExpensesTab(vm, trip, isDark, currentUserId)
+        else if (_spendingSubTab == 1)
+          _buildBalancesAndPeopleTab(trip, balanceSummary, vm.expenses, isDark, currentUserId)
+        else
+          _buildCategoriesBreakdownTab(trip, vm.expenses, isDark),
+      ],
+    );
+  }
+
+  Widget _buildSpendingSubSwitcher(bool isDark, int expenseCount, int memberCount) {
+    final subTabs = [
+      {'label': 'Expenses ($expenseCount)', 'index': 0},
+      {'label': 'People ($memberCount)', 'index': 1},
+      {'label': 'Categories', 'index': 2},
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+        borderRadius: AppRadius.mdBorder,
+      ),
+      padding: const EdgeInsets.all(4),
+      child: Row(
+        children: subTabs.map((tab) {
+          final idx = tab['index'] as int;
+          final isSelected = _spendingSubTab == idx;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () {
+                HapticHelper.selection();
+                setState(() => _spendingSubTab = idx);
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 7),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? (isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard)
+                      : Colors.transparent,
+                  borderRadius: AppRadius.smBorder,
+                  boxShadow: isSelected
+                      ? (isDark ? AppElevation.darkSubtle : AppElevation.lightSubtle)
+                      : null,
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  tab['label'] as String,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                    color: isSelected
+                        ? (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary)
+                        : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildJourneySection(TripDetailViewModel vm, Trip trip, bool isDark) {
+    final stops = vm.journeyStops;
+    if (stops.isEmpty) {
+      return EmptyStateView(
+        emoji: '🗺️',
+        title: 'No itinerary stops added yet',
+        subtitle: 'Capture where you went, key viewpoints, and landmarks during "${trip.name}".',
+        buttonText: 'Add First Stop',
+        onButtonPressed: () => _showAddJourneyStopSheet(trip),
+      );
+    }
+
+    final Map<int, List<JourneyStop>> dayMap = {};
+    for (final s in stops) {
+      dayMap.putIfAbsent(s.dayNumber, () => []).add(s);
+    }
+    final sortedDays = dayMap.keys.toList()..sort();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Travel Timeline', style: AppTypography.titleSmall(isDark: isDark)),
+            TextButton.icon(
+              onPressed: () => _showAddJourneyStopSheet(trip),
+              icon: const Icon(Icons.add_location_alt_outlined, size: 16),
+              label: const Text('Add Stop'),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        ...sortedDays.map((day) {
+          final dayStops = dayMap[day]!;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        'DAY $day',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.0,
+                          color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(child: Divider(color: isDark ? Colors.white12 : Colors.black12)),
+                  ],
+                ),
+              ),
+              ...dayStops.map((stop) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: SurfaceCard(
+                    padding: const EdgeInsets.all(14),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.place_rounded, size: 18, color: AppColors.emeraldPrimary),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      stop.locationName,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 14,
+                                        color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    stop.time,
+                                    style: AppTypography.bodySmall(isDark: isDark),
+                                  ),
+                                ],
+                              ),
+                              if (stop.notes != null && stop.notes!.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  stop.notes!,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded, size: 16, color: Colors.grey),
+                          onPressed: () {
+                            HapticHelper.light();
+                            vm.deleteJourneyStop(stop.id);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ],
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildMemoriesSection(TripDetailViewModel vm, Trip trip, bool isDark) {
+    final memories = vm.tripMemories;
+    if (memories.isEmpty) {
+      return EmptyStateView(
+        emoji: '✨',
+        title: 'No memories saved yet',
+        subtitle: 'Capture memorable highlights, funny quotes, or thoughts from "${trip.name}".',
+        buttonText: 'Add First Memory',
+        onButtonPressed: () => _showAddTripMemorySheet(trip),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Trip Memories & Scrapbook', style: AppTypography.titleSmall(isDark: isDark)),
+            TextButton.icon(
+              onPressed: () => _showAddTripMemorySheet(trip),
+              icon: const Icon(Icons.add_reaction_outlined, size: 16),
+              label: const Text('Add Memory'),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: memories.length,
+          separatorBuilder: (ctx, i) => const SizedBox(height: 10),
+          itemBuilder: (ctx, i) {
+            final mem = memories[i];
+            return SurfaceCard(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(mem.emoji, style: const TextStyle(fontSize: 24)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              mem.title,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15,
+                                color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Day ${mem.dayNumber} • ${DateFormatter.formatRelative(mem.createdAt)}',
+                              style: AppTypography.bodySmall(isDark: isDark),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.grey),
+                        onPressed: () {
+                          HapticHelper.light();
+                          vm.deleteTripMemory(mem.id);
+                        },
+                      ),
+                    ],
+                  ),
+                  if (mem.note != null && mem.note!.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        mem.note!,
+                        style: TextStyle(
+                          fontSize: 13,
+                          height: 1.4,
+                          fontStyle: FontStyle.italic,
+                          color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCategoriesBreakdownTab(Trip trip, List<Expense> expenses, bool isDark) {
+    int totalTripSpent = 0;
+    final Map<String, int> catAmounts = {};
+    final Map<String, int> catCounts = {};
+
+    for (final exp in expenses) {
+      if (exp.isDeleted) continue;
+      totalTripSpent += exp.amountInPaise;
+      final catKey = exp.category.name;
+      catAmounts[catKey] = (catAmounts[catKey] ?? 0) + exp.amountInPaise;
+      catCounts[catKey] = (catCounts[catKey] ?? 0) + 1;
+    }
+
+    if (catAmounts.isEmpty) {
+      return EmptyStateView(
+        emoji: '📊',
+        title: 'No category data yet',
+        subtitle: 'Add expenses to see a breakdown of spending by category.',
+      );
+    }
+
+    final sortedCategories = catAmounts.keys.toList()
+      ..sort((a, b) => (catAmounts[b] ?? 0).compareTo(catAmounts[a] ?? 0));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Category Spending Breakdown', style: AppTypography.titleSmall(isDark: isDark)),
+        const SizedBox(height: AppSpacing.sm),
+        ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: sortedCategories.length,
+          separatorBuilder: (ctx, i) => const SizedBox(height: 8),
+          itemBuilder: (ctx, i) {
+            final catName = sortedCategories[i];
+            final amount = catAmounts[catName] ?? 0;
+            final count = catCounts[catName] ?? 0;
+            final percentage = totalTripSpent > 0 ? (amount / totalTripSpent) : 0.0;
+            final percentInt = (percentage * 100).round();
+
+            return SurfaceCard(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        catName.toUpperCase(),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                          color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                        ),
+                      ),
+                      CurrencyDisplay(
+                        amountInPaise: amount,
+                        size: CurrencyDisplaySize.medium,
+                        currencyCode: trip.currencyCode,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '$count ${count == 1 ? "expense" : "expenses"}',
+                        style: AppTypography.bodySmall(isDark: isDark),
+                      ),
+                      Text(
+                        '$percentInt% of trip',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: percentage,
+                      minHeight: 6,
+                      backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 
