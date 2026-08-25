@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/services/google_auth_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
@@ -30,21 +31,37 @@ class HomeView extends StatefulWidget {
 
 class _HomeViewState extends State<HomeView> {
   int _currentIndex = 0; // 0 = Expense (Personal), 1 = Trips (Group)
+  bool _isRefreshing = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadData();
+      _refreshAllData();
     });
   }
 
-  void _loadData() {
-    final authVm = context.read<AuthViewModel>();
-    final user = authVm.currentUser;
-    if (user != null) {
-      context.read<HomeViewModel>().loadTrips(user.id);
-      context.read<PersonalExpenseViewModel>().loadData(user.id);
+  Future<void> _refreshAllData() async {
+    if (_isRefreshing) return;
+    setState(() => _isRefreshing = true);
+
+    try {
+      final user = context.read<AuthViewModel>().currentUser;
+      if (user != null) {
+        final homeVm = context.read<HomeViewModel>();
+        final personalVm = context.read<PersonalExpenseViewModel>();
+        final apiClient = context.read<ApiClient>();
+        final syncService = context.read<SyncService>();
+
+        await syncService.flushQueue(apiClient);
+        await homeVm.loadTrips(user.id);
+        await personalVm.loadData(user.id);
+        await personalVm.syncTripExpenses(user.id);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isRefreshing = false);
+      }
     }
   }
 
@@ -67,143 +84,176 @@ class _HomeViewState extends State<HomeView> {
     );
   }
 
-  void _showLinkAccountDialog() {
-    final emailController = TextEditingController();
-    final nameController = TextEditingController(text: context.read<AuthViewModel>().currentUser?.displayName ?? '');
+  Future<void> _showLinkAccountDialog() async {
     final authVm = context.read<AuthViewModel>();
     final homeVm = context.read<HomeViewModel>();
     final personalVm = context.read<PersonalExpenseViewModel>();
     final syncService = context.read<SyncService>();
     final apiClient = context.read<ApiClient>();
 
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.g_mobiledata_rounded, color: AppColors.emeraldPrimary, size: 28),
-              SizedBox(width: 6),
-              Text('Continue with Google', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+    HapticHelper.medium();
+
+    String? email;
+    String? name;
+    String? googleId;
+    String? photoUrl;
+
+    try {
+      final googleResult = await GoogleAuthService.signIn();
+      if (googleResult != null) {
+        email = googleResult.email;
+        name = googleResult.displayName;
+        googleId = googleResult.googleId;
+        photoUrl = googleResult.avatarUrl;
+      } else {
+        return; // User cancelled
+      }
+    } catch (e) {
+      debugPrint('Native Google sign in threw exception: $e. Falling back to account entry.');
+      if (!mounted) return;
+
+      final emailController = TextEditingController();
+      final nameController = TextEditingController(text: authVm.currentUser?.displayName ?? '');
+
+      final result = await showDialog<Map<String, String>>(
+        context: context,
+        builder: (ctx) {
+          return AlertDialog(
+            shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
+            title: const Row(
               children: [
-                const Text(
-                  'Sync your Kith account across devices. All your existing trips, expenses, and balances will stay permanently linked.',
-                  style: TextStyle(fontSize: 13),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Display Name',
-                    prefixIcon: Icon(Icons.person_outline, size: 20),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'Google Email Address',
-                    hintText: 'you@gmail.com',
-                    prefixIcon: Icon(Icons.email_outlined, size: 20),
-                  ),
-                ),
+                Icon(Icons.g_mobiledata_rounded, color: AppColors.emeraldPrimary, size: 28),
+                SizedBox(width: 6),
+                Text('Continue with Google', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
               ],
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                final email = emailController.text.trim();
-                final name = nameController.text.trim();
-                if (email.isEmpty || !email.contains('@')) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please enter a valid Google email address.')),
-                  );
-                  return;
-                }
-                Navigator.pop(ctx);
-
-                final stageNotifier = ValueNotifier<int>(0);
-                final stages = const [
-                  ProgressStage(label: 'Connecting Google account', description: 'Linking Google credential'),
-                  ProgressStage(label: 'Verifying canonical ledger', description: 'Migrating guest records securely'),
-                  ProgressStage(label: 'Syncing trips & balances', description: 'Backing up all data to cloud'),
-                ];
-
-                showDialog(
-                  context: context,
-                  barrierDismissible: false,
-                  builder: (dCtx) => ValueListenableBuilder<int>(
-                    valueListenable: stageNotifier,
-                    builder: (c, activeStage, _) {
-                      final isDark = Theme.of(c).brightness == Brightness.dark;
-                      return Dialog(
-                        backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
-                        shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
-                        child: Padding(
-                          padding: const EdgeInsets.all(24.0),
-                          child: KithStageProgress(
-                            title: 'Syncing your account…',
-                            stages: stages,
-                            currentStageIndex: activeStage,
-                          ),
-                        ),
-                      );
-                    },
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Sync your Kith account across devices. All your existing trips, expenses, and balances will stay permanently linked.',
+                    style: TextStyle(fontSize: 13),
                   ),
-                );
-
-                Future.delayed(const Duration(milliseconds: 250), () {
-                  if (mounted) stageNotifier.value = 1;
-                });
-                Future.delayed(const Duration(milliseconds: 550), () {
-                  if (mounted) stageNotifier.value = 2;
-                });
-
-                final updated = await authVm.signInWithGoogle(
-                  email: email,
-                  displayName: name.isEmpty ? email.split('@')[0] : name,
-                  googleId: 'g_${email.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}',
-                );
-
-                if (mounted) {
-                  Navigator.of(context, rootNavigator: true).pop(); // Dismiss progress
-
-                  if (updated != null) {
-                    await syncService.flushQueue(apiClient);
-                    await homeVm.loadTrips(updated.id);
-                    await personalVm.loadData(updated.id);
-                    await personalVm.syncTripExpenses(updated.id);
-
-                    if (mounted) {
-                      KithSuccessToast.show(context, 'Account linked to ${updated.email} ✓');
-                    }
-                  } else {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(authVm.errorMessage ?? 'Could not sign in with Google.')),
-                      );
-                    }
-                  }
-                }
-              },
-              child: const Text('Continue with Google'),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: nameController,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                      labelText: 'Display Name',
+                      prefixIcon: Icon(Icons.person_outline, size: 20),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Google Email Address',
+                      hintText: 'you@gmail.com',
+                      prefixIcon: Icon(Icons.email_outlined, size: 20),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ],
-        );
-      },
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final em = emailController.text.trim();
+                  final nm = nameController.text.trim();
+                  if (em.isEmpty || !em.contains('@')) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please enter a valid Google email address.')),
+                    );
+                    return;
+                  }
+                  Navigator.pop(ctx, {'email': em, 'name': nm});
+                },
+                child: const Text('Continue'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (result == null || !mounted) return;
+      email = result['email']!;
+      name = result['name']!.isEmpty ? email.split('@')[0] : result['name']!;
+      googleId = 'g_${email.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}';
+    }
+
+    if (!mounted) return;
+
+    final stageNotifier = ValueNotifier<int>(0);
+    final stages = const [
+      ProgressStage(label: 'Connecting Google account', description: 'Linking Google credential'),
+      ProgressStage(label: 'Verifying canonical ledger', description: 'Migrating guest records securely'),
+      ProgressStage(label: 'Syncing trips & balances', description: 'Backing up all data to cloud'),
+    ];
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dCtx) => ValueListenableBuilder<int>(
+        valueListenable: stageNotifier,
+        builder: (c, activeStage, _) {
+          final isDark = Theme.of(c).brightness == Brightness.dark;
+          return Dialog(
+            backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+            shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: KithStageProgress(
+                title: 'Syncing your account…',
+                stages: stages,
+                currentStageIndex: activeStage,
+              ),
+            ),
+          );
+        },
+      ),
     );
+
+    Future.delayed(const Duration(milliseconds: 250), () {
+      if (mounted) stageNotifier.value = 1;
+    });
+    Future.delayed(const Duration(milliseconds: 550), () {
+      if (mounted) stageNotifier.value = 2;
+    });
+
+    final updated = await authVm.signInWithGoogle(
+      email: email,
+      displayName: name,
+      googleId: googleId,
+      photoUrl: photoUrl,
+    );
+
+    if (mounted) {
+      Navigator.of(context, rootNavigator: true).pop(); // Dismiss progress
+
+      if (updated != null) {
+        await syncService.flushQueue(apiClient);
+        await homeVm.loadTrips(updated.id);
+        await personalVm.loadData(updated.id);
+        await personalVm.syncTripExpenses(updated.id);
+
+        if (mounted) {
+          KithSuccessToast.show(context, 'Account linked to ${updated.email} ✓');
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(authVm.errorMessage ?? 'Could not sign in with Google.')),
+          );
+        }
+      }
+    }
   }
 
   void _showServerConfigDialog() {
