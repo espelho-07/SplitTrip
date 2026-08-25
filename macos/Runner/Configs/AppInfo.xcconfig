@@ -8,7 +8,7 @@
 PRODUCT_NAME = kith_app
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.kith.app.kithApp
+PRODUCT_BUNDLE_IDENTIFIER = com.nirniq.kith
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 com.kith.app. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 com.nirniq. All rights reserved.

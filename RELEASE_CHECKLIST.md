@@ -39,7 +39,7 @@ This document tracks the verified status required before deploying Kith to stagi
 ---
 
 ## 4. Android Release Package Status
-- [x] **Application ID (PASS)**: Stable namespace `com.kith.app.kith_app`.
+- [x] **Application ID (PASS)**: Stable namespace `com.nirniq.kith`.
 - [x] **Version Bump (PASS)**: `versionName` (1.0.0) and monotonically increasing `versionCode` (1) in `pubspec.yaml`.
 - [x] **Permissions (PASS)**: Only necessary permissions requested (`CAMERA`, `RECORD_AUDIO`, `POST_NOTIFICATIONS`, `INTERNET`).
 - [x] **Deep Links (PASS)**: Custom URI (`kith://trip/join?code=...`) and App Links (`https://kith.app/join?code=...`) intent-filters active in `AndroidManifest.xml`.
