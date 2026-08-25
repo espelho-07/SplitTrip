@@ -48,8 +48,12 @@ class GoogleAuthService {
   /// This is the Web client ID (not the Android client) — that is correct.
   /// The Android client ID is embedded in google-services.json for the
   /// native SDK; the Web client ID here identifies the token audience.
+  static const String _webClientId =
+      '752190461758-m6ikshjbood33faqfacgfnvkdjrp7vj2.apps.googleusercontent.com';
+
   static final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: ['email', 'profile'],
+    serverClientId: _webClientId,
   );
 
   /// Triggers the native Google account picker, verifies identity via Supabase,
