@@ -237,7 +237,22 @@ class _HelpFaqViewState extends State<HelpFaqView> {
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: AppBar(
-        title: const Text('Help & FAQ Center'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Help & FAQ'),
+            Text(
+              'Kith by Nirniq',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0.3,
+                color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+              ),
+            ),
+          ],
+        ),
         elevation: 0,
         backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
       ),

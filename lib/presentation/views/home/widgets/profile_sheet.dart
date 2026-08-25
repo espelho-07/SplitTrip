@@ -701,20 +701,32 @@ class ProfileSheet extends StatelessWidget {
               child: Column(
                 children: [
                   Text(
-                    'KITH • v2.2.0',
+                    'Kith',
                     style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.2,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.6,
                       color: isDark ? Colors.white38 : Colors.black38,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Zero-Confusion Travel & Group Finances',
+                    'by Nirniq',
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0.8,
                       color: isDark ? Colors.white24 : Colors.black26,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'v2.2.0',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0.4,
+                      color: isDark ? Colors.white.withValues(alpha: 0.18) : Colors.black.withValues(alpha: 0.12),
                     ),
                   ),
                 ],

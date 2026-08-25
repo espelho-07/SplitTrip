@@ -306,6 +306,20 @@ child: Column(
                 style: AppTypography.displayHero(isDark: isDark),
               ).animate().fadeIn(delay: 150.ms, duration: 400.ms),
 
+              const SizedBox(height: 5),
+
+              // Brand credit
+              Text(
+                'Kith by Nirniq',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 0.6,
+                  color: (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted)
+                      .withValues(alpha: 0.65),
+                ),
+              ).animate().fadeIn(delay: 220.ms, duration: 400.ms),
+
               const SizedBox(height: AppSpacing.sm),
 
               // Description
