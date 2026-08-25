@@ -74,6 +74,14 @@ class _SetBudgetDialogState extends State<SetBudgetDialog> {
             behavior: SnackBarBehavior.floating,
           ),
         );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to update budget. Please try again.'),
+            backgroundColor: AppColors.negativeRedDark,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
     }
   }

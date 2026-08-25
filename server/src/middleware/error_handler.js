@@ -1,9 +1,18 @@
 function errorHandler(err, req, res, next) {
-  console.error('[Error]', err);
-
+  // Never log sensitive tokens or full stack traces with secrets
+  const isAppError = err instanceof AppError;
   const status = err.statusCode || 500;
-  const code = err.code || 'INTERNAL_SERVER_ERROR';
-  const message = err.message || 'An unexpected error occurred';
+  const code = err.code || (status === 500 ? 'INTERNAL_SERVER_ERROR' : 'API_ERROR');
+  
+  // Sanitize internal server errors in production to avoid leaking SQL or internal details
+  const isProduction = process.env.NODE_ENV === 'production';
+  const message = (status >= 500 && isProduction && !isAppError)
+    ? 'An unexpected internal server error occurred. Please try again later.'
+    : (err.message || 'An unexpected error occurred');
+
+  if (status >= 500) {
+    console.error(`[Internal Server Error] ${req.method} ${req.originalUrl}:`, err.message);
+  }
 
   res.status(status).json({
     error: {

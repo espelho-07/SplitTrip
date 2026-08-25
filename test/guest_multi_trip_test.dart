@@ -150,12 +150,6 @@ void main() {
     });
 
     test('6. Member total spend consumption isolates individual split shares from payer amount', () {
-      final members = [
-        TripMember(id: 'mbr_1', userId: 'usr_1', displayName: 'Rahul', role: 'member', joinedAt: DateTime.now()),
-        TripMember(id: 'mbr_2', userId: 'usr_2', displayName: 'Priya', role: 'member', joinedAt: DateTime.now()),
-        TripMember(id: 'mbr_3', userId: 'usr_3', displayName: 'Darpan', role: 'creator', joinedAt: DateTime.now()),
-      ];
-
       // Expense 1: Rahul paid ₹300, split ₹100 each across all 3
       final exp1 = Expense(
         id: 'exp_1',

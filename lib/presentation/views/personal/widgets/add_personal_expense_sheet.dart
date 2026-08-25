@@ -242,6 +242,7 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
       if (mounted) {
         setState(() => _isSaving = false);
         if (expense != null) {
+          HapticHelper.success();
           Navigator.of(context).pop(true);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -250,6 +251,15 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
                   : 'Personal expense added ✓'),
               behavior: SnackBarBehavior.floating,
               duration: const Duration(seconds: 2),
+            ),
+          );
+        } else {
+          HapticHelper.error();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to save expense. Please try again.'),
+              backgroundColor: AppColors.negativeRedDark,
+              behavior: SnackBarBehavior.floating,
             ),
           );
         }
@@ -269,6 +279,7 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
       if (mounted) {
         setState(() => _isSaving = false);
         if (debt != null) {
+          HapticHelper.success();
           Navigator.of(context).pop(true);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -279,6 +290,15 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
               ),
               behavior: SnackBarBehavior.floating,
               duration: const Duration(seconds: 2),
+            ),
+          );
+        } else {
+          HapticHelper.error();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to save debt record. Please try again.'),
+              backgroundColor: AppColors.negativeRedDark,
+              behavior: SnackBarBehavior.floating,
             ),
           );
         }

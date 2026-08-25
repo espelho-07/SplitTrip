@@ -7,6 +7,7 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/utils/date_formatter.dart';
+import '../../../../core/utils/haptic_feedback_helper.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/pill_badge.dart';
 import '../../../../domain/enums/expense_category.dart';
@@ -168,11 +169,21 @@ class _PersonalExpenseDetailSheetState extends State<PersonalExpenseDetailSheet>
                         if (mounted) {
                           setDialogState(() => isSavingEdit = false);
                           if (success) {
+                            HapticHelper.success();
                             dialogNav.pop();
                             nav.pop(true);
                             messenger.showSnackBar(
                               const SnackBar(
                                 content: Text('Expense updated ✓'),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          } else {
+                            HapticHelper.error();
+                            messenger.showSnackBar(
+                              const SnackBar(
+                                content: Text('Failed to update expense. Please try again.'),
+                                backgroundColor: AppColors.negativeRedDark,
                                 behavior: SnackBarBehavior.floating,
                               ),
                             );

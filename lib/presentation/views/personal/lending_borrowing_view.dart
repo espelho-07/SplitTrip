@@ -389,7 +389,7 @@ class _LendingBorrowingViewState extends State<LendingBorrowingView> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '% repaid ()',
+                            '${(progress * 100).round()}% repaid (${CurrencyFormatter.formatPaise(repaidAmount, currencyCode: 'INR')})',
                             style: TextStyle(fontSize: 10, color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
                           ),
                           const SizedBox(height: 8),

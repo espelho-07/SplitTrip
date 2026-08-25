@@ -45,6 +45,16 @@ class _JoinTripViewState extends State<JoinTripView> {
     final preview = await joinVm.fetchPreview();
     if (preview != null && mounted) {
       _showPreviewSheet(preview);
+    } else if (mounted) {
+      HapticHelper.error();
+      final err = joinVm.errorMessage ?? 'Could not find a trip for code "${joinVm.code}". Please verify and retry.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(err),
+          backgroundColor: AppColors.negativeRedDark,
+          duration: const Duration(seconds: 3),
+        ),
+      );
     }
   }
 
@@ -79,10 +89,21 @@ class _JoinTripViewState extends State<JoinTripView> {
                 Navigator.of(bottomSheetContext).pop();
                 final trip = await joinVm.joinTrip(user);
                 if (trip != null && mounted) {
+                  HapticHelper.success();
                   await homeVm.loadTrips(user.id);
                   if (mounted) {
                     GoRouter.of(this.context).go('/trip/${trip.id}');
                   }
+                } else if (mounted) {
+                  HapticHelper.error();
+                  final err = joinVm.errorMessage ?? 'Failed to join trip. Please check your network connection and retry.';
+                  ScaffoldMessenger.of(this.context).showSnackBar(
+                    SnackBar(
+                      content: Text(err),
+                      backgroundColor: AppColors.negativeRedDark,
+                      duration: const Duration(seconds: 3),
+                    ),
+                  );
                 }
               },
               onCancel: () {

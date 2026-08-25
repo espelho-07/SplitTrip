@@ -6,6 +6,7 @@ import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/currency_formatter.dart';
+import '../../../../core/utils/haptic_feedback_helper.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../domain/models/personal_debt.dart';
 import '../../../viewmodels/auth_viewmodel.dart';
@@ -77,6 +78,7 @@ class _RecordRepaymentSheetState extends State<RecordRepaymentSheet> {
     if (mounted) {
       setState(() => _isSaving = false);
       if (success) {
+        HapticHelper.success();
         Navigator.of(context).pop(true);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -85,6 +87,15 @@ class _RecordRepaymentSheetState extends State<RecordRepaymentSheet> {
                   ? 'Repayment recorded from ${widget.debt.personName}!'
                   : 'Repayment recorded to ${widget.debt.personName}!',
             ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else {
+        HapticHelper.error();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to record repayment. Please try again.'),
+            backgroundColor: AppColors.negativeRedDark,
             behavior: SnackBarBehavior.floating,
           ),
         );
