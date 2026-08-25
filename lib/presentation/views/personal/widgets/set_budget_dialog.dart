@@ -8,6 +8,8 @@ import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../viewmodels/personal_expense_viewmodel.dart';
 
+import '../../../widgets/progress/progress.dart';
+
 class SetBudgetDialog extends StatefulWidget {
   final int currentBudgetPaise;
   final String monthYear;
@@ -68,12 +70,7 @@ class _SetBudgetDialogState extends State<SetBudgetDialog> {
       setState(() => _isSaving = false);
       if (success) {
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(paise > 0 ? 'Monthly budget updated!' : 'Budget removed.'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        KithSuccessToast.show(context, paise > 0 ? 'Budget updated ✓' : 'Budget removed ✓');
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(

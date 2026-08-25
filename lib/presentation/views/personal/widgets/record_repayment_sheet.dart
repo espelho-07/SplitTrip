@@ -11,6 +11,7 @@ import '../../../../core/widgets/app_button.dart';
 import '../../../../domain/models/personal_debt.dart';
 import '../../../viewmodels/auth_viewmodel.dart';
 import '../../../viewmodels/personal_expense_viewmodel.dart';
+import '../../../widgets/progress/progress.dart';
 
 class RecordRepaymentSheet extends StatefulWidget {
   final PersonalDebt debt;
@@ -38,8 +39,9 @@ class _RecordRepaymentSheetState extends State<RecordRepaymentSheet> {
   @override
   void initState() {
     super.initState();
-    // Default to full remaining balance for one-tap settlement
-    final remainingRupees = (widget.debt.remainingAmountInPaise / 100).toStringAsFixed(0);
+    final remainingRupees = (widget.debt.remainingAmountInPaise / 100).toStringAsFixed(
+      widget.debt.remainingAmountInPaise % 100 == 0 ? 0 : 2,
+    );
     _amountController = TextEditingController(text: remainingRupees);
   }
 
@@ -51,11 +53,12 @@ class _RecordRepaymentSheetState extends State<RecordRepaymentSheet> {
   }
 
   Future<void> _handleSave() async {
-    final text = _amountController.text.trim();
-    final rupees = double.tryParse(text) ?? 0;
+    final amountText = _amountController.text.trim();
+    final rupees = double.tryParse(amountText) ?? 0;
     final paise = (rupees * 100).round();
 
-    if (paise <= 0) {
+    if (paise <= 0 || paise > widget.debt.remainingAmountInPaise) {
+      HapticHelper.error();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a valid repayment amount.')),
       );
@@ -78,18 +81,8 @@ class _RecordRepaymentSheetState extends State<RecordRepaymentSheet> {
     if (mounted) {
       setState(() => _isSaving = false);
       if (success) {
-        HapticHelper.success();
         Navigator.of(context).pop(true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              widget.debt.debtType == PersonalDebtType.lent
-                  ? 'Repayment recorded from ${widget.debt.personName}!'
-                  : 'Repayment recorded to ${widget.debt.personName}!',
-            ),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        KithSuccessToast.show(context, 'Payment recorded ✓');
       } else {
         HapticHelper.error();
         ScaffoldMessenger.of(context).showSnackBar(

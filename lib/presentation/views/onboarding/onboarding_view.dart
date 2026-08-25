@@ -12,6 +12,7 @@ import '../../../core/widgets/surface_card.dart';
 import '../../../domain/enums/app_experience_mode.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
+import '../../widgets/progress/progress.dart';
 
 class OnboardingView extends StatefulWidget {
   const OnboardingView({super.key});
@@ -23,8 +24,8 @@ class OnboardingView extends StatefulWidget {
 class _OnboardingViewState extends State<OnboardingView> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _recoveryKeyController = TextEditingController();
-  AppExperienceMode _selectedMode = AppExperienceMode.all;
   bool _showRecoveryField = false;
+  AppExperienceMode _selectedMode = AppExperienceMode.tripsOnly;
 
   @override
   void dispose() {
@@ -47,7 +48,7 @@ class _OnboardingViewState extends State<OnboardingView> {
           children: [
             Icon(Icons.g_mobiledata_rounded, color: AppColors.emeraldPrimary, size: 28),
             SizedBox(width: 6),
-            Text('Sign in with Google', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            Text('Continue with Google', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
           ],
         ),
         content: Column(
@@ -107,6 +108,47 @@ class _OnboardingViewState extends State<OnboardingView> {
       final name = result['name']!.isEmpty ? email.split('@')[0] : result['name']!;
       final googleId = 'g_${email.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}';
 
+      final stageNotifier = ValueNotifier<int>(0);
+      final stages = const [
+        ProgressStage(label: 'Signing in with Google', description: 'Contacting Google identity provider'),
+        ProgressStage(label: 'Verifying account', description: 'Checking canonical ledger profile'),
+        ProgressStage(label: 'Syncing your Kith data', description: 'Restoring trips, expenses & balances'),
+        ProgressStage(label: 'Account ready', description: 'Preparing your space'),
+      ];
+
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (dCtx) => ValueListenableBuilder<int>(
+          valueListenable: stageNotifier,
+          builder: (ctx, activeStage, _) {
+            final isDark = Theme.of(ctx).brightness == Brightness.dark;
+            return Dialog(
+              backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+              shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: KithStageProgress(
+                  title: 'Signing in…',
+                  stages: stages,
+                  currentStageIndex: activeStage,
+                ),
+              ),
+            );
+          },
+        ),
+      );
+
+      Future.delayed(const Duration(milliseconds: 250), () {
+        if (mounted) stageNotifier.value = 1;
+      });
+      Future.delayed(const Duration(milliseconds: 550), () {
+        if (mounted) stageNotifier.value = 2;
+      });
+      Future.delayed(const Duration(milliseconds: 850), () {
+        if (mounted) stageNotifier.value = 3;
+      });
+
       final user = await authVm.signInWithGoogle(
         email: email,
         displayName: name,
@@ -114,14 +156,14 @@ class _OnboardingViewState extends State<OnboardingView> {
       );
 
       if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop(); // Dismiss progress
+
         if (user != null) {
           final homeVm = context.read<HomeViewModel>();
           await homeVm.loadTrips(user.id);
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('🎉 Signed in as ${user.displayName}! Cloud sync active.')),
-            );
             context.go('/home');
+            KithSuccessToast.show(context, 'Signed in as ${user.displayName} ✓');
           }
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -148,6 +190,7 @@ class _OnboardingViewState extends State<OnboardingView> {
     await authVm.createGuestSession(name, _selectedMode);
     if (mounted) {
       context.go('/home');
+      KithSuccessToast.show(context, 'Welcome to Kith ✓');
     }
   }
 
@@ -164,16 +207,55 @@ class _OnboardingViewState extends State<OnboardingView> {
     }
 
     HapticHelper.medium();
+
+    final stageNotifier = ValueNotifier<int>(0);
+    final stages = const [
+      ProgressStage(label: 'Checking recovery code', description: 'Validating security key hash'),
+      ProgressStage(label: 'Restoring identity', description: 'Resolving canonical user account'),
+      ProgressStage(label: 'Syncing cloud data', description: 'Loading all trips & personal finance'),
+    ];
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dCtx) => ValueListenableBuilder<int>(
+        valueListenable: stageNotifier,
+        builder: (ctx, activeStage, _) {
+          final isDark = Theme.of(ctx).brightness == Brightness.dark;
+          return Dialog(
+            backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+            shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: KithStageProgress(
+                title: 'Restoring account…',
+                stages: stages,
+                currentStageIndex: activeStage,
+              ),
+            ),
+          );
+        },
+      ),
+    );
+
+    Future.delayed(const Duration(milliseconds: 250), () {
+      if (mounted) stageNotifier.value = 1;
+    });
+    Future.delayed(const Duration(milliseconds: 550), () {
+      if (mounted) stageNotifier.value = 2;
+    });
+
     final user = await authVm.recoverSession(key);
+
     if (mounted) {
+      Navigator.of(context, rootNavigator: true).pop(); // Dismiss progress
+
       if (user != null) {
         final homeVm = context.read<HomeViewModel>();
         await homeVm.loadTrips(user.id);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('🎉 Welcome back, ${user.displayName}! Account restored.')),
-          );
           context.go('/home');
+          KithSuccessToast.show(context, 'Welcome back, ${user.displayName} ✓');
         }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(

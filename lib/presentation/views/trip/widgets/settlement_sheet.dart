@@ -12,6 +12,7 @@ import '../../../../core/widgets/surface_card.dart';
 import '../../../../domain/models/balance_summary.dart';
 import '../../../../domain/models/trip.dart';
 import '../../../../domain/models/trip_member.dart';
+import '../../../widgets/progress/progress.dart';
 
 class SettlementSheet extends StatefulWidget {
   final Trip trip;
@@ -55,7 +56,7 @@ class _SettlementSheetState extends State<SettlementSheet> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
         title: Text(
           'Record Payment',
           style: AppTypography.titleMedium(isDark: isDark),
@@ -91,6 +92,7 @@ class _SettlementSheetState extends State<SettlementSheet> {
           setState(() {
             _paidTransferKeys.add(transferKey);
           });
+          KithSuccessToast.show(context, 'Payment recorded ✓');
         }
       } finally {
         if (mounted) {

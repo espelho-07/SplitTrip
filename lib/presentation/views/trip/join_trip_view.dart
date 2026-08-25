@@ -11,6 +11,7 @@ import '../../../core/widgets/surface_card.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/join_trip_viewmodel.dart';
+import '../../widgets/progress/progress.dart';
 import 'qr_scanner_view.dart';
 import 'widgets/join_preview_sheet.dart';
 
@@ -100,23 +101,72 @@ class _JoinTripViewState extends State<JoinTripView> {
                 if (user == null) return;
 
                 Navigator.of(bottomSheetContext).pop();
+
+                final stageNotifier = ValueNotifier<int>(0);
+                final stages = const [
+                  ProgressStage(label: 'Checking invite code', description: 'Validating membership token'),
+                  ProgressStage(label: 'Joining trip', description: 'Adding your ledger to group'),
+                  ProgressStage(label: 'Syncing trip', description: 'Fetching expenses and balances'),
+                ];
+
+                // Show progress dialog
+                showDialog(
+                  context: this.context,
+                  barrierDismissible: false,
+                  builder: (dCtx) => ValueListenableBuilder<int>(
+                    valueListenable: stageNotifier,
+                    builder: (ctx, activeStage, _) {
+                      final isDark = Theme.of(ctx).brightness == Brightness.dark;
+                      return Dialog(
+                        backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+                        shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
+                        child: Padding(
+                          padding: const EdgeInsets.all(24.0),
+                          child: KithStageProgress(
+                            title: 'Joining trip…',
+                            stages: stages,
+                            currentStageIndex: activeStage,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                );
+
+                Future.delayed(const Duration(milliseconds: 250), () {
+                  if (mounted) stageNotifier.value = 1;
+                });
+                Future.delayed(const Duration(milliseconds: 550), () {
+                  if (mounted) stageNotifier.value = 2;
+                });
+
                 final trip = await joinVm.joinTrip(user);
-                if (trip != null && mounted) {
-                  HapticHelper.success();
-                  await homeVm.loadTrips(user.id);
-                  if (mounted) {
-                    GoRouter.of(this.context).go('/trip/${trip.id}');
+
+                if (mounted) {
+                  Navigator.of(this.context, rootNavigator: true).pop(); // Dismiss progress
+
+                  if (trip != null) {
+                    await homeVm.loadTrips(user.id);
+                    if (mounted) {
+                      GoRouter.of(this.context).go('/trip/${trip.id}');
+                      KithSuccessToast.show(this.context, "You're in ✓");
+                    }
+                  } else {
+                    HapticHelper.error();
+                    final err = joinVm.errorMessage ?? 'Could not join trip. Please check your network and retry.';
+                    ScaffoldMessenger.of(this.context).showSnackBar(
+                      SnackBar(
+                        content: Text(err),
+                        backgroundColor: AppColors.negativeRedDark,
+                        duration: const Duration(seconds: 4),
+                        action: SnackBarAction(
+                          label: 'Retry',
+                          textColor: Colors.white,
+                          onPressed: () => _handlePreviewOrJoin(preview.inviteCode),
+                        ),
+                      ),
+                    );
                   }
-                } else if (mounted) {
-                  HapticHelper.error();
-                  final err = joinVm.errorMessage ?? 'Failed to join trip. Please check your network connection and retry.';
-                  ScaffoldMessenger.of(this.context).showSnackBar(
-                    SnackBar(
-                      content: Text(err),
-                      backgroundColor: AppColors.negativeRedDark,
-                      duration: const Duration(seconds: 3),
-                    ),
-                  );
                 }
               },
               onCancel: () {

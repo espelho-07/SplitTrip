@@ -10,6 +10,7 @@ import '../../../core/widgets/app_button.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/create_trip_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
+import '../../widgets/progress/progress.dart';
 
 class CreateTripView extends StatefulWidget {
   const CreateTripView({super.key});
@@ -63,25 +64,85 @@ class _CreateTripViewState extends State<CreateTripView> {
     }
 
     HapticHelper.light();
+
+    final stageNotifier = ValueNotifier<int>(0);
+    final stages = const [
+      ProgressStage(label: 'Creating trip', description: 'Initializing trip ledger'),
+      ProgressStage(label: 'Setting up membership', description: 'Adding your profile as organizer'),
+      ProgressStage(label: 'Preparing your trip space', description: 'Configuring split rules & invite code'),
+      ProgressStage(label: 'Syncing', description: 'Securing cloud backup'),
+    ];
+
+    // Show stage-based progress dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dCtx) {
+        return ValueListenableBuilder<int>(
+          valueListenable: stageNotifier,
+          builder: (ctx, activeStage, _) {
+            final isDark = Theme.of(ctx).brightness == Brightness.dark;
+            return Dialog(
+              backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+              shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: KithStageProgress(
+                  title: 'Creating your trip…',
+                  stages: stages,
+                  currentStageIndex: activeStage,
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    // Sequential stage progression
+    Future.delayed(const Duration(milliseconds: 250), () {
+      if (mounted) stageNotifier.value = 1;
+    });
+    Future.delayed(const Duration(milliseconds: 550), () {
+      if (mounted) stageNotifier.value = 2;
+    });
+    Future.delayed(const Duration(milliseconds: 850), () {
+      if (mounted) stageNotifier.value = 3;
+    });
+
     final trip = await createVm.createTrip(user);
-    if (trip != null && mounted) {
-      homeVm.addTripLocally(trip, user.id);
-      HapticHelper.success();
-      context.go('/trip/${trip.id}');
-    } else if (mounted) {
-      HapticHelper.error();
-      final err = createVm.errorMessage ?? 'Could not create the trip. Please check your network and retry.';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(err),
-          backgroundColor: AppColors.negativeRedDark,
-          action: SnackBarAction(
-            label: 'Retry',
-            textColor: Colors.white,
-            onPressed: _handleCreate,
+
+    if (mounted) {
+      Navigator.of(context, rootNavigator: true).pop(); // Close progress dialog
+
+      if (trip != null) {
+        homeVm.addTripLocally(trip, user.id);
+        context.go('/trip/${trip.id}');
+        KithSuccessToast.show(context, 'Trip created ✓');
+      } else {
+        HapticHelper.error();
+        final err = createVm.errorMessage ?? "Couldn't create the trip.";
+        showDialog(
+          context: context,
+          builder: (errCtx) => AlertDialog(
+            title: const Text("Couldn't create the trip"),
+            content: Text('$err Your entered details have been saved.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(errCtx),
+                child: const Text('Keep Editing'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  Navigator.pop(errCtx);
+                  _handleCreate();
+                },
+                child: const Text('Try Again'),
+              ),
+            ],
           ),
-        ),
-      );
+        );
+      }
     }
   }
 

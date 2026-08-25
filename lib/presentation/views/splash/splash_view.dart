@@ -14,6 +14,8 @@ class SplashView extends StatefulWidget {
 }
 
 class _SplashViewState extends State<SplashView> {
+  String? _statusMessage;
+
   @override
   void initState() {
     super.initState();
@@ -22,6 +24,14 @@ class _SplashViewState extends State<SplashView> {
 
   Future<void> _bootstrap() async {
     final authVm = context.read<AuthViewModel>();
+    
+    // Delayed status message if initialization takes noticeable time
+    Future.delayed(const Duration(milliseconds: 400), () {
+      if (mounted && authVm.isLoading) {
+        setState(() => _statusMessage = 'Restoring your account…');
+      }
+    });
+
     try {
       await authVm.initSession().timeout(const Duration(seconds: 4));
     } catch (_) {
@@ -29,7 +39,7 @@ class _SplashViewState extends State<SplashView> {
     }
 
     // Short graceful pause for animation fluidity
-    await Future.delayed(const Duration(milliseconds: 600));
+    await Future.delayed(const Duration(milliseconds: 500));
 
     if (!mounted) return;
 
@@ -96,10 +106,20 @@ class _SplashViewState extends State<SplashView> {
 
             const SizedBox(height: 8),
 
-            // Subtitle
-            Text(
-              'Effortless group money for trips & friends',
-              style: AppTypography.bodyMedium(isDark: isDark),
+            // Subtitle or Contextual Status
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              child: Text(
+                _statusMessage ?? 'Effortless group money for trips & friends',
+                key: ValueKey(_statusMessage),
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: _statusMessage != null ? FontWeight.w600 : FontWeight.normal,
+                  color: _statusMessage != null
+                      ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
+                      : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                ),
+              ),
             )
             .animate()
             .fadeIn(delay: 350.ms, duration: 400.ms),

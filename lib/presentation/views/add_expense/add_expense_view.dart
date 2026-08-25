@@ -21,6 +21,7 @@ import '../../../domain/models/trip_member.dart';
 import '../../viewmodels/add_expense_viewmodel.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/trip_detail_viewmodel.dart';
+import '../../widgets/progress/progress.dart';
 import 'widgets/expense_draft_confirmation_sheet.dart';
 
 class AddExpenseView extends StatefulWidget {
@@ -165,8 +166,8 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     HapticHelper.light();
     final expense = await addVm.saveExpense(trip.id);
     if (expense != null && mounted) {
-      HapticHelper.success();
       context.pop(true);
+      KithSuccessToast.show(context, 'Expense added ✓');
     } else if (mounted) {
       HapticHelper.error();
       final err = addVm.errorMessage ?? 'Could not save the expense. Please try again.';
@@ -689,6 +690,58 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     );
   }
 
+  Future<void> _handleParseReceiptWithStages(String rawText, Trip trip, String currentUserId) async {
+    final addVm = context.read<AddExpenseViewModel>();
+    final stageNotifier = ValueNotifier<int>(0);
+    final stages = const [
+      ProgressStage(label: 'Capturing receipt', description: 'Scanning receipt geometry'),
+      ProgressStage(label: 'Reading text lines', description: 'Extracting optical characters'),
+      ProgressStage(label: 'Finding total & merchant', description: 'Computing tax and line items'),
+      ProgressStage(label: 'Preparing expense draft', description: 'Structuring participant split'),
+    ];
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => ValueListenableBuilder<int>(
+        valueListenable: stageNotifier,
+        builder: (c, activeStage, _) {
+          final isDark = Theme.of(c).brightness == Brightness.dark;
+          return Dialog(
+            backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+            shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: KithStageProgress(
+                title: 'Scanning receipt…',
+                stages: stages,
+                currentStageIndex: activeStage,
+              ),
+            ),
+          );
+        },
+      ),
+    );
+
+    Future.delayed(const Duration(milliseconds: 250), () {
+      if (mounted) stageNotifier.value = 1;
+    });
+    Future.delayed(const Duration(milliseconds: 550), () {
+      if (mounted) stageNotifier.value = 2;
+    });
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (mounted) stageNotifier.value = 3;
+    });
+
+    await Future.delayed(const Duration(milliseconds: 950));
+    final draft = addVm.parseReceiptToDraft(rawText, trip.members, currentUserId);
+
+    if (mounted) {
+      Navigator.of(context, rootNavigator: true).pop(); // Close progress dialog
+      _showDraftConfirmation(draft, trip);
+    }
+  }
+
   Widget _buildReceiptScanTab(AddExpenseViewModel addVm, Trip trip, String currentUserId, bool isDark) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -768,10 +821,9 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                   FilledButton.tonal(
                     onPressed: () {
                       HapticHelper.light();
-                      final draft = addVm.parseReceiptToDraft(rcpt['text']!, trip.members, currentUserId);
-                      _showDraftConfirmation(draft, trip);
+                      _handleParseReceiptWithStages(rcpt['text']!, trip, currentUserId);
                     },
-                    child: const Text('Parse & Confirm'),
+                    child: const Text('Scan & Review'),
                   ),
                 ],
               ),

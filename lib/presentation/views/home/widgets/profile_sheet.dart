@@ -16,6 +16,7 @@ import '../../../viewmodels/auth_viewmodel.dart';
 import '../../../viewmodels/home_viewmodel.dart';
 import '../../../viewmodels/personal_expense_viewmodel.dart';
 import '../../../viewmodels/theme_viewmodel.dart';
+import '../../../widgets/progress/progress.dart';
 import '../../settings/widgets/beta_feedback_sheet.dart';
 
 class ProfileSheet extends StatelessWidget {
@@ -376,7 +377,7 @@ class ProfileSheet extends StatelessWidget {
                       Navigator.pop(context);
                       final messenger = ScaffoldMessenger.of(context);
                       messenger.showSnackBar(
-                        const SnackBar(content: Text('⟳ Syncing all data with cloud...'), behavior: SnackBarBehavior.floating),
+                        const SnackBar(content: Text('Syncing all data with cloud…'), behavior: SnackBarBehavior.floating, duration: Duration(milliseconds: 1200)),
                       );
                       final apiClient = context.read<ApiClient>();
                       final syncService = context.read<SyncService>();
@@ -388,9 +389,9 @@ class ProfileSheet extends StatelessWidget {
                       await personalVm.loadData(user.id);
                       await personalVm.syncTripExpenses(user.id);
 
-                      messenger.showSnackBar(
-                        const SnackBar(content: Text('🎉 Everything is up to date!'), behavior: SnackBarBehavior.floating),
-                      );
+                      if (context.mounted) {
+                        KithSuccessToast.show(context, 'Everything is up to date ✓');
+                      }
                     },
                   ),
                   Divider(height: 1, color: isDark ? Colors.white10 : Colors.black12),

@@ -19,6 +19,7 @@ import '../../../../domain/models/personal_debt.dart';
 import '../../../viewmodels/auth_viewmodel.dart';
 import '../../../viewmodels/home_viewmodel.dart';
 import '../../../viewmodels/personal_expense_viewmodel.dart';
+import '../../../widgets/progress/progress.dart';
 
 enum PersonalEntryMode {
   expense,
@@ -242,16 +243,10 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
       if (mounted) {
         setState(() => _isSaving = false);
         if (expense != null) {
-          HapticHelper.success();
           Navigator.of(context).pop(true);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(_syncToTrip
-                  ? 'Expense saved & added to trip ✓'
-                  : 'Personal expense added ✓'),
-              behavior: SnackBarBehavior.floating,
-              duration: const Duration(seconds: 2),
-            ),
+          KithSuccessToast.show(
+            context,
+            _syncToTrip ? 'Expense saved & added to trip ✓' : 'Expense added ✓',
           );
         } else {
           HapticHelper.error();
@@ -279,18 +274,12 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
       if (mounted) {
         setState(() => _isSaving = false);
         if (debt != null) {
-          HapticHelper.success();
           Navigator.of(context).pop(true);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                _mode == PersonalEntryMode.lent
-                    ? 'Lending record added for $personName ✓'
-                    : 'Borrowing record added from $personName ✓',
-              ),
-              behavior: SnackBarBehavior.floating,
-              duration: const Duration(seconds: 2),
-            ),
+          KithSuccessToast.show(
+            context,
+            _mode == PersonalEntryMode.lent
+                ? 'Lending record added ✓'
+                : 'Borrowing record added ✓',
           );
         } else {
           HapticHelper.error();

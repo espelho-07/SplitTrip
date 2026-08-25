@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_radius.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/widgets/member_avatar.dart';
 import '../../../data/services/local_storage_service.dart';
@@ -14,6 +15,7 @@ import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/personal_expense_viewmodel.dart';
 import '../../viewmodels/theme_viewmodel.dart';
+import '../../widgets/progress/progress.dart';
 import '../personal/personal_home_tab.dart';
 import '../personal/widgets/add_personal_expense_sheet.dart';
 import '../trip/trips_home_tab.dart';
@@ -82,7 +84,7 @@ class _HomeViewState extends State<HomeView> {
             children: [
               Icon(Icons.g_mobiledata_rounded, color: AppColors.emeraldPrimary, size: 28),
               SizedBox(width: 6),
-              Text('Sign in with Google', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              Text('Continue with Google', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
             ],
           ),
           content: SingleChildScrollView(
@@ -132,32 +134,67 @@ class _HomeViewState extends State<HomeView> {
                 }
                 Navigator.pop(ctx);
 
-                final messenger = ScaffoldMessenger.of(context);
-                messenger.showSnackBar(
-                  const SnackBar(content: Text('Connecting Google account & syncing cloud ledger...')),
+                final stageNotifier = ValueNotifier<int>(0);
+                final stages = const [
+                  ProgressStage(label: 'Connecting Google account', description: 'Linking Google credential'),
+                  ProgressStage(label: 'Verifying canonical ledger', description: 'Migrating guest records securely'),
+                  ProgressStage(label: 'Syncing trips & balances', description: 'Backing up all data to cloud'),
+                ];
+
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (dCtx) => ValueListenableBuilder<int>(
+                    valueListenable: stageNotifier,
+                    builder: (c, activeStage, _) {
+                      final isDark = Theme.of(c).brightness == Brightness.dark;
+                      return Dialog(
+                        backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+                        shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
+                        child: Padding(
+                          padding: const EdgeInsets.all(24.0),
+                          child: KithStageProgress(
+                            title: 'Syncing your account…',
+                            stages: stages,
+                            currentStageIndex: activeStage,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 );
+
+                Future.delayed(const Duration(milliseconds: 250), () {
+                  if (mounted) stageNotifier.value = 1;
+                });
+                Future.delayed(const Duration(milliseconds: 550), () {
+                  if (mounted) stageNotifier.value = 2;
+                });
 
                 final updated = await authVm.signInWithGoogle(
                   email: email,
                   displayName: name.isEmpty ? email.split('@')[0] : name,
                   googleId: 'g_${email.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}',
                 );
-                if (updated != null) {
-                  await syncService.flushQueue(apiClient);
-                  await homeVm.loadTrips(updated.id);
-                  await personalVm.loadData(updated.id);
-                  await personalVm.syncTripExpenses(updated.id);
 
-                  if (mounted) {
-                    messenger.showSnackBar(
-                      SnackBar(content: Text('🎉 Signed in with Google as ${updated.email}! Cloud sync active.')),
-                    );
-                  }
-                } else {
-                  if (mounted) {
-                    messenger.showSnackBar(
-                      SnackBar(content: Text(authVm.errorMessage ?? 'Could not sign in with Google.')),
-                    );
+                if (mounted) {
+                  Navigator.of(context, rootNavigator: true).pop(); // Dismiss progress
+
+                  if (updated != null) {
+                    await syncService.flushQueue(apiClient);
+                    await homeVm.loadTrips(updated.id);
+                    await personalVm.loadData(updated.id);
+                    await personalVm.syncTripExpenses(updated.id);
+
+                    if (mounted) {
+                      KithSuccessToast.show(context, 'Account linked to ${updated.email} ✓');
+                    }
+                  } else {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(authVm.errorMessage ?? 'Could not sign in with Google.')),
+                      );
+                    }
                   }
                 }
               },
@@ -347,8 +384,48 @@ class _HomeViewState extends State<HomeView> {
                 if (key.isEmpty) return;
                 Navigator.pop(ctx);
 
+                final stageNotifier = ValueNotifier<int>(0);
+                final stages = const [
+                  ProgressStage(label: 'Validating recovery key', description: 'Checking hash on server'),
+                  ProgressStage(label: 'Restoring account session', description: 'Loading canonical user identity'),
+                  ProgressStage(label: 'Syncing cloud data', description: 'Restoring trips, expenses & balances'),
+                ];
+
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (dCtx) => ValueListenableBuilder<int>(
+                    valueListenable: stageNotifier,
+                    builder: (c, activeStage, _) {
+                      final isDark = Theme.of(c).brightness == Brightness.dark;
+                      return Dialog(
+                        backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+                        shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
+                        child: Padding(
+                          padding: const EdgeInsets.all(24.0),
+                          child: KithStageProgress(
+                            title: 'Restoring account…',
+                            stages: stages,
+                            currentStageIndex: activeStage,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                );
+
+                Future.delayed(const Duration(milliseconds: 250), () {
+                  if (mounted) stageNotifier.value = 1;
+                });
+                Future.delayed(const Duration(milliseconds: 550), () {
+                  if (mounted) stageNotifier.value = 2;
+                });
+
                 final restoredUser = await authVm.recoverSession(key);
+
                 if (mounted) {
+                  Navigator.of(context, rootNavigator: true).pop(); // Dismiss progress
+
                   if (restoredUser != null) {
                     final syncService = context.read<SyncService>();
                     final apiClient = context.read<ApiClient>();
@@ -356,10 +433,9 @@ class _HomeViewState extends State<HomeView> {
                     await homeVm.loadTrips(restoredUser.id);
                     await personalVm.loadData(restoredUser.id);
                     await personalVm.syncTripExpenses(restoredUser.id);
+
                     if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('🎉 Restored account for "${restoredUser.displayName}" & synced all trips!')),
-                      );
+                      KithSuccessToast.show(context, 'Account restored for ${restoredUser.displayName} ✓');
                     }
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
