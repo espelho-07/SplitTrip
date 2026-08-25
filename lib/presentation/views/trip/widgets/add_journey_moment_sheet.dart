@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/haptic_feedback_helper.dart';
@@ -139,129 +140,20 @@ class _AddJourneyMomentSheetState extends State<AddJourneyMomentSheet> {
             ),
             const SizedBox(height: 2),
             Text(
-              'Capture where you were, what happened, and highlights from "${widget.trip.name}".',
+              'Record a highlight, activity, or viewpoint from "${widget.trip.name}".',
               style: AppTypography.bodySmall(isDark: isDark),
             ),
             const SizedBox(height: AppSpacing.lg),
 
-            // Day Selector
-            Row(
-              children: [
-                Text(
-                  'Day:',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                    color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: List.generate(7, (index) {
-                        final day = index + 1;
-                        final isSelected = _dayIndex == day;
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: InkWell(
-                            onTap: () {
-                              HapticHelper.selection();
-                              setState(() => _dayIndex = day);
-                            },
-                            borderRadius: BorderRadius.circular(8),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
-                                    : (isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                'Day $day',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: isSelected
-                                      ? (isDark ? Colors.black : Colors.white)
-                                      : (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      }),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: AppSpacing.md),
-
-            // Time Selector
-            Row(
-              children: [
-                Text(
-                  'Time:',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                    color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                InkWell(
-                  onTap: () async {
-                    HapticHelper.light();
-                    final time = await showTimePicker(
-                      context: context,
-                      initialTime: _selectedTime,
-                    );
-                    if (time != null) {
-                      setState(() => _selectedTime = time);
-                    }
-                  },
-                  borderRadius: BorderRadius.circular(8),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.schedule_rounded, size: 14, color: AppColors.emeraldPrimary),
-                        const SizedBox(width: 6),
-                        Text(
-                          _selectedTime.format(context),
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: AppSpacing.md),
-
-            // Title
+            // Primary Question: What happened?
             TextField(
               controller: _titleController,
               autofocus: true,
               textCapitalization: TextCapitalization.sentences,
-              style: AppTypography.bodyMedium(isDark: isDark),
+              style: AppTypography.titleSmall(isDark: isDark),
               decoration: const InputDecoration(
                 labelText: 'What happened?',
-                hintText: 'e.g. Sunset drinks, Surfing lesson, Checked into villa',
+                hintText: 'e.g. Sunset at cliff cafe, Scooter ride to waterfalls',
                 prefixIcon: Icon(Icons.auto_awesome_rounded, size: 20),
               ),
             ),
@@ -282,6 +174,95 @@ class _AddJourneyMomentSheetState extends State<AddJourneyMomentSheet> {
 
             const SizedBox(height: AppSpacing.md),
 
+            // When: Day & Time in single cohesive row
+            Row(
+              children: [
+                // Day Selector Pill Menu
+                PopupMenuButton<int>(
+                  initialValue: _dayIndex,
+                  shape: RoundedRectangleBorder(borderRadius: AppRadius.mdBorder),
+                  onSelected: (day) {
+                    HapticHelper.selection();
+                    setState(() => _dayIndex = day);
+                  },
+                  itemBuilder: (ctx) => List.generate(14, (idx) {
+                    final day = idx + 1;
+                    return PopupMenuItem(
+                      value: day,
+                      child: Text('Day $day', style: const TextStyle(fontWeight: FontWeight.w600)),
+                    );
+                  }),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.calendar_today_rounded, size: 14, color: AppColors.emeraldPrimary),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Day $_dayIndex',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.arrow_drop_down_rounded, size: 18),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(width: 10),
+
+                // Time Selector Pill
+                InkWell(
+                  onTap: () async {
+                    HapticHelper.light();
+                    final time = await showTimePicker(
+                      context: context,
+                      initialTime: _selectedTime,
+                    );
+                    if (time != null) {
+                      setState(() => _selectedTime = time);
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.schedule_rounded, size: 14, color: AppColors.emeraldPrimary),
+                        const SizedBox(width: 8),
+                        Text(
+                          _selectedTime.format(context),
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: AppSpacing.md),
+
             // Notes / Story
             TextField(
               controller: _noteController,
@@ -290,7 +271,7 @@ class _AddJourneyMomentSheetState extends State<AddJourneyMomentSheet> {
               style: AppTypography.bodyMedium(isDark: isDark),
               decoration: const InputDecoration(
                 labelText: 'Reflection / Note (Optional)',
-                hintText: 'e.g. Best calamari we had, played acoustic songs by the shore',
+                hintText: 'e.g. Best seafood we had, sang acoustic songs by the shore',
                 prefixIcon: Icon(Icons.notes_rounded, size: 20),
               ),
             ),

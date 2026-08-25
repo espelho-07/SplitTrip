@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -397,7 +397,33 @@ class ProfileSheet extends StatelessWidget {
               ),
             ),
 
-            const SizedBox(height: AppSpacing.xl),
+            const SizedBox(height: AppSpacing.lg),
+
+            Center(
+              child: Column(
+                children: [
+                  Text(
+                    'KITH • v2.2.0',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.2,
+                      color: isDark ? Colors.white38 : Colors.black38,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Zero-Confusion Travel & Group Finances',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? Colors.white24 : Colors.black26,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: AppSpacing.lg),
 
             // Done Button
             AppButton(

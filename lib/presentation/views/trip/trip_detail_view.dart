@@ -460,24 +460,55 @@ class _TripDetailViewState extends State<TripDetailView> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.history_rounded, size: 20),
-            tooltip: 'Activity Logs',
-            onPressed: _showActivityLogsSheet,
-          ),
-          IconButton(
-            icon: const Icon(Icons.file_download_outlined, size: 20),
-            tooltip: 'Export Financials',
-            onPressed: () => _showExportSheet(trip, tripDetailVm.expenses, balanceSummary),
-          ),
-          IconButton(
             icon: const Icon(Icons.qr_code_2_rounded, size: 22),
-            tooltip: 'Trip QR Code & Invite',
+            tooltip: 'Share Trip & QR',
             onPressed: () => _showInviteShareDialog(trip),
           ),
-          IconButton(
-            icon: const Icon(Icons.person_add_outlined, size: 20),
-            tooltip: 'Add Friend',
-            onPressed: _showAddFriendDialog,
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert_rounded, size: 20),
+            tooltip: 'Trip Options',
+            shape: const RoundedRectangleBorder(borderRadius: AppRadius.mdBorder),
+            onSelected: (val) {
+              if (val == 'friend') {
+                _showAddFriendDialog();
+              } else if (val == 'activity') {
+                _showActivityLogsSheet();
+              } else if (val == 'export') {
+                _showExportSheet(trip, tripDetailVm.expenses, balanceSummary);
+              }
+            },
+            itemBuilder: (ctx) => [
+              const PopupMenuItem(
+                value: 'friend',
+                child: Row(
+                  children: [
+                    Icon(Icons.person_add_outlined, size: 18),
+                    SizedBox(width: 10),
+                    Text('Add Friend', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'activity',
+                child: Row(
+                  children: [
+                    Icon(Icons.history_rounded, size: 18),
+                    SizedBox(width: 10),
+                    Text('Activity Log', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'export',
+                child: Row(
+                  children: [
+                    Icon(Icons.file_download_outlined, size: 18),
+                    SizedBox(width: 10),
+                    Text('Export Financials', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(width: 4),
         ],
@@ -538,11 +569,19 @@ class _TripDetailViewState extends State<TripDetailView> {
               return;
             }
             final homeVm = context.read<HomeViewModel>();
+            final messenger = ScaffoldMessenger.of(context);
             final result = await context.push('/trip/${trip.id}/add-expense');
             if (result == true && user != null && mounted) {
               await tripDetailVm.loadTrip(trip.id, user.id);
               if (mounted) {
                 homeVm.loadTrips(user.id);
+                messenger.showSnackBar(
+                  const SnackBar(
+                    content: Text('Expense added ✓'),
+                    behavior: SnackBarBehavior.floating,
+                    duration: Duration(seconds: 2),
+                  ),
+                );
               }
             }
           } else {
@@ -957,6 +996,13 @@ class _TripDetailViewState extends State<TripDetailView> {
       currentUserId: currentUserId,
       onAdd: (moment) {
         vm.addJourneyMoment(moment);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Moment saved to Journey ✓'),
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 2),
+          ),
+        );
       },
     );
   }
