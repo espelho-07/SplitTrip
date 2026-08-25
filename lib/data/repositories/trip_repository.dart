@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:uuid/uuid.dart';
 import '../../core/network/api_client.dart';
+import '../../core/network/api_exceptions.dart';
 import '../../core/network/realtime_client.dart';
 import '../../domain/enums/trip_lifecycle.dart';
 import '../../domain/models/activity_log.dart';
@@ -80,13 +81,35 @@ class TripRepository {
 
   /// Fetches a non-sensitive preview of a trip by invite code before joining.
   Future<TripPreview?> getTripPreview(String inviteCode) async {
+    final cleanCode = inviteCode.trim().toUpperCase().replaceAll(RegExp(r'[\s\-]'), '');
+    if (cleanCode.isEmpty) return null;
+
+    // Check if trip is already cached locally
+    final cached = getCachedTrips().where(
+      (t) => t.inviteCode.toUpperCase() == cleanCode || t.id.toUpperCase() == cleanCode,
+    ).firstOrNull;
+
+    if (cached != null) {
+      return TripPreview(
+        tripId: cached.id,
+        name: cached.name,
+        emoji: cached.emoji,
+        coverGradientIndex: cached.coverGradientIndex,
+        currencyCode: cached.currencyCode,
+        creatorName: cached.members.where((m) => m.role == 'creator').firstOrNull?.displayName ?? 'A Kith user',
+        memberCount: cached.members.length,
+        lifecycleState: cached.lifecycleState.name,
+        inviteCode: cached.inviteCode,
+      );
+    }
+
     try {
-      final res = await apiClient.get('/trips/preview', queryParams: {'code': inviteCode.trim()});
+      final res = await apiClient.get('/trips/preview', queryParams: {'code': cleanCode});
       if (res is Map<String, dynamic>) {
         return TripPreview.fromJson(res);
       }
     } catch (_) {
-      // Offline fallback
+      // Return null on preview failure
     }
     return null;
   }
@@ -102,7 +125,12 @@ class TripRepository {
     List<String> initialFriendNames = const [],
     String tripMode = 'split_only',
   }) async {
+    final tripId = 'trip_${_uuid.v4().replaceAll('-', '').substring(0, 12)}';
+    final inviteCode = _generateInviteCode();
+
     final payload = {
+      'id': tripId,
+      'inviteCode': inviteCode,
       'name': name.trim(),
       'description': description?.trim(),
       'emoji': emoji,
@@ -125,9 +153,6 @@ class TripRepository {
     } catch (_) {
       // Offline fallback
     }
-
-    final tripId = 'trip_${_uuid.v4().replaceAll('-', '').substring(0, 12)}';
-    final inviteCode = _generateInviteCode();
 
     final members = <TripMember>[
       TripMember(
@@ -179,11 +204,20 @@ class TripRepository {
   }
 
   /// Joins a trip via 6-digit alphanumeric invite code.
-  Future<Trip?> joinTrip({
+  Future<Trip> joinTrip({
     required String inviteCodeOrId,
     required GuestUser user,
   }) async {
-    final cleanCode = inviteCodeOrId.trim().toUpperCase();
+    final cleanCode = inviteCodeOrId.trim().toUpperCase().replaceAll(RegExp(r'[\s\-]'), '');
+    if (cleanCode.isEmpty) {
+      throw const ValidationException(message: 'Please enter a valid 6-digit invite code.');
+    }
+
+    // Ensure authorization header is set with current session token
+    if (user.anonymousToken.isNotEmpty) {
+      apiClient.setAuthToken(user.anonymousToken);
+      realtimeClient?.setAuthToken(user.anonymousToken);
+    }
 
     try {
       final res = await apiClient.post('/trips/join', body: {'inviteCode': cleanCode});
@@ -199,49 +233,130 @@ class TripRepository {
         await storage.saveTrips(currentTrips.map((t) => t.toJson()).toList());
         return trip;
       }
-    } catch (_) {
-      // Offline fallback
+    } on NotFoundException {
+      throw NotFoundException(message: 'No trip found for invite code "$cleanCode". Check the code and try again.');
+    } on NetworkException {
+      // Check if trip was previously cached on this device
+      final trips = getCachedTrips();
+      final match = trips.where(
+        (t) => t.inviteCode.toUpperCase() == cleanCode || t.id.toUpperCase() == cleanCode,
+      ).firstOrNull;
+      if (match != null) {
+        if (match.members.any((m) => m.userId == user.id)) {
+          return match;
+        }
+
+        final updatedMembers = List<TripMember>.from(match.members);
+        final newMember = TripMember(
+          id: 'mbr_${_uuid.v4().replaceAll('-', '').substring(0, 10)}',
+          userId: user.id,
+          displayName: user.displayName,
+          avatarUrl: user.avatarUrl,
+          role: 'member',
+          joinedAt: DateTime.now(),
+        );
+        updatedMembers.add(newMember);
+
+        final updatedTrip = match.copyWith(
+          members: updatedMembers,
+          updatedAt: DateTime.now(),
+        );
+
+        final idx = trips.indexWhere((t) => t.id == match.id);
+        if (idx != -1) {
+          trips[idx] = updatedTrip;
+        } else {
+          trips.add(updatedTrip);
+        }
+        await storage.saveTrips(trips.map((t) => t.toJson()).toList());
+        await syncService.enqueueMutation(MutationType.joinTrip, {'inviteCode': cleanCode});
+        return updatedTrip;
+      }
+      throw const NetworkException(message: "You're offline. Reconnect to join this trip.");
+    } on ApiException catch (e) {
+      // If server returned a trip in conflict/already-joined scenario
+      if (e.details is Map<String, dynamic> && e.details.containsKey('trip')) {
+        final trip = Trip.fromJson(e.details['trip'] as Map<String, dynamic>);
+        return trip;
+      }
+      // If local cache has the trip (e.g. offline or local test session), update local cache
+      final trips = getCachedTrips();
+      final match = trips.where(
+        (t) => t.inviteCode.toUpperCase() == cleanCode || t.id.toUpperCase() == cleanCode,
+      ).firstOrNull;
+      if (match != null) {
+        if (match.members.any((m) => m.userId == user.id)) {
+          return match;
+        }
+
+        final updatedMembers = List<TripMember>.from(match.members);
+        final newMember = TripMember(
+          id: 'mbr_${_uuid.v4().replaceAll('-', '').substring(0, 10)}',
+          userId: user.id,
+          displayName: user.displayName,
+          avatarUrl: user.avatarUrl,
+          role: 'member',
+          joinedAt: DateTime.now(),
+        );
+        updatedMembers.add(newMember);
+
+        final updatedTrip = match.copyWith(
+          members: updatedMembers,
+          updatedAt: DateTime.now(),
+        );
+
+        final idx = trips.indexWhere((t) => t.id == match.id);
+        if (idx != -1) {
+          trips[idx] = updatedTrip;
+        } else {
+          trips.add(updatedTrip);
+        }
+        await storage.saveTrips(trips.map((t) => t.toJson()).toList());
+        await syncService.enqueueMutation(MutationType.joinTrip, {'inviteCode': cleanCode});
+        return updatedTrip;
+      }
+      rethrow;
+    } catch (e) {
+      // Offline fallback: check local cache
+      final trips = getCachedTrips();
+      final match = trips.where(
+        (t) => t.inviteCode.toUpperCase() == cleanCode || t.id.toUpperCase() == cleanCode,
+      ).firstOrNull;
+      if (match != null) {
+        if (match.members.any((m) => m.userId == user.id)) {
+          return match;
+        }
+
+        final updatedMembers = List<TripMember>.from(match.members);
+        final newMember = TripMember(
+          id: 'mbr_${_uuid.v4().replaceAll('-', '').substring(0, 10)}',
+          userId: user.id,
+          displayName: user.displayName,
+          avatarUrl: user.avatarUrl,
+          role: 'member',
+          joinedAt: DateTime.now(),
+        );
+        updatedMembers.add(newMember);
+
+        final updatedTrip = match.copyWith(
+          members: updatedMembers,
+          updatedAt: DateTime.now(),
+        );
+
+        final idx = trips.indexWhere((t) => t.id == match.id);
+        if (idx != -1) {
+          trips[idx] = updatedTrip;
+        } else {
+          trips.add(updatedTrip);
+        }
+        await storage.saveTrips(trips.map((t) => t.toJson()).toList());
+        await syncService.enqueueMutation(MutationType.joinTrip, {'inviteCode': cleanCode});
+        return updatedTrip;
+      }
+      throw NetworkException(message: "Could not join trip: $e");
     }
 
-    final trips = getCachedTrips();
-    final matchIndex = trips.indexWhere(
-      (t) => t.inviteCode.toUpperCase() == cleanCode || t.id == cleanCode,
-    );
-
-    if (matchIndex == -1) {
-      return null;
-    }
-
-    final targetTrip = trips[matchIndex];
-    if (targetTrip.members.any((m) => m.userId == user.id)) {
-      return targetTrip;
-    }
-
-    final updatedMembers = List<TripMember>.from(targetTrip.members);
-    final newMember = TripMember(
-      id: 'mbr_${_uuid.v4().replaceAll('-', '').substring(0, 10)}',
-      userId: user.id,
-      displayName: user.displayName,
-      avatarUrl: user.avatarUrl,
-      role: 'member',
-      joinedAt: DateTime.now(),
-    );
-    updatedMembers.add(newMember);
-
-    final updatedTrip = targetTrip.copyWith(
-      members: updatedMembers,
-      updatedAt: DateTime.now(),
-    );
-
-    trips[matchIndex] = updatedTrip;
-    await storage.saveTrips(trips.map((t) => t.toJson()).toList());
-
-    await syncService.enqueueMutation(
-      MutationType.joinTrip,
-      {'inviteCode': cleanCode},
-    );
-
-    return updatedTrip;
+    throw const NotFoundException(message: 'Could not resolve trip for this invite code.');
   }
 
   /// Updates the lifecycle of a trip (e.g. active -> completed).

@@ -33,9 +33,22 @@ class JoinTripViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<TripPreview?> fetchPreview() async {
-    if (_code.length < 6) {
-      _errorMessage = 'Please enter a valid 6-digit trip code';
+  String _formatError(dynamic e) {
+    final str = e.toString();
+    if (str.startsWith('Exception: ')) return str.substring(11);
+    if (str.contains('message: ')) {
+      final match = RegExp(r'message:\s*([^,\)]+)').firstMatch(str);
+      if (match != null && match.group(1) != null) {
+        return match.group(1)!.trim();
+      }
+    }
+    return str;
+  }
+
+  Future<TripPreview?> fetchPreview([String? directCode]) async {
+    final targetCode = (directCode ?? _code).trim().toUpperCase().replaceAll(RegExp(r'[\s\-]'), '');
+    if (targetCode.length < 4) {
+      _errorMessage = 'Please enter a valid trip code';
       notifyListeners();
       return null;
     }
@@ -45,14 +58,14 @@ class JoinTripViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final p = await tripRepo.getTripPreview(_code);
+      final p = await tripRepo.getTripPreview(targetCode);
       if (p == null) {
-        _errorMessage = 'No trip found for code "$_code". Please check and try again.';
+        _errorMessage = 'No trip found for code "$targetCode". Please check and try again.';
       }
       _preview = p;
       return p;
     } catch (e) {
-      _errorMessage = e.toString();
+      _errorMessage = _formatError(e);
       return null;
     } finally {
       _isLoadingPreview = false;
@@ -60,9 +73,12 @@ class JoinTripViewModel extends ChangeNotifier {
     }
   }
 
-  Future<Trip?> joinTrip(GuestUser user) async {
-    if (_code.isEmpty) {
-      _errorMessage = 'Please enter a 6-digit trip code';
+  Future<Trip?> joinTrip(GuestUser user, [String? directCode]) async {
+    if (_isJoining) return null;
+
+    final targetCode = (directCode ?? _code).trim().toUpperCase().replaceAll(RegExp(r'[\s\-]'), '');
+    if (targetCode.isEmpty) {
+      _errorMessage = 'Please enter a 6-character trip code';
       notifyListeners();
       return null;
     }
@@ -73,17 +89,13 @@ class JoinTripViewModel extends ChangeNotifier {
 
     try {
       final trip = await tripRepo.joinTrip(
-        inviteCodeOrId: _code,
+        inviteCodeOrId: targetCode,
         user: user,
       );
 
-      if (trip == null) {
-        _errorMessage = 'No trip found with this code. Please check and try again.';
-      }
-
       return trip;
     } catch (e) {
-      _errorMessage = e.toString();
+      _errorMessage = _formatError(e);
       return null;
     } finally {
       _isJoining = false;

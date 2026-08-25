@@ -32,16 +32,24 @@ class TripService {
     };
   }
 
-  createTrip(user, { name, description, emoji, coverGradientIndex, currencyCode, initialFriendNames = [], tripMode = 'split_only' }) {
+  createTrip(user, { id, inviteCode: customInviteCode, name, description, emoji, coverGradientIndex, currencyCode, initialFriendNames = [], tripMode = 'split_only' }) {
     if (!name || !name.trim()) {
       throw AppError.badRequest('Trip name is required');
     }
 
-    const tripId = `trip_${crypto.randomUUID().replace(/-/g, '').substring(0, 12)}`;
-    let inviteCode = this._generateInviteCode();
+    // Check if trip with client-provided ID already exists (idempotent create)
+    if (id) {
+      const existingTrip = db.get('trips', id);
+      if (existingTrip) {
+        return this._enrichTrip(existingTrip);
+      }
+    }
 
-    // Ensure code uniqueness
-    while (db.findOne('trips', (t) => t.inviteCode === inviteCode)) {
+    const tripId = id && id.trim() ? id.trim() : `trip_${crypto.randomUUID().replace(/-/g, '').substring(0, 12)}`;
+    let inviteCode = customInviteCode ? customInviteCode.trim().toUpperCase() : this._generateInviteCode();
+
+    // Ensure code uniqueness (if collision with a different trip, generate unique code)
+    while (db.findOne('trips', (t) => t.inviteCode === inviteCode && t.id !== tripId)) {
       inviteCode = this._generateInviteCode();
     }
 
@@ -162,12 +170,15 @@ class TripService {
   }
 
   getTripPreviewByCode(inviteCode) {
-    if (!inviteCode || !inviteCode.trim()) {
+    if (!inviteCode || !inviteCode.toString().trim()) {
       throw AppError.badRequest('Join code is required');
     }
 
-    const cleanCode = inviteCode.trim().toUpperCase();
-    const trip = db.findOne('trips', (t) => t.inviteCode === cleanCode || t.id === cleanCode);
+    const cleanCode = inviteCode.toString().trim().toUpperCase().replace(/[\s\-]/g, '');
+    const trip = db.findOne('trips', (t) =>
+      (t.inviteCode && t.inviteCode.toUpperCase() === cleanCode) ||
+      (t.id && t.id.toUpperCase() === cleanCode)
+    );
 
     if (!trip) {
       throw AppError.notFound('No trip found for this invite code');
@@ -191,12 +202,15 @@ class TripService {
   }
 
   joinTripByCode(user, inviteCode, realtimeHub = null) {
-    if (!inviteCode || !inviteCode.trim()) {
+    if (!inviteCode || !inviteCode.toString().trim()) {
       throw AppError.badRequest('Join code is required');
     }
 
-    const cleanCode = inviteCode.trim().toUpperCase();
-    const trip = db.findOne('trips', (t) => t.inviteCode === cleanCode || t.id === cleanCode);
+    const cleanCode = inviteCode.toString().trim().toUpperCase().replace(/[\s\-]/g, '');
+    const trip = db.findOne('trips', (t) =>
+      (t.inviteCode && t.inviteCode.toUpperCase() === cleanCode) ||
+      (t.id && t.id.toUpperCase() === cleanCode)
+    );
 
     if (!trip) {
       throw AppError.notFound('No trip found with this code. Please check and try again.');
@@ -214,17 +228,38 @@ class TripService {
     }
 
     const now = new Date().toISOString();
-    const newMember = {
-      id: `mbr_${crypto.randomUUID().replace(/-/g, '').substring(0, 10)}`,
-      tripId: trip.id,
-      userId: user.id,
-      displayName: user.displayName,
-      avatarUrl: user.avatarUrl || null,
-      role: 'member',
-      joinedAt: now,
-    };
 
-    db.insert('trip_members', newMember);
+    // Check if there is an unlinked placeholder member created via initialFriendNames
+    const placeholderMember = db.findOne(
+      'trip_members',
+      (m) => m.tripId === trip.id &&
+             m.userId.startsWith('guest_') &&
+             m.displayName.trim().toLowerCase() === user.displayName.trim().toLowerCase()
+    );
+
+    let activeMember;
+    if (placeholderMember) {
+      // Upgrade existing placeholder member with authenticated user
+      db.update('trip_members', placeholderMember.id, {
+        userId: user.id,
+        avatarUrl: user.avatarUrl || placeholderMember.avatarUrl,
+        joinedAt: now,
+      });
+      activeMember = db.get('trip_members', placeholderMember.id);
+    } else {
+      // Create new member record
+      activeMember = {
+        id: `mbr_${crypto.randomUUID().replace(/-/g, '').substring(0, 10)}`,
+        tripId: trip.id,
+        userId: user.id,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl || null,
+        role: 'member',
+        joinedAt: now,
+      };
+      db.insert('trip_members', activeMember);
+    }
+
     db.update('trips', trip.id, { updatedAt: now });
 
     this.logActivity(trip.id, {
@@ -232,7 +267,7 @@ class TripService {
       actorId: user.id,
       actorName: user.displayName,
       description: `${user.displayName} joined the trip`,
-      metadata: { memberId: newMember.id },
+      metadata: { memberId: activeMember.id },
     });
 
     const enriched = this._enrichTrip(trip);
@@ -240,7 +275,7 @@ class TripService {
     if (realtimeHub) {
       realtimeHub.broadcastToTrip(trip.id, 'member_joined', {
         tripId: trip.id,
-        member: newMember,
+        member: activeMember,
         trip: enriched,
       });
     }

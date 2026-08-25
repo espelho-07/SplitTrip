@@ -74,7 +74,7 @@ void main() {
       );
 
       expect(joinedTrip, isNotNull);
-      expect(joinedTrip!.members.length, 2);
+      expect(joinedTrip.members.length, 2);
       expect(joinedTrip.members.any((m) => m.userId == 'usr_friend'), isTrue);
     });
 

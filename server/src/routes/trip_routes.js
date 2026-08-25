@@ -32,14 +32,17 @@ router.get('/', (req, res, next) => {
 // POST /api/trips - Create new trip
 router.post('/', (req, res, next) => {
   try {
-    const { name, description, emoji, coverGradientIndex, currencyCode, initialFriendNames } = req.body;
+    const { id, inviteCode, name, description, emoji, coverGradientIndex, currencyCode, initialFriendNames, tripMode } = req.body;
     const trip = tripService.createTrip(req.user, {
+      id,
+      inviteCode,
       name,
       description,
       emoji,
       coverGradientIndex,
       currencyCode,
       initialFriendNames,
+      tripMode,
     });
     res.status(201).json({ data: trip });
   } catch (e) {

@@ -45,34 +45,36 @@ class _JoinTripViewState extends State<JoinTripView> {
   }
 
   Future<void> _handlePreviewOrJoin([String? directCode]) async {
+    FocusScope.of(context).unfocus();
+
     final joinVm = context.read<JoinTripViewModel>();
     final authVm = context.read<AuthViewModel>();
 
     final user = authVm.currentUser;
     if (user == null) return;
 
-    if (directCode != null) {
-      joinVm.setCode(directCode);
-      _codeController.text = directCode;
+    final targetCode = (directCode ?? _codeController.text).trim().toUpperCase();
+    if (targetCode.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a 6-character trip invite code')),
+      );
+      return;
     }
 
-    final preview = await joinVm.fetchPreview();
+    joinVm.setCode(targetCode);
+    _codeController.text = targetCode;
+
+    final preview = await joinVm.fetchPreview(targetCode);
     if (preview != null && mounted) {
       _showPreviewSheet(preview);
     } else if (mounted) {
-      HapticHelper.error();
-      final err = joinVm.errorMessage ?? 'Could not find a trip for code "${joinVm.code}". Please verify and retry.';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(err),
-          backgroundColor: AppColors.negativeRedDark,
-          duration: const Duration(seconds: 3),
-        ),
-      );
+      // If preview is unavailable (e.g. preview endpoint timeout), offer direct join attempt
+      _executeJoinFlow(targetCode);
     }
   }
 
   Future<void> _handleOpenQrScanner() async {
+    FocusScope.of(context).unfocus();
     HapticHelper.medium();
     final scannedCode = await Navigator.of(context).push<String>(
       MaterialPageRoute(builder: (_) => const QrScannerView()),
@@ -80,6 +82,84 @@ class _JoinTripViewState extends State<JoinTripView> {
 
     if (scannedCode != null && scannedCode.isNotEmpty && mounted) {
       _handlePreviewOrJoin(scannedCode);
+    }
+  }
+
+  Future<void> _executeJoinFlow(String code) async {
+    final authVm = context.read<AuthViewModel>();
+    final homeVm = context.read<HomeViewModel>();
+    final joinVm = context.read<JoinTripViewModel>();
+
+    final user = authVm.currentUser;
+    if (user == null) return;
+
+    FocusScope.of(context).unfocus();
+
+    final stageNotifier = ValueNotifier<int>(0);
+    final stages = const [
+      ProgressStage(label: 'Checking invite code', description: 'Validating membership token'),
+      ProgressStage(label: 'Joining trip', description: 'Adding your ledger to group'),
+      ProgressStage(label: 'Syncing trip', description: 'Fetching expenses and balances'),
+    ];
+
+    // Show progress dialog with finite timeout
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dCtx) => ValueListenableBuilder<int>(
+        valueListenable: stageNotifier,
+        builder: (ctx, activeStage, _) {
+          final isDark = Theme.of(ctx).brightness == Brightness.dark;
+          return Dialog(
+            backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+            shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: KithStageProgress(
+                title: 'Joining trip…',
+                stages: stages,
+                currentStageIndex: activeStage,
+              ),
+            ),
+          );
+        },
+      ),
+    );
+
+    Future.delayed(const Duration(milliseconds: 250), () {
+      if (mounted) stageNotifier.value = 1;
+    });
+    Future.delayed(const Duration(milliseconds: 550), () {
+      if (mounted) stageNotifier.value = 2;
+    });
+
+    final trip = await joinVm.joinTrip(user, code);
+
+    if (mounted) {
+      Navigator.of(context, rootNavigator: true).pop(); // Dismiss progress
+
+      if (trip != null) {
+        await homeVm.loadTrips(user.id);
+        if (mounted) {
+          GoRouter.of(context).go('/trip/${trip.id}');
+          KithSuccessToast.show(context, "You're in! 🎉");
+        }
+      } else {
+        HapticHelper.error();
+        final err = joinVm.errorMessage ?? 'Could not join trip. Please check the invite code and try again.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(err),
+            backgroundColor: AppColors.negativeRedDark,
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: () => _executeJoinFlow(code),
+            ),
+          ),
+        );
+      }
     }
   }
 
@@ -95,79 +175,8 @@ class _JoinTripViewState extends State<JoinTripView> {
               preview: preview,
               isJoining: joinVm.isJoining,
               onConfirmJoin: () async {
-                final authVm = context.read<AuthViewModel>();
-                final homeVm = context.read<HomeViewModel>();
-                final user = authVm.currentUser;
-                if (user == null) return;
-
                 Navigator.of(bottomSheetContext).pop();
-
-                final stageNotifier = ValueNotifier<int>(0);
-                final stages = const [
-                  ProgressStage(label: 'Checking invite code', description: 'Validating membership token'),
-                  ProgressStage(label: 'Joining trip', description: 'Adding your ledger to group'),
-                  ProgressStage(label: 'Syncing trip', description: 'Fetching expenses and balances'),
-                ];
-
-                // Show progress dialog
-                showDialog(
-                  context: this.context,
-                  barrierDismissible: false,
-                  builder: (dCtx) => ValueListenableBuilder<int>(
-                    valueListenable: stageNotifier,
-                    builder: (ctx, activeStage, _) {
-                      final isDark = Theme.of(ctx).brightness == Brightness.dark;
-                      return Dialog(
-                        backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
-                        shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
-                        child: Padding(
-                          padding: const EdgeInsets.all(24.0),
-                          child: KithStageProgress(
-                            title: 'Joining trip…',
-                            stages: stages,
-                            currentStageIndex: activeStage,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                );
-
-                Future.delayed(const Duration(milliseconds: 250), () {
-                  if (mounted) stageNotifier.value = 1;
-                });
-                Future.delayed(const Duration(milliseconds: 550), () {
-                  if (mounted) stageNotifier.value = 2;
-                });
-
-                final trip = await joinVm.joinTrip(user);
-
-                if (mounted) {
-                  Navigator.of(this.context, rootNavigator: true).pop(); // Dismiss progress
-
-                  if (trip != null) {
-                    await homeVm.loadTrips(user.id);
-                    if (mounted) {
-                      GoRouter.of(this.context).go('/trip/${trip.id}');
-                      KithSuccessToast.show(this.context, "You're in ✓");
-                    }
-                  } else {
-                    HapticHelper.error();
-                    final err = joinVm.errorMessage ?? 'Could not join trip. Please check your network and retry.';
-                    ScaffoldMessenger.of(this.context).showSnackBar(
-                      SnackBar(
-                        content: Text(err),
-                        backgroundColor: AppColors.negativeRedDark,
-                        duration: const Duration(seconds: 4),
-                        action: SnackBarAction(
-                          label: 'Retry',
-                          textColor: Colors.white,
-                          onPressed: () => _handlePreviewOrJoin(preview.inviteCode),
-                        ),
-                      ),
-                    );
-                  }
-                }
+                await _executeJoinFlow(preview.inviteCode ?? preview.id);
               },
               onCancel: () {
                 Navigator.of(bottomSheetContext).pop();
