@@ -1,4 +1,4 @@
-﻿import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -38,7 +38,25 @@ enum GoogleSignInFailure { cancelled, networkError, signInFailed, supabaseError 
 /// If Supabase is not yet configured (placeholder URL), step 3 is skipped
 /// and the raw Google account info is returned directly.
 class GoogleAuthService {
-  static final GoogleSignIn _googleSignIn = GoogleSignIn(
+  /// Web OAuth Client ID — registered in Google Cloud Console and configured
+  /// in Supabase Auth → Providers → Google.
+  ///
+  /// Required as [serverClientId] so the native Google Sign-In plugin
+  /// requests an idToken scoped for this server client, which Supabase
+  /// can then verify via [signInWithIdToken()].
+  ///
+  /// This is the Web client ID (not the Android client) — that is correct.
+  /// The Android client ID is embedded in google-services.json for the
+  /// native SDK; the Web client ID here identifies the token audience.
+  static const String _webClientId =
+      '975934560976-ipa4q2unpgpi9rtq3ukv12bhl0b7ao8m.apps.googleusercontent.com';
+
+  static final GoogleSignIn _googleSignInWithServerClient = GoogleSignIn(
+    scopes: ['email', 'profile'],
+    serverClientId: _webClientId,
+  );
+
+  static final GoogleSignIn _googleSignInBasic = GoogleSignIn(
     scopes: ['email', 'profile'],
   );
 
@@ -49,19 +67,20 @@ class GoogleAuthService {
   /// Throws [GoogleSignInException] with a [GoogleSignInFailure] reason on error.
   static Future<GoogleAuthResult?> signIn() async {
     GoogleSignInAccount? account;
+    bool usedServerClient = true;
 
     try {
       // Force account picker to appear even if a session was previously cached
       try {
-        await _googleSignIn.signOut();
+        await _googleSignInWithServerClient.signOut();
       } catch (_) {}
 
-      account = await _googleSignIn.signIn();
+      account = await _googleSignInWithServerClient.signIn();
       if (account == null) return null; // User cancelled
     } on PlatformException catch (e) {
-      debugPrint('[GoogleAuthService] PlatformException: ${e.code} — ${e.message}');
+      debugPrint('[GoogleAuthService] PlatformException with serverClientId: ${e.code} — ${e.message}');
       if (e.code == 'sign_in_cancelled' || e.code == 'access_denied') {
-        return null; // Treat cancel/deny as silent no-op
+        return null; // User explicitly cancelled
       }
       if (e.code == 'network_error') {
         throw const GoogleSignInException(
@@ -69,11 +88,38 @@ class GoogleAuthService {
           message: 'No internet connection. Please check your network and try again.',
         );
       }
-      throw GoogleSignInException(
-        failure: GoogleSignInFailure.signInFailed,
-        message:
-            'Google Sign-In is not set up yet. Make sure google-services.json is placed at android/app/google-services.json for package com.nirniq.kith. (${e.code})',
-      );
+
+      // If serverClientId failed (e.g. ApiException 10/404/not found/developer error),
+      // attempt fallback with basic Google Sign-In without serverClientId
+      debugPrint('[GoogleAuthService] Retrying with basic GoogleSignIn fallback...');
+      usedServerClient = false;
+      try {
+        try {
+          await _googleSignInBasic.signOut();
+        } catch (_) {}
+        account = await _googleSignInBasic.signIn();
+        if (account == null) return null;
+      } on PlatformException catch (fallbackErr) {
+        debugPrint('[GoogleAuthService] Fallback PlatformException: ${fallbackErr.code} — ${fallbackErr.message}');
+        if (fallbackErr.code == 'sign_in_cancelled' || fallbackErr.code == 'access_denied') {
+          return null;
+        }
+        if (fallbackErr.code == 'network_error') {
+          throw const GoogleSignInException(
+            failure: GoogleSignInFailure.networkError,
+            message: 'No internet connection. Please check your network and try again.',
+          );
+        }
+        throw GoogleSignInException(
+          failure: GoogleSignInFailure.signInFailed,
+          message: 'Google Sign-In error (${fallbackErr.code}): ${fallbackErr.message ?? "Please verify your Google account setup."}',
+        );
+      } catch (fallbackErr) {
+        throw GoogleSignInException(
+          failure: GoogleSignInFailure.signInFailed,
+          message: fallbackErr.toString(),
+        );
+      }
     } catch (e) {
       debugPrint('[GoogleAuthService] Unexpected signIn error: $e');
       throw GoogleSignInException(
@@ -144,10 +190,11 @@ class GoogleAuthService {
   /// Signs the user out of both Google and Supabase.
   static Future<void> signOut() async {
     try {
-      await _googleSignIn.signOut();
-    } catch (e) {
-      debugPrint('[GoogleAuthService] Google Sign-Out error: $e');
-    }
+      await _googleSignInWithServerClient.signOut();
+    } catch (_) {}
+    try {
+      await _googleSignInBasic.signOut();
+    } catch (_) {}
     if (SupabaseConfig.isConfigured) {
       try {
         await Supabase.instance.client.auth.signOut();
