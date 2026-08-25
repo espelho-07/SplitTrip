@@ -1,16 +1,16 @@
 [
   {
-    "id": "541dad80-72b8-4202-969d-059f329ad513",
-    "token": "kith_sess_e8920e2e6b327e659063c05b24db503d3057e55c7ace73a0",
-    "userId": "usr_752b9027456a",
-    "createdAt": "2026-08-24T19:42:52.535Z",
-    "expiresAt": "2027-08-24T19:42:52.535Z"
+    "id": "7f83c443-c1ca-4b35-a2e2-28a8b8d94e98",
+    "token": "kith_sess_7c52fa7ac28aea1ec176dfd8b52f18de7631d233f43d0163",
+    "userId": "usr_6c7a15d8d91d",
+    "createdAt": "2026-08-24T20:36:23.944Z",
+    "expiresAt": "2027-08-24T20:36:23.944Z"
   },
   {
-    "id": "85d24b2a-769d-4cdf-a98c-227561a4e394",
-    "token": "kith_sess_b58a92fa172ec00439a153ea7ed63066cf2b62b900e870cc",
-    "userId": "usr_bb3291952d6d",
-    "createdAt": "2026-08-24T19:42:52.536Z",
-    "expiresAt": "2027-08-24T19:42:52.536Z"
+    "id": "bfcf5d6f-89fa-4c37-98bb-e5ff9d3f27a5",
+    "token": "kith_sess_506a52ffad939fa1e89c16e0c7f26dec2179de3977b9035a",
+    "userId": "usr_3a9d765d5a49",
+    "createdAt": "2026-08-24T20:36:23.945Z",
+    "expiresAt": "2027-08-24T20:36:23.945Z"
   }
 ]

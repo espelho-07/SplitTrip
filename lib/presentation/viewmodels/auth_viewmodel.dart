@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../data/repositories/user_repository.dart';
+import '../../domain/enums/app_experience_mode.dart';
 import '../../domain/models/guest_user.dart';
 
 class AuthViewModel extends ChangeNotifier {
   final UserRepository userRepo;
   GuestUser? _currentUser;
+  AppExperienceMode _appExperienceMode = AppExperienceMode.all;
   bool _isInitialized = false;
   bool _isLoading = false;
   String? _errorMessage;
@@ -12,6 +14,7 @@ class AuthViewModel extends ChangeNotifier {
   AuthViewModel({required this.userRepo});
 
   GuestUser? get currentUser => _currentUser;
+  AppExperienceMode get appExperienceMode => _appExperienceMode;
   bool get isAuthenticated => _currentUser != null;
   bool get isInitialized => _isInitialized;
   bool get isLoading => _isLoading;
@@ -27,6 +30,7 @@ class AuthViewModel extends ChangeNotifier {
 
     try {
       _currentUser = userRepo.getCurrentUser();
+      _appExperienceMode = AppExperienceMode.fromKey(userRepo.getAppExperienceMode());
     } catch (e) {
       _errorMessage = e.toString();
     } finally {
@@ -36,9 +40,19 @@ class AuthViewModel extends ChangeNotifier {
     }
   }
 
-  Future<GuestUser> createGuestSession(String displayName) async {
+  Future<void> setAppExperienceMode(AppExperienceMode mode) async {
+    _appExperienceMode = mode;
+    await userRepo.saveAppExperienceMode(mode.key);
+    notifyListeners();
+  }
+
+  Future<GuestUser> createGuestSession(String displayName, [AppExperienceMode? mode]) async {
     _isLoading = true;
     _errorMessage = null;
+    if (mode != null) {
+      _appExperienceMode = mode;
+      await userRepo.saveAppExperienceMode(mode.key);
+    }
     notifyListeners();
 
     try {

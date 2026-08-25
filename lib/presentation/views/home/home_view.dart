@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
@@ -14,6 +15,7 @@ import '../../../core/widgets/member_avatar.dart';
 import '../../../core/widgets/surface_card.dart';
 import '../../../data/services/local_storage_service.dart';
 import '../../../data/services/sync_service.dart';
+import '../../../domain/enums/app_experience_mode.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/personal_expense_viewmodel.dart';
@@ -200,6 +202,127 @@ class _HomeViewState extends State<HomeView> {
                   ],
                 ),
               ),
+              const SizedBox(height: AppSpacing.lg),
+              Text(
+                'App Modules & Experience',
+                style: AppTypography.titleSmall(isDark: isDark),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'Choose whether to focus exclusively on group trips or use the full suite with personal finance.',
+                style: AppTypography.bodySmall(isDark: isDark),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+
+              // Mode 1: Trips Only
+              InkWell(
+                onTap: () async {
+                  HapticHelper.selection();
+                  await authVm.setAppExperienceMode(AppExperienceMode.tripsOnly);
+                  if (mounted) {
+                    setState(() => _currentIndex = 1);
+                  }
+                },
+                borderRadius: AppRadius.mdBorder,
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: authVm.appExperienceMode == AppExperienceMode.tripsOnly
+                        ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.12)
+                        : (isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle),
+                    borderRadius: AppRadius.mdBorder,
+                    border: Border.all(
+                      color: authVm.appExperienceMode == AppExperienceMode.tripsOnly
+                          ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
+                          : (isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle),
+                      width: authVm.appExperienceMode == AppExperienceMode.tripsOnly ? 1.5 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Text('✈️', style: TextStyle(fontSize: 20)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Trips & Group Splitting Only',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                                color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Clean interface focused purely on trips and balances',
+                              style: AppTypography.bodySmall(isDark: isDark),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (authVm.appExperienceMode == AppExperienceMode.tripsOnly)
+                        const Icon(Icons.check_circle_rounded, color: AppColors.emeraldPrimary, size: 20),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: AppSpacing.xs),
+
+              // Mode 2: Both Trips & Personal Expenses
+              InkWell(
+                onTap: () async {
+                  HapticHelper.selection();
+                  await authVm.setAppExperienceMode(AppExperienceMode.all);
+                },
+                borderRadius: AppRadius.mdBorder,
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: authVm.appExperienceMode == AppExperienceMode.all
+                        ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.12)
+                        : (isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle),
+                    borderRadius: AppRadius.mdBorder,
+                    border: Border.all(
+                      color: authVm.appExperienceMode == AppExperienceMode.all
+                          ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
+                          : (isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle),
+                      width: authVm.appExperienceMode == AppExperienceMode.all ? 1.5 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Text('💼', style: TextStyle(fontSize: 20)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Trips & Personal Expenses',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                                color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Full suite with personal tracker, lending/borrowing, & budgets',
+                              style: AppTypography.bodySmall(isDark: isDark),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (authVm.appExperienceMode == AppExperienceMode.all)
+                        const Icon(Icons.check_circle_rounded, color: AppColors.emeraldPrimary, size: 20),
+                    ],
+                  ),
+                ),
+              ),
+
               const SizedBox(height: AppSpacing.md),
               AppButton(
                 text: 'Sync All Data with Cloud',
@@ -594,6 +717,7 @@ class _HomeViewState extends State<HomeView> {
     final authVm = context.watch<AuthViewModel>();
     final themeVm = context.watch<ThemeViewModel>();
     final user = authVm.currentUser;
+    final isTripsOnly = authVm.appExperienceMode == AppExperienceMode.tripsOnly;
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
@@ -649,53 +773,57 @@ class _HomeViewState extends State<HomeView> {
           const SizedBox(width: 8),
         ],
       ),
-      body: IndexedStack(
-        index: _currentIndex,
-        children: const [
-          PersonalHomeTab(),
-          TripsHomeTab(),
-        ],
-      ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
-          border: Border(
-            top: BorderSide(
-              color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
-              width: 1,
+      body: isTripsOnly
+          ? const TripsHomeTab()
+          : IndexedStack(
+              index: _currentIndex,
+              children: const [
+                PersonalHomeTab(),
+                TripsHomeTab(),
+              ],
             ),
-          ),
-        ),
-        child: NavigationBar(
-          selectedIndex: _currentIndex,
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          indicatorColor: AppColors.emeraldPrimary.withValues(alpha: 0.16),
-          height: 64,
-          onDestinationSelected: (index) {
-            if (_currentIndex != index) {
-              setState(() => _currentIndex = index);
-              HapticHelper.selection();
-            }
-          },
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.receipt_long_outlined, size: 22),
-              selectedIcon: Icon(Icons.receipt_long_rounded, size: 22, color: AppColors.emeraldPrimary),
-              label: 'Expenses',
+      bottomNavigationBar: isTripsOnly
+          ? null
+          : Container(
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+                border: Border(
+                  top: BorderSide(
+                    color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: NavigationBar(
+                selectedIndex: _currentIndex,
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                indicatorColor: AppColors.emeraldPrimary.withValues(alpha: 0.16),
+                height: 64,
+                onDestinationSelected: (index) {
+                  if (_currentIndex != index) {
+                    setState(() => _currentIndex = index);
+                    HapticHelper.selection();
+                  }
+                },
+                destinations: const [
+                  NavigationDestination(
+                    icon: Icon(Icons.receipt_long_outlined, size: 22),
+                    selectedIcon: Icon(Icons.receipt_long_rounded, size: 22, color: AppColors.emeraldPrimary),
+                    label: 'Expenses',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.flight_takeoff_outlined, size: 22),
+                    selectedIcon: Icon(Icons.flight_takeoff_rounded, size: 22, color: AppColors.emeraldPrimary),
+                    label: 'Trips',
+                  ),
+                ],
+              ),
             ),
-            NavigationDestination(
-              icon: Icon(Icons.flight_takeoff_outlined, size: 22),
-              selectedIcon: Icon(Icons.flight_takeoff_rounded, size: 22, color: AppColors.emeraldPrimary),
-              label: 'Trips',
-            ),
-          ],
-        ),
-      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           HapticHelper.light();
-          if (_currentIndex == 0) {
+          if (!isTripsOnly && _currentIndex == 0) {
             AddPersonalExpenseSheet.show(context);
           } else {
             context.push('/create-trip');
@@ -708,7 +836,7 @@ class _HomeViewState extends State<HomeView> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         icon: const Icon(Icons.add_rounded, size: 20),
         label: Text(
-          _currentIndex == 0 ? 'Add Expense' : 'New Trip',
+          (!isTripsOnly && _currentIndex == 0) ? 'Add Expense' : 'New Trip',
           style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
         ),
       ),

@@ -28,6 +28,7 @@ import '../../viewmodels/trip_detail_viewmodel.dart';
 import '../add_expense/add_expense_view.dart';
 import 'widgets/activity_log_sheet.dart';
 import 'widgets/expense_detail_sheet.dart';
+import 'widgets/member_spend_breakdown_sheet.dart';
 import 'widgets/settlement_sheet.dart';
 import 'widgets/trip_qr_sheet.dart';
 
@@ -516,7 +517,7 @@ class _TripDetailViewState extends State<TripDetailView> {
               if (_activeTab == 0)
                 _buildExpensesTab(tripDetailVm, trip, isDark, user?.id ?? '')
               else
-                _buildBalancesAndPeopleTab(trip, balanceSummary, isDark, user?.id ?? ''),
+                _buildBalancesAndPeopleTab(trip, balanceSummary, tripDetailVm.expenses, isDark, user?.id ?? ''),
 
               const SizedBox(height: 90),
             ],
@@ -918,7 +919,7 @@ class _TripDetailViewState extends State<TripDetailView> {
                 ),
                 alignment: Alignment.center,
                 child: Text(
-                  'Balances ($memberCount)',
+                  'Spending & Balances ($memberCount)',
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
@@ -1188,11 +1189,22 @@ class _TripDetailViewState extends State<TripDetailView> {
     );
   }
 
-  Widget _buildBalancesAndPeopleTab(Trip trip, BalanceSummary balanceSummary, bool isDark, String currentUserId) {
+  Widget _buildBalancesAndPeopleTab(
+    Trip trip,
+    BalanceSummary balanceSummary,
+    List<Expense> expenses,
+    bool isDark,
+    String currentUserId,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Personal Balances Section (Pairwise "What you owe / What they owe you")
+        // 1. Member Total Spending (Individual Consumption) Section
+        _buildMemberSpendingSection(trip, expenses, isDark, currentUserId),
+
+        const SizedBox(height: AppSpacing.lg),
+
+        // 2. Personal Balances Section (Pairwise "What you owe / What they owe you")
         _buildPersonalBalancesSection(trip, balanceSummary, isDark, currentUserId),
 
         const SizedBox(height: AppSpacing.lg),
@@ -1305,6 +1317,159 @@ class _TripDetailViewState extends State<TripDetailView> {
             isFullWidth: true,
             onPressed: _showSettlementSheet,
           ),
+      ],
+    );
+  }
+
+  Widget _buildMemberSpendingSection(
+    Trip trip,
+    List<Expense> expenses,
+    bool isDark,
+    String currentUserId,
+  ) {
+    int totalTripSpent = 0;
+    for (final exp in expenses) {
+      if (!exp.isDeleted) {
+        totalTripSpent += exp.amountInPaise;
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.pie_chart_outline_rounded, size: 18, color: AppColors.emeraldPrimary),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Member Total Spending',
+                      style: AppTypography.titleSmall(isDark: isDark),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'What each person consumed in "${trip.name}" (Tap for breakdown)',
+                  style: AppTypography.bodySmall(isDark: isDark),
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: trip.members.length,
+          separatorBuilder: (context, index) => const SizedBox(height: AppSpacing.sm),
+          itemBuilder: (context, index) {
+            final member = trip.members[index];
+            final isSelf = member.userId == currentUserId;
+
+            // Calculate member's total consumed share from non-deleted expenses
+            int memberSpentPaise = 0;
+            int expenseCount = 0;
+            for (final exp in expenses) {
+              if (exp.isDeleted) continue;
+              final split = exp.splits.where((s) => s.memberId == member.id).firstOrNull;
+              if (split != null && split.amountInPaise > 0) {
+                memberSpentPaise += split.amountInPaise;
+                expenseCount++;
+              }
+            }
+
+            final percentage = totalTripSpent > 0
+                ? ((memberSpentPaise / totalTripSpent) * 100).round()
+                : 0;
+
+            return SurfaceCard(
+              onTap: () {
+                MemberSpendBreakdownSheet.show(
+                  context,
+                  trip: trip,
+                  member: member,
+                  expenses: expenses,
+                  currentUserId: currentUserId,
+                );
+              },
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  MemberAvatar(
+                    name: member.displayName,
+                    isCreator: member.isCreator,
+                    size: 40,
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                isSelf ? '${member.displayName} (You)' : member.displayName,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                  color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (member.isCreator) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                decoration: BoxDecoration(
+                                  color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.15),
+                                  borderRadius: AppRadius.smBorder,
+                                ),
+                                child: Text(
+                                  'CREATOR',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w800,
+                                    color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '$expenseCount ${expenseCount == 1 ? 'expense' : 'expenses'} ($percentage% of trip)',
+                          style: AppTypography.bodySmall(isDark: isDark),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CurrencyDisplay(
+                        amountInPaise: memberSpentPaise,
+                        size: CurrencyDisplaySize.medium,
+                        currencyCode: trip.currencyCode,
+                      ),
+                      const SizedBox(width: 6),
+                      const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.emeraldPrimary),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
       ],
     );
   }

@@ -35,4 +35,12 @@ class UserRepository {
       displayName: displayName,
     );
   }
+
+  String? getAppExperienceMode() {
+    return authService.storage.getSavedAppExperienceMode();
+  }
+
+  Future<bool> saveAppExperienceMode(String mode) {
+    return authService.storage.saveAppExperienceMode(mode);
+  }
 }

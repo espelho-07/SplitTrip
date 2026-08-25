@@ -9,6 +9,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/surface_card.dart';
+import '../../../domain/enums/app_experience_mode.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 
@@ -22,6 +23,7 @@ class OnboardingView extends StatefulWidget {
 class _OnboardingViewState extends State<OnboardingView> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _recoveryKeyController = TextEditingController();
+  AppExperienceMode _selectedMode = AppExperienceMode.all;
   bool _showRecoveryField = false;
 
   @override
@@ -44,7 +46,7 @@ class _OnboardingViewState extends State<OnboardingView> {
     }
 
     HapticHelper.medium();
-    await authVm.createGuestSession(name);
+    await authVm.createGuestSession(name, _selectedMode);
     if (mounted) {
       context.go('/home');
     }
@@ -194,6 +196,126 @@ class _OnboardingViewState extends State<OnboardingView> {
                       ),
                       onSubmitted: (_) => _handleStart(),
                     ),
+                    const SizedBox(height: AppSpacing.lg),
+
+                    // App Experience Mode Selection
+                    Text(
+                      'What would you like to track?',
+                      style: AppTypography.titleSmall(isDark: isDark),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'You can change or switch this anytime from profile settings.',
+                      style: AppTypography.bodySmall(isDark: isDark),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+
+                    // Option 1: Trips & Group Splitting Only
+                    InkWell(
+                      onTap: () {
+                        HapticHelper.selection();
+                        setState(() => _selectedMode = AppExperienceMode.tripsOnly);
+                      },
+                      borderRadius: AppRadius.mdBorder,
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: _selectedMode == AppExperienceMode.tripsOnly
+                              ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.12)
+                              : (isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle),
+                          borderRadius: AppRadius.mdBorder,
+                          border: Border.all(
+                            color: _selectedMode == AppExperienceMode.tripsOnly
+                                ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
+                                : (isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle),
+                            width: _selectedMode == AppExperienceMode.tripsOnly ? 1.5 : 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Text('✈️', style: TextStyle(fontSize: 22)),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Trips & Group Splitting Only',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13,
+                                      color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Group travel costs, shared expenses & instant settlements',
+                                    style: AppTypography.bodySmall(isDark: isDark),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (_selectedMode == AppExperienceMode.tripsOnly)
+                              const Icon(Icons.check_circle_rounded, color: AppColors.emeraldPrimary, size: 20),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: AppSpacing.xs),
+
+                    // Option 2: Both Trips & Personal Expenses
+                    InkWell(
+                      onTap: () {
+                        HapticHelper.selection();
+                        setState(() => _selectedMode = AppExperienceMode.all);
+                      },
+                      borderRadius: AppRadius.mdBorder,
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: _selectedMode == AppExperienceMode.all
+                              ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.12)
+                              : (isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle),
+                          borderRadius: AppRadius.mdBorder,
+                          border: Border.all(
+                            color: _selectedMode == AppExperienceMode.all
+                                ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
+                                : (isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle),
+                            width: _selectedMode == AppExperienceMode.all ? 1.5 : 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Text('💼', style: TextStyle(fontSize: 22)),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Trips & Personal Expenses',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13,
+                                      color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Full suite: personal finance, lending/borrowing + group trips',
+                                    style: AppTypography.bodySmall(isDark: isDark),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (_selectedMode == AppExperienceMode.all)
+                              const Icon(Icons.check_circle_rounded, color: AppColors.emeraldPrimary, size: 20),
+                          ],
+                        ),
+                      ),
+                    ),
+
                     const SizedBox(height: AppSpacing.lg),
                     AppButton(
                       text: 'Get Started',

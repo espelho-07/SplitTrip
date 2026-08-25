@@ -178,4 +178,15 @@ class LocalStorageService {
     }
     return _prefs.setString(_customServerUrlKey, url.trim());
   }
+
+  // --- App Experience Mode (Trips Only vs All Modules) ---
+  static const String _appExperienceModeKey = 'kith_app_experience_mode';
+
+  String? getSavedAppExperienceMode() {
+    return _prefs.getString(_appExperienceModeKey);
+  }
+
+  Future<bool> saveAppExperienceMode(String mode) async {
+    return _prefs.setString(_appExperienceModeKey, mode);
+  }
 }

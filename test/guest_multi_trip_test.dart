@@ -9,6 +9,7 @@ import 'package:kith_app/domain/enums/trip_lifecycle.dart';
 import 'package:kith_app/domain/models/expense.dart';
 import 'package:kith_app/domain/enums/expense_category.dart';
 import 'package:kith_app/domain/enums/split_type.dart';
+import 'package:kith_app/domain/models/expense_split.dart';
 
 void main() {
   group('Guest-First Multi-Trip & Local Persistence Tests', () {
@@ -136,6 +137,75 @@ void main() {
       expect(queue.length, 2);
       expect(queue[0].payload['tripId'], 'trip_A');
       expect(queue[1].payload['tripId'], 'trip_B');
+    });
+
+    test('5. AppExperienceMode persists correctly and defaults to all modules', () async {
+      expect(storage.getSavedAppExperienceMode(), isNull);
+
+      await storage.saveAppExperienceMode('trips_only');
+      expect(storage.getSavedAppExperienceMode(), 'trips_only');
+
+      await storage.saveAppExperienceMode('all');
+      expect(storage.getSavedAppExperienceMode(), 'all');
+    });
+
+    test('6. Member total spend consumption isolates individual split shares from payer amount', () {
+      final members = [
+        TripMember(id: 'mbr_1', userId: 'usr_1', displayName: 'Rahul', role: 'member', joinedAt: DateTime.now()),
+        TripMember(id: 'mbr_2', userId: 'usr_2', displayName: 'Priya', role: 'member', joinedAt: DateTime.now()),
+        TripMember(id: 'mbr_3', userId: 'usr_3', displayName: 'Darpan', role: 'creator', joinedAt: DateTime.now()),
+      ];
+
+      // Expense 1: Rahul paid ₹300, split ₹100 each across all 3
+      final exp1 = Expense(
+        id: 'exp_1',
+        tripId: 'trip_1',
+        title: 'Snacks',
+        amountInPaise: 30000,
+        paidById: 'mbr_1',
+        category: ExpenseCategory.food,
+        splits: [
+          const ExpenseSplit(memberId: 'mbr_1', amountInPaise: 10000),
+          const ExpenseSplit(memberId: 'mbr_2', amountInPaise: 10000),
+          const ExpenseSplit(memberId: 'mbr_3', amountInPaise: 10000),
+        ],
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      // Expense 2: Priya paid ₹200, but only Rahul and Priya were in it (₹100 each)
+      final exp2 = Expense(
+        id: 'exp_2',
+        tripId: 'trip_1',
+        title: 'Taxi',
+        amountInPaise: 20000,
+        paidById: 'mbr_2',
+        category: ExpenseCategory.transport,
+        splits: [
+          const ExpenseSplit(memberId: 'mbr_1', amountInPaise: 10000),
+          const ExpenseSplit(memberId: 'mbr_2', amountInPaise: 10000),
+        ],
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      final expenses = [exp1, exp2];
+
+      // Calculate consumed spend for Rahul (mbr_1): ₹100 + ₹100 = ₹200 (even though Rahul paid ₹300 out of pocket)
+      int rahulConsumed = 0;
+      for (final e in expenses) {
+        final s = e.splits.where((sp) => sp.memberId == 'mbr_1').firstOrNull;
+        if (s != null) rahulConsumed += s.amountInPaise;
+      }
+      expect(rahulConsumed, 20000); // ₹200
+
+      // Calculate consumed spend for Darpan (mbr_3): ₹100 (only part of exp1)
+      int darpanConsumed = 0;
+      for (final e in expenses) {
+        final s = e.splits.where((sp) => sp.memberId == 'mbr_3').firstOrNull;
+        if (s != null) darpanConsumed += s.amountInPaise;
+      }
+      expect(darpanConsumed, 10000); // ₹100
     });
   });
 }
