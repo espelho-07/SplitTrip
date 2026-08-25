@@ -10,13 +10,9 @@ import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/surface_card.dart';
 import '../../../domain/enums/app_experience_mode.dart';
-import '../../../core/network/api_client.dart';
-import '../../../core/services/google_auth_service.dart';
 import '../../../core/services/permission_service.dart';
-import '../../../data/services/sync_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
-import '../../viewmodels/personal_expense_viewmodel.dart';
 import '../../widgets/progress/progress.dart';
 import 'interactive_tutorial_sheet.dart';
 
@@ -53,119 +49,7 @@ class _OnboardingViewState extends State<OnboardingView> {
     if (authVm.isLoading) return;
 
     HapticHelper.medium();
-
-    GoogleAuthResult? googleResult;
-
-    try {
-      googleResult = await GoogleAuthService.signIn();
-      if (googleResult == null) return; // User cancelled — silent no-op
-    } on GoogleSignInException catch (e) {
-      if (!mounted) return;
-      switch (e.failure) {
-        case GoogleSignInFailure.cancelled:
-          return;
-        case GoogleSignInFailure.networkError:
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No internet connection. Please try again.'),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-          return;
-        case GoogleSignInFailure.signInFailed:
-        case GoogleSignInFailure.supabaseError:
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(e.message),
-              behavior: SnackBarBehavior.floating,
-              duration: const Duration(seconds: 5),
-            ),
-          );
-          return;
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Sign-in failed: $e'), behavior: SnackBarBehavior.floating),
-      );
-      return;
-    }
-
-    if (!mounted) return;
-
-    final stageNotifier = ValueNotifier<int>(0);
-    final stages = const [
-      ProgressStage(label: 'Signing in with Google', description: 'Contacting Google identity provider'),
-      ProgressStage(label: 'Verifying account', description: 'Checking canonical ledger profile'),
-      ProgressStage(label: 'Syncing your Kith data', description: 'Restoring trips, expenses & balances'),
-      ProgressStage(label: 'Account ready', description: 'Preparing your space'),
-    ];
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (dCtx) => ValueListenableBuilder<int>(
-        valueListenable: stageNotifier,
-        builder: (ctx, activeStage, _) {
-          final isDark = Theme.of(ctx).brightness == Brightness.dark;
-          return Dialog(
-            backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
-            shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: KithStageProgress(
-                title: 'Signing in…',
-                stages: stages,
-                currentStageIndex: activeStage,
-              ),
-            ),
-          );
-        },
-      ),
-    );
-
-    Future.delayed(const Duration(milliseconds: 250), () {
-      if (mounted) stageNotifier.value = 1;
-    });
-    Future.delayed(const Duration(milliseconds: 550), () {
-      if (mounted) stageNotifier.value = 2;
-    });
-    Future.delayed(const Duration(milliseconds: 850), () {
-      if (mounted) stageNotifier.value = 3;
-    });
-
-    final user = await authVm.signInWithGoogle(
-      email: googleResult.email,
-      displayName: googleResult.displayName,
-      googleId: googleResult.googleId,
-      photoUrl: googleResult.avatarUrl,
-      supabaseUserId: googleResult.supabaseUserId,
-    );
-
-    if (mounted) {
-      Navigator.of(context, rootNavigator: true).pop(); // Dismiss progress
-
-      if (user != null) {
-        final homeVm = context.read<HomeViewModel>();
-        final personalVm = context.read<PersonalExpenseViewModel>();
-        final syncService = context.read<SyncService>();
-        final apiClient = context.read<ApiClient>();
-
-        await syncService.flushQueue(apiClient);
-        await homeVm.loadTrips(user.id);
-        await personalVm.loadData(user.id);
-        await personalVm.syncTripExpenses(user.id);
-
-        if (mounted) {
-          context.go('/home');
-          KithSuccessToast.show(context, 'Signed in as ${user.displayName} ✓');
-        }
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(authVm.errorMessage ?? 'Could not complete Google Sign-In.')),
-        );
-      }
-    }
+    await AuthProgressDialog.startGoogleSignIn(context);
   }
 
   Future<void> _handleStart() async {
