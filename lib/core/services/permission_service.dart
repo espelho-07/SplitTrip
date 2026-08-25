@@ -5,17 +5,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 class PermissionService {
   static const String _keyInitialPermissionsRequested = 'kith_initial_permissions_requested';
 
-  /// Requests core app permissions (Microphone, Camera, Notifications) on first launch.
-  static Future<void> requestInitialPermissions() async {
+  /// Requests core app permissions (Location, Microphone, Camera, Notifications) on first launch.
+  static Future<void> requestInitialPermissions({bool force = false}) async {
     if (kIsWeb) return;
 
     try {
       final prefs = await SharedPreferences.getInstance();
       final hasRequested = prefs.getBool(_keyInitialPermissionsRequested) ?? false;
 
-      if (!hasRequested) {
-        // Request essential permissions together on first app launch
+      if (!hasRequested || force) {
+        // Request essential permissions together on first app launch / onboarding
         await [
+          Permission.locationWhenInUse,
           Permission.microphone,
           Permission.camera,
           Permission.notification,

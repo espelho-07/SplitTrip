@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/services/permission_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
@@ -33,6 +34,7 @@ class _HomeViewState extends State<HomeView> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      PermissionService.requestInitialPermissions();
       _refreshAllData();
     });
   }

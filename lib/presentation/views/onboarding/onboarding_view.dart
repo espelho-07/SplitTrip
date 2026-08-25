@@ -12,6 +12,7 @@ import '../../../core/widgets/surface_card.dart';
 import '../../../domain/enums/app_experience_mode.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/services/google_auth_service.dart';
+import '../../../core/services/permission_service.dart';
 import '../../../data/services/sync_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
@@ -31,6 +32,14 @@ class _OnboardingViewState extends State<OnboardingView> {
   final TextEditingController _recoveryKeyController = TextEditingController();
   bool _showRecoveryField = false;
   AppExperienceMode _selectedMode = AppExperienceMode.tripsOnly;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      PermissionService.requestInitialPermissions();
+    });
+  }
 
   @override
   void dispose() {

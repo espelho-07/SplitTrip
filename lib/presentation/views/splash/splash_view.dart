@@ -1,8 +1,9 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../../core/services/permission_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/kith_brand.dart';
 import '../../viewmodels/auth_viewmodel.dart';
@@ -71,7 +72,11 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
     if (_showStatus) setState(() => _showStatus = false);
 
     // Small fade-out buffer before routing
-    await Future<void>.delayed(const Duration(milliseconds: 80));
+    // Prompt essential permissions on launch
+    try {
+      await PermissionService.requestInitialPermissions();
+    } catch (_) {}
+
     if (!mounted) return;
 
     if (authVm.isAuthenticated) {
