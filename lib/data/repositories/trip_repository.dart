@@ -100,6 +100,7 @@ class TripRepository {
     String currencyCode = 'INR',
     required GuestUser creator,
     List<String> initialFriendNames = const [],
+    String tripMode = 'split_only',
   }) async {
     final payload = {
       'name': name.trim(),
@@ -108,6 +109,7 @@ class TripRepository {
       'coverGradientIndex': coverGradientIndex,
       'currencyCode': currencyCode,
       'initialFriendNames': initialFriendNames,
+      'tripMode': tripMode,
     };
 
     try {
@@ -161,6 +163,7 @@ class TripRepository {
       inviteCode: inviteCode,
       members: members,
       lifecycleState: TripLifecycle.active,
+      tripMode: tripMode,
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );

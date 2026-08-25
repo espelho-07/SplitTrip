@@ -322,6 +322,40 @@ class _CreateTripViewState extends State<CreateTripView> {
 
               const SizedBox(height: AppSpacing.xl),
 
+              // Trip Mode Selector
+              Text(
+                'What are you using this trip for?',
+                style: AppTypography.titleSmall(isDark: isDark),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTripModeCard(
+                      title: 'Split expenses',
+                      subtitle: 'For shared spending with friends.',
+                      icon: Icons.pie_chart_outline_rounded,
+                      mode: 'split_only',
+                      createVm: createVm,
+                      isDark: isDark,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _buildTripModeCard(
+                      title: 'Split + Journey',
+                      subtitle: 'Shared spending & automatic memories.',
+                      icon: Icons.auto_awesome_rounded,
+                      mode: 'split_and_journey',
+                      createVm: createVm,
+                      isDark: isDark,
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: AppSpacing.xl),
+
               // Currency Selection
               Text(
                 'Trip Currency',
@@ -450,6 +484,78 @@ class _CreateTripViewState extends State<CreateTripView> {
                   : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTripModeCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required String mode,
+    required CreateTripViewModel createVm,
+    required bool isDark,
+  }) {
+    final isSelected = createVm.tripMode == mode;
+    final activeColor = isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary;
+
+    return GestureDetector(
+      onTap: () {
+        HapticHelper.selection();
+        createVm.setTripMode(mode);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? activeColor.withValues(alpha: 0.12)
+              : (isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle),
+          borderRadius: AppRadius.mdBorder,
+          border: Border.all(
+            color: isSelected
+                ? activeColor
+                : (isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle),
+            width: isSelected ? 1.8 : 1.0,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 20,
+                  color: isSelected ? activeColor : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                ),
+                const Spacer(),
+                if (isSelected)
+                  Icon(Icons.check_circle_rounded, size: 16, color: activeColor),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              title,
+              style: TextStyle(
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                fontSize: 14,
+                color: isSelected
+                    ? (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary)
+                    : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 11,
+                color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                height: 1.3,
+              ),
+            ),
+          ],
         ),
       ),
     );

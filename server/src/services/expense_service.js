@@ -106,6 +106,34 @@ class ExpenseService {
     db.insert('expenses', expense);
     db.update('trips', tripId, { updatedAt: now });
 
+    // Automatic Journey / Memory Enrichment for Split + Journey trips
+    if (trip.tripMode === 'split_and_journey') {
+      try {
+        const journeyService = require('./journey_service');
+        const categoryEmojis = {
+          food: '🍴',
+          transport: '🚆',
+          stay: '🏨',
+          drinks: '☕',
+          activities: '🎟️',
+          shopping: '🛍️',
+          groceries: '🛒',
+          general: '📍',
+        };
+        const emoji = categoryEmojis[category] || '📍';
+
+        journeyService.createMoment(user, tripId, {
+          title: `${emoji} ${title.trim()}`,
+          placeName: title.trim(),
+          note: `Expense ₹${(amountInPaise / 100).toFixed(2)} paid by ${payerMember.displayName}`,
+          expenseId: expense.id,
+          occurredAt: now,
+        }, realtimeHub);
+      } catch (err) {
+        // Non-blocking journey enrichment
+      }
+    }
+
     const tripService = require('./trip_service');
     tripService.logActivity(tripId, {
       type: 'expense_added',

@@ -11,6 +11,7 @@ class CreateTripViewModel extends ChangeNotifier {
   String _emoji = '✈️';
   int _coverGradientIndex = 0;
   String _currencyCode = 'INR';
+  String _tripMode = 'split_only'; // 'split_only' or 'split_and_journey'
   final List<String> _friendNames = [];
   bool _isCreating = false;
   String? _errorMessage;
@@ -22,6 +23,7 @@ class CreateTripViewModel extends ChangeNotifier {
   String get emoji => _emoji;
   int get coverGradientIndex => _coverGradientIndex;
   String get currencyCode => _currencyCode;
+  String get tripMode => _tripMode;
   List<String> get friendNames => List.unmodifiable(_friendNames);
   bool get isCreating => _isCreating;
   String? get errorMessage => _errorMessage;
@@ -53,6 +55,11 @@ class CreateTripViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setTripMode(String mode) {
+    _tripMode = mode;
+    notifyListeners();
+  }
+
   void addFriendName(String name) {
     if (name.trim().isNotEmpty && !_friendNames.contains(name.trim())) {
       _friendNames.add(name.trim());
@@ -71,6 +78,7 @@ class CreateTripViewModel extends ChangeNotifier {
     _emoji = '✈️';
     _coverGradientIndex = 0;
     _currencyCode = 'INR';
+    _tripMode = 'split_only';
     _friendNames.clear();
     _isCreating = false;
     _errorMessage = null;
@@ -92,6 +100,7 @@ class CreateTripViewModel extends ChangeNotifier {
         currencyCode: _currencyCode,
         creator: creator,
         initialFriendNames: _friendNames,
+        tripMode: _tripMode,
       );
       resetForm();
       return trip;

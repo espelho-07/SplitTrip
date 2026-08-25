@@ -13,8 +13,11 @@ class Trip {
   final List<TripMember> members;
   final TripLifecycle lifecycleState;
   final String inviteCode;
+  final String tripMode; // 'split_only' or 'split_and_journey'
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  bool get isJourneyEnabled => tripMode == 'split_and_journey';
 
   const Trip({
     required this.id,
@@ -27,6 +30,7 @@ class Trip {
     required this.members,
     this.lifecycleState = TripLifecycle.active,
     required this.inviteCode,
+    this.tripMode = 'split_only',
     required this.createdAt,
     required this.updatedAt,
   });
@@ -42,6 +46,7 @@ class Trip {
     List<TripMember>? members,
     TripLifecycle? lifecycleState,
     String? inviteCode,
+    String? tripMode,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -56,6 +61,7 @@ class Trip {
       members: members ?? this.members,
       lifecycleState: lifecycleState ?? this.lifecycleState,
       inviteCode: inviteCode ?? this.inviteCode,
+      tripMode: tripMode ?? this.tripMode,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -72,6 +78,7 @@ class Trip {
     'members': members.map((m) => m.toJson()).toList(),
     'lifecycleState': lifecycleState.name,
     'inviteCode': inviteCode,
+    'tripMode': tripMode,
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
   };
@@ -90,6 +97,7 @@ class Trip {
         [],
     lifecycleState: TripLifecycle.fromString(json['lifecycleState'] as String? ?? 'active'),
     inviteCode: json['inviteCode'] as String? ?? 'KITH00',
+    tripMode: json['tripMode'] as String? ?? json['trip_mode'] as String? ?? 'split_only',
     createdAt: json['createdAt'] != null
         ? DateTime.parse(json['createdAt'] as String)
         : DateTime.now(),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../../core/services/permission_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_elevation.dart';
 import '../../../core/theme/app_radius.dart';
@@ -47,6 +48,7 @@ class _TripDetailViewState extends State<TripDetailView> {
   int _topLevelTab = 0; // 0 = Spending, 1 = Journey, 2 = Memories
   int _spendingSubTab = 0; // 0 = Expenses, 1 = People, 2 = Categories
   final TextEditingController _searchController = TextEditingController();
+  bool _dismissedLocationPrompt = false;
 
   static const List<Map<String, String?>> _categories = [
     {'label': 'All', 'value': null, 'emoji': '✨'},
@@ -1420,13 +1422,80 @@ class _TripDetailViewState extends State<TripDetailView> {
 
   Widget _buildJourneySection(TripDetailViewModel vm, Trip trip, bool isDark, String currentUserId) {
     final moments = vm.journeyMoments;
+    final locationPromptBanner = !_dismissedLocationPrompt
+        ? Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+              borderRadius: AppRadius.mdBorder,
+              border: Border.all(color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.location_on_outlined, size: 18, color: AppColors.emeraldPrimary),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Auto-create Journey',
+                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: isDark ? Colors.white : Colors.black87),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Kith can use your location during this trip to build your Journey automatically.',
+                  style: TextStyle(fontSize: 12, color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () {
+                        setState(() => _dismissedLocationPrompt = true);
+                      },
+                      child: Text('Not now', style: TextStyle(color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted, fontSize: 12)),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton.tonal(
+                      onPressed: () async {
+                        setState(() => _dismissedLocationPrompt = true);
+                        final granted = await PermissionService.requestLocationPermission();
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(granted ? 'Location-assisted Journey enabled ✓' : 'Location permission not granted'),
+                            ),
+                          );
+                        }
+                      },
+                      child: const Text('Enable', style: TextStyle(fontSize: 12)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          )
+        : const SizedBox.shrink();
+
     if (moments.isEmpty) {
-      return EmptyStateView(
-        emoji: '🗺️',
-        title: 'Your trip starts here.',
-        subtitle: 'Add your first moment when something worth remembering happens.',
-        buttonText: 'Add Moment',
-        onButtonPressed: () => _showAddJourneyMomentSheet(trip, vm.expenses, currentUserId),
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          locationPromptBanner,
+          EmptyStateView(
+            emoji: '🗺️',
+            title: 'Your trip starts here.',
+            subtitle: 'Add your first moment when something worth remembering happens.',
+            buttonText: 'Add Moment',
+            onButtonPressed: () => _showAddJourneyMomentSheet(trip, vm.expenses, currentUserId),
+          ),
+        ],
       );
     }
 
@@ -1439,6 +1508,7 @@ class _TripDetailViewState extends State<TripDetailView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        locationPromptBanner,
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [

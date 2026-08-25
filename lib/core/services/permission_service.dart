@@ -59,4 +59,20 @@ class PermissionService {
       return false;
     }
   }
+
+  /// Explicitly requests Location permission ONLY when user opts in to auto-journey on a trip.
+  static Future<bool> requestLocationPermission() async {
+    if (kIsWeb) return true;
+
+    try {
+      final status = await Permission.locationWhenInUse.status;
+      if (status.isGranted) return true;
+
+      final result = await Permission.locationWhenInUse.request();
+      return result.isGranted;
+    } catch (e) {
+      debugPrint('[PermissionService] Error requesting location permission: $e');
+      return false;
+    }
+  }
 }

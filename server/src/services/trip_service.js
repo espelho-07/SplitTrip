@@ -32,7 +32,7 @@ class TripService {
     };
   }
 
-  createTrip(user, { name, description, emoji, coverGradientIndex, currencyCode, initialFriendNames = [] }) {
+  createTrip(user, { name, description, emoji, coverGradientIndex, currencyCode, initialFriendNames = [], tripMode = 'split_only' }) {
     if (!name || !name.trim()) {
       throw AppError.badRequest('Trip name is required');
     }
@@ -55,6 +55,7 @@ class TripService {
       currencyCode: (currencyCode || 'INR').toUpperCase(),
       creatorId: user.id,
       inviteCode,
+      tripMode: tripMode === 'split_and_journey' ? 'split_and_journey' : 'split_only',
       lifecycleState: 'active',
       createdAt: now,
       updatedAt: now,
