@@ -197,12 +197,16 @@ class AuthService {
     String? supabaseUserId,
   }) async {
     final currentGuest = getCurrentUser();
+    final cleanEmail = email.trim().toLowerCase();
+    final cleanDisplayName = displayName.trim().isNotEmpty ? displayName.trim() : cleanEmail.split('@')[0];
+
     try {
       final res = await apiClient.post('/auth/google', body: {
-        'email': email.trim().toLowerCase(),
-        'displayName': displayName.trim(),
+        'email': cleanEmail,
+        'displayName': cleanDisplayName,
         'photoUrl': photoUrl,
         'googleId': googleId,
+        'supabaseUserId': supabaseUserId,
         'currentGuestUserId': currentGuest?.id,
       });
 
@@ -214,52 +218,129 @@ class AuthService {
         apiClient.setAuthToken(token);
         realtimeClient?.setAuthToken(token);
         await storage.saveUser(user.toJson());
+
+        // If previous guest session had a different ID, re-tag all local data
+        if (currentGuest != null && currentGuest.id != user.id) {
+          await _reTagLocalGuestData(currentGuest.id, user.id);
+        }
+
         return user;
       }
     } catch (e) {
       // Backend offline or 404: seamlessly canonicalize user locally with Google profile
+      final deterministicId = supabaseUserId ??
+          (googleId != null && googleId.isNotEmpty ? 'usr_g_$googleId' : 'usr_g_${cleanEmail.hashCode.abs()}');
+
       final updatedUser = (currentGuest ?? GuestUser(
-        id: 'usr_${_uuid.v4().replaceAll('-', '').substring(0, 12)}',
-        displayName: displayName.trim().isNotEmpty ? displayName.trim() : 'Kith User',
+        id: deterministicId,
+        displayName: cleanDisplayName,
         avatarUrl: photoUrl,
         recoveryKey: _generateRecoveryKey(),
-        anonymousToken: 'kith_sess_${_uuid.v4().replaceAll('-', '')}',
+        anonymousToken: 'kith_sess_${cleanEmail.hashCode.abs()}',
         createdAt: DateTime.now(),
         isLinkedToAccount: true,
       )).copyWith(
+        id: currentGuest != null ? currentGuest.id : deterministicId,
         isLinkedToAccount: true,
-        email: email.trim().toLowerCase(),
-        displayName: displayName.trim().isNotEmpty ? displayName.trim() : (currentGuest?.displayName ?? 'Kith User'),
+        email: cleanEmail,
+        displayName: cleanDisplayName,
         avatarUrl: photoUrl ?? currentGuest?.avatarUrl,
       );
 
       await storage.saveUser(updatedUser.toJson());
       apiClient.setAuthToken(updatedUser.anonymousToken);
       realtimeClient?.setAuthToken(updatedUser.anonymousToken);
+      if (currentGuest != null && currentGuest.id != updatedUser.id) {
+        await _reTagLocalGuestData(currentGuest.id, updatedUser.id);
+      }
       syncLocalGuestSession(updatedUser);
       return updatedUser;
     }
 
+    final fallbackId = supabaseUserId ??
+        (googleId != null && googleId.isNotEmpty ? 'usr_g_$googleId' : 'usr_g_${cleanEmail.hashCode.abs()}');
+
     final fallback = (currentGuest ?? GuestUser(
-      id: 'usr_${_uuid.v4().replaceAll('-', '').substring(0, 12)}',
-      displayName: displayName.trim().isNotEmpty ? displayName.trim() : 'Kith User',
+      id: fallbackId,
+      displayName: cleanDisplayName,
       avatarUrl: photoUrl,
       recoveryKey: _generateRecoveryKey(),
-      anonymousToken: 'kith_sess_${_uuid.v4().replaceAll('-', '')}',
+      anonymousToken: 'kith_sess_${cleanEmail.hashCode.abs()}',
       createdAt: DateTime.now(),
       isLinkedToAccount: true,
     )).copyWith(
+      id: currentGuest != null ? currentGuest.id : fallbackId,
       isLinkedToAccount: true,
-      email: email.trim().toLowerCase(),
-      displayName: displayName.trim().isNotEmpty ? displayName.trim() : (currentGuest?.displayName ?? 'Kith User'),
+      email: cleanEmail,
+      displayName: cleanDisplayName,
       avatarUrl: photoUrl ?? currentGuest?.avatarUrl,
     );
 
     await storage.saveUser(fallback.toJson());
     apiClient.setAuthToken(fallback.anonymousToken);
     realtimeClient?.setAuthToken(fallback.anonymousToken);
+    if (currentGuest != null && currentGuest.id != fallback.id) {
+      await _reTagLocalGuestData(currentGuest.id, fallback.id);
+    }
     syncLocalGuestSession(fallback);
     return fallback;
+  }
+
+  /// Re-tags local cached guest entities to canonical user ID on Google sign-in
+  Future<void> _reTagLocalGuestData(String oldGuestId, String canonicalUserId) async {
+    try {
+      // 1. Re-tag Personal Expenses
+      final personalExpenses = storage.getSavedPersonalExpenses();
+      for (final exp in personalExpenses) {
+        if (exp['userId'] == oldGuestId) {
+          exp['userId'] = canonicalUserId;
+        }
+      }
+      await storage.savePersonalExpenses(personalExpenses);
+
+      // 2. Re-tag Personal Debts
+      final personalDebts = storage.getSavedPersonalDebts();
+      for (final debt in personalDebts) {
+        if (debt['userId'] == oldGuestId) {
+          debt['userId'] = canonicalUserId;
+        }
+      }
+      await storage.savePersonalDebts(personalDebts);
+
+      // 3. Re-tag Trips & Members
+      final trips = storage.getSavedTrips();
+      for (final trip in trips) {
+        if (trip['creatorId'] == oldGuestId) {
+          trip['creatorId'] = canonicalUserId;
+        }
+        final members = trip['members'] as List<dynamic>?;
+        if (members != null) {
+          for (final m in members) {
+            if (m is Map<String, dynamic> && m['userId'] == oldGuestId) {
+              m['userId'] = canonicalUserId;
+            }
+          }
+        }
+      }
+      await storage.saveTrips(trips);
+
+      // 4. Re-tag Mutation Queue
+      final mutations = storage.getMutationQueue();
+      for (final m in mutations) {
+        final payload = m['payload'] as Map<String, dynamic>?;
+        if (payload != null) {
+          if (payload['userId'] == oldGuestId) {
+            payload['userId'] = canonicalUserId;
+          }
+          if (payload['creatorId'] == oldGuestId) {
+            payload['creatorId'] = canonicalUserId;
+          }
+        }
+      }
+      await storage.saveMutationQueue(mutations);
+    } catch (_) {
+      // Non-blocking local re-tag
+    }
   }
 
   /// Attempts to restore an authenticated session from a live Supabase session.

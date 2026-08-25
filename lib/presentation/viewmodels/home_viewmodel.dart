@@ -94,6 +94,14 @@ class HomeViewModel extends ChangeNotifier {
       // 2. Non-blocking network sync
       final remoteTrips = await tripRepo.getTrips();
       _trips = remoteTrips;
+
+      // Hydrate expenses for each trip so balances are immediately available
+      for (final trip in remoteTrips) {
+        try {
+          await expenseRepo.getExpenses(trip.id);
+        } catch (_) {}
+      }
+
       _computeLocalBalances(_trips, currentUserId);
     } catch (e) {
       _errorMessage = e.toString();

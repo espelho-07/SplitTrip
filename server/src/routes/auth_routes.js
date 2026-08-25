@@ -81,12 +81,13 @@ router.post('/link', authMiddleware, (req, res, next) => {
 // POST /api/auth/google - Authenticate or canonicalize Google account
 router.post('/google', (req, res, next) => {
   try {
-    const { email, displayName, photoUrl, googleId, currentGuestUserId } = req.body;
+    const { email, displayName, photoUrl, googleId, supabaseUserId, currentGuestUserId } = req.body;
     const result = authService.loginWithGoogle({
       email,
       displayName,
       photoUrl,
       googleId,
+      supabaseUserId,
       currentGuestUserId,
     });
     res.status(200).json({ data: result });

@@ -10,9 +10,12 @@ import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/surface_card.dart';
 import '../../../domain/enums/app_experience_mode.dart';
+import '../../../core/network/api_client.dart';
 import '../../../core/services/google_auth_service.dart';
+import '../../../data/services/sync_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
+import '../../viewmodels/personal_expense_viewmodel.dart';
 import '../../widgets/progress/progress.dart';
 import 'interactive_tutorial_sheet.dart';
 
@@ -135,7 +138,15 @@ class _OnboardingViewState extends State<OnboardingView> {
 
       if (user != null) {
         final homeVm = context.read<HomeViewModel>();
+        final personalVm = context.read<PersonalExpenseViewModel>();
+        final syncService = context.read<SyncService>();
+        final apiClient = context.read<ApiClient>();
+
+        await syncService.flushQueue(apiClient);
         await homeVm.loadTrips(user.id);
+        await personalVm.loadData(user.id);
+        await personalVm.syncTripExpenses(user.id);
+
         if (mounted) {
           context.go('/home');
           KithSuccessToast.show(context, 'Signed in as ${user.displayName} ✓');

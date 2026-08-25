@@ -90,6 +90,13 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
+        Provider<LocalStorageService>.value(value: storageService),
+        Provider<ApiClient>.value(value: apiClient),
+        Provider<SyncService>.value(value: syncService),
+        Provider<UserRepository>.value(value: userRepo),
+        Provider<TripRepository>.value(value: tripRepo),
+        Provider<ExpenseRepository>.value(value: expenseRepo),
+        Provider<PersonalRepository>.value(value: personalRepo),
         ChangeNotifierProvider(create: (_) => ThemeViewModel(storage: storageService)),
         ChangeNotifierProvider(create: (_) => AuthViewModel(userRepo: userRepo)),
         ChangeNotifierProvider(

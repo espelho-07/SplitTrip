@@ -54,6 +54,8 @@ class _HomeViewState extends State<HomeView> {
         await personalVm.loadData(user.id);
         await personalVm.syncTripExpenses(user.id);
       }
+    } catch (e) {
+      debugPrint('[HomeView] Data refresh notice: $e');
     } finally {
       if (mounted) {
         setState(() => _isRefreshing = false);

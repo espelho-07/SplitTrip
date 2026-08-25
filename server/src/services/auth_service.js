@@ -226,18 +226,20 @@ class AuthService {
     };
   }
 
-  loginWithGoogle({ email, displayName, photoUrl, googleId, currentGuestUserId }) {
+  loginWithGoogle({ email, displayName, photoUrl, googleId, supabaseUserId, currentGuestUserId }) {
     if (!email || !email.includes('@')) {
       throw AppError.badRequest('A valid Google email address is required');
     }
 
     const cleanEmail = email.trim().toLowerCase();
     const cleanGoogleId = googleId ? googleId.trim() : null;
+    const cleanSupabaseUserId = supabaseUserId ? supabaseUserId.trim() : null;
     const now = new Date().toISOString();
 
-    // 1. Check for existing canonical user by googleId or email
+    // 1. Check for existing canonical user by googleId, supabaseUserId, or email
     let user = db.findOne('users', (u) => {
       if (cleanGoogleId && u.googleId === cleanGoogleId) return true;
+      if (cleanSupabaseUserId && (u.supabaseUserId === cleanSupabaseUserId || u.id === cleanSupabaseUserId)) return true;
       if (u.email && u.email.toLowerCase() === cleanEmail) return true;
       return false;
     });
@@ -250,6 +252,7 @@ class AuthService {
         email: cleanEmail,
       };
       if (cleanGoogleId && !user.googleId) updates.googleId = cleanGoogleId;
+      if (cleanSupabaseUserId && !user.supabaseUserId) updates.supabaseUserId = cleanSupabaseUserId;
       if (displayName && displayName.trim()) updates.displayName = displayName.trim();
       if (photoUrl && !user.avatarUrl) updates.avatarUrl = photoUrl;
 
@@ -267,6 +270,7 @@ class AuthService {
         db.update('users', guestUser.id, {
           email: cleanEmail,
           googleId: cleanGoogleId,
+          supabaseUserId: cleanSupabaseUserId,
           displayName: displayName && displayName.trim() ? displayName.trim() : guestUser.displayName,
           avatarUrl: photoUrl || guestUser.avatarUrl,
           isGuest: false,
@@ -274,13 +278,14 @@ class AuthService {
         });
         user = db.get('users', guestUser.id);
       } else {
-        // Create new permanent canonical user
-        const newId = `usr_g_${crypto.randomUUID().replace(/-/g, '').substring(0, 12)}`;
+        // Create new permanent canonical user with stable ID
+        const newId = cleanSupabaseUserId || (cleanGoogleId ? `usr_g_${cleanGoogleId}` : `usr_g_${crypto.randomUUID().replace(/-/g, '').substring(0, 12)}`);
         user = {
           id: newId,
           displayName: displayName && displayName.trim() ? displayName.trim() : cleanEmail.split('@')[0],
           avatarUrl: photoUrl || null,
           googleId: cleanGoogleId,
+          supabaseUserId: cleanSupabaseUserId,
           recoveryKeyHash: null,
           isGuest: false,
           email: cleanEmail,
@@ -299,6 +304,8 @@ class AuthService {
         displayName: user.displayName,
         avatarUrl: user.avatarUrl,
         email: user.email,
+        googleId: user.googleId,
+        supabaseUserId: user.supabaseUserId,
         isGuest: user.isGuest,
         isLinkedToAccount: true,
         anonymousToken: session.token,
@@ -344,6 +351,24 @@ class AuthService {
       const members = db.find('trip_members', (m) => m.userId === guestUserId);
       for (const m of members) {
         db.update('trip_members', m.id, { userId: canonicalUserId });
+      }
+
+      // Migrate trip expenses paidById
+      const expenses = db.find('expenses', (e) => e.paidById === guestUserId);
+      for (const exp of expenses) {
+        db.update('expenses', exp.id, { paidById: canonicalUserId });
+      }
+
+      // Migrate trip journey moments
+      const moments = db.find('trip_journey_moments', (m) => m.userId === guestUserId || m.creatorId === guestUserId);
+      for (const mom of moments) {
+        db.update('trip_journey_moments', mom.id, { userId: canonicalUserId, creatorId: canonicalUserId });
+      }
+
+      // Migrate activity logs
+      const logs = db.find('activity_logs', (l) => l.userId === guestUserId);
+      for (const log of logs) {
+        db.update('activity_logs', log.id, { userId: canonicalUserId });
       }
     } catch (e) {
       console.error('[AuthService] Guest data migration warning:', e.message);
