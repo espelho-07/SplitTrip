@@ -27,6 +27,10 @@ class DateFormatter {
     return DateFormat('d MMM yyyy').format(date);
   }
 
+  static String formatTime(DateTime date) {
+    return DateFormat('h:mm a').format(date);
+  }
+
   static bool isToday(DateTime date) {
     final now = DateTime.now();
     return date.year == now.year && date.month == now.month && date.day == now.day;

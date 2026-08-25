@@ -19,6 +19,7 @@ class Database {
       personal_debts: new Map(),
       personal_repayments: new Map(),
       personal_budgets: new Map(),
+      trip_journey_moments: new Map(),
     };
     if (!this.inMemory) {
       this._initStorage();

@@ -20,7 +20,7 @@ import '../../../core/widgets/surface_card.dart';
 import '../../../domain/enums/trip_lifecycle.dart';
 import '../../../domain/models/balance_summary.dart';
 import '../../../domain/models/expense.dart';
-import '../../../domain/models/journey_stop.dart';
+import '../../../domain/models/journey_moment.dart';
 import '../../../domain/models/trip.dart';
 import '../../../domain/services/trip_export_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
@@ -28,8 +28,7 @@ import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/trip_detail_viewmodel.dart';
 import '../add_expense/add_expense_view.dart';
 import 'widgets/activity_log_sheet.dart';
-import 'widgets/add_journey_stop_sheet.dart';
-import 'widgets/add_trip_memory_sheet.dart';
+import 'widgets/add_journey_moment_sheet.dart';
 import 'widgets/expense_detail_sheet.dart';
 import 'widgets/member_spend_breakdown_sheet.dart';
 import 'widgets/settlement_sheet.dart';
@@ -384,38 +383,6 @@ class _TripDetailViewState extends State<TripDetailView> {
     );
   }
 
-  void _showAddJourneyStopSheet(Trip trip) {
-    AddJourneyStopSheet.show(
-      context,
-      trip: trip,
-      onAdd: (stop) {
-        context.read<TripDetailViewModel>().addJourneyStop(stop);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Added "${stop.locationName}" to Journey!'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      },
-    );
-  }
-
-  void _showAddTripMemorySheet(Trip trip) {
-    AddTripMemorySheet.show(
-      context,
-      trip: trip,
-      onAdd: (memory) {
-        context.read<TripDetailViewModel>().addTripMemory(memory);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Saved "${memory.title}" to Memories!'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -544,18 +511,18 @@ class _TripDetailViewState extends State<TripDetailView> {
 
               const SizedBox(height: AppSpacing.lg),
 
-              // Top-Level Segmented Navigation [ 💳 Spending ] [ 🗺️ Journey ] [ ✨ Memories ]
+              // Top-Level Segmented Navigation [ 🏝️ Overview ] [ 💳 Spending ] [ 🗺️ Journey ]
               _buildTopTabSwitcher(isDark),
 
               const SizedBox(height: AppSpacing.lg),
 
               // Active Tab Content
               if (_topLevelTab == 0)
-                _buildSpendingSection(tripDetailVm, trip, balanceSummary, isDark, user?.id ?? '')
+                _buildOverviewSection(tripDetailVm, trip, balanceSummary, isDark, user?.id ?? '')
               else if (_topLevelTab == 1)
-                _buildJourneySection(tripDetailVm, trip, isDark)
+                _buildSpendingSection(tripDetailVm, trip, balanceSummary, isDark, user?.id ?? '')
               else
-                _buildMemoriesSection(tripDetailVm, trip, isDark),
+                _buildJourneySection(tripDetailVm, trip, isDark, user?.id ?? ''),
 
               const SizedBox(height: 90),
             ],
@@ -565,7 +532,7 @@ class _TripDetailViewState extends State<TripDetailView> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
           HapticHelper.light();
-          if (_topLevelTab == 0) {
+          if (_topLevelTab == 0 || _topLevelTab == 1) {
             if (!trip.lifecycleState.allowsExpenses) {
               _showSettlementSheet();
               return;
@@ -578,25 +545,23 @@ class _TripDetailViewState extends State<TripDetailView> {
                 homeVm.loadTrips(user.id);
               }
             }
-          } else if (_topLevelTab == 1) {
-            _showAddJourneyStopSheet(trip);
           } else {
-            _showAddTripMemorySheet(trip);
+            _showAddJourneyMomentSheet(trip, tripDetailVm.expenses, user?.id ?? '');
           }
         },
         backgroundColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
         foregroundColor: isDark ? AppColors.darkBackground : Colors.white,
         elevation: 4,
         icon: Icon(
-          _topLevelTab == 0
+          (_topLevelTab == 0 || _topLevelTab == 1)
               ? (trip.lifecycleState.allowsExpenses ? Icons.add_rounded : Icons.payments_outlined)
-              : (_topLevelTab == 1 ? Icons.add_location_alt_rounded : Icons.bookmark_add_rounded),
+              : Icons.add_location_alt_rounded,
           size: 20,
         ),
         label: Text(
-          _topLevelTab == 0
+          (_topLevelTab == 0 || _topLevelTab == 1)
               ? (trip.lifecycleState.allowsExpenses ? 'Add Expense' : 'Settle Up')
-              : (_topLevelTab == 1 ? 'Add Stop' : 'Save Memory'),
+              : 'Add Moment',
           style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
         ),
       ),
@@ -919,9 +884,9 @@ class _TripDetailViewState extends State<TripDetailView> {
 
   Widget _buildTopTabSwitcher(bool isDark) {
     final tabs = [
+      {'label': 'Overview', 'icon': Icons.space_dashboard_outlined},
       {'label': 'Spending', 'icon': Icons.credit_card_rounded},
       {'label': 'Journey', 'icon': Icons.map_outlined},
-      {'label': 'Memories', 'icon': Icons.auto_awesome_rounded},
     ];
 
     return Container(
@@ -979,6 +944,355 @@ class _TripDetailViewState extends State<TripDetailView> {
             ),
           );
         }),
+      ),
+    );
+  }
+
+  void _showAddJourneyMomentSheet(Trip trip, List<Expense> expenses, String currentUserId) {
+    final vm = context.read<TripDetailViewModel>();
+    AddJourneyMomentSheet.show(
+      context,
+      trip: trip,
+      expenses: expenses,
+      currentUserId: currentUserId,
+      onAdd: (moment) {
+        vm.addJourneyMoment(moment);
+      },
+    );
+  }
+
+  Widget _buildOverviewSection(
+    TripDetailViewModel vm,
+    Trip trip,
+    BalanceSummary balanceSummary,
+    bool isDark,
+    String currentUserId,
+  ) {
+    final recentExpenses = vm.expenses.take(4).toList();
+    final recentMoments = vm.journeyMoments.take(3).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Trip Members and Meta Card
+        SurfaceCard(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(trip.emoji, style: const TextStyle(fontSize: 28)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(trip.name, style: AppTypography.titleMedium(isDark: isDark)),
+                        if (trip.description != null && trip.description!.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(trip.description!, style: AppTypography.bodySmall(isDark: isDark)),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Divider(color: isDark ? Colors.white10 : Colors.black12),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Trip Members (${trip.members.length})', style: AppTypography.bodySmall(isDark: isDark)),
+                  InkWell(
+                    onTap: _showAddFriendDialog,
+                    child: Row(
+                      children: [
+                        Icon(Icons.person_add_alt_1_rounded, size: 14, color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Add Friend',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: trip.members.map((m) {
+                  final isSelf = m.userId == currentUserId || m.id == currentUserId;
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        MemberAvatar(name: m.displayName, size: 16),
+                        const SizedBox(width: 6),
+                        Text(
+                          isSelf ? '${m.displayName} (You)' : m.displayName,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: isSelf ? FontWeight.w700 : FontWeight.w500,
+                            color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: AppSpacing.lg),
+
+        // Recent Spending Activity Section
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Recent Spending', style: AppTypography.titleSmall(isDark: isDark)),
+            TextButton(
+              onPressed: () {
+                HapticHelper.selection();
+                setState(() => _topLevelTab = 1);
+              },
+              child: const Text('View all spending →'),
+            ),
+          ],
+        ),
+        if (recentExpenses.isEmpty) ...[
+          EmptyStateView(
+            emoji: '💳',
+            title: 'No expenses recorded yet',
+            subtitle: 'Add the first trip expense to begin splitting with the crew.',
+            buttonText: 'Add First Expense',
+            onButtonPressed: () async {
+              final homeVm = context.read<HomeViewModel>();
+              final result = await context.push('/trip/${trip.id}/add-expense');
+              if (result == true && mounted) {
+                await vm.loadTrip(trip.id, currentUserId);
+                homeVm.loadTrips(currentUserId);
+              }
+            },
+          ),
+        ] else ...[
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: recentExpenses.length,
+            separatorBuilder: (ctx, i) => const SizedBox(height: 8),
+            itemBuilder: (ctx, i) {
+              final expense = recentExpenses[i];
+              return _buildCleanExpenseRow(expense, trip, isDark, currentUserId);
+            },
+          ),
+        ],
+
+        const SizedBox(height: AppSpacing.lg),
+
+        // Recent Journey Moments Section
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Journey Timeline', style: AppTypography.titleSmall(isDark: isDark)),
+            TextButton(
+              onPressed: () {
+                HapticHelper.selection();
+                setState(() => _topLevelTab = 2);
+              },
+              child: const Text('View full journey →'),
+            ),
+          ],
+        ),
+        if (recentMoments.isEmpty) ...[
+          EmptyStateView(
+            emoji: '🗺️',
+            title: 'Your trip starts here.',
+            subtitle: 'Add your first moment when something worth remembering happens.',
+            buttonText: 'Add First Moment',
+            onButtonPressed: () => _showAddJourneyMomentSheet(trip, vm.expenses, currentUserId),
+          ),
+        ] else ...[
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: recentMoments.length,
+            separatorBuilder: (ctx, i) => const SizedBox(height: 8),
+            itemBuilder: (ctx, i) {
+              final moment = recentMoments[i];
+              return _buildCleanMomentRow(moment, isDark);
+            },
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildCleanExpenseRow(Expense expense, Trip trip, bool isDark, String currentUserId) {
+    final payer = trip.members.where((m) => m.id == expense.paidById || m.userId == expense.paidById).firstOrNull;
+    final payerName = payer?.displayName ?? 'Member';
+    final isPayerSelf = payer?.userId == currentUserId || payer?.id == currentUserId;
+
+    final userSplit = expense.splits.where((s) => s.memberId == currentUserId || (payer != null && s.memberId == payer.id && isPayerSelf)).firstOrNull;
+    final userSharePaise = userSplit?.amountInPaise ?? (expense.amountInPaise ~/ (expense.splits.isNotEmpty ? expense.splits.length : 1));
+
+    return SurfaceCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      onTap: () => _showExpenseDetailSheet(expense, trip, currentUserId),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              expense.category.emoji,
+              style: const TextStyle(fontSize: 20),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  expense.title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${isPayerSelf ? "You" : payerName} paid · ${DateFormatter.formatRelative(expense.createdAt)}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '₹${(expense.amountInPaise / 100).toStringAsFixed(0)}',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 15,
+                  color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Your share: ₹${(userSharePaise / 100).toStringAsFixed(0)}',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCleanMomentRow(JourneyMoment moment, bool isDark) {
+    return SurfaceCard(
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.place_rounded, size: 18, color: AppColors.emeraldPrimary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        moment.title,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                          color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      'Day ${moment.dayIndex} · ${DateFormatter.formatTime(moment.occurredAt)}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                      ),
+                    ),
+                  ],
+                ),
+                if (moment.placeName != null && moment.placeName!.isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      Icon(Icons.location_on_outlined, size: 12, color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                      const SizedBox(width: 3),
+                      Expanded(
+                        child: Text(
+                          moment.placeName!,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                if (moment.note != null && moment.note!.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    moment.note!,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontStyle: FontStyle.italic,
+                      color: isDark ? Colors.white70 : Colors.black87,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1058,21 +1372,21 @@ class _TripDetailViewState extends State<TripDetailView> {
     );
   }
 
-  Widget _buildJourneySection(TripDetailViewModel vm, Trip trip, bool isDark) {
-    final stops = vm.journeyStops;
-    if (stops.isEmpty) {
+  Widget _buildJourneySection(TripDetailViewModel vm, Trip trip, bool isDark, String currentUserId) {
+    final moments = vm.journeyMoments;
+    if (moments.isEmpty) {
       return EmptyStateView(
         emoji: '🗺️',
-        title: 'No itinerary stops added yet',
-        subtitle: 'Capture where you went, key viewpoints, and landmarks during "${trip.name}".',
-        buttonText: 'Add First Stop',
-        onButtonPressed: () => _showAddJourneyStopSheet(trip),
+        title: 'Your trip starts here.',
+        subtitle: 'Add your first moment when something worth remembering happens.',
+        buttonText: 'Add Moment',
+        onButtonPressed: () => _showAddJourneyMomentSheet(trip, vm.expenses, currentUserId),
       );
     }
 
-    final Map<int, List<JourneyStop>> dayMap = {};
-    for (final s in stops) {
-      dayMap.putIfAbsent(s.dayNumber, () => []).add(s);
+    final Map<int, List<JourneyMoment>> dayMap = {};
+    for (final m in moments) {
+      dayMap.putIfAbsent(m.dayIndex, () => []).add(m);
     }
     final sortedDays = dayMap.keys.toList()..sort();
 
@@ -1084,15 +1398,15 @@ class _TripDetailViewState extends State<TripDetailView> {
           children: [
             Text('Travel Timeline', style: AppTypography.titleSmall(isDark: isDark)),
             TextButton.icon(
-              onPressed: () => _showAddJourneyStopSheet(trip),
+              onPressed: () => _showAddJourneyMomentSheet(trip, vm.expenses, currentUserId),
               icon: const Icon(Icons.add_location_alt_outlined, size: 16),
-              label: const Text('Add Stop'),
+              label: const Text('Add Moment'),
             ),
           ],
         ),
         const SizedBox(height: AppSpacing.xs),
         ...sortedDays.map((day) {
-          final dayStops = dayMap[day]!;
+          final dayMoments = dayMap[day]!;
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1121,7 +1435,11 @@ class _TripDetailViewState extends State<TripDetailView> {
                   ],
                 ),
               ),
-              ...dayStops.map((stop) {
+              ...dayMoments.map((moment) {
+                final linkedExp = moment.expenseId != null
+                    ? vm.expenses.where((e) => e.id == moment.expenseId).firstOrNull
+                    : null;
+
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: SurfaceCard(
@@ -1132,7 +1450,7 @@ class _TripDetailViewState extends State<TripDetailView> {
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+                            color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.15),
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(Icons.place_rounded, size: 18, color: AppColors.emeraldPrimary),
@@ -1147,7 +1465,7 @@ class _TripDetailViewState extends State<TripDetailView> {
                                 children: [
                                   Expanded(
                                     child: Text(
-                                      stop.locationName,
+                                      moment.title,
                                       style: TextStyle(
                                         fontWeight: FontWeight.w700,
                                         fontSize: 14,
@@ -1156,18 +1474,57 @@ class _TripDetailViewState extends State<TripDetailView> {
                                     ),
                                   ),
                                   Text(
-                                    stop.time,
-                                    style: AppTypography.bodySmall(isDark: isDark),
+                                    DateFormatter.formatTime(moment.occurredAt),
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                                    ),
                                   ),
                                 ],
                               ),
-                              if (stop.notes != null && stop.notes!.isNotEmpty) ...[
+                              if (moment.placeName != null && moment.placeName!.isNotEmpty) ...[
+                                const SizedBox(height: 3),
+                                Row(
+                                  children: [
+                                    Icon(Icons.location_on_outlined, size: 12, color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                                    const SizedBox(width: 3),
+                                    Expanded(
+                                      child: Text(
+                                        moment.placeName!,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                              if (moment.note != null && moment.note!.isNotEmpty) ...[
                                 const SizedBox(height: 4),
                                 Text(
-                                  stop.notes!,
+                                  moment.note!,
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                                    color: isDark ? Colors.white70 : Colors.black87,
+                                  ),
+                                ),
+                              ],
+                              if (linkedExp != null) ...[
+                                const SizedBox(height: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    'Linked: ${linkedExp.title} (₹${(linkedExp.amountInPaise / 100).toStringAsFixed(0)})',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -1178,7 +1535,7 @@ class _TripDetailViewState extends State<TripDetailView> {
                           icon: const Icon(Icons.close_rounded, size: 16, color: Colors.grey),
                           onPressed: () {
                             HapticHelper.light();
-                            vm.deleteJourneyStop(stop.id);
+                            vm.deleteJourneyMoment(moment.id);
                           },
                         ),
                       ],
@@ -1189,106 +1546,6 @@ class _TripDetailViewState extends State<TripDetailView> {
             ],
           );
         }),
-      ],
-    );
-  }
-
-  Widget _buildMemoriesSection(TripDetailViewModel vm, Trip trip, bool isDark) {
-    final memories = vm.tripMemories;
-    if (memories.isEmpty) {
-      return EmptyStateView(
-        emoji: '✨',
-        title: 'No memories saved yet',
-        subtitle: 'Capture memorable highlights, funny quotes, or thoughts from "${trip.name}".',
-        buttonText: 'Add First Memory',
-        onButtonPressed: () => _showAddTripMemorySheet(trip),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Trip Memories & Scrapbook', style: AppTypography.titleSmall(isDark: isDark)),
-            TextButton.icon(
-              onPressed: () => _showAddTripMemorySheet(trip),
-              icon: const Icon(Icons.add_reaction_outlined, size: 16),
-              label: const Text('Add Memory'),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        ListView.separated(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: memories.length,
-          separatorBuilder: (ctx, i) => const SizedBox(height: 10),
-          itemBuilder: (ctx, i) {
-            final mem = memories[i];
-            return SurfaceCard(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(mem.emoji, style: const TextStyle(fontSize: 24)),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              mem.title,
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 15,
-                                color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Day ${mem.dayNumber} • ${DateFormatter.formatRelative(mem.createdAt)}',
-                              style: AppTypography.bodySmall(isDark: isDark),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.grey),
-                        onPressed: () {
-                          HapticHelper.light();
-                          vm.deleteTripMemory(mem.id);
-                        },
-                      ),
-                    ],
-                  ),
-                  if (mem.note != null && mem.note!.isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        mem.note!,
-                        style: TextStyle(
-                          fontSize: 13,
-                          height: 1.4,
-                          fontStyle: FontStyle.italic,
-                          color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            );
-          },
-        ),
       ],
     );
   }

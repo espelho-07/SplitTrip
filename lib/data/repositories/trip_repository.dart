@@ -5,6 +5,7 @@ import '../../core/network/realtime_client.dart';
 import '../../domain/enums/trip_lifecycle.dart';
 import '../../domain/models/activity_log.dart';
 import '../../domain/models/guest_user.dart';
+import '../../domain/models/journey_moment.dart';
 import '../../domain/models/journey_stop.dart';
 import '../../domain/models/trip.dart';
 import '../../domain/models/trip_member.dart';
@@ -502,6 +503,71 @@ class TripRepository {
     final list = getCachedTripMemories(tripId);
     list.removeWhere((m) => m.id == memoryId);
     await saveTripMemories(tripId, list);
+  }
+
+  /// Synchronously returns cached journey moments for a trip.
+  List<JourneyMoment> getCachedJourneyMoments(String tripId) {
+    final raw = storage.getSavedJourneyMoments(tripId);
+    final moments = raw.map((json) => JourneyMoment.fromJson(json)).toList();
+    moments.sort((a, b) {
+      final dayComp = a.dayIndex.compareTo(b.dayIndex);
+      if (dayComp != 0) return dayComp;
+      return a.occurredAt.compareTo(b.occurredAt);
+    });
+    return moments;
+  }
+
+  /// Persists journey moments for a trip locally.
+  Future<void> saveJourneyMoments(String tripId, List<JourneyMoment> moments) async {
+    await storage.saveJourneyMoments(tripId, moments.map((m) => m.toJson()).toList());
+  }
+
+  /// Fetches journey moments from the backend with local fallback.
+  Future<List<JourneyMoment>> getJourneyMoments(String tripId) async {
+    try {
+      final res = await apiClient.get('/trips/$tripId/moments');
+      if (res is List) {
+        final moments = res.map((m) => JourneyMoment.fromJson(m as Map<String, dynamic>)).toList();
+        await saveJourneyMoments(tripId, moments);
+        return moments;
+      }
+    } catch (_) {
+      // Offline fallback
+    }
+    return getCachedJourneyMoments(tripId);
+  }
+
+  /// Appends or updates a single journey moment with offline queueing.
+  Future<void> addOrUpdateJourneyMoment(String tripId, JourneyMoment moment) async {
+    final list = getCachedJourneyMoments(tripId);
+    list.removeWhere((m) => m.id == moment.id);
+    list.add(moment);
+    await saveJourneyMoments(tripId, list);
+
+    try {
+      await apiClient.post('/trips/$tripId/moments', body: moment.toJson());
+    } catch (_) {
+      await syncService.enqueueMutation(
+        MutationType.addExpense, // or generic mutation
+        {'action': 'add_moment', 'tripId': tripId, 'moment': moment.toJson()},
+      );
+    }
+  }
+
+  /// Deletes a journey moment with offline queueing.
+  Future<void> deleteJourneyMoment(String tripId, String momentId) async {
+    final list = getCachedJourneyMoments(tripId);
+    list.removeWhere((m) => m.id == momentId);
+    await saveJourneyMoments(tripId, list);
+
+    try {
+      await apiClient.delete('/trips/$tripId/moments/$momentId');
+    } catch (_) {
+      await syncService.enqueueMutation(
+        MutationType.deleteExpense,
+        {'action': 'delete_moment', 'tripId': tripId, 'momentId': momentId},
+      );
+    }
   }
 
   static String _generateInviteCode() {

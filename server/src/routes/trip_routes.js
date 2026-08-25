@@ -128,4 +128,49 @@ router.get('/:id/activity', (req, res, next) => {
   }
 });
 
+// Journey Moments Endpoints
+// GET /api/trips/:id/moments - Get chronological journey moments
+router.get('/:id/moments', (req, res, next) => {
+  try {
+    const journeyService = require('../services/journey_service');
+    const moments = journeyService.getTripMoments(req.user, req.params.id);
+    res.status(200).json({ data: moments });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// POST /api/trips/:id/moments - Create journey moment
+router.post('/:id/moments', (req, res, next) => {
+  try {
+    const journeyService = require('../services/journey_service');
+    const moment = journeyService.createMoment(req.user, req.params.id, req.body, realtimeHub);
+    res.status(201).json({ data: moment });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// PUT /api/trips/:id/moments/:momentId - Update journey moment
+router.put('/:id/moments/:momentId', (req, res, next) => {
+  try {
+    const journeyService = require('../services/journey_service');
+    const moment = journeyService.updateMoment(req.user, req.params.id, req.params.momentId, req.body, realtimeHub);
+    res.status(200).json({ data: moment });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// DELETE /api/trips/:id/moments/:momentId - Delete journey moment
+router.delete('/:id/moments/:momentId', (req, res, next) => {
+  try {
+    const journeyService = require('../services/journey_service');
+    const result = journeyService.deleteMoment(req.user, req.params.id, req.params.momentId, realtimeHub);
+    res.status(200).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
 module.exports = router;

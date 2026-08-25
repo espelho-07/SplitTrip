@@ -225,4 +225,22 @@ class LocalStorageService {
   Future<bool> saveTripMemories(String tripId, List<Map<String, dynamic>> memoriesJson) async {
     return _prefs.setString('$_tripMemoriesPrefix$tripId', jsonEncode(memoriesJson));
   }
+
+  // --- Trip Journey Moments ---
+  static const String _journeyMomentsPrefix = 'kith_moments_';
+
+  List<Map<String, dynamic>> getSavedJourneyMoments(String tripId) {
+    final raw = _prefs.getString('$_journeyMomentsPrefix$tripId');
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      final list = jsonDecode(raw) as List<dynamic>;
+      return list.cast<Map<String, dynamic>>();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<bool> saveJourneyMoments(String tripId, List<Map<String, dynamic>> momentsJson) async {
+    return _prefs.setString('$_journeyMomentsPrefix$tripId', jsonEncode(momentsJson));
+  }
 }

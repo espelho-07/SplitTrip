@@ -8,6 +8,7 @@ import '../../domain/enums/trip_lifecycle.dart';
 import '../../domain/models/activity_log.dart';
 import '../../domain/models/balance_summary.dart';
 import '../../domain/models/expense.dart';
+import '../../domain/models/journey_moment.dart';
 import '../../domain/models/journey_stop.dart';
 import '../../domain/models/trip.dart';
 import '../../domain/models/trip_memory.dart';
@@ -23,6 +24,7 @@ class TripDetailViewModel extends ChangeNotifier {
   List<ActivityLog> _activityLogs = [];
   List<JourneyStop> _journeyStops = [];
   List<TripMemory> _tripMemories = [];
+  List<JourneyMoment> _journeyMoments = [];
   bool _isLoading = false;
   bool _isLoadingActivity = false;
   String? _errorMessage;
@@ -48,6 +50,7 @@ class TripDetailViewModel extends ChangeNotifier {
   List<ActivityLog> get activityLogs => _activityLogs;
   List<JourneyStop> get journeyStops => _journeyStops;
   List<TripMemory> get tripMemories => _tripMemories;
+  List<JourneyMoment> get journeyMoments => _journeyMoments;
   bool get isLoading => _isLoading;
   bool get isLoadingActivity => _isLoadingActivity;
   String? get errorMessage => _errorMessage;
@@ -115,6 +118,7 @@ class TripDetailViewModel extends ChangeNotifier {
       _activityLogs = tripRepo.getCachedActivityLogs(tripId);
       _journeyStops = tripRepo.getCachedJourneyStops(tripId);
       _tripMemories = tripRepo.getCachedTripMemories(tripId);
+      _journeyMoments = tripRepo.getCachedJourneyMoments(tripId);
       _balanceSummary = BalanceEngine.calculateBalances(
         members: cachedTrip.members,
         expenses: _expenses,
@@ -137,6 +141,7 @@ class TripDetailViewModel extends ChangeNotifier {
         _expenses = await expenseRepo.getExpenses(tripId);
         _journeyStops = tripRepo.getCachedJourneyStops(tripId);
         _tripMemories = tripRepo.getCachedTripMemories(tripId);
+        _journeyMoments = await tripRepo.getJourneyMoments(tripId);
         _balanceSummary = await expenseRepo.getBalanceSummary(
           trip: remoteTrip,
           currentUserId: currentUserId,
@@ -160,11 +165,13 @@ class TripDetailViewModel extends ChangeNotifier {
       _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
       _journeyStops = tripRepo.getCachedJourneyStops(_trip!.id);
       _tripMemories = tripRepo.getCachedTripMemories(_trip!.id);
+      _journeyMoments = tripRepo.getCachedJourneyMoments(_trip!.id);
       try {
         final updatedTrip = await tripRepo.getTripById(_trip!.id);
         if (updatedTrip != null) {
           _trip = updatedTrip;
           _expenses = await expenseRepo.getExpenses(_trip!.id);
+          _journeyMoments = await tripRepo.getJourneyMoments(_trip!.id);
           _balanceSummary = await expenseRepo.getBalanceSummary(
             trip: _trip!,
             currentUserId: currentUserId,
@@ -313,6 +320,27 @@ class TripDetailViewModel extends ChangeNotifier {
     if (_trip == null) return;
     await tripRepo.deleteTripMemory(_trip!.id, memoryId);
     _tripMemories = tripRepo.getCachedTripMemories(_trip!.id);
+    notifyListeners();
+  }
+
+  Future<void> addJourneyMoment(JourneyMoment moment) async {
+    if (_trip == null) return;
+    await tripRepo.addOrUpdateJourneyMoment(_trip!.id, moment);
+    _journeyMoments = tripRepo.getCachedJourneyMoments(_trip!.id);
+    notifyListeners();
+  }
+
+  Future<void> updateJourneyMoment(JourneyMoment moment) async {
+    if (_trip == null) return;
+    await tripRepo.addOrUpdateJourneyMoment(_trip!.id, moment);
+    _journeyMoments = tripRepo.getCachedJourneyMoments(_trip!.id);
+    notifyListeners();
+  }
+
+  Future<void> deleteJourneyMoment(String momentId) async {
+    if (_trip == null) return;
+    await tripRepo.deleteJourneyMoment(_trip!.id, momentId);
+    _journeyMoments = tripRepo.getCachedJourneyMoments(_trip!.id);
     notifyListeners();
   }
 
