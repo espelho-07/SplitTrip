@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../../../core/network/api_client.dart';
+import '../../../../core/services/google_auth_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
@@ -10,35 +13,31 @@ import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/member_avatar.dart';
 import '../../../../core/widgets/surface_card.dart';
 import '../../../../data/services/sync_service.dart';
-import '../../../../core/network/api_client.dart';
 import '../../../../domain/enums/app_experience_mode.dart';
 import '../../../viewmodels/auth_viewmodel.dart';
 import '../../../viewmodels/home_viewmodel.dart';
 import '../../../viewmodels/personal_expense_viewmodel.dart';
 import '../../../viewmodels/theme_viewmodel.dart';
-import '../../../widgets/progress/progress.dart';
+import '../../../widgets/progress/kith_stage_progress.dart';
+import '../../../widgets/progress/kith_success_toast.dart';
+import '../../cloud/cloud_sync_sheet.dart';
+import '../../onboarding/interactive_tutorial_sheet.dart';
 import '../../settings/widgets/beta_feedback_sheet.dart';
 
 class ProfileSheet extends StatelessWidget {
   final VoidCallback? onSwitchToTrips;
-  final void Function(BuildContext) onShowLinkAccount;
-  final void Function(BuildContext) onShowRestoreAccount;
-  final void Function(BuildContext) onShowServerConfig;
+  final void Function(BuildContext)? onShowRestoreAccount;
 
   const ProfileSheet({
     super.key,
     this.onSwitchToTrips,
-    required this.onShowLinkAccount,
-    required this.onShowRestoreAccount,
-    required this.onShowServerConfig,
+    this.onShowRestoreAccount,
   });
 
   static Future<void> show(
     BuildContext context, {
     VoidCallback? onSwitchToTrips,
-    required void Function(BuildContext) onShowLinkAccount,
-    required void Function(BuildContext) onShowRestoreAccount,
-    required void Function(BuildContext) onShowServerConfig,
+    void Function(BuildContext)? onShowRestoreAccount,
   }) {
     return showModalBottomSheet(
       context: context,
@@ -46,11 +45,227 @@ class ProfileSheet extends StatelessWidget {
       backgroundColor: Colors.transparent,
       builder: (ctx) => ProfileSheet(
         onSwitchToTrips: onSwitchToTrips,
-        onShowLinkAccount: onShowLinkAccount,
         onShowRestoreAccount: onShowRestoreAccount,
-        onShowServerConfig: onShowServerConfig,
       ),
     );
+  }
+
+  Future<void> _handleGoogleSignIn(BuildContext context) async {
+    final authVm = context.read<AuthViewModel>();
+    final homeVm = context.read<HomeViewModel>();
+    final personalVm = context.read<PersonalExpenseViewModel>();
+    final apiClient = context.read<ApiClient>();
+    final syncService = context.read<SyncService>();
+
+    if (authVm.isLoading) return;
+    HapticHelper.medium();
+
+    String? email;
+    String? name;
+    String? googleId;
+    String? photoUrl;
+
+    try {
+      final googleResult = await GoogleAuthService.signIn();
+      if (googleResult != null) {
+        email = googleResult.email;
+        name = googleResult.displayName;
+        googleId = googleResult.googleId;
+        photoUrl = googleResult.avatarUrl;
+      } else {
+        // User cancelled prompt
+        return;
+      }
+    } catch (e) {
+      debugPrint('Native Google sign in error: $e. Using account entry fallback.');
+      if (!context.mounted) return;
+
+      final emailController = TextEditingController();
+      final nameController = TextEditingController(text: authVm.currentUser?.displayName ?? '');
+
+      final result = await showDialog<Map<String, String>>(
+        context: context,
+        builder: (dCtx) => AlertDialog(
+          shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
+          title: const Row(
+            children: [
+              Icon(Icons.g_mobiledata_rounded, color: AppColors.emeraldPrimary, size: 28),
+              SizedBox(width: 6),
+              Text('Continue with Google', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Enter your Google account to sync all trips, expenses, and balances across devices.',
+                  style: TextStyle(fontSize: 13),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: nameController,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    labelText: 'Display Name',
+                    prefixIcon: Icon(Icons.person_outline, size: 20),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'Google Email Address',
+                    hintText: 'you@gmail.com',
+                    prefixIcon: Icon(Icons.email_outlined, size: 20),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dCtx),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final em = emailController.text.trim();
+                final nm = nameController.text.trim();
+                if (em.isEmpty || !em.contains('@')) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please enter a valid Google email address.')),
+                  );
+                  return;
+                }
+                Navigator.pop(dCtx, {'email': em, 'name': nm});
+              },
+              child: const Text('Continue'),
+            ),
+          ],
+        ),
+      );
+
+      if (result == null || !context.mounted) return;
+      email = result['email']!;
+      name = result['name']!.isEmpty ? email.split('@')[0] : result['name']!;
+      googleId = 'g_${email.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}';
+    }
+
+    if (!context.mounted) return;
+
+    final stageNotifier = ValueNotifier<int>(0);
+    final stages = const [
+      ProgressStage(label: 'Signing you in…', description: 'Contacting Google identity provider'),
+      ProgressStage(label: 'Verifying your account…', description: 'Linking canonical cloud ledger'),
+      ProgressStage(label: 'Syncing your Kith data…', description: 'Restoring trips, expenses & balances'),
+      ProgressStage(label: "You're signed in ✓", description: 'Account ready'),
+    ];
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dCtx) => ValueListenableBuilder<int>(
+        valueListenable: stageNotifier,
+        builder: (c, activeStage, _) {
+          final isDark = Theme.of(c).brightness == Brightness.dark;
+          return Dialog(
+            backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+            shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: KithStageProgress(
+                title: 'Connecting Account…',
+                stages: stages,
+                currentStageIndex: activeStage,
+              ),
+            ),
+          );
+        },
+      ),
+    );
+
+    Future.delayed(const Duration(milliseconds: 250), () {
+      if (context.mounted) stageNotifier.value = 1;
+    });
+    Future.delayed(const Duration(milliseconds: 550), () {
+      if (context.mounted) stageNotifier.value = 2;
+    });
+    Future.delayed(const Duration(milliseconds: 850), () {
+      if (context.mounted) stageNotifier.value = 3;
+    });
+
+    final updated = await authVm.signInWithGoogle(
+      email: email,
+      displayName: name,
+      googleId: googleId,
+      photoUrl: photoUrl,
+    );
+
+    if (context.mounted) {
+      Navigator.of(context, rootNavigator: true).pop(); // Dismiss progress
+
+      if (updated != null) {
+        await syncService.flushQueue(apiClient);
+        await homeVm.loadTrips(updated.id);
+        await personalVm.loadData(updated.id);
+        await personalVm.syncTripExpenses(updated.id);
+
+        if (context.mounted) {
+          KithSuccessToast.show(context, 'Signed in as ${updated.displayName} ✓');
+        }
+      } else {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(authVm.errorMessage ?? 'Could not sign in with Google.')),
+          );
+        }
+      }
+    }
+  }
+
+  void _showSignOutDialog(BuildContext context) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
+        title: const Text('Sign out of Kith?'),
+        content: const Text(
+          'Your cloud data will remain safe. You can sign back in anytime using your Google account or Recovery Key.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () => Navigator.pop(dCtx, true),
+            child: const Text('Sign out'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && context.mounted) {
+      final authVm = context.read<AuthViewModel>();
+      final homeVm = context.read<HomeViewModel>();
+      final personalVm = context.read<PersonalExpenseViewModel>();
+
+      // Close profile sheet first
+      Navigator.of(context).pop();
+
+      await authVm.logout();
+      homeVm.clearData();
+      personalVm.clearData();
+
+      if (context.mounted) {
+        context.go('/onboarding');
+        KithSuccessToast.show(context, 'Signed out successfully ✓');
+      }
+    }
   }
 
   @override
@@ -58,9 +273,13 @@ class ProfileSheet extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final authVm = context.watch<AuthViewModel>();
     final themeVm = context.watch<ThemeViewModel>();
+    final syncService = context.watch<SyncService>();
     final user = authVm.currentUser;
 
     if (user == null) return const SizedBox.shrink();
+
+    final isGoogleLinked = user.isGoogleLinked;
+    final pendingCount = syncService.pendingCount;
 
     return Container(
       decoration: BoxDecoration(
@@ -110,23 +329,26 @@ class ProfileSheet extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
-                              color: (user.isLinkedToAccount ? AppColors.emeraldPrimary : AppColors.indigoAccent)
+                              color: (isGoogleLinked ? AppColors.emeraldPrimary : AppColors.indigoAccent)
                                   .withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
-                              user.isLinkedToAccount ? 'Cloud Linked' : 'Guest Account',
+                              isGoogleLinked ? 'Google Connected' : 'Guest Account',
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
-                                color: user.isLinkedToAccount ? AppColors.emeraldPrimary : AppColors.indigoAccent,
+                                color: isGoogleLinked ? AppColors.emeraldPrimary : AppColors.indigoAccent,
                               ),
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Text(
-                            user.isLinkedToAccount ? (user.email ?? '') : 'Offline Ready',
-                            style: AppTypography.bodySmall(isDark: isDark),
+                          Flexible(
+                            child: Text(
+                              isGoogleLinked ? (user.email ?? '') : 'Data on this device',
+                              style: AppTypography.bodySmall(isDark: isDark),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ],
                       ),
@@ -138,7 +360,7 @@ class ProfileSheet extends StatelessWidget {
 
             const SizedBox(height: AppSpacing.lg),
 
-            // SECTION 1: ACCOUNT
+            // SECTION 1: ACCOUNT & IDENTITY
             _buildSectionHeader('ACCOUNT', isDark),
             const SizedBox(height: AppSpacing.xs),
             SurfaceCard(
@@ -149,9 +371,9 @@ class ProfileSheet extends StatelessWidget {
                   Row(
                     children: [
                       Icon(
-                        user.isGoogleLinked ? Icons.verified_user_rounded : Icons.person_outline_rounded,
+                        isGoogleLinked ? Icons.verified_user_rounded : Icons.person_outline_rounded,
                         size: 20,
-                        color: user.isGoogleLinked ? AppColors.emeraldPrimary : AppColors.indigoAccent,
+                        color: isGoogleLinked ? AppColors.emeraldPrimary : AppColors.indigoAccent,
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -159,7 +381,7 @@ class ProfileSheet extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              user.isGoogleLinked ? 'Google Account' : 'Guest Account',
+                              isGoogleLinked ? 'Connected with Google' : 'Sign in with Google',
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
@@ -167,50 +389,40 @@ class ProfileSheet extends StatelessWidget {
                               ),
                             ),
                             Text(
-                              user.email != null && user.email!.isNotEmpty
-                                  ? user.email!
-                                  : 'Not linked to Google yet',
+                              isGoogleLinked
+                                  ? (user.email ?? 'Cloud identity active')
+                                  : 'Sign in with Google to sync across devices',
                               style: AppTypography.bodySmall(isDark: isDark),
                             ),
                           ],
                         ),
                       ),
+                      if (isGoogleLinked)
+                        const Icon(Icons.check_circle_rounded, size: 18, color: AppColors.emeraldPrimary),
                     ],
                   ),
-                  if (!user.isGoogleLinked) ...[
+                  if (!isGoogleLinked) ...[
                     Divider(height: 20, color: isDark ? Colors.white10 : Colors.black12),
                     InkWell(
-                      onTap: () {
-                        Navigator.pop(context);
-                        onShowLinkAccount(context);
-                      },
+                      onTap: () => _handleGoogleSignIn(context),
                       borderRadius: AppRadius.smBorder,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Row(
                           children: [
-                            const Icon(Icons.g_mobiledata_rounded, size: 26, color: AppColors.emeraldPrimary),
+                            const Icon(Icons.g_mobiledata_rounded, size: 28, color: AppColors.emeraldPrimary),
                             const SizedBox(width: 8),
                             Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Continue with Google',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                      color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                                    ),
-                                  ),
-                                  Text(
-                                    'Sync your Kith account across devices',
-                                    style: AppTypography.bodySmall(isDark: isDark),
-                                  ),
-                                ],
+                              child: Text(
+                                'Continue with Google',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                                ),
                               ),
                             ),
-                            const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
+                            const Icon(Icons.arrow_forward_rounded, size: 18, color: AppColors.emeraldPrimary),
                           ],
                         ),
                       ),
@@ -222,7 +434,66 @@ class ProfileSheet extends StatelessWidget {
 
             const SizedBox(height: AppSpacing.lg),
 
-            // SECTION 2: RECOVERY KEY
+            // SECTION 2: CLOUD & SYNCHRONIZATION
+            _buildSectionHeader('CLOUD', isDark),
+            const SizedBox(height: AppSpacing.xs),
+            SurfaceCard(
+              backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 4),
+              child: Column(
+                children: [
+                  ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.cloud_sync_rounded, size: 20, color: AppColors.emeraldPrimary),
+                    title: Text(
+                      'Cloud Sync',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                      ),
+                    ),
+                    subtitle: Text(
+                      pendingCount > 0 ? '$pendingCount changes waiting to sync' : '✓ Up to date',
+                      style: AppTypography.bodySmall(isDark: isDark),
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
+                    onTap: () {
+                      Navigator.pop(context);
+                      CloudSyncSheet.show(context);
+                    },
+                  ),
+                  Divider(height: 1, color: isDark ? Colors.white10 : Colors.black12),
+                  ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.dns_outlined, size: 20),
+                    title: Text(
+                      'Cloud Settings',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                      ),
+                    ),
+                    subtitle: Text(
+                      'Sync controls, privacy, and account settings',
+                      style: AppTypography.bodySmall(isDark: isDark),
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
+                    onTap: () {
+                      Navigator.pop(context);
+                      context.push('/cloud-settings');
+                    },
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: AppSpacing.lg),
+
+            // SECTION 3: RECOVERY KEY
             _buildSectionHeader('EMERGENCY RECOVERY KEY', isDark),
             const SizedBox(height: AppSpacing.xs),
             SurfaceCard(
@@ -286,7 +557,7 @@ class ProfileSheet extends StatelessWidget {
 
             const SizedBox(height: AppSpacing.lg),
 
-            // SECTION 2: EXPERIENCE & MODES
+            // SECTION 4: APP EXPERIENCE & MODES
             _buildSectionHeader('APP EXPERIENCE', isDark),
             const SizedBox(height: AppSpacing.xs),
             SurfaceCard(
@@ -324,97 +595,60 @@ class ProfileSheet extends StatelessWidget {
 
             const SizedBox(height: AppSpacing.lg),
 
-            // SECTION 3: PREFERENCES & DATA
-            _buildSectionHeader('PREFERENCES & CLOUD', isDark),
+            // SECTION 5: PREFERENCES
+            _buildSectionHeader('PREFERENCES', isDark),
             const SizedBox(height: AppSpacing.xs),
             SurfaceCard(
               backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 4),
-              child: Column(
-                children: [
-                  // Theme Mode
-                  ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(
-                      themeVm.themeMode == ThemeMode.dark
-                          ? Icons.dark_mode_rounded
-                          : (themeVm.themeMode == ThemeMode.light ? Icons.light_mode_rounded : Icons.brightness_auto_rounded),
-                      size: 20,
-                    ),
-                    title: Text('Appearance', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary)),
-                    subtitle: Text(
-                      themeVm.themeMode == ThemeMode.dark ? 'Dark mode' : (themeVm.themeMode == ThemeMode.light ? 'Light mode' : 'System auto'),
-                      style: AppTypography.bodySmall(isDark: isDark),
-                    ),
-                    trailing: DropdownButton<ThemeMode>(
-                      value: themeVm.themeMode,
-                      underline: const SizedBox.shrink(),
-                      dropdownColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
-                      items: const [
-                        DropdownMenuItem(value: ThemeMode.system, child: Text('System', style: TextStyle(fontSize: 12))),
-                        DropdownMenuItem(value: ThemeMode.light, child: Text('Light', style: TextStyle(fontSize: 12))),
-                        DropdownMenuItem(value: ThemeMode.dark, child: Text('Dark', style: TextStyle(fontSize: 12))),
-                      ],
-                      onChanged: (mode) {
-                        if (mode != null) {
-                          themeVm.setThemeMode(mode);
-                          HapticHelper.selection();
-                        }
-                      },
-                    ),
+              child: ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(
+                  themeVm.themeMode == ThemeMode.dark
+                      ? Icons.dark_mode_rounded
+                      : (themeVm.themeMode == ThemeMode.light
+                          ? Icons.light_mode_rounded
+                          : Icons.brightness_auto_rounded),
+                  size: 20,
+                ),
+                title: Text(
+                  'Appearance',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                   ),
-                  Divider(height: 1, color: isDark ? Colors.white10 : Colors.black12),
-                  // Sync with Cloud
-                  ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.cloud_sync_rounded, size: 20, color: AppColors.emeraldPrimary),
-                    title: Text('Sync All Data', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary)),
-                    subtitle: Text('Force refresh all trips & personal ledger', style: AppTypography.bodySmall(isDark: isDark)),
-                    trailing: const Icon(Icons.refresh_rounded, size: 18),
-                    onTap: () async {
-                      Navigator.pop(context);
-                      final messenger = ScaffoldMessenger.of(context);
-                      messenger.showSnackBar(
-                        const SnackBar(content: Text('Syncing all data with cloud…'), behavior: SnackBarBehavior.floating, duration: Duration(milliseconds: 1200)),
-                      );
-                      final apiClient = context.read<ApiClient>();
-                      final syncService = context.read<SyncService>();
-                      final homeVm = context.read<HomeViewModel>();
-                      final personalVm = context.read<PersonalExpenseViewModel>();
-
-                      await syncService.flushQueue(apiClient);
-                      await homeVm.loadTrips(user.id);
-                      await personalVm.loadData(user.id);
-                      await personalVm.syncTripExpenses(user.id);
-
-                      if (context.mounted) {
-                        KithSuccessToast.show(context, 'Everything is up to date ✓');
-                      }
-                    },
-                  ),
-                  Divider(height: 1, color: isDark ? Colors.white10 : Colors.black12),
-                  // Server Config
-                  ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.dns_outlined, size: 20),
-                    title: Text('Cloud & Server Settings', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary)),
-                    trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
-                    onTap: () {
-                      Navigator.pop(context);
-                      onShowServerConfig(context);
-                    },
-                  ),
-                ],
+                ),
+                subtitle: Text(
+                  themeVm.themeMode == ThemeMode.dark
+                      ? 'Dark mode'
+                      : (themeVm.themeMode == ThemeMode.light ? 'Light mode' : 'System auto'),
+                  style: AppTypography.bodySmall(isDark: isDark),
+                ),
+                trailing: DropdownButton<ThemeMode>(
+                  value: themeVm.themeMode,
+                  underline: const SizedBox.shrink(),
+                  dropdownColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+                  items: const [
+                    DropdownMenuItem(value: ThemeMode.system, child: Text('System', style: TextStyle(fontSize: 12))),
+                    DropdownMenuItem(value: ThemeMode.light, child: Text('Light', style: TextStyle(fontSize: 12))),
+                    DropdownMenuItem(value: ThemeMode.dark, child: Text('Dark', style: TextStyle(fontSize: 12))),
+                  ],
+                  onChanged: (mode) {
+                    if (mode != null) {
+                      themeVm.setThemeMode(mode);
+                      HapticHelper.selection();
+                    }
+                  },
+                ),
               ),
             ),
 
             const SizedBox(height: AppSpacing.lg),
 
-            // SECTION 4: SUPPORT & ACCOUNT
-            _buildSectionHeader('SUPPORT & SESSION', isDark),
+            // SECTION 6: HELP & SUPPORT
+            _buildSectionHeader('HELP & ABOUT', isDark),
             const SizedBox(height: AppSpacing.xs),
             SurfaceCard(
               backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
@@ -424,8 +658,55 @@ class ProfileSheet extends StatelessWidget {
                   ListTile(
                     dense: true,
                     contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.help_center_outlined, size: 20, color: AppColors.emeraldPrimary),
+                    title: Text(
+                      'Help & FAQ',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                      ),
+                    ),
+                    subtitle: Text('Searchable guides & answers for all features', style: AppTypography.bodySmall(isDark: isDark)),
+                    trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
+                    onTap: () {
+                      Navigator.pop(context);
+                      context.push('/help');
+                    },
+                  ),
+                  Divider(height: 1, color: isDark ? Colors.white10 : Colors.black12),
+                  ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.auto_stories_outlined, size: 20, color: AppColors.indigoAccent),
+                    title: Text(
+                      'Replay Kith Tour',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                      ),
+                    ),
+                    subtitle: Text('Review the 5-step quick onboarding', style: AppTypography.bodySmall(isDark: isDark)),
+                    trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
+                    onTap: () {
+                      Navigator.pop(context);
+                      InteractiveTutorialSheet.show(context);
+                    },
+                  ),
+                  Divider(height: 1, color: isDark ? Colors.white10 : Colors.black12),
+                  ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.feedback_outlined, size: 20),
-                    title: Text('Send Feedback', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary)),
+                    title: Text(
+                      'Send Feedback',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                      ),
+                    ),
                     trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
                     onTap: () {
                       Navigator.pop(context);
@@ -437,52 +718,32 @@ class ProfileSheet extends StatelessWidget {
                       );
                     },
                   ),
-                  Divider(height: 1, color: isDark ? Colors.white10 : Colors.black12),
-                  ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.key_outlined, size: 20),
-                    title: Text('Restore with Recovery Key', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary)),
-                    trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
-                    onTap: () {
-                      Navigator.pop(context);
-                      onShowRestoreAccount(context);
-                    },
-                  ),
-                  Divider(height: 1, color: isDark ? Colors.white10 : Colors.black12),
-                  ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.logout_rounded, size: 20, color: Colors.redAccent),
-                    title: const Text('Sign Out', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.redAccent)),
-                    trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
-                    onTap: () async {
-                      Navigator.pop(context);
-                      final confirm = await showDialog<bool>(
-                        context: context,
-                        builder: (dCtx) => AlertDialog(
-                          title: const Text('Sign Out?'),
-                          content: const Text('Make sure you have saved your Recovery Key or linked with Google so you can restore your data later.'),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(dCtx, false),
-                              child: const Text('Cancel'),
-                            ),
-                            FilledButton(
-                              style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
-                              onPressed: () => Navigator.pop(dCtx, true),
-                              child: const Text('Sign Out'),
-                            ),
-                          ],
-                        ),
-                      );
-
-                      if (confirm == true && context.mounted) {
-                        await authVm.logout();
-                      }
-                    },
-                  ),
                 ],
+              ),
+            ),
+
+            const SizedBox(height: AppSpacing.lg),
+
+            // SECTION 7: DANGER ZONE
+            _buildSectionHeader('DANGER ZONE', isDark),
+            const SizedBox(height: AppSpacing.xs),
+            SurfaceCard(
+              backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 4),
+              child: ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.logout_rounded, size: 20, color: Colors.redAccent),
+                title: const Text(
+                  'Sign Out',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.redAccent),
+                ),
+                subtitle: Text(
+                  'Clear credentials from this device',
+                  style: AppTypography.bodySmall(isDark: isDark),
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
+                onTap: () => _showSignOutDialog(context),
               ),
             ),
 
@@ -518,7 +779,7 @@ class ProfileSheet extends StatelessWidget {
             AppButton(
               text: 'Done',
               isFullWidth: true,
-              variant: AppButtonVariant.ghost,
+              variant: AppButtonVariant.secondary,
               onPressed: () => Navigator.pop(context),
             ),
           ],
@@ -529,14 +790,14 @@ class ProfileSheet extends StatelessWidget {
 
   Widget _buildSectionHeader(String title, bool isDark) {
     return Padding(
-      padding: const EdgeInsets.only(left: 4, bottom: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       child: Text(
         title,
         style: TextStyle(
           fontSize: 11,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 1.0,
-          color: isDark ? Colors.white54 : Colors.black45,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.1,
+          color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
         ),
       ),
     );
@@ -554,10 +815,10 @@ class ProfileSheet extends StatelessWidget {
       onTap: onTap,
       borderRadius: AppRadius.smBorder,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
         child: Row(
           children: [
-            Text(emoji, style: const TextStyle(fontSize: 22)),
+            Text(emoji, style: const TextStyle(fontSize: 20)),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -567,23 +828,21 @@ class ProfileSheet extends StatelessWidget {
                     title,
                     style: TextStyle(
                       fontSize: 13,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                       color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                     ),
                   ),
-                  const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                    ),
+                    style: AppTypography.bodySmall(isDark: isDark),
                   ),
                 ],
               ),
             ),
             if (isSelected)
-              const Icon(Icons.check_circle_rounded, color: AppColors.emeraldPrimary, size: 20),
+              const Icon(Icons.check_circle_rounded, color: AppColors.emeraldPrimary, size: 20)
+            else
+              const Icon(Icons.radio_button_unchecked_rounded, color: Colors.grey, size: 20),
           ],
         ),
       ),

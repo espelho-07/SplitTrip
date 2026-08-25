@@ -106,4 +106,14 @@ class HomeViewModel extends ChangeNotifier {
   Future<void> refresh(String currentUserId) async {
     await loadTrips(currentUserId);
   }
+
+  void clearData() {
+    _trips = [];
+    _tripBalances.clear();
+    _overallNetBalanceInPaise = 0;
+    _totalSpentOnTripsInPaise = 0;
+    _isLoading = false;
+    _errorMessage = null;
+    notifyListeners();
+  }
 }

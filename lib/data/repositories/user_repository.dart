@@ -61,4 +61,28 @@ class UserRepository {
   Future<bool> saveAppExperienceMode(String mode) {
     return authService.storage.saveAppExperienceMode(mode);
   }
+
+  bool hasCompletedOnboarding() {
+    return authService.storage.hasCompletedOnboarding();
+  }
+
+  Future<bool> setOnboardingCompleted(bool completed) {
+    return authService.storage.setOnboardingCompleted(completed);
+  }
+
+  DateTime? getLastSyncTime() {
+    return authService.storage.getLastSyncTime();
+  }
+
+  Future<bool> saveLastSyncTime(DateTime time) {
+    return authService.storage.saveLastSyncTime(time);
+  }
+
+  bool isAutoSyncEnabled() {
+    return authService.storage.isAutoSyncEnabled();
+  }
+
+  Future<bool> setAutoSyncEnabled(bool enabled) {
+    return authService.storage.setAutoSyncEnabled(enabled);
+  }
 }

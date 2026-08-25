@@ -176,6 +176,13 @@ class RealtimeClient {
     _channel = null;
   }
 
+  void disconnect() {
+    _reconnectTimer?.cancel();
+    _activeSubscribedTripIds.clear();
+    _cleanupChannel();
+    _isConnected = false;
+  }
+
   void dispose() {
     _isDisposed = true;
     _reconnectTimer?.cancel();

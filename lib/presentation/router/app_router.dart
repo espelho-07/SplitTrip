@@ -1,5 +1,7 @@
 import 'package:go_router/go_router.dart';
 import '../views/add_expense/add_expense_view.dart';
+import '../views/cloud/cloud_settings_view.dart';
+import '../views/help/help_faq_view.dart';
 import '../views/home/home_view.dart';
 import '../views/onboarding/onboarding_view.dart';
 import '../views/personal/category_breakdown_view.dart';
@@ -26,6 +28,14 @@ class AppRouter {
       GoRoute(
         path: '/home',
         builder: (context, state) => const HomeView(),
+      ),
+      GoRoute(
+        path: '/help',
+        builder: (context, state) => const HelpFaqView(),
+      ),
+      GoRoute(
+        path: '/cloud-settings',
+        builder: (context, state) => const CloudSettingsView(),
       ),
       GoRoute(
         path: '/personal/debts',

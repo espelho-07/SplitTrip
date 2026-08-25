@@ -154,4 +154,26 @@ class AuthViewModel extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  bool get hasCompletedOnboarding => userRepo.hasCompletedOnboarding();
+
+  Future<void> setOnboardingCompleted(bool completed) async {
+    await userRepo.setOnboardingCompleted(completed);
+    notifyListeners();
+  }
+
+  DateTime? get lastSyncTime => userRepo.getLastSyncTime();
+
+  Future<void> recordSyncCompleted() async {
+    final now = DateTime.now();
+    await userRepo.saveLastSyncTime(now);
+    notifyListeners();
+  }
+
+  bool get isAutoSyncEnabled => userRepo.isAutoSyncEnabled();
+
+  Future<void> setAutoSyncEnabled(bool enabled) async {
+    await userRepo.setAutoSyncEnabled(enabled);
+    notifyListeners();
+  }
 }

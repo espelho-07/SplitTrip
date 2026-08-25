@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:uuid/uuid.dart';
 import '../../core/network/api_client.dart';
 import '../../core/network/realtime_client.dart';
+import '../../core/services/google_auth_service.dart';
 import '../../domain/models/guest_user.dart';
 import 'local_storage_service.dart';
 
@@ -223,7 +224,7 @@ class AuthService {
     throw StateError('Failed to authenticate with Google');
   }
 
-  /// Revokes backend session and clears local credentials
+  /// Revokes backend session, disconnects realtime, and clears local credentials
   Future<void> logout() async {
     try {
       await apiClient.post('/auth/logout', body: {});
@@ -232,7 +233,11 @@ class AuthService {
     }
     apiClient.setAuthToken(null);
     realtimeClient?.setAuthToken(null);
-    await storage.clearUser();
+    realtimeClient?.disconnect();
+    try {
+      await GoogleAuthService.signOut();
+    } catch (_) {}
+    await storage.clearAllUserData();
   }
 
   static String _generateRecoveryKey() {

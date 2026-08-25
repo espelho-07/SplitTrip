@@ -14,6 +14,7 @@ import '../../../core/services/google_auth_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../widgets/progress/progress.dart';
+import 'interactive_tutorial_sheet.dart';
 
 class OnboardingView extends StatefulWidget {
   const OnboardingView({super.key});
@@ -302,35 +303,53 @@ class _OnboardingViewState extends State<OnboardingView> {
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
-          child: Column(
+child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: AppSpacing.xl),
 
               // Header Brand Badge
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.12),
-                  borderRadius: AppRadius.fullBorder,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.auto_awesome,
-                      size: 14,
-                      color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Effortless Group Splitting',
-                      style: AppTypography.badgeText(
-                        color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.auto_awesome,
+                          size: 14,
+                          color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Effortless Group Splitting',
+                          style: AppTypography.badgeText(
+                            color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                  TextButton.icon(
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    icon: const Icon(Icons.help_outline_rounded, size: 14, color: AppColors.emeraldPrimary),
+                    label: const Text(
+                      'Quick Tour',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.emeraldPrimary),
+                    ),
+                    onPressed: () => InteractiveTutorialSheet.show(context),
+                  ),
+                ],
               ).animate().fadeIn(duration: 400.ms),
 
               const SizedBox(height: AppSpacing.lg),

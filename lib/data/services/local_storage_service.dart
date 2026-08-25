@@ -243,4 +243,63 @@ class LocalStorageService {
   Future<bool> saveJourneyMoments(String tripId, List<Map<String, dynamic>> momentsJson) async {
     return _prefs.setString('$_journeyMomentsPrefix$tripId', jsonEncode(momentsJson));
   }
+
+  // --- Onboarding & Tutorial ---
+  static const String _onboardingCompletedKey = 'kith_onboarding_completed';
+
+  bool hasCompletedOnboarding() {
+    return _prefs.getBool(_onboardingCompletedKey) ?? false;
+  }
+
+  Future<bool> setOnboardingCompleted(bool completed) async {
+    return _prefs.setBool(_onboardingCompletedKey, completed);
+  }
+
+  // --- Cloud Sync Metadata ---
+  static const String _lastSyncTimeKey = 'kith_last_sync_time';
+  static const String _autoSyncKey = 'kith_auto_sync_enabled';
+
+  DateTime? getLastSyncTime() {
+    final raw = _prefs.getString(_lastSyncTimeKey);
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      return DateTime.parse(raw);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<bool> saveLastSyncTime(DateTime time) async {
+    return _prefs.setString(_lastSyncTimeKey, time.toIso8601String());
+  }
+
+  bool isAutoSyncEnabled() {
+    return _prefs.getBool(_autoSyncKey) ?? true;
+  }
+
+  Future<bool> setAutoSyncEnabled(bool enabled) async {
+    return _prefs.setBool(_autoSyncKey, enabled);
+  }
+
+  /// Wipes all user-specific data on logout while preserving app settings
+  Future<void> clearAllUserData() async {
+    await clearUser();
+    await _prefs.remove(_tripsKey);
+    await _prefs.remove(_mutationQueueKey);
+    await _prefs.remove(_personalExpensesKey);
+    await _prefs.remove(_personalDebtsKey);
+    await _prefs.remove(_lastSyncTimeKey);
+    
+    // Clear all prefixed keys
+    final keys = _prefs.getKeys().toList();
+    for (final k in keys) {
+      if (k.startsWith(_expensesPrefix) ||
+          k.startsWith(_personalBudgetKeyPrefix) ||
+          k.startsWith(_journeyStopsPrefix) ||
+          k.startsWith(_tripMemoriesPrefix) ||
+          k.startsWith(_journeyMomentsPrefix)) {
+        await _prefs.remove(k);
+      }
+    }
+  }
 }

@@ -709,4 +709,16 @@ class PersonalExpenseViewModel extends ChangeNotifier {
       return false;
     }
   }
+
+  void clearData() {
+    _expenses = [];
+    _tripSyncedExpenses = [];
+    _debtsSummary = PersonalDebtsSummary.empty();
+    _budget = PersonalBudget.empty(currentMonthKey);
+    _isLoading = false;
+    _isSaving = false;
+    _errorMessage = null;
+    _applyFilterAndCalculate();
+    notifyListeners();
+  }
 }

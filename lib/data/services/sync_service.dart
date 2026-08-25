@@ -71,6 +71,9 @@ class SyncService {
 
   SyncService(this._storage);
 
+  bool get isProcessing => _isProcessing;
+  int get pendingCount => getPendingMutations().length;
+
   List<SyncMutation> getPendingMutations() {
     final raw = _storage.getMutationQueue();
     return raw.map((json) => SyncMutation.fromJson(json)).toList();
