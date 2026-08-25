@@ -335,9 +335,9 @@ class AuthService {
       }
 
       // Migrate trips created by guest
-      const trips = db.find('trips', (t) => t.createdBy === guestUserId);
+      const trips = db.find('trips', (t) => t.creatorId === guestUserId || t.createdBy === guestUserId);
       for (const t of trips) {
-        db.update('trips', t.id, { createdBy: canonicalUserId });
+        db.update('trips', t.id, { creatorId: canonicalUserId, createdBy: canonicalUserId });
       }
 
       // Migrate trip members

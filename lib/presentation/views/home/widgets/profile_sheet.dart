@@ -137,13 +137,98 @@ class ProfileSheet extends StatelessWidget {
 
             const SizedBox(height: AppSpacing.lg),
 
-            // SECTION 1: ACCOUNT & RECOVERY
-            _buildSectionHeader('SECURITY & RECOVERY', isDark),
+            // SECTION 1: ACCOUNT
+            _buildSectionHeader('ACCOUNT', isDark),
             const SizedBox(height: AppSpacing.xs),
             SurfaceCard(
               backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
               padding: const EdgeInsets.all(AppSpacing.md),
               child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        user.isGoogleLinked ? Icons.verified_user_rounded : Icons.person_outline_rounded,
+                        size: 20,
+                        color: user.isGoogleLinked ? AppColors.emeraldPrimary : AppColors.indigoAccent,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              user.isGoogleLinked ? 'Google Account' : 'Guest Account',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                              ),
+                            ),
+                            Text(
+                              user.email != null && user.email!.isNotEmpty
+                                  ? user.email!
+                                  : 'Not linked to Google yet',
+                              style: AppTypography.bodySmall(isDark: isDark),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (!user.isGoogleLinked) ...[
+                    Divider(height: 20, color: isDark ? Colors.white10 : Colors.black12),
+                    InkWell(
+                      onTap: () {
+                        Navigator.pop(context);
+                        onShowLinkAccount(context);
+                      },
+                      borderRadius: AppRadius.smBorder,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.g_mobiledata_rounded, size: 26, color: AppColors.emeraldPrimary),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Sign in with Google',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Sync your Kith account across devices',
+                                    style: AppTypography.bodySmall(isDark: isDark),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+            const SizedBox(height: AppSpacing.lg),
+
+            // SECTION 2: RECOVERY KEY
+            _buildSectionHeader('EMERGENCY RECOVERY KEY', isDark),
+            const SizedBox(height: AppSpacing.xs),
+            SurfaceCard(
+              backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
@@ -165,8 +250,8 @@ class ProfileSheet extends StatelessWidget {
                               user.recoveryKey,
                               style: const TextStyle(
                                 fontFamily: 'monospace',
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
                                 letterSpacing: 1.2,
                               ),
                             ),
@@ -189,41 +274,11 @@ class ProfileSheet extends StatelessWidget {
                       ),
                     ],
                   ),
-                  if (!user.isLinkedToAccount) ...[
-                    Divider(height: 20, color: isDark ? Colors.white10 : Colors.black12),
-                    InkWell(
-                      onTap: () {
-                        Navigator.pop(context);
-                        onShowLinkAccount(context);
-                      },
-                      child: Row(
-                        children: [
-                          const Icon(Icons.cloud_upload_outlined, size: 18, color: AppColors.emeraldPrimary),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Link to Email',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                                  ),
-                                ),
-                                Text(
-                                  'Permanently sync trips & finances to the cloud',
-                                  style: AppTypography.bodySmall(isDark: isDark),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
-                        ],
-                      ),
-                    ),
-                  ],
+                  const SizedBox(height: 6),
+                  Text(
+                    'Keep this key safe. You can use it to restore your account on any new phone.',
+                    style: TextStyle(fontSize: 11, color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                  ),
                 ],
               ),
             ),
@@ -391,6 +446,39 @@ class ProfileSheet extends StatelessWidget {
                     onTap: () {
                       Navigator.pop(context);
                       onShowRestoreAccount(context);
+                    },
+                  ),
+                  Divider(height: 1, color: isDark ? Colors.white10 : Colors.black12),
+                  ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.logout_rounded, size: 20, color: Colors.redAccent),
+                    title: const Text('Sign Out', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.redAccent)),
+                    trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
+                    onTap: () async {
+                      Navigator.pop(context);
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (dCtx) => AlertDialog(
+                          title: const Text('Sign Out?'),
+                          content: const Text('Make sure you have saved your Recovery Key or linked with Google so you can restore your data later.'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(dCtx, false),
+                              child: const Text('Cancel'),
+                            ),
+                            FilledButton(
+                              style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+                              onPressed: () => Navigator.pop(dCtx, true),
+                              child: const Text('Sign Out'),
+                            ),
+                          ],
+                        ),
+                      );
+
+                      if (confirm == true && context.mounted) {
+                        await authVm.logout();
+                      }
                     },
                   ),
                 ],

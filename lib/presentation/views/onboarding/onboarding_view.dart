@@ -33,6 +33,105 @@ class _OnboardingViewState extends State<OnboardingView> {
     super.dispose();
   }
 
+  Future<void> _handleGoogleSignIn() async {
+    final authVm = context.read<AuthViewModel>();
+    if (authVm.isLoading) return;
+
+    final emailController = TextEditingController();
+    final nameController = TextEditingController();
+
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.g_mobiledata_rounded, color: AppColors.emeraldPrimary, size: 28),
+            SizedBox(width: 6),
+            Text('Sign in with Google', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Sign in to sync your trips, expenses, and balances across all devices.',
+              style: TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(
+                labelText: 'Your Name',
+                prefixIcon: Icon(Icons.person_outline, size: 20),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: emailController,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(
+                labelText: 'Google Email Address',
+                hintText: 'you@gmail.com',
+                prefixIcon: Icon(Icons.email_outlined, size: 20),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final email = emailController.text.trim();
+              final name = nameController.text.trim();
+              if (email.isEmpty || !email.contains('@')) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please enter a valid Google email address.')),
+                );
+                return;
+              }
+              Navigator.pop(dCtx, {'email': email, 'name': name});
+            },
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && mounted) {
+      HapticHelper.medium();
+      final email = result['email']!;
+      final name = result['name']!.isEmpty ? email.split('@')[0] : result['name']!;
+      final googleId = 'g_${email.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}';
+
+      final user = await authVm.signInWithGoogle(
+        email: email,
+        displayName: name,
+        googleId: googleId,
+      );
+
+      if (mounted) {
+        if (user != null) {
+          final homeVm = context.read<HomeViewModel>();
+          await homeVm.loadTrips(user.id);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('🎉 Signed in as ${user.displayName}! Cloud sync active.')),
+            );
+            context.go('/home');
+          }
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(authVm.errorMessage ?? 'Could not complete Google Sign-In.')),
+          );
+        }
+      }
+    }
+  }
+
   Future<void> _handleStart() async {
     final authVm = context.read<AuthViewModel>();
     if (authVm.isLoading) return;
@@ -170,6 +269,70 @@ class _OnboardingViewState extends State<OnboardingView> {
               ).animate().fadeIn(delay: 550.ms),
 
               const SizedBox(height: AppSpacing.xxl),
+
+              // PRIMARY AUTH: Continue with Google Card
+              SurfaceCard(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.g_mobiledata_rounded, size: 24, color: AppColors.emeraldPrimary),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Primary Sign-In', style: AppTypography.titleSmall(isDark: isDark)),
+                              Text('Sync your Kith account across devices', style: AppTypography.bodySmall(isDark: isDark)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    AppButton(
+                      text: 'Continue with Google',
+                      icon: Icons.g_mobiledata_rounded,
+                      isFullWidth: true,
+                      isLoading: authVm.isLoading,
+                      onPressed: _handleGoogleSignIn,
+                    ),
+                  ],
+                ),
+              ).animate().fadeIn(delay: 600.ms).slideY(begin: 0.1, end: 0),
+
+              const SizedBox(height: AppSpacing.lg),
+
+              // OR DIVIDER
+              Row(
+                children: [
+                  Expanded(child: Divider(color: isDark ? Colors.white12 : Colors.black12)),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text(
+                      'OR START AS GUEST',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.0,
+                        color: isDark ? Colors.white38 : Colors.black38,
+                      ),
+                    ),
+                  ),
+                  Expanded(child: Divider(color: isDark ? Colors.white12 : Colors.black12)),
+                ],
+              ),
+
+              const SizedBox(height: AppSpacing.lg),
 
               // Name Input Card
               SurfaceCard(
@@ -318,8 +481,9 @@ class _OnboardingViewState extends State<OnboardingView> {
 
                     const SizedBox(height: AppSpacing.lg),
                     AppButton(
-                      text: 'Get Started',
+                      text: 'Start as Guest',
                       icon: Icons.arrow_forward_rounded,
+                      variant: AppButtonVariant.secondary,
                       isFullWidth: true,
                       isLoading: authVm.isLoading,
                       onPressed: _handleStart,
@@ -330,18 +494,20 @@ class _OnboardingViewState extends State<OnboardingView> {
 
               const SizedBox(height: AppSpacing.lg),
 
-              // Recovery Key Toggle
+              // FALLBACK: Recovery Key Toggle
               Center(
-                child: TextButton(
+                child: TextButton.icon(
                   onPressed: () {
                     setState(() {
                       _showRecoveryField = !_showRecoveryField;
                     });
                   },
-                  child: Text(
-                    _showRecoveryField ? 'Hide Recovery Option' : 'Have a recovery code? Restore identity',
+                  icon: const Icon(Icons.key_rounded, size: 16),
+                  label: Text(
+                    _showRecoveryField ? 'Hide Recovery Option' : 'Use Recovery Key',
                     style: TextStyle(
-                      color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                      color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                      fontWeight: FontWeight.w600,
                       fontSize: 13,
                     ),
                   ),

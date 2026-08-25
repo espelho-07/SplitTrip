@@ -9,6 +9,9 @@ class GuestUser {
   final DateTime createdAt;
   final bool isLinkedToAccount;
   final String? email;
+  final String? googleId;
+
+  bool get isGoogleLinked => (email != null && email!.isNotEmpty) || (googleId != null && googleId!.isNotEmpty);
 
   const GuestUser({
     required this.id,
@@ -19,6 +22,7 @@ class GuestUser {
     required this.createdAt,
     this.isLinkedToAccount = false,
     this.email,
+    this.googleId,
   });
 
   GuestUser copyWith({
@@ -30,6 +34,7 @@ class GuestUser {
     DateTime? createdAt,
     bool? isLinkedToAccount,
     String? email,
+    String? googleId,
   }) {
     return GuestUser(
       id: id ?? this.id,
@@ -40,6 +45,7 @@ class GuestUser {
       createdAt: createdAt ?? this.createdAt,
       isLinkedToAccount: isLinkedToAccount ?? this.isLinkedToAccount,
       email: email ?? this.email,
+      googleId: googleId ?? this.googleId,
     );
   }
 
@@ -52,6 +58,7 @@ class GuestUser {
     'createdAt': createdAt.toIso8601String(),
     'isLinkedToAccount': isLinkedToAccount,
     'email': email,
+    'googleId': googleId,
   };
 
   factory GuestUser.fromJson(Map<String, dynamic> json) => GuestUser(
@@ -65,5 +72,6 @@ class GuestUser {
         : DateTime.now(),
     isLinkedToAccount: json['isLinkedToAccount'] as bool? ?? false,
     email: json['email'] as String?,
+    googleId: json['googleId'] as String?,
   );
 }

@@ -80,9 +80,9 @@ class _HomeViewState extends State<HomeView> {
         return AlertDialog(
           title: const Row(
             children: [
-              Icon(Icons.link_rounded, color: AppColors.emeraldPrimary, size: 22),
-              SizedBox(width: 8),
-              Text('Link & Sync Account', style: TextStyle(fontSize: 18)),
+              Icon(Icons.g_mobiledata_rounded, color: AppColors.emeraldPrimary, size: 28),
+              SizedBox(width: 6),
+              Text('Sign in with Google', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
             ],
           ),
           content: SingleChildScrollView(
@@ -91,7 +91,7 @@ class _HomeViewState extends State<HomeView> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Link your guest session to your email. All your existing trips, expenses, lending records, and budgets will be permanently backed up to the cloud.',
+                  'Sync your Kith account across devices. All your existing trips, expenses, and balances will stay permanently linked.',
                   style: TextStyle(fontSize: 13),
                 ),
                 const SizedBox(height: 16),
@@ -107,8 +107,8 @@ class _HomeViewState extends State<HomeView> {
                   controller: emailController,
                   keyboardType: TextInputType.emailAddress,
                   decoration: const InputDecoration(
-                    labelText: 'Email Address',
-                    hintText: 'you@example.com',
+                    labelText: 'Google Email Address',
+                    hintText: 'you@gmail.com',
                     prefixIcon: Icon(Icons.email_outlined, size: 20),
                   ),
                 ),
@@ -126,7 +126,7 @@ class _HomeViewState extends State<HomeView> {
                 final name = nameController.text.trim();
                 if (email.isEmpty || !email.contains('@')) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please enter a valid email address.')),
+                    const SnackBar(content: Text('Please enter a valid Google email address.')),
                   );
                   return;
                 }
@@ -134,10 +134,14 @@ class _HomeViewState extends State<HomeView> {
 
                 final messenger = ScaffoldMessenger.of(context);
                 messenger.showSnackBar(
-                  const SnackBar(content: Text('Linking account & syncing data with cloud...')),
+                  const SnackBar(content: Text('Connecting Google account & syncing cloud ledger...')),
                 );
 
-                final updated = await authVm.linkAccount(email: email, displayName: name.isEmpty ? null : name);
+                final updated = await authVm.signInWithGoogle(
+                  email: email,
+                  displayName: name.isEmpty ? email.split('@')[0] : name,
+                  googleId: 'g_${email.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}',
+                );
                 if (updated != null) {
                   await syncService.flushQueue(apiClient);
                   await homeVm.loadTrips(updated.id);
@@ -146,18 +150,18 @@ class _HomeViewState extends State<HomeView> {
 
                   if (mounted) {
                     messenger.showSnackBar(
-                      SnackBar(content: Text('🎉 Account linked to ${updated.email}! All trips & finances synced.')),
+                      SnackBar(content: Text('🎉 Signed in with Google as ${updated.email}! Cloud sync active.')),
                     );
                   }
                 } else {
                   if (mounted) {
                     messenger.showSnackBar(
-                      SnackBar(content: Text(authVm.errorMessage ?? 'Could not link account.')),
+                      SnackBar(content: Text(authVm.errorMessage ?? 'Could not sign in with Google.')),
                     );
                   }
                 }
               },
-              child: const Text('Link & Sync All'),
+              child: const Text('Continue with Google'),
             ),
           ],
         );

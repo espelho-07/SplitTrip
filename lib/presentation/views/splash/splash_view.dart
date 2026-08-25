@@ -22,10 +22,14 @@ class _SplashViewState extends State<SplashView> {
 
   Future<void> _bootstrap() async {
     final authVm = context.read<AuthViewModel>();
-    await authVm.initSession();
+    try {
+      await authVm.initSession().timeout(const Duration(seconds: 4));
+    } catch (_) {
+      // Graceful fallback to cached state or onboarding
+    }
 
     // Short graceful pause for animation fluidity
-    await Future.delayed(const Duration(milliseconds: 900));
+    await Future.delayed(const Duration(milliseconds: 600));
 
     if (!mounted) return;
 
