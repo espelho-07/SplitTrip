@@ -48,7 +48,7 @@ class AppConfig {
     if (_envDefineApiUrl.isNotEmpty) return _envDefineApiUrl;
 
     // By default, connect to the live cloud backend so real physical devices on Wi-Fi/Cellular work out of the box
-    return 'https://kith-staging-backend.onrender.com/api';
+    return 'https://splittrip-4es6.onrender.com/api';
   }
 
   static String get wsUrl {
@@ -67,7 +67,7 @@ class AppConfig {
     }
     if (_envDefineWsUrl.isNotEmpty) return _envDefineWsUrl;
 
-    return 'wss://kith-staging-backend.onrender.com/ws';
+    return 'wss://splittrip-4es6.onrender.com/ws';
   }
 
   static String buildInviteLink(String inviteCode) {
