@@ -423,6 +423,7 @@ class _TripDetailViewState extends State<TripDetailView> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final tripDetailVm = context.watch<TripDetailViewModel>();
     final authVm = context.watch<AuthViewModel>();
+    final l10n = context.l10n;
 
     final trip = tripDetailVm.trip;
     final user = authVm.currentUser;
@@ -568,6 +569,7 @@ class _TripDetailViewState extends State<TripDetailView> {
                 _calculateUserSpentPaise(tripDetailVm.expenses, user?.id, trip),
                 isDark,
                 gradientColors,
+                l10n,
               ),
 
               const SizedBox(height: AppSpacing.md),
@@ -577,18 +579,20 @@ class _TripDetailViewState extends State<TripDetailView> {
 
               const SizedBox(height: AppSpacing.lg),
 
-              // Top-Level Segmented Navigation [ 🏝️ Overview ] [ 💳 Spending ] [ 🗺️ Journey ]
-              _buildTopTabSwitcher(isDark),
+              // Top-Level Segmented Navigation [ 🏝️ Overview ] [ 💳 Spending ] [ 🗺️ Journey (if enabled) ]
+              _buildTopTabSwitcher(trip, isDark, l10n),
 
               const SizedBox(height: AppSpacing.lg),
 
               // Active Tab Content
               if (_topLevelTab == 0)
-                _buildOverviewSection(tripDetailVm, trip, balanceSummary, isDark, user?.id ?? '')
+                _buildOverviewSection(tripDetailVm, trip, balanceSummary, isDark, user?.id ?? '', l10n)
               else if (_topLevelTab == 1)
-                _buildSpendingSection(tripDetailVm, trip, balanceSummary, isDark, user?.id ?? '')
+                _buildSpendingSection(tripDetailVm, trip, balanceSummary, isDark, user?.id ?? '', l10n)
+              else if (trip.isJourneyEnabled)
+                _buildJourneySection(tripDetailVm, trip, isDark, user?.id ?? '')
               else
-                _buildJourneySection(tripDetailVm, trip, isDark, user?.id ?? ''),
+                _buildOverviewSection(tripDetailVm, trip, balanceSummary, isDark, user?.id ?? '', l10n),
 
               const SizedBox(height: 90),
             ],
@@ -598,7 +602,7 @@ class _TripDetailViewState extends State<TripDetailView> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
           HapticHelper.light();
-          if (_topLevelTab == 0 || _topLevelTab == 1) {
+          if (_topLevelTab == 0 || _topLevelTab == 1 || !trip.isJourneyEnabled) {
             if (!trip.lifecycleState.allowsExpenses) {
               _showSettlementSheet();
               return;
@@ -611,10 +615,10 @@ class _TripDetailViewState extends State<TripDetailView> {
               if (mounted) {
                 homeVm.loadTrips(user.id);
                 messenger.showSnackBar(
-                  const SnackBar(
-                    content: Text('Expense added ✓'),
+                  SnackBar(
+                    content: Text(l10n.tripsTitle),
                     behavior: SnackBarBehavior.floating,
-                    duration: Duration(seconds: 2),
+                    duration: const Duration(seconds: 2),
                   ),
                 );
               }
@@ -627,15 +631,15 @@ class _TripDetailViewState extends State<TripDetailView> {
         foregroundColor: isDark ? AppColors.darkBackground : Colors.white,
         elevation: 4,
         icon: Icon(
-          (_topLevelTab == 0 || _topLevelTab == 1)
+          (_topLevelTab == 0 || _topLevelTab == 1 || !trip.isJourneyEnabled)
               ? (trip.lifecycleState.allowsExpenses ? Icons.add_rounded : Icons.payments_outlined)
               : Icons.add_location_alt_rounded,
           size: 20,
         ),
         label: Text(
-          (_topLevelTab == 0 || _topLevelTab == 1)
-              ? (trip.lifecycleState.allowsExpenses ? 'Add Expense' : 'Settle Up')
-              : 'Add Moment',
+          (_topLevelTab == 0 || _topLevelTab == 1 || !trip.isJourneyEnabled)
+              ? (trip.lifecycleState.allowsExpenses ? l10n.tripDetailBtnAddExpense : l10n.tripDetailBtnSettleUp)
+              : l10n.tripDetailBtnAddMoment,
           style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
         ),
       ),
@@ -678,6 +682,7 @@ class _TripDetailViewState extends State<TripDetailView> {
     int userSpentPaise,
     bool isDark,
     List<Color> gradientColors,
+    AppLocalizations l10n,
   ) {
     final youAreOwedPaise = userNetPaise > 0 ? userNetPaise : 0;
     final youOwePaise = userNetPaise < 0 ? userNetPaise.abs() : 0;
@@ -717,7 +722,7 @@ class _TripDetailViewState extends State<TripDetailView> {
                   const Icon(Icons.people_alt_outlined, size: 14, color: Colors.white70),
                   const SizedBox(width: 4),
                   Text(
-                    '${trip.members.length} people',
+                    l10n.tripsHomeMembersCount(trip.members.length),
                     style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
                   ),
                 ],
@@ -733,9 +738,9 @@ class _TripDetailViewState extends State<TripDetailView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      "YOU'RE OWED",
-                      style: TextStyle(
+                    Text(
+                      l10n.personalYouAreOwed.toUpperCase(),
+                      style: const TextStyle(
                         color: Colors.white70,
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
@@ -763,9 +768,9 @@ class _TripDetailViewState extends State<TripDetailView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      "YOU OWE",
-                      style: TextStyle(
+                    Text(
+                      l10n.personalYouOwe.toUpperCase(),
+                      style: const TextStyle(
                         color: Colors.white70,
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
@@ -793,9 +798,9 @@ class _TripDetailViewState extends State<TripDetailView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      "TRIP SPEND",
-                      style: TextStyle(
+                    Text(
+                      l10n.tripDetailTripSpending.toUpperCase(),
+                      style: const TextStyle(
                         color: Colors.white70,
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
@@ -838,7 +843,7 @@ class _TripDetailViewState extends State<TripDetailView> {
                     const Icon(Icons.payments_outlined, size: 16, color: Colors.white),
                     const SizedBox(width: 8),
                     Text(
-                      'Settle Up (${balanceSummary.simplifiedSettlements.length} transfers)',
+                      '${l10n.tripDetailSettleUp} (${balanceSummary.simplifiedSettlements.length})',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 13,
@@ -956,11 +961,12 @@ class _TripDetailViewState extends State<TripDetailView> {
     }
   }
 
-  Widget _buildTopTabSwitcher(bool isDark) {
+  Widget _buildTopTabSwitcher(Trip trip, bool isDark, AppLocalizations l10n) {
     final tabs = [
-      {'label': 'Overview', 'icon': Icons.space_dashboard_outlined},
-      {'label': 'Spending', 'icon': Icons.credit_card_rounded},
-      {'label': 'Journey', 'icon': Icons.map_outlined},
+      {'label': l10n.tripDetailTabOverview, 'icon': Icons.space_dashboard_outlined},
+      {'label': l10n.tripDetailTabSpending, 'icon': Icons.credit_card_rounded},
+      if (trip.isJourneyEnabled)
+        {'label': l10n.tripDetailTabJourney, 'icon': Icons.map_outlined},
     ];
 
     return Container(
@@ -1048,6 +1054,7 @@ class _TripDetailViewState extends State<TripDetailView> {
     BalanceSummary balanceSummary,
     bool isDark,
     String currentUserId,
+    AppLocalizations l10n,
   ) {
     final recentExpenses = vm.expenses.take(4).toList();
     final recentMoments = vm.journeyMoments.take(3).toList();
@@ -1085,7 +1092,7 @@ class _TripDetailViewState extends State<TripDetailView> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Trip Members (${trip.members.length})', style: AppTypography.bodySmall(isDark: isDark)),
+                  Text(l10n.tripDetailMembersCount(trip.members.length), style: AppTypography.bodySmall(isDark: isDark)),
                   InkWell(
                     onTap: _showAddFriendDialog,
                     child: Row(
@@ -1093,7 +1100,7 @@ class _TripDetailViewState extends State<TripDetailView> {
                         Icon(Icons.person_add_alt_1_rounded, size: 14, color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary),
                         const SizedBox(width: 4),
                         Text(
-                          'Add Friend',
+                          l10n.tripDetailAddFriend,
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
@@ -1123,7 +1130,7 @@ class _TripDetailViewState extends State<TripDetailView> {
                         MemberAvatar(name: m.displayName, size: 16),
                         const SizedBox(width: 6),
                         Text(
-                          isSelf ? '${m.displayName} (You)' : m.displayName,
+                          isSelf ? '${m.displayName} ${l10n.tripDetailYouSuffix}' : m.displayName,
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: isSelf ? FontWeight.w700 : FontWeight.w500,
@@ -1145,22 +1152,22 @@ class _TripDetailViewState extends State<TripDetailView> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Recent Spending', style: AppTypography.titleSmall(isDark: isDark)),
+            Text(l10n.tripDetailRecentSpending, style: AppTypography.titleSmall(isDark: isDark)),
             TextButton(
               onPressed: () {
                 HapticHelper.selection();
                 setState(() => _topLevelTab = 1);
               },
-              child: const Text('View all spending →'),
+              child: Text(l10n.tripDetailViewAllSpending),
             ),
           ],
         ),
         if (recentExpenses.isEmpty) ...[
           EmptyStateView(
             emoji: '💳',
-            title: 'No expenses recorded yet',
-            subtitle: 'Add the first trip expense to begin splitting with the crew.',
-            buttonText: 'Add First Expense',
+            title: l10n.tripDetailNoExpenses,
+            subtitle: l10n.tripDetailNoExpensesSub,
+            buttonText: l10n.tripDetailAddFirstExpense,
             onButtonPressed: () async {
               final homeVm = context.read<HomeViewModel>();
               final result = await context.push('/trip/${trip.id}/add-expense');
@@ -1178,52 +1185,54 @@ class _TripDetailViewState extends State<TripDetailView> {
             separatorBuilder: (ctx, i) => const SizedBox(height: 8),
             itemBuilder: (ctx, i) {
               final expense = recentExpenses[i];
-              return _buildCleanExpenseRow(expense, trip, isDark, currentUserId);
+              return _buildCleanExpenseRow(expense, trip, isDark, currentUserId, l10n);
             },
           ),
         ],
 
-        const SizedBox(height: AppSpacing.lg),
+        if (trip.isJourneyEnabled) ...[
+          const SizedBox(height: AppSpacing.lg),
 
-        // Recent Journey Moments Section
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Journey Timeline', style: AppTypography.titleSmall(isDark: isDark)),
-            TextButton(
-              onPressed: () {
-                HapticHelper.selection();
-                setState(() => _topLevelTab = 2);
+          // Recent Journey Moments Section
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(l10n.tripDetailJourneyTimeline, style: AppTypography.titleSmall(isDark: isDark)),
+              TextButton(
+                onPressed: () {
+                  HapticHelper.selection();
+                  setState(() => _topLevelTab = 2);
+                },
+                child: Text(l10n.tripDetailViewFullJourney),
+              ),
+            ],
+          ),
+          if (recentMoments.isEmpty) ...[
+            EmptyStateView(
+              emoji: '🗺️',
+              title: l10n.tripDetailNoMoments,
+              subtitle: l10n.tripDetailNoMomentsSub,
+              buttonText: l10n.tripDetailAddFirstMoment,
+              onButtonPressed: () => _showAddJourneyMomentSheet(trip, vm.expenses, currentUserId),
+            ),
+          ] else ...[
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: recentMoments.length,
+              separatorBuilder: (ctx, i) => const SizedBox(height: 8),
+              itemBuilder: (ctx, i) {
+                final moment = recentMoments[i];
+                return _buildCleanMomentRow(moment, isDark);
               },
-              child: const Text('View full journey →'),
             ),
           ],
-        ),
-        if (recentMoments.isEmpty) ...[
-          EmptyStateView(
-            emoji: '🗺️',
-            title: 'Your trip starts here.',
-            subtitle: 'Add your first moment when something worth remembering happens.',
-            buttonText: 'Add First Moment',
-            onButtonPressed: () => _showAddJourneyMomentSheet(trip, vm.expenses, currentUserId),
-          ),
-        ] else ...[
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: recentMoments.length,
-            separatorBuilder: (ctx, i) => const SizedBox(height: 8),
-            itemBuilder: (ctx, i) {
-              final moment = recentMoments[i];
-              return _buildCleanMomentRow(moment, isDark);
-            },
-          ),
         ],
       ],
     );
   }
 
-  Widget _buildCleanExpenseRow(Expense expense, Trip trip, bool isDark, String currentUserId) {
+  Widget _buildCleanExpenseRow(Expense expense, Trip trip, bool isDark, String currentUserId, AppLocalizations l10n) {
     final payer = trip.members.where((m) => m.id == expense.paidById || m.userId == expense.paidById).firstOrNull;
     final payerName = payer?.displayName ?? 'Member';
     final isPayerSelf = payer?.userId == currentUserId || payer?.id == currentUserId;
@@ -1262,7 +1271,7 @@ class _TripDetailViewState extends State<TripDetailView> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${isPayerSelf ? "You" : payerName} paid · ${DateFormatter.formatRelative(expense.createdAt)}',
+                  '${isPayerSelf ? l10n.tripDetailYou : payerName} paid · ${DateFormatter.formatRelative(expense.createdAt)}',
                   style: TextStyle(
                     fontSize: 12,
                     color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
@@ -1285,7 +1294,7 @@ class _TripDetailViewState extends State<TripDetailView> {
               ),
               const SizedBox(height: 2),
               Text(
-                'Your share: ₹${(userSharePaise / 100).toStringAsFixed(0)}',
+                '${l10n.tripDetailYourShare}: ₹${(userSharePaise / 100).toStringAsFixed(0)}',
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
@@ -1384,14 +1393,15 @@ class _TripDetailViewState extends State<TripDetailView> {
     BalanceSummary balanceSummary,
     bool isDark,
     String currentUserId,
+    AppLocalizations l10n,
   ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSpendingSubSwitcher(isDark, vm.expenses.length, trip.members.length),
+        _buildSpendingSubSwitcher(isDark, vm.expenses.length, trip.members.length, l10n),
         const SizedBox(height: AppSpacing.md),
         if (_spendingSubTab == 0)
-          _buildExpensesTab(vm, trip, isDark, currentUserId)
+          _buildExpensesTab(vm, trip, isDark, currentUserId, l10n)
         else if (_spendingSubTab == 1)
           _buildBalancesAndPeopleTab(trip, balanceSummary, vm.expenses, isDark, currentUserId)
         else
@@ -1400,11 +1410,11 @@ class _TripDetailViewState extends State<TripDetailView> {
     );
   }
 
-  Widget _buildSpendingSubSwitcher(bool isDark, int expenseCount, int memberCount) {
+  Widget _buildSpendingSubSwitcher(bool isDark, int expenseCount, int memberCount, AppLocalizations l10n) {
     final subTabs = [
-      {'label': 'Expenses ($expenseCount)', 'index': 0},
-      {'label': 'People ($memberCount)', 'index': 1},
-      {'label': 'Categories', 'index': 2},
+      {'label': '${l10n.tripDetailTabExpenses} ($expenseCount)', 'index': 0},
+      {'label': '${l10n.tripDetailTabPeople} ($memberCount)', 'index': 1},
+      {'label': l10n.tripDetailTabCategories, 'index': 2},
     ];
 
     return Container(
@@ -1802,12 +1812,25 @@ class _TripDetailViewState extends State<TripDetailView> {
     );
   }
 
-  Widget _buildExpensesTab(TripDetailViewModel vm, Trip trip, bool isDark, String currentUserId) {
+  String _getCategoryLabel(String? value, AppLocalizations l10n) {
+    switch (value) {
+      case 'food': return l10n.tripDetailCatFood;
+      case 'transport': return l10n.tripDetailCatTransport;
+      case 'stay': return l10n.tripDetailCatStay;
+      case 'fuel': return l10n.tripDetailCatFuel;
+      case 'activity': return l10n.tripDetailCatActivity;
+      case 'shopping': return l10n.tripDetailCatShopping;
+      case 'general': return l10n.tripDetailCatOther;
+      default: return l10n.tripDetailCatAll;
+    }
+  }
+
+  Widget _buildExpensesTab(TripDetailViewModel vm, Trip trip, bool isDark, String currentUserId, AppLocalizations l10n) {
     if (vm.expenses.isEmpty) {
       return EmptyStateView(
         emoji: '🧾',
-        title: 'No expenses recorded yet',
-        subtitle: 'Tap "Add Expense" below to speak or enter the first shared expense for "${trip.name}".',
+        title: l10n.tripDetailNoExpenses,
+        subtitle: l10n.tripDetailNoExpensesSub,
       );
     }
 
@@ -1841,7 +1864,7 @@ class _TripDetailViewState extends State<TripDetailView> {
                     color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                   ),
                   decoration: InputDecoration(
-                    hintText: 'Search title or payer...',
+                    hintText: l10n.tripDetailSearchExpenses,
                     hintStyle: TextStyle(
                       fontSize: 13,
                       color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
@@ -1899,7 +1922,7 @@ class _TripDetailViewState extends State<TripDetailView> {
                       Text(cat['emoji']!, style: const TextStyle(fontSize: 12)),
                       const SizedBox(width: 4),
                       Text(
-                        cat['label']!,
+                        _getCategoryLabel(cat['value'], l10n),
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
@@ -1994,7 +2017,7 @@ class _TripDetailViewState extends State<TripDetailView> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            '${isPayerCurrentUser ? 'You' : (payer?.displayName ?? 'Someone')} paid • ${DateFormatter.formatRelative(expense.createdAt)}',
+                            '${isPayerCurrentUser ? l10n.tripDetailYou : (payer?.displayName ?? 'Someone')} paid • ${DateFormatter.formatRelative(expense.createdAt)}',
                             style: AppTypography.bodySmall(isDark: isDark),
                           ),
                           if (expense.splits.length < trip.members.length) ...[
@@ -2025,7 +2048,7 @@ class _TripDetailViewState extends State<TripDetailView> {
                           Text(
                             isPayerCurrentUser
                                 ? 'you lent ${CurrencyFormatter.formatPaise(expense.amountInPaise - userSplit.amountInPaise, currencyCode: trip.currencyCode)}'
-                                : 'your share ${CurrencyFormatter.formatPaise(userSplit.amountInPaise, currencyCode: trip.currencyCode)}',
+                                : '${l10n.tripDetailYourShare} ${CurrencyFormatter.formatPaise(userSplit.amountInPaise, currencyCode: trip.currencyCode)}',
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,

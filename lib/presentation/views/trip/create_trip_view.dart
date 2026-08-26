@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -45,6 +46,7 @@ class _CreateTripViewState extends State<CreateTripView> {
     final createVm = context.read<CreateTripViewModel>();
     final authVm = context.read<AuthViewModel>();
     final homeVm = context.read<HomeViewModel>();
+    final l10n = context.l10n;
 
     if (createVm.isCreating) return;
 
@@ -54,10 +56,10 @@ class _CreateTripViewState extends State<CreateTripView> {
     if (!createVm.isValid) {
       HapticHelper.medium();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter a trip name'),
+        SnackBar(
+          content: Text(l10n.createTripErrName),
           backgroundColor: AppColors.negativeRedDark,
-          duration: Duration(seconds: 2),
+          duration: const Duration(seconds: 2),
         ),
       );
       return;
@@ -66,11 +68,11 @@ class _CreateTripViewState extends State<CreateTripView> {
     HapticHelper.light();
 
     final stageNotifier = ValueNotifier<int>(0);
-    final stages = const [
-      ProgressStage(label: 'Creating trip', description: 'Initializing trip ledger'),
-      ProgressStage(label: 'Setting up membership', description: 'Adding your profile as organizer'),
-      ProgressStage(label: 'Preparing your trip space', description: 'Configuring split rules & invite code'),
-      ProgressStage(label: 'Syncing', description: 'Securing cloud backup'),
+    final stages = [
+      ProgressStage(label: l10n.createTripStageInit, description: l10n.createTripStageInitDesc),
+      ProgressStage(label: l10n.createTripStageMember, description: l10n.createTripStageMemberDesc),
+      ProgressStage(label: l10n.createTripStageSpace, description: l10n.createTripStageSpaceDesc),
+      ProgressStage(label: l10n.createTripStageSync, description: l10n.createTripStageSyncDesc),
     ];
 
     // Show stage-based progress dialog
@@ -88,7 +90,7 @@ class _CreateTripViewState extends State<CreateTripView> {
               child: Padding(
                 padding: const EdgeInsets.all(24.0),
                 child: KithStageProgress(
-                  title: 'Creating your trip…',
+                  title: l10n.createTripProgressTitle,
                   stages: stages,
                   currentStageIndex: activeStage,
                 ),
@@ -121,26 +123,26 @@ class _CreateTripViewState extends State<CreateTripView> {
         _friendController.clear();
         createVm.reset();
         context.pushReplacement('/trip/${trip.id}');
-        KithSuccessToast.show(context, 'Trip created ✓');
+        KithSuccessToast.show(context, '${l10n.tripsTitle} ✓');
       } else {
         HapticHelper.error();
-        final err = createVm.errorMessage ?? "Couldn't create the trip.";
+        final err = createVm.errorMessage ?? l10n.statusErrorGeneral;
         showDialog(
           context: context,
           builder: (errCtx) => AlertDialog(
-            title: const Text("Couldn't create the trip"),
-            content: Text('$err Your entered details have been saved.'),
+            title: Text(l10n.statusErrorGeneral),
+            content: Text('$err ${l10n.createTripDiscardDesc}'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(errCtx),
-                child: const Text('Keep Editing'),
+                child: Text(l10n.createTripDiscardKeep),
               ),
               FilledButton(
                 onPressed: () {
                   Navigator.pop(errCtx);
                   _handleCreate();
                 },
-                child: const Text('Try Again'),
+                child: Text(l10n.actionRetry),
               ),
             ],
           ),
@@ -153,6 +155,7 @@ class _CreateTripViewState extends State<CreateTripView> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final createVm = context.watch<CreateTripViewModel>();
+    final l10n = context.l10n;
     final hasUnsavedData = createVm.name.trim().isNotEmpty || createVm.friendNames.isNotEmpty;
 
     return PopScope(
@@ -164,20 +167,20 @@ class _CreateTripViewState extends State<CreateTripView> {
           builder: (ctx) => AlertDialog(
             shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
             backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
-            title: Text('Discard trip?', style: AppTypography.titleLarge(isDark: isDark)),
+            title: Text(l10n.createTripDiscardTitle, style: AppTypography.titleLarge(isDark: isDark)),
             content: Text(
-              'You have entered trip details that haven\'t been saved yet.',
+              l10n.createTripDiscardDesc,
               style: AppTypography.bodyMedium(isDark: isDark),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(false),
-                child: const Text('Keep Editing'),
+                child: Text(l10n.createTripDiscardKeep),
               ),
               FilledButton(
                 style: FilledButton.styleFrom(backgroundColor: AppColors.negativeRedDark),
                 onPressed: () => Navigator.of(ctx).pop(true),
-                child: const Text('Discard'),
+                child: Text(l10n.createTripDiscardConfirm),
               ),
             ],
           ),
@@ -189,7 +192,7 @@ class _CreateTripViewState extends State<CreateTripView> {
       child: Scaffold(
         backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
         appBar: AppBar(
-          title: const Text('Create a Trip'),
+          title: Text(l10n.createTripAppBarTitle),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_rounded),
             onPressed: () async {
@@ -199,20 +202,20 @@ class _CreateTripViewState extends State<CreateTripView> {
                   builder: (ctx) => AlertDialog(
                     shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
                     backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
-                    title: Text('Discard trip?', style: AppTypography.titleLarge(isDark: isDark)),
+                    title: Text(l10n.createTripDiscardTitle, style: AppTypography.titleLarge(isDark: isDark)),
                     content: Text(
-                      'You have entered trip details that haven\'t been saved yet.',
+                      l10n.createTripDiscardDesc,
                       style: AppTypography.bodyMedium(isDark: isDark),
                     ),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.of(ctx).pop(false),
-                        child: const Text('Keep Editing'),
+                        child: Text(l10n.createTripDiscardKeep),
                       ),
                       FilledButton(
                         style: FilledButton.styleFrom(backgroundColor: AppColors.negativeRedDark),
                         onPressed: () => Navigator.of(ctx).pop(true),
-                        child: const Text('Discard'),
+                        child: Text(l10n.createTripDiscardConfirm),
                       ),
                     ],
                   ),
@@ -229,288 +232,288 @@ class _CreateTripViewState extends State<CreateTripView> {
         body: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Trip Preview Banner
-              Container(
-                height: 100,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: AppColors.getGradient(createVm.coverGradientIndex),
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: AppRadius.xlBorder,
-                ),
-                padding: const EdgeInsets.all(16),
-                alignment: Alignment.centerLeft,
-                child: Row(
-                  children: [
-                    Container(
-                      width: 54,
-                      height: 54,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.25),
-                        shape: BoxShape.circle,
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(createVm.emoji, style: const TextStyle(fontSize: 28)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Trip Preview Banner
+                Container(
+                  height: 100,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: AppColors.getGradient(createVm.coverGradientIndex),
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Text(
-                        createVm.name.isEmpty ? 'Trip Name' : createVm.name,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.5,
+                    borderRadius: AppRadius.xlBorder,
+                  ),
+                  padding: const EdgeInsets.all(16),
+                  alignment: Alignment.centerLeft,
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 54,
+                        height: 54,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.25),
+                          shape: BoxShape.circle,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        alignment: Alignment.center,
+                        child: Text(createVm.emoji, style: const TextStyle(fontSize: 28)),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Text(
+                          createVm.name.isEmpty ? l10n.createTripPreviewPlaceholder : createVm.name,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.5,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: AppSpacing.xl),
+
+                // Trip Name Input
+                Text(
+                  l10n.createTripNameLabel,
+                  style: AppTypography.titleSmall(isDark: isDark),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                TextField(
+                  controller: _nameController,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: InputDecoration(
+                    hintText: l10n.createTripNameHint,
+                    prefixIcon: const Icon(Icons.flight_takeoff_rounded, size: 20),
+                  ),
+                  onChanged: createVm.setName,
+                ),
+
+                const SizedBox(height: AppSpacing.lg),
+
+                // Emoji Picker
+                Text(
+                  l10n.createTripIconLabel,
+                  style: AppTypography.titleSmall(isDark: isDark),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                SizedBox(
+                  height: 48,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _emojis.length,
+                    separatorBuilder: (context, index) => const SizedBox(width: 8),
+                    itemBuilder: (context, index) {
+                      final em = _emojis[index];
+                      final isSelected = createVm.emoji == em;
+                      return GestureDetector(
+                        onTap: () {
+                          HapticHelper.selection();
+                          createVm.setEmoji(em);
+                        },
+                        child: Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.2)
+                                : (isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle),
+                            borderRadius: AppRadius.mdBorder,
+                            border: isSelected
+                                ? Border.all(
+                                    color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                                    width: 2,
+                                  )
+                                : null,
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(em, style: const TextStyle(fontSize: 22)),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+
+                const SizedBox(height: AppSpacing.lg),
+
+                // Gradient Theme Picker
+                Text(
+                  l10n.createTripGradientLabel,
+                  style: AppTypography.titleSmall(isDark: isDark),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: List.generate(AppColors.tripGradients.length, (index) {
+                    final isSelected = createVm.coverGradientIndex == index;
+                    final gradient = AppColors.getGradient(index);
+                    return GestureDetector(
+                      onTap: () {
+                        HapticHelper.selection();
+                        createVm.setCoverGradientIndex(index);
+                      },
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(colors: gradient),
+                          shape: BoxShape.circle,
+                          border: isSelected
+                              ? Border.all(color: Colors.white, width: 3)
+                              : null,
+                          boxShadow: isSelected
+                              ? [
+                                  BoxShadow(
+                                    color: gradient[0].withValues(alpha: 0.5),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
+                                  )
+                                ]
+                              : null,
+                        ),
+                        child: isSelected
+                            ? const Icon(Icons.check_rounded, color: Colors.white, size: 20)
+                            : null,
+                      ),
+                    );
+                  }),
+                ),
+
+                const SizedBox(height: AppSpacing.xl),
+
+                // Trip Mode Selector
+                Text(
+                  l10n.createTripModeLabel,
+                  style: AppTypography.titleSmall(isDark: isDark),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildTripModeCard(
+                        title: l10n.createTripModeSplitOnlyTitle,
+                        subtitle: l10n.createTripModeSplitOnlySub,
+                        icon: Icons.pie_chart_outline_rounded,
+                        mode: 'split_only',
+                        createVm: createVm,
+                        isDark: isDark,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _buildTripModeCard(
+                        title: l10n.createTripModeJourneyTitle,
+                        subtitle: l10n.createTripModeJourneySub,
+                        icon: Icons.auto_awesome_rounded,
+                        mode: 'split_and_journey',
+                        createVm: createVm,
+                        isDark: isDark,
                       ),
                     ),
                   ],
                 ),
-              ),
 
-              const SizedBox(height: AppSpacing.xl),
+                const SizedBox(height: AppSpacing.xl),
 
-              // Trip Name Input
-              Text(
-                'Trip Name',
-                style: AppTypography.titleSmall(isDark: isDark),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              TextField(
-                controller: _nameController,
-                textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  hintText: 'e.g. Goa Escape, Weekend Camping',
-                  prefixIcon: Icon(Icons.flight_takeoff_rounded, size: 20),
+                // Currency Selection
+                Text(
+                  l10n.createTripCurrencyLabel,
+                  style: AppTypography.titleSmall(isDark: isDark),
                 ),
-                onChanged: createVm.setName,
-              ),
+                const SizedBox(height: AppSpacing.xs),
+                Row(
+                  children: [
+                    _buildCurrencyChip('INR', '₹ INR', createVm, isDark),
+                    const SizedBox(width: 8),
+                    _buildCurrencyChip('USD', '\$ USD', createVm, isDark),
+                    const SizedBox(width: 8),
+                    _buildCurrencyChip('EUR', '€ EUR', createVm, isDark),
+                    const SizedBox(width: 8),
+                    _buildCurrencyChip('GBP', '£ GBP', createVm, isDark),
+                  ],
+                ),
 
-              const SizedBox(height: AppSpacing.lg),
+                const SizedBox(height: AppSpacing.xl),
 
-              // Emoji Picker
-              Text(
-                'Choose Icon',
-                style: AppTypography.titleSmall(isDark: isDark),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              SizedBox(
-                height: 48,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _emojis.length,
-                  separatorBuilder: (context, index) => const SizedBox(width: 8),
-                  itemBuilder: (context, index) {
-                    final em = _emojis[index];
-                    final isSelected = createVm.emoji == em;
-                    return GestureDetector(
-                      onTap: () {
-                        HapticHelper.selection();
-                        createVm.setEmoji(em);
-                      },
-                      child: Container(
-                        width: 46,
-                        height: 46,
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.2)
-                              : (isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle),
-                          borderRadius: AppRadius.mdBorder,
-                          border: isSelected
-                              ? Border.all(
-                                  color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-                                  width: 2,
-                                )
-                              : null,
+                // Add Initial Friends
+                Text(
+                  l10n.createTripFriendsLabel,
+                  style: AppTypography.titleSmall(isDark: isDark),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  l10n.createTripFriendsSub,
+                  style: AppTypography.bodySmall(isDark: isDark),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _friendController,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: InputDecoration(
+                          hintText: l10n.createTripFriendHint,
+                          prefixIcon: const Icon(Icons.person_add_outlined, size: 20),
                         ),
-                        alignment: Alignment.center,
-                        child: Text(em, style: const TextStyle(fontSize: 22)),
+                        onSubmitted: (_) => _addFriend(),
                       ),
-                    );
-                  },
+                    ),
+                    const SizedBox(width: 10),
+                    IconButton.filled(
+                      onPressed: _addFriend,
+                      icon: const Icon(Icons.add_rounded),
+                      style: IconButton.styleFrom(
+                        backgroundColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                        foregroundColor: isDark ? AppColors.darkBackground : Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: AppRadius.mdBorder),
+                        padding: const EdgeInsets.all(14),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
 
-              const SizedBox(height: AppSpacing.lg),
-
-              // Gradient Theme Picker
-              Text(
-                'Cover Gradient Theme',
-                style: AppTypography.titleSmall(isDark: isDark),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: List.generate(AppColors.tripGradients.length, (index) {
-                  final isSelected = createVm.coverGradientIndex == index;
-                  final gradient = AppColors.getGradient(index);
-                  return GestureDetector(
-                    onTap: () {
-                      HapticHelper.selection();
-                      createVm.setCoverGradientIndex(index);
-                    },
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(colors: gradient),
-                        shape: BoxShape.circle,
-                        border: isSelected
-                            ? Border.all(color: Colors.white, width: 3)
-                            : null,
-                        boxShadow: isSelected
-                            ? [
-                                BoxShadow(
-                                  color: gradient[0].withValues(alpha: 0.5),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 4),
-                                )
-                              ]
-                            : null,
-                      ),
-                      child: isSelected
-                          ? const Icon(Icons.check_rounded, color: Colors.white, size: 20)
-                          : null,
-                    ),
-                  );
-                }),
-              ),
-
-              const SizedBox(height: AppSpacing.xl),
-
-              // Trip Mode Selector
-              Text(
-                'What are you using this trip for?',
-                style: AppTypography.titleSmall(isDark: isDark),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildTripModeCard(
-                      title: 'Split expenses',
-                      subtitle: 'For shared spending with friends.',
-                      icon: Icons.pie_chart_outline_rounded,
-                      mode: 'split_only',
-                      createVm: createVm,
-                      isDark: isDark,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _buildTripModeCard(
-                      title: 'Split + Journey',
-                      subtitle: 'Shared spending & automatic memories.',
-                      icon: Icons.auto_awesome_rounded,
-                      mode: 'split_and_journey',
-                      createVm: createVm,
-                      isDark: isDark,
-                    ),
+                if (createVm.friendNames.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: createVm.friendNames.map((name) {
+                      return Chip(
+                        label: Text(name),
+                        deleteIcon: const Icon(Icons.close_rounded, size: 16),
+                        onDeleted: () => createVm.removeFriendName(name),
+                        backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+                        shape: RoundedRectangleBorder(borderRadius: AppRadius.fullBorder),
+                      );
+                    }).toList(),
                   ),
                 ],
-              ),
 
-              const SizedBox(height: AppSpacing.xl),
+                const SizedBox(height: AppSpacing.xxl),
 
-              // Currency Selection
-              Text(
-                'Trip Currency',
-                style: AppTypography.titleSmall(isDark: isDark),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Row(
-                children: [
-                  _buildCurrencyChip('INR', '₹ INR', createVm, isDark),
-                  const SizedBox(width: 8),
-                  _buildCurrencyChip('USD', '\$ USD', createVm, isDark),
-                  const SizedBox(width: 8),
-                  _buildCurrencyChip('EUR', '€ EUR', createVm, isDark),
-                  const SizedBox(width: 8),
-                  _buildCurrencyChip('GBP', '£ GBP', createVm, isDark),
-                ],
-              ),
-
-              const SizedBox(height: AppSpacing.xl),
-
-              // Add Initial Friends
-              Text(
-                'Add Friends (Optional)',
-                style: AppTypography.titleSmall(isDark: isDark),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                'You can also share an invite link or join code after creating.',
-                style: AppTypography.bodySmall(isDark: isDark),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _friendController,
-                      textCapitalization: TextCapitalization.words,
-                      decoration: const InputDecoration(
-                        hintText: "Friend's Name (e.g. Rahul)",
-                        prefixIcon: Icon(Icons.person_add_outlined, size: 20),
-                      ),
-                      onSubmitted: (_) => _addFriend(),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  IconButton.filled(
-                    onPressed: _addFriend,
-                    icon: const Icon(Icons.add_rounded),
-                    style: IconButton.styleFrom(
-                      backgroundColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-                      foregroundColor: isDark ? AppColors.darkBackground : Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: AppRadius.mdBorder),
-                      padding: const EdgeInsets.all(14),
-                    ),
-                  ),
-                ],
-              ),
-
-              if (createVm.friendNames.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.md),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: createVm.friendNames.map((name) {
-                    return Chip(
-                      label: Text(name),
-                      deleteIcon: const Icon(Icons.close_rounded, size: 16),
-                      onDeleted: () => createVm.removeFriendName(name),
-                      backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
-                      shape: RoundedRectangleBorder(borderRadius: AppRadius.fullBorder),
-                    );
-                  }).toList(),
+                // Create CTA
+                AppButton(
+                  text: l10n.createTripCta,
+                  icon: Icons.check_circle_outline_rounded,
+                  isFullWidth: true,
+                  isLoading: createVm.isCreating,
+                  onPressed: createVm.isValid ? _handleCreate : null,
                 ),
+
+                const SizedBox(height: 32),
               ],
-
-              const SizedBox(height: AppSpacing.xxl),
-
-              // Create CTA
-              AppButton(
-                text: 'Create Trip',
-                icon: Icons.check_circle_outline_rounded,
-                isFullWidth: true,
-                isLoading: createVm.isCreating,
-                onPressed: createVm.isValid ? _handleCreate : null,
-              ),
-
-              const SizedBox(height: 32),
-            ],
+            ),
           ),
         ),
-      ),
       ),
     );
   }

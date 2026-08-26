@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -271,6 +272,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     final tripDetailVm = context.watch<TripDetailViewModel>();
     final addVm = context.watch<AddExpenseViewModel>();
     final authVm = context.watch<AuthViewModel>();
+    final l10n = context.l10n;
 
     final trip = tripDetailVm.trip;
     final currentUserId = authVm.currentUser?.id ?? '';
@@ -289,20 +291,20 @@ class _AddExpenseViewState extends State<AddExpenseView> {
           builder: (ctx) => AlertDialog(
             shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
             backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
-            title: Text('Discard expense?', style: AppTypography.titleLarge(isDark: isDark)),
+            title: Text(l10n.createTripDiscardTitle, style: AppTypography.titleLarge(isDark: isDark)),
             content: Text(
-              'You have unsaved expense details.',
+              l10n.createTripDiscardDesc,
               style: AppTypography.bodyMedium(isDark: isDark),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(false),
-                child: const Text('Keep Editing'),
+                child: Text(l10n.createTripDiscardKeep),
               ),
               FilledButton(
                 style: FilledButton.styleFrom(backgroundColor: AppColors.negativeRedDark),
                 onPressed: () => Navigator.of(ctx).pop(true),
-                child: const Text('Discard'),
+                child: Text(l10n.createTripDiscardConfirm),
               ),
             ],
           ),
@@ -318,11 +320,11 @@ class _AddExpenseViewState extends State<AddExpenseView> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                addVm.isEditMode ? 'Edit Group Expense' : 'Add Group Expense',
+                addVm.isEditMode ? l10n.expenseEditTitle : l10n.expenseAddTitle,
                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
               ),
               Text(
-                '${trip.emoji} ${trip.name} · Split with ${trip.members.length} members',
+                '${trip.emoji} ${trip.name} · ${l10n.tripsHomeMembersCount(trip.members.length)}',
                 style: TextStyle(
                   fontSize: 11,
                   color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
@@ -339,20 +341,20 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                   builder: (ctx) => AlertDialog(
                     shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
                     backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
-                    title: Text('Discard expense?', style: AppTypography.titleLarge(isDark: isDark)),
+                    title: Text(l10n.createTripDiscardTitle, style: AppTypography.titleLarge(isDark: isDark)),
                     content: Text(
-                      'You have unsaved expense details.',
+                      l10n.createTripDiscardDesc,
                       style: AppTypography.bodyMedium(isDark: isDark),
                     ),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.of(ctx).pop(false),
-                        child: const Text('Keep Editing'),
+                        child: Text(l10n.createTripDiscardKeep),
                       ),
                       FilledButton(
                         style: FilledButton.styleFrom(backgroundColor: AppColors.negativeRedDark),
                         onPressed: () => Navigator.of(ctx).pop(true),
-                        child: const Text('Discard'),
+                        child: Text(l10n.createTripDiscardConfirm),
                       ),
                     ],
                   ),
@@ -381,9 +383,9 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                   padding: const EdgeInsets.all(4),
                   child: Row(
                     children: [
-                      _buildModeTab('Voice', Icons.mic_rounded, 0, addVm.currentTab, isDark),
-                      _buildModeTab('Receipt', Icons.receipt_long_rounded, 1, addVm.currentTab, isDark),
-                      _buildModeTab('Manual', Icons.edit_note_rounded, 2, addVm.currentTab, isDark),
+                      _buildModeTab(l10n.expenseVoiceTab, Icons.mic_rounded, 0, addVm.currentTab, isDark),
+                      _buildModeTab(l10n.expenseReceiptTab, Icons.receipt_long_rounded, 1, addVm.currentTab, isDark),
+                      _buildModeTab(l10n.expenseManualTab, Icons.edit_note_rounded, 2, addVm.currentTab, isDark),
                     ],
                   ),
                 ),
@@ -394,10 +396,10 @@ class _AddExpenseViewState extends State<AddExpenseView> {
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
                 child: addVm.currentTab == 0
-                    ? _buildVoiceInputTab(addVm, trip, currentUserId, isDark)
+                    ? _buildVoiceInputTab(addVm, trip, currentUserId, isDark, l10n)
                     : (addVm.currentTab == 1
-                        ? _buildReceiptScanTab(addVm, trip, currentUserId, isDark)
-                        : _buildManualInputTab(addVm, trip, isDark)),
+                        ? _buildReceiptScanTab(addVm, trip, currentUserId, isDark, l10n)
+                        : _buildManualInputTab(addVm, trip, isDark, l10n)),
               ),
             ),
 
@@ -434,7 +436,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Text('Total Amount', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                            Text(l10n.expenseAmountLabel, style: const TextStyle(fontSize: 11, color: Colors.grey)),
                             CurrencyDisplay(
                               amountInPaise: addVm.amountInPaise,
                               size: CurrencyDisplaySize.large,
@@ -446,7 +448,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: AppButton(
-                          text: addVm.isEditMode ? 'Update' : 'Save Expense',
+                          text: addVm.isEditMode ? l10n.actionEdit : l10n.expenseSaveBtn,
                           icon: Icons.check_rounded,
                           isLoading: addVm.isSaving,
                           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -513,18 +515,18 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     );
   }
 
-  Widget _buildVoiceInputTab(AddExpenseViewModel addVm, Trip trip, String currentUserId, bool isDark) {
+  Widget _buildVoiceInputTab(AddExpenseViewModel addVm, Trip trip, String currentUserId, bool isDark, AppLocalizations l10n) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         const SizedBox(height: AppSpacing.md),
         Text(
-          'Speak Naturally',
+          l10n.expenseVoiceTitle,
           style: AppTypography.titleLarge(isDark: isDark),
         ),
         const SizedBox(height: AppSpacing.xs),
         Text(
-          'Say who paid, what it was for, and how much.\n(e.g. "Maine 6000 train ke diye sabke liye")',
+          l10n.expenseVoiceSub,
           style: AppTypography.bodyMedium(isDark: isDark),
           textAlign: TextAlign.center,
         ),
@@ -663,7 +665,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
         Align(
           alignment: Alignment.centerLeft,
           child: Text(
-            'Try saying (or tap to test):',
+            l10n.expenseVoiceTry,
             style: AppTypography.titleSmall(isDark: isDark),
           ),
         ),
@@ -742,18 +744,18 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     }
   }
 
-  Widget _buildReceiptScanTab(AddExpenseViewModel addVm, Trip trip, String currentUserId, bool isDark) {
+  Widget _buildReceiptScanTab(AddExpenseViewModel addVm, Trip trip, String currentUserId, bool isDark, AppLocalizations l10n) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         const SizedBox(height: AppSpacing.md),
         Text(
-          'Scan Receipt or Bill',
+          l10n.expenseReceiptTitle,
           style: AppTypography.titleLarge(isDark: isDark),
         ),
         const SizedBox(height: AppSpacing.xs),
         Text(
-          'Capture or upload any receipt. Total and merchant are extracted automatically for your confirmation.',
+          l10n.expenseReceiptSub,
           style: AppTypography.bodyMedium(isDark: isDark),
           textAlign: TextAlign.center,
         ),
@@ -834,7 +836,16 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     );
   }
 
-  Widget _buildManualInputTab(AddExpenseViewModel addVm, Trip trip, bool isDark) {
+  String _getSplitTypeDisplayName(SplitType type, AppLocalizations l10n) {
+    switch (type) {
+      case SplitType.equal: return l10n.expenseSplitEqually;
+      case SplitType.exact: return l10n.expenseSplitExact;
+      case SplitType.percentage: return l10n.expenseSplitPercentages;
+      case SplitType.shares: return l10n.expenseSplitShares;
+    }
+  }
+
+  Widget _buildManualInputTab(AddExpenseViewModel addVm, Trip trip, bool isDark, AppLocalizations l10n) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -844,7 +855,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Amount', style: TextStyle(fontSize: 12, color: Colors.grey)),
+              Text(l10n.expenseAmountLabel, style: const TextStyle(fontSize: 12, color: Colors.grey)),
               const SizedBox(height: 4),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
@@ -894,16 +905,16 @@ class _AddExpenseViewState extends State<AddExpenseView> {
         const SizedBox(height: AppSpacing.lg),
 
         // Expense Title
-        Text('What was this for?', style: AppTypography.titleSmall(isDark: isDark)),
+        Text(l10n.expenseWhatForLabel, style: AppTypography.titleSmall(isDark: isDark)),
         const SizedBox(height: AppSpacing.xs),
         TextField(
           controller: _titleController,
           textCapitalization: TextCapitalization.sentences,
           decoration: InputDecoration(
-            hintText: 'e.g. Train tickets, Dinner, Groceries',
+            hintText: l10n.expenseWhatForHint,
             prefixIcon: const Icon(Icons.receipt_outlined, size: 20),
             errorText: _hasAttemptedSave && addVm.title.trim().isEmpty
-                ? 'Please enter what this expense was for'
+                ? l10n.expenseWhatForHint
                 : null,
           ),
           onChanged: (val) {
@@ -917,7 +928,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
         const SizedBox(height: AppSpacing.lg),
 
         // Category Selector Chips
-        Text('Category', style: AppTypography.titleSmall(isDark: isDark)),
+        Text(l10n.tripDetailTabCategories, style: AppTypography.titleSmall(isDark: isDark)),
         const SizedBox(height: AppSpacing.xs),
         SizedBox(
           height: 42,
@@ -953,7 +964,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
         const SizedBox(height: AppSpacing.lg),
 
         // Payer Selector
-        Text('Who Paid?', style: AppTypography.titleSmall(isDark: isDark)),
+        Text(l10n.expensePaidByLabel, style: AppTypography.titleSmall(isDark: isDark)),
         const SizedBox(height: AppSpacing.xs),
         SurfaceCard(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -961,7 +972,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
             child: DropdownButton<String>(
               value: addVm.paidById.isNotEmpty ? addVm.paidById : null,
               isExpanded: true,
-              hint: const Text('Select Payer'),
+              hint: Text(l10n.expensePaidByLabel),
               items: trip.members.map((m) {
                 return DropdownMenuItem<String>(
                   value: m.id,
@@ -989,7 +1000,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
           children: [
             Row(
               children: [
-                Text('Split Method', style: AppTypography.titleSmall(isDark: isDark)),
+                Text(l10n.expenseSplitHowLabel, style: AppTypography.titleSmall(isDark: isDark)),
                 const SizedBox(width: 4),
                 IconButton(
                   icon: const Icon(Icons.help_outline_rounded, size: 18, color: AppColors.emeraldPrimary),
@@ -1005,7 +1016,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
               items: SplitType.values.map((type) {
                 return DropdownMenuItem(
                   value: type,
-                  child: Text(type.displayName, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  child: Text(_getSplitTypeDisplayName(type, l10n), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                 );
               }).toList(),
               onChanged: (type) {
@@ -1025,6 +1036,8 @@ class _AddExpenseViewState extends State<AddExpenseView> {
         ],
 
         const SizedBox(height: AppSpacing.xs),
+
+        // Participant Split List
 
         // Participant Split List
         SurfaceCard(

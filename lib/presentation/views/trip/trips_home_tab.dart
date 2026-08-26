@@ -35,15 +35,15 @@ class TripsHomeTab extends StatelessWidget {
     Color? insightColor;
 
     if (net > 0) {
-      insightText = 'You get back ${CurrencyFormatter.formatPaise(net, currencyCode: 'INR')} overall';
+      insightText = l10n.tripsHomeGetBackOverall(CurrencyFormatter.formatPaise(net, currencyCode: 'INR'));
       insightIcon = Icons.arrow_downward_rounded;
       insightColor = isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight;
     } else if (net < 0) {
-      insightText = 'You owe ${CurrencyFormatter.formatPaise(net.abs(), currencyCode: 'INR')} overall';
+      insightText = l10n.tripsHomeOweOverall(CurrencyFormatter.formatPaise(net.abs(), currencyCode: 'INR'));
       insightIcon = Icons.arrow_upward_rounded;
       insightColor = isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight;
     } else if (homeVm.trips.isNotEmpty) {
-      insightText = 'All trip balances settled ✓';
+      insightText = l10n.tripsHomeAllSettled;
       insightIcon = Icons.check_circle_outline_rounded;
       insightColor = isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary;
     }
@@ -63,7 +63,7 @@ class TripsHomeTab extends StatelessWidget {
                 // 1. Hero Trips Spending Display
                 KithAmountDisplay(
                   amountInPaise: totalSpentPaise,
-                  periodSubtitle: '${homeVm.trips.length} ${homeVm.trips.length == 1 ? 'Trip' : 'Trips'} Active',
+                  periodSubtitle: l10n.tripsHomeActiveCount(homeVm.trips.length),
                   contextualInsight: insightText,
                   insightIcon: insightIcon,
                   insightColor: insightColor,
@@ -86,10 +86,10 @@ class TripsHomeTab extends StatelessWidget {
                 // 3. Trips List or Clean Empty State
                 if (homeVm.trips.isEmpty)
                   KithEmptyState(
-                    title: 'No trips yet',
-                    subtitle: 'Create a trip when you\'re ready to split group expenses with friends.',
+                    title: l10n.tripsNoTrips,
+                    subtitle: l10n.tripsNoTripsSub,
                     icon: Icons.flight_takeoff_rounded,
-                    actionLabel: 'Create Trip',
+                    actionLabel: l10n.tripsCreate,
                     onAction: () => context.push('/create-trip'),
                   )
                 else
@@ -97,7 +97,7 @@ class TripsHomeTab extends StatelessWidget {
                     final balance = homeVm.tripBalances[trip.id];
                     return Padding(
                       padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                      child: _buildTripCard(context, trip, balance, isDark, user?.id ?? ''),
+                      child: _buildTripCard(context, trip, balance, isDark, user?.id ?? '', l10n),
                     );
                   }),
 
@@ -107,7 +107,7 @@ class TripsHomeTab extends StatelessWidget {
     );
   }
 
-  Widget _buildTripCard(BuildContext context, Trip trip, dynamic balance, bool isDark, String currentUserId) {
+  Widget _buildTripCard(BuildContext context, Trip trip, dynamic balance, bool isDark, String currentUserId, AppLocalizations l10n) {
     final gradientColors = AppColors.getGradient(trip.coverGradientIndex);
     final userNetPaise = balance?.currentUserNetBalanceInPaise ?? 0;
 
@@ -166,7 +166,7 @@ class TripsHomeTab extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          '${trip.members.length} members',
+                          l10n.tripsHomeMembersCount(trip.members.length),
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.85),
                             fontSize: 12,
@@ -227,8 +227,8 @@ class TripsHomeTab extends StatelessWidget {
                   children: [
                     Text(
                       userNetPaise > 0
-                          ? 'You get back'
-                          : (userNetPaise < 0 ? 'You owe' : 'Settled'),
+                          ? l10n.tripDetailYouGetBack
+                          : (userNetPaise < 0 ? l10n.tripDetailYouOwe : l10n.tripsHomeCardSettled),
                       style: TextStyle(
                         fontSize: 11,
                         color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,

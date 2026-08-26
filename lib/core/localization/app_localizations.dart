@@ -513,6 +513,117 @@ class AppLocalizations {
   String get onboardingRecoverySheetDesc => translate('onboarding_recovery_sheet_desc');
   String get onboardingRecoverySheetCta => translate('onboarding_recovery_sheet_cta');
   String get onboardingSigningInStatus => translate('onboarding_signing_in_status');
+
+  // Create Trip View
+  String get createTripAppBarTitle => translate('create_trip_app_bar_title');
+  String get createTripPreviewPlaceholder => translate('create_trip_preview_placeholder');
+  String get createTripNameLabel => translate('create_trip_name_label');
+  String get createTripNameHint => translate('create_trip_name_hint');
+  String get createTripIconLabel => translate('create_trip_icon_label');
+  String get createTripGradientLabel => translate('create_trip_gradient_label');
+  String get createTripModeLabel => translate('create_trip_mode_label');
+  String get createTripModeSplitOnlyTitle => translate('create_trip_mode_split_only_title');
+  String get createTripModeSplitOnlySub => translate('create_trip_mode_split_only_sub');
+  String get createTripModeJourneyTitle => translate('create_trip_mode_journey_title');
+  String get createTripModeJourneySub => translate('create_trip_mode_journey_sub');
+  String get createTripCurrencyLabel => translate('create_trip_currency_label');
+  String get createTripFriendsLabel => translate('create_trip_friends_label');
+  String get createTripFriendsSub => translate('create_trip_friends_sub');
+  String get createTripFriendHint => translate('create_trip_friend_hint');
+  String get createTripCta => translate('create_trip_cta');
+  String get createTripErrName => translate('create_trip_err_name');
+  String get createTripStageInit => translate('create_trip_stage_init');
+  String get createTripStageInitDesc => translate('create_trip_stage_init_desc');
+  String get createTripStageMember => translate('create_trip_stage_member');
+  String get createTripStageMemberDesc => translate('create_trip_stage_member_desc');
+  String get createTripStageSpace => translate('create_trip_stage_space');
+  String get createTripStageSpaceDesc => translate('create_trip_stage_space_desc');
+  String get createTripStageSync => translate('create_trip_stage_sync');
+  String get createTripStageSyncDesc => translate('create_trip_stage_sync_desc');
+  String get createTripProgressTitle => translate('create_trip_progress_title');
+  String get createTripDiscardTitle => translate('create_trip_discard_title');
+  String get createTripDiscardDesc => translate('create_trip_discard_desc');
+  String get createTripDiscardKeep => translate('create_trip_discard_keep');
+  String get createTripDiscardConfirm => translate('create_trip_discard_confirm');
+
+  // Add Expense View
+  String get expenseAddTitle => translate('expense_add_title');
+  String get expenseEditTitle => translate('expense_edit_title');
+  String get expenseAmountLabel => translate('expense_amount_label');
+  String get expenseWhatForLabel => translate('expense_what_for_label');
+  String get expenseWhatForHint => translate('expense_what_for_hint');
+  String get expensePaidByLabel => translate('expense_paid_by_label');
+  String get expenseSplitHowLabel => translate('expense_split_how_label');
+  String get expenseSplitEqually => translate('expense_split_equally');
+  String get expenseSplitExact => translate('expense_split_exact');
+  String get expenseSplitPercentages => translate('expense_split_percentages');
+  String get expenseSplitShares => translate('expense_split_shares');
+  String get expenseSaveBtn => translate('expense_save_btn');
+  String get expenseVoiceTab => translate('expense_voice_tab');
+  String get expenseReceiptTab => translate('expense_receipt_tab');
+  String get expenseManualTab => translate('expense_manual_tab');
+  String get expenseVoiceTitle => translate('expense_voice_title');
+  String get expenseVoiceSub => translate('expense_voice_sub');
+  String get expenseVoiceTry => translate('expense_voice_try');
+  String get expenseReceiptTitle => translate('expense_receipt_title');
+  String get expenseReceiptSub => translate('expense_receipt_sub');
+  String get expenseReceiptCamera => translate('expense_receipt_camera');
+  String get expenseReceiptGallery => translate('expense_receipt_gallery');
+  String get expenseReceiptSample => translate('expense_receipt_sample');
+  String get expenseSplitTotalMustMatch => translate('expense_split_total_must_match');
+
+  // Trip Detail View
+  String get tripDetailTabOverview => translate('trip_detail_tab_overview');
+  String get tripDetailTabSpending => translate('trip_detail_tab_spending');
+  String get tripDetailTabJourney => translate('trip_detail_tab_journey');
+  String get tripDetailTabExpenses => translate('trip_detail_tab_expenses');
+  String get tripDetailTabPeople => translate('trip_detail_tab_people');
+  String get tripDetailTabCategories => translate('trip_detail_tab_categories');
+  String get tripDetailTripSpending => translate('trip_detail_trip_spending');
+  String get tripDetailYourShare => translate('trip_detail_your_share');
+  String get tripDetailRecentSpending => translate('trip_detail_recent_spending');
+  String get tripDetailViewAllSpending => translate('trip_detail_view_all_spending');
+  String get tripDetailJourneyTimeline => translate('trip_detail_journey_timeline');
+  String get tripDetailViewFullJourney => translate('trip_detail_view_full_journey');
+  String get tripDetailAddFirstExpense => translate('trip_detail_add_first_expense');
+  String get tripDetailNoExpenses => translate('trip_detail_no_expenses');
+  String get tripDetailNoExpensesSub => translate('trip_detail_no_expenses_sub');
+  String get tripDetailAddFirstMoment => translate('trip_detail_add_first_moment');
+  String get tripDetailNoMoments => translate('trip_detail_no_moments');
+  String get tripDetailNoMomentsSub => translate('trip_detail_no_moments_sub');
+  String tripDetailMembersCount(int count) => translate('trip_detail_members_count').replaceAll('{count}', count.toString());
+  String get tripDetailAddFriend => translate('trip_detail_add_friend');
+  String get tripDetailYou => translate('trip_detail_you');
+  String get tripDetailYouSuffix => translate('trip_detail_you_suffix');
+  String get tripDetailYouGetBack => translate('trip_detail_you_get_back');
+  String get tripDetailYouOwe => translate('trip_detail_you_owe');
+  String get tripDetailAllSettled => translate('trip_detail_all_settled');
+  String get tripDetailSettleUp => translate('trip_detail_settle_up');
+  String get tripDetailBtnAddExpense => translate('trip_detail_btn_add_expense');
+  String get tripDetailBtnAddMoment => translate('trip_detail_btn_add_moment');
+  String get tripDetailBtnSettleUp => translate('trip_detail_btn_settle_up');
+  String get tripDetailFinishTrip => translate('trip_detail_finish_trip');
+  String get tripDetailReopenTrip => translate('trip_detail_reopen_trip');
+  String get tripDetailArchiveTrip => translate('trip_detail_archive_trip');
+  String get tripDetailCatAll => translate('trip_detail_cat_all');
+  String get tripDetailCatFood => translate('trip_detail_cat_food');
+  String get tripDetailCatTransport => translate('trip_detail_cat_transport');
+  String get tripDetailCatStay => translate('trip_detail_cat_stay');
+  String get tripDetailCatFuel => translate('trip_detail_cat_fuel');
+  String get tripDetailCatActivity => translate('trip_detail_cat_activity');
+  String get tripDetailCatShopping => translate('trip_detail_cat_shopping');
+  String get tripDetailCatOther => translate('trip_detail_cat_other');
+  String get tripDetailSearchExpenses => translate('trip_detail_search_expenses');
+
+  // Trips Home Tab
+  String tripsHomeGetBackOverall(String amount) => translate('trips_home_get_back_overall').replaceAll('{amount}', amount);
+  String tripsHomeOweOverall(String amount) => translate('trips_home_owe_overall').replaceAll('{amount}', amount);
+  String get tripsHomeAllSettled => translate('trips_home_all_settled');
+  String tripsHomeActiveCount(int count) => translate('trips_home_active_count').replaceAll('{count}', count.toString());
+  String get tripsHomeSpentLabel => translate('trips_home_spent_label');
+  String get tripsHomeYoursLabel => translate('trips_home_yours_label');
+  String tripsHomeMembersCount(int count) => translate('trips_home_members_count').replaceAll('{count}', count.toString());
+  String get tripsHomeCardSettled => translate('trips_home_card_settled');
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {
