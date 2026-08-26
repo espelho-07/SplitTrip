@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_elevation.dart';
 import '../../../core/theme/app_radius.dart';
@@ -16,6 +17,7 @@ import '../../../core/widgets/surface_card.dart';
 import '../../../domain/models/trip.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
+import '../../widgets/tooltips/contextual_hint_card.dart';
 
 class TripsHomeTab extends StatelessWidget {
   const TripsHomeTab({super.key});
@@ -25,6 +27,7 @@ class TripsHomeTab extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final homeVm = context.watch<HomeViewModel>();
     final authVm = context.watch<AuthViewModel>();
+    final l10n = context.l10n;
     final user = authVm.currentUser;
 
     return RefreshIndicator(
@@ -41,6 +44,15 @@ class TripsHomeTab extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // First-use Contextual Hint
+                  ContextualHintCard(
+                    hintKey: 'trips_home',
+                    title: l10n.hintTripsTitle,
+                    description: l10n.hintTripsDesc,
+                    icon: Icons.flight_takeoff_rounded,
+                    iconColor: AppColors.tealAccent,
+                  ),
+
                   // Balance Overview Card
                   _buildBalanceCard(homeVm, isDark),
 
@@ -51,13 +63,13 @@ class TripsHomeTab extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Your Group Trips',
+                        l10n.tripsMyTrips,
                         style: AppTypography.titleMedium(isDark: isDark),
                       ),
                       TextButton.icon(
                         onPressed: () => context.push('/join-trip'),
                         icon: const Icon(Icons.group_add_outlined, size: 16),
-                        label: const Text('Join Trip', style: TextStyle(fontSize: 13)),
+                        label: Text(l10n.tripsJoin, style: const TextStyle(fontSize: 13)),
                       ),
                     ],
                   ),

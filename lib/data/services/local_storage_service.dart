@@ -281,7 +281,37 @@ class LocalStorageService {
     return _prefs.setBool(_autoSyncKey, enabled);
   }
 
-  /// Wipes all user-specific data on logout while preserving app settings
+  // --- Language & Localization (Device-level) ---
+  static const String _languageKey = 'kith_selected_language';
+  static const String _initialLanguageSelectedKey = 'kith_initial_language_selected';
+  static const String _hintPrefix = 'kith_hint_dismissed_';
+
+  String? getSavedLanguage() {
+    return _prefs.getString(_languageKey);
+  }
+
+  Future<bool> saveLanguage(String languageCode) async {
+    return _prefs.setString(_languageKey, languageCode);
+  }
+
+  bool hasSelectedInitialLanguage() {
+    return _prefs.getBool(_initialLanguageSelectedKey) ?? false;
+  }
+
+  Future<bool> setHasSelectedInitialLanguage(bool selected) async {
+    return _prefs.setBool(_initialLanguageSelectedKey, selected);
+  }
+
+  // --- Contextual Hints / Tooltips ---
+  bool isHintDismissed(String hintKey) {
+    return _prefs.getBool('$_hintPrefix$hintKey') ?? false;
+  }
+
+  Future<bool> dismissHint(String hintKey) async {
+    return _prefs.setBool('$_hintPrefix$hintKey', true);
+  }
+
+  /// Wipes all user-specific data on logout while preserving app settings (language, theme, hints)
   Future<void> clearAllUserData() async {
     await clearUser();
     await _prefs.remove(_tripsKey);

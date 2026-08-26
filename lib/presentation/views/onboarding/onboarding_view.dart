@@ -13,7 +13,9 @@ import '../../../domain/enums/app_experience_mode.dart';
 import '../../../core/services/permission_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
+import '../../viewmodels/locale_viewmodel.dart';
 import '../../widgets/progress/progress.dart';
+import '../language/language_select_sheet.dart';
 import 'interactive_tutorial_sheet.dart';
 
 class OnboardingView extends StatefulWidget {
@@ -186,18 +188,37 @@ child: Column(
                       ],
                     ),
                   ),
-                  TextButton.icon(
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    icon: const Icon(Icons.help_outline_rounded, size: 14, color: AppColors.emeraldPrimary),
-                    label: const Text(
-                      'Quick Tour',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.emeraldPrimary),
-                    ),
-                    onPressed: () => InteractiveTutorialSheet.show(context),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextButton.icon(
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        icon: const Icon(Icons.translate_rounded, size: 14, color: AppColors.emeraldPrimary),
+                        label: Text(
+                          context.watch<LocaleViewModel>().currentLanguage.nativeName,
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.emeraldPrimary),
+                        ),
+                        onPressed: () => LanguageSelectSheet.show(context),
+                      ),
+                      const SizedBox(width: 6),
+                      TextButton.icon(
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        icon: const Icon(Icons.help_outline_rounded, size: 14, color: AppColors.emeraldPrimary),
+                        label: const Text(
+                          'Quick Tour',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.emeraldPrimary),
+                        ),
+                        onPressed: () => InteractiveTutorialSheet.show(context),
+                      ),
+                    ],
                   ),
                 ],
               ).animate().fadeIn(duration: 400.ms),

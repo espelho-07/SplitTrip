@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
+import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -30,48 +31,60 @@ class InteractiveTutorialSheet extends StatefulWidget {
 class _InteractiveTutorialSheetState extends State<InteractiveTutorialSheet> {
   int _currentStep = 0;
 
-  final List<Map<String, dynamic>> _steps = [
-    {
-      'title': 'Your money, simplified.',
-      'subtitle': 'Track everyday spending, categories, and personal budgets without spreadsheets or clutter.',
-      'icon': Icons.account_balance_wallet_rounded,
-      'color': AppColors.emeraldPrimary,
-      'badge': 'PERSONAL FINANCES',
-      'highlight': 'Switch between Personal and Trips anytime from the bottom bar.',
-    },
-    {
-      'title': 'Split trips effortlessly.',
-      'subtitle': 'Create a trip, invite friends with 6-character codes or QR, and let Kith calculate minimal repayments.',
-      'icon': Icons.flight_takeoff_rounded,
-      'color': AppColors.indigoAccent,
-      'badge': 'GROUP TRAVEL & LEDGERS',
-      'highlight': 'Zero-confusion debt simplification algorithm built-in.',
-    },
-    {
-      'title': 'Add expenses your way.',
-      'subtitle': 'Type an expense, speak it naturally in English/Hindi, or capture a receipt with instant AI OCR.',
-      'icon': Icons.mic_none_rounded,
-      'color': AppColors.amberAccent,
-      'badge': 'INTELLIGENT INPUT',
-      'highlight': 'Voice draft preview lets you confirm amounts before saving.',
-    },
-    {
-      'title': 'Never lose your data.',
-      'subtitle': 'Sign in with Google to sync seamlessly across devices, or keep your Recovery Key safe as a backup.',
-      'icon': Icons.cloud_sync_rounded,
-      'color': AppColors.emeraldPrimary,
-      'badge': 'CLOUD & RECOVERY',
-      'highlight': 'Works 100% offline and automatically syncs when online.',
-    },
-    {
-      'title': "You're all set!",
-      'subtitle': 'Create your first trip or track an expense today with total confidence.',
-      'icon': Icons.all_inclusive_rounded,
-      'color': AppColors.emeraldPrimary,
-      'badge': 'READY TO GO',
-      'highlight': 'Tap + to record your first transaction.',
-    },
-  ];
+  List<Map<String, dynamic>> _buildSteps(BuildContext context) {
+    final l10n = context.l10n;
+
+    return [
+      {
+        'title': l10n.tutorialSlide1Title,
+        'subtitle': l10n.tutorialSlide1Desc,
+        'icon': Icons.account_balance_wallet_rounded,
+        'color': AppColors.emeraldPrimary,
+        'badge': 'KITH OVERVIEW',
+        'highlight': l10n.tutorialSlide1Desc,
+      },
+      {
+        'title': l10n.tutorialSlide2Title,
+        'subtitle': l10n.tutorialSlide2Desc,
+        'icon': Icons.account_balance_wallet_rounded,
+        'color': AppColors.emeraldPrimary,
+        'badge': 'PERSONAL FINANCES',
+        'highlight': l10n.tutorialSlide2Desc,
+      },
+      {
+        'title': l10n.tutorialSlide3Title,
+        'subtitle': l10n.tutorialSlide3Desc,
+        'icon': Icons.flight_takeoff_rounded,
+        'color': AppColors.indigoAccent,
+        'badge': 'GROUP TRAVEL & LEDGERS',
+        'highlight': l10n.tutorialSlide3Desc,
+      },
+      {
+        'title': l10n.tutorialSlide4Title,
+        'subtitle': l10n.tutorialSlide4Desc,
+        'icon': Icons.mic_none_rounded,
+        'color': AppColors.amberAccent,
+        'badge': 'INTELLIGENT INPUT',
+        'highlight': l10n.tutorialSlide4Desc,
+      },
+      {
+        'title': l10n.tutorialSlide5Title,
+        'subtitle': l10n.tutorialSlide5Desc,
+        'icon': Icons.cloud_sync_rounded,
+        'color': AppColors.emeraldPrimary,
+        'badge': 'CLOUD & RECOVERY',
+        'highlight': l10n.tutorialSlide5Desc,
+      },
+      {
+        'title': l10n.tutorialSlide6Title,
+        'subtitle': l10n.tutorialSlide6Desc,
+        'icon': Icons.all_inclusive_rounded,
+        'color': AppColors.emeraldPrimary,
+        'badge': 'READY TO GO',
+        'highlight': l10n.tutorialSlide6Desc,
+      },
+    ];
+  }
 
   Future<void> _finishTutorial() async {
     HapticHelper.success();
@@ -83,9 +96,9 @@ class _InteractiveTutorialSheetState extends State<InteractiveTutorialSheet> {
     }
   }
 
-  void _nextStep() {
+  void _nextStep(int maxSteps) {
     HapticHelper.selection();
-    if (_currentStep < _steps.length - 1) {
+    if (_currentStep < maxSteps - 1) {
       setState(() => _currentStep++);
     } else {
       _finishTutorial();
@@ -95,8 +108,10 @@ class _InteractiveTutorialSheetState extends State<InteractiveTutorialSheet> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final step = _steps[_currentStep];
-    final isLast = _currentStep == _steps.length - 1;
+    final l10n = context.l10n;
+    final steps = _buildSteps(context);
+    final step = steps[_currentStep];
+    final isLast = _currentStep == steps.length - 1;
 
     return Container(
       decoration: BoxDecoration(
@@ -134,7 +149,7 @@ class _InteractiveTutorialSheetState extends State<InteractiveTutorialSheet> {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    'STEP ${_currentStep + 1} OF ${_steps.length} • ${step['badge']}',
+                    'STEP ${_currentStep + 1} OF ${steps.length} • ${step['badge']}',
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w800,
@@ -152,7 +167,7 @@ class _InteractiveTutorialSheetState extends State<InteractiveTutorialSheet> {
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                     child: Text(
-                      'Skip Tour',
+                      l10n.actionSkip,
                       style: TextStyle(
                         fontSize: 12,
                         color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
@@ -243,7 +258,7 @@ class _InteractiveTutorialSheetState extends State<InteractiveTutorialSheet> {
               children: [
                 // Dots
                 Row(
-                  children: List.generate(_steps.length, (index) {
+                  children: List.generate(steps.length, (index) {
                     final isActive = index == _currentStep;
                     return AnimatedContainer(
                       duration: const Duration(milliseconds: 250),
@@ -262,11 +277,11 @@ class _InteractiveTutorialSheetState extends State<InteractiveTutorialSheet> {
                 const Spacer(),
                 // Next / Get Started Button
                 AppButton(
-                  text: isLast ? 'Get Started' : 'Next',
+                  text: isLast ? l10n.actionDone : l10n.actionNext,
                   icon: isLast ? Icons.check_rounded : Icons.arrow_forward_rounded,
                   height: 44,
                   padding: const EdgeInsets.symmetric(horizontal: 20),
-                  onPressed: _nextStep,
+                  onPressed: () => _nextStep(steps.length),
                 ),
               ],
             ),

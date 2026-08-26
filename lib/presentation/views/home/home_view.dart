@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../../core/localization/app_localizations.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/services/permission_service.dart';
 import '../../../core/theme/app_colors.dart';
@@ -196,6 +197,7 @@ class _HomeViewState extends State<HomeView> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final authVm = context.watch<AuthViewModel>();
     final themeVm = context.watch<ThemeViewModel>();
+    final l10n = context.l10n;
     final user = authVm.currentUser;
     final isTripsOnly = authVm.appExperienceMode == AppExperienceMode.tripsOnly;
 
@@ -236,6 +238,14 @@ class _HomeViewState extends State<HomeView> {
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.menu_book_rounded, size: 22),
+            tooltip: l10n.guideTitle,
+            onPressed: () {
+              HapticHelper.light();
+              context.push('/guide');
+            },
+          ),
           IconButton(
             icon: Icon(
               isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
@@ -286,16 +296,16 @@ class _HomeViewState extends State<HomeView> {
                     HapticHelper.selection();
                   }
                 },
-                destinations: const [
+                destinations: [
                   NavigationDestination(
-                    icon: Icon(Icons.receipt_long_outlined, size: 22),
-                    selectedIcon: Icon(Icons.receipt_long_rounded, size: 22, color: AppColors.emeraldPrimary),
-                    label: 'Expenses',
+                    icon: const Icon(Icons.receipt_long_outlined, size: 22),
+                    selectedIcon: const Icon(Icons.receipt_long_rounded, size: 22, color: AppColors.emeraldPrimary),
+                    label: l10n.tabExpense,
                   ),
                   NavigationDestination(
-                    icon: Icon(Icons.flight_takeoff_outlined, size: 22),
-                    selectedIcon: Icon(Icons.flight_takeoff_rounded, size: 22, color: AppColors.emeraldPrimary),
-                    label: 'Trips',
+                    icon: const Icon(Icons.flight_takeoff_outlined, size: 22),
+                    selectedIcon: const Icon(Icons.flight_takeoff_rounded, size: 22, color: AppColors.emeraldPrimary),
+                    label: l10n.tabTrips,
                   ),
                 ],
               ),
@@ -316,7 +326,7 @@ class _HomeViewState extends State<HomeView> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         icon: const Icon(Icons.add_rounded, size: 20),
         label: Text(
-          (!isTripsOnly && _currentIndex == 0) ? 'Add Expense' : 'New Trip',
+          (!isTripsOnly && _currentIndex == 0) ? l10n.personalAddExpense : l10n.tripsCreate,
           style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
         ),
       ),

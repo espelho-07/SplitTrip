@@ -13,6 +13,7 @@ class AppColors {
   static const Color emeraldGlow = Color(0x3314B8A6);
 
   static const Color indigoAccent = Color(0xFF6366F1);
+  static const Color tealAccent = Color(0xFF14B8A6);
   static const Color amberAccent = Color(0xFFF59E0B);
   static const Color roseAccent = Color(0xFFF43F5E);
   static const Color violetAccent = Color(0xFF8B5CF6);

@@ -7,6 +7,8 @@ import 'core/config/app_config.dart';
 import 'core/config/supabase_config.dart';
 import 'core/network/api_client.dart';
 import 'core/network/realtime_client.dart' as kith_realtime;
+import 'core/localization/app_language.dart';
+import 'core/localization/app_localizations.dart';
 import 'core/theme/app_theme.dart';
 import 'data/repositories/expense_repository.dart';
 import 'data/repositories/personal_repository.dart';
@@ -21,6 +23,7 @@ import 'presentation/viewmodels/auth_viewmodel.dart';
 import 'presentation/viewmodels/create_trip_viewmodel.dart';
 import 'presentation/viewmodels/home_viewmodel.dart';
 import 'presentation/viewmodels/join_trip_viewmodel.dart';
+import 'presentation/viewmodels/locale_viewmodel.dart';
 import 'presentation/viewmodels/personal_expense_viewmodel.dart';
 import 'presentation/viewmodels/theme_viewmodel.dart';
 import 'presentation/viewmodels/trip_detail_viewmodel.dart';
@@ -98,6 +101,7 @@ void main() async {
         Provider<ExpenseRepository>.value(value: expenseRepo),
         Provider<PersonalRepository>.value(value: personalRepo),
         ChangeNotifierProvider(create: (_) => ThemeViewModel(storage: storageService)),
+        ChangeNotifierProvider(create: (_) => LocaleViewModel(storage: storageService)),
         ChangeNotifierProvider(create: (_) => AuthViewModel(userRepo: userRepo)),
         ChangeNotifierProvider(
           create: (_) => HomeViewModel(tripRepo: tripRepo, expenseRepo: expenseRepo),
@@ -131,6 +135,7 @@ class KithApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final themeVm = context.watch<ThemeViewModel>();
+    final localeVm = context.watch<LocaleViewModel>();
 
     return MaterialApp.router(
       title: 'Kith',
@@ -138,6 +143,11 @@ class KithApp extends StatelessWidget {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeVm.themeMode,
+      locale: localeVm.locale,
+      supportedLocales: AppLanguage.values.map((l) => l.locale).toList(),
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+      ],
       routerConfig: AppRouter.router,
     );
   }

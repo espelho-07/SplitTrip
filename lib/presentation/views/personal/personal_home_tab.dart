@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -17,6 +18,7 @@ import '../../../domain/models/personal_debt.dart';
 import '../../../domain/models/personal_expense.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/personal_expense_viewmodel.dart';
+import '../../widgets/tooltips/contextual_hint_card.dart';
 import 'widgets/add_personal_expense_sheet.dart';
 import 'widgets/personal_expense_detail_sheet.dart';
 import 'widgets/personal_expense_filter_sheet.dart';
@@ -32,6 +34,7 @@ class PersonalHomeTab extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final personalVm = context.watch<PersonalExpenseViewModel>();
     final authVm = context.watch<AuthViewModel>();
+    final l10n = context.l10n;
 
     final totalSpentPaise = personalVm.totalSpentInPaise;
     final avgPerDayPaise = personalVm.averageSpentPerDayInPaise;
@@ -49,6 +52,15 @@ class PersonalHomeTab extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
         children: [
+          // 0. First-Use Contextual Tooltip Hint
+          ContextualHintCard(
+            hintKey: 'personal_home',
+            title: l10n.hintExpenseTitle,
+            description: l10n.hintExpenseDesc,
+            icon: Icons.account_balance_wallet_outlined,
+            iconColor: AppColors.emeraldPrimary,
+          ),
+
           // 1. Month Navigation Header & Period Filter Chips
           _buildPeriodSelector(context, personalVm, isDark),
           const SizedBox(height: AppSpacing.md),

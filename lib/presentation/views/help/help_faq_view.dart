@@ -258,6 +258,71 @@ class _HelpFaqViewState extends State<HelpFaqView> {
       ),
       body: Column(
         children: [
+          // Interactive Setup Guide Banner
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, 0),
+            child: InkWell(
+              onTap: () {
+                HapticHelper.medium();
+                Navigator.of(context).pushNamed('/guide');
+              },
+              borderRadius: AppRadius.mdBorder,
+              child: Container(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: isDark
+                        ? [
+                            AppColors.emeraldPrimary.withValues(alpha: 0.25),
+                            AppColors.indigoAccent.withValues(alpha: 0.2),
+                          ]
+                        : [
+                            AppColors.emeraldPrimary.withValues(alpha: 0.12),
+                            AppColors.indigoAccent.withValues(alpha: 0.08),
+                          ],
+                  ),
+                  borderRadius: AppRadius.mdBorder,
+                  border: Border.all(
+                    color: AppColors.emeraldPrimary.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.emeraldPrimary.withValues(alpha: 0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.menu_book_rounded, color: AppColors.emeraldPrimary, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'How Kith Works • Setup Guide',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Interactive feature tour with direct action shortcuts',
+                            style: AppTypography.bodySmall(isDark: isDark),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.emeraldPrimary),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
           // Search Input
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),

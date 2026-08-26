@@ -3,11 +3,19 @@ import '../../data/repositories/user_repository.dart';
 import '../../domain/enums/app_experience_mode.dart';
 import '../../domain/models/guest_user.dart';
 
+enum AuthState {
+  uninitialized,
+  authenticated,
+  signedOut,
+  authenticating,
+  syncing,
+}
+
 class AuthViewModel extends ChangeNotifier {
   final UserRepository userRepo;
   GuestUser? _currentUser;
   AppExperienceMode _appExperienceMode = AppExperienceMode.all;
-  bool _isInitialized = false;
+  AuthState _authState = AuthState.uninitialized;
   bool _isLoading = false;
   String? _errorMessage;
 
@@ -15,26 +23,27 @@ class AuthViewModel extends ChangeNotifier {
 
   GuestUser? get currentUser => _currentUser;
   AppExperienceMode get appExperienceMode => _appExperienceMode;
+  AuthState get authState => _authState;
   bool get isAuthenticated => _currentUser != null;
-  bool get isInitialized => _isInitialized;
+  bool get isInitialized => _authState != AuthState.uninitialized;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
   Future<void> initSession() async {
     _isLoading = true;
+    _authState = AuthState.uninitialized;
     // Yield to the event loop so that any pending widget builds complete
-    // before we call notifyListeners(). This prevents the
-    // "setState() called during build" assertion when initSession() is
-    // invoked synchronously from a widget's initState().
+    // before we call notifyListeners().
     await Future<void>.value();
 
     try {
       _currentUser = userRepo.getCurrentUser();
       _appExperienceMode = AppExperienceMode.fromKey(userRepo.getAppExperienceMode());
+      _authState = _currentUser != null ? AuthState.authenticated : AuthState.signedOut;
     } catch (e) {
       _errorMessage = e.toString();
+      _authState = AuthState.signedOut;
     } finally {
-      _isInitialized = true;
       _isLoading = false;
       notifyListeners();
     }
@@ -58,6 +67,7 @@ class AuthViewModel extends ChangeNotifier {
     try {
       final user = await userRepo.createGuestUser(displayName: displayName);
       _currentUser = user;
+      _authState = AuthState.authenticated;
       return user;
     } catch (e) {
       _errorMessage = e.toString();
@@ -76,6 +86,7 @@ class AuthViewModel extends ChangeNotifier {
     try {
       final user = await userRepo.recoverUser(recoveryKey);
       _currentUser = user;
+      _authState = AuthState.authenticated;
       return user;
     } catch (e) {
       _errorMessage = 'Invalid recovery key';
@@ -101,6 +112,7 @@ class AuthViewModel extends ChangeNotifier {
         displayName: displayName,
       );
       _currentUser = user;
+      _authState = AuthState.authenticated;
       return user;
     } catch (e) {
       _errorMessage = 'Could not link account: $e';
@@ -120,6 +132,7 @@ class AuthViewModel extends ChangeNotifier {
   }) async {
     _isLoading = true;
     _errorMessage = null;
+    _authState = AuthState.authenticating;
     notifyListeners();
 
     try {
@@ -131,9 +144,11 @@ class AuthViewModel extends ChangeNotifier {
         supabaseUserId: supabaseUserId,
       );
       _currentUser = user;
+      _authState = AuthState.authenticated;
       return user;
     } catch (e) {
       _errorMessage = 'Could not sign in with Google: $e';
+      _authState = AuthState.signedOut;
       return null;
     } finally {
       _isLoading = false;
@@ -148,6 +163,7 @@ class AuthViewModel extends ChangeNotifier {
       final user = await userRepo.restoreSupabaseSession();
       if (user != null && _currentUser == null) {
         _currentUser = user;
+        _authState = AuthState.authenticated;
         notifyListeners();
       }
     } catch (_) {
@@ -163,8 +179,11 @@ class AuthViewModel extends ChangeNotifier {
     try {
       await userRepo.logout();
       _currentUser = null;
+      _authState = AuthState.signedOut;
     } catch (e) {
       _errorMessage = 'Could not logout: $e';
+      _currentUser = null;
+      _authState = AuthState.signedOut;
     } finally {
       _isLoading = false;
       notifyListeners();

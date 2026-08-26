@@ -7,6 +7,7 @@ import '../../../core/services/permission_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/kith_brand.dart';
 import '../../viewmodels/auth_viewmodel.dart';
+import '../../viewmodels/locale_viewmodel.dart';
 
 class SplashView extends StatefulWidget {
   const SplashView({super.key});
@@ -79,7 +80,11 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
 
     if (!mounted) return;
 
-    if (authVm.isAuthenticated) {
+    final localeVm = context.read<LocaleViewModel>();
+
+    if (!localeVm.hasSelectedInitialLanguage) {
+      context.go('/language-select');
+    } else if (authVm.isAuthenticated) {
       context.go('/home');
     } else {
       context.go('/onboarding');

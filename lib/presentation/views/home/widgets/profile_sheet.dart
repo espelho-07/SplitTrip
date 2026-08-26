@@ -10,14 +10,18 @@ import '../../../../core/utils/haptic_feedback_helper.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/member_avatar.dart';
 import '../../../../core/widgets/surface_card.dart';
+import '../../../../core/localization/app_localizations.dart';
+import '../../../../data/services/local_storage_service.dart';
 import '../../../../data/services/sync_service.dart';
 import '../../../../domain/enums/app_experience_mode.dart';
 import '../../../viewmodels/auth_viewmodel.dart';
 import '../../../viewmodels/home_viewmodel.dart';
+import '../../../viewmodels/locale_viewmodel.dart';
 import '../../../viewmodels/personal_expense_viewmodel.dart';
 import '../../../viewmodels/theme_viewmodel.dart';
 import '../../../widgets/progress/progress.dart';
 import '../../cloud/cloud_sync_sheet.dart';
+import '../../language/language_select_sheet.dart';
 import '../../onboarding/interactive_tutorial_sheet.dart';
 import '../../settings/widgets/beta_feedback_sheet.dart';
 
@@ -59,23 +63,22 @@ class ProfileSheet extends StatelessWidget {
   }
 
   void _showSignOutDialog(BuildContext context) async {
+    final l10n = context.l10n;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (dCtx) => AlertDialog(
         shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
-        title: const Text('Sign out of Kith?'),
-        content: const Text(
-          'Your cloud data will remain safe. You can sign back in anytime using your Google account or Recovery Key.',
-        ),
+        title: Text(l10n.authSignOutTitle),
+        content: Text(l10n.authSignOutDesc),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dCtx, false),
-            child: const Text('Cancel'),
+            child: Text(l10n.actionCancel),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () => Navigator.pop(dCtx, true),
-            child: const Text('Sign out'),
+            child: Text(l10n.authSignOutConfirm),
           ),
         ],
       ),
@@ -85,17 +88,19 @@ class ProfileSheet extends StatelessWidget {
       final authVm = context.read<AuthViewModel>();
       final homeVm = context.read<HomeViewModel>();
       final personalVm = context.read<PersonalExpenseViewModel>();
+      final storage = context.read<LocalStorageService>();
 
       // Close profile sheet first
       Navigator.of(context).pop();
 
       await authVm.logout();
+      await storage.clearAllUserData();
       homeVm.clearData();
       personalVm.clearData();
 
       if (context.mounted) {
         context.go('/onboarding');
-        KithSuccessToast.show(context, 'Signed out successfully ✓');
+        KithSuccessToast.show(context, l10n.authSignOutSuccess);
       }
     }
   }
@@ -105,7 +110,9 @@ class ProfileSheet extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final authVm = context.watch<AuthViewModel>();
     final themeVm = context.watch<ThemeViewModel>();
+    final localeVm = context.watch<LocaleViewModel>();
     final syncService = context.watch<SyncService>();
+    final l10n = context.l10n;
     final user = authVm.currentUser;
 
     if (user == null) return const SizedBox.shrink();
@@ -433,47 +440,72 @@ class ProfileSheet extends StatelessWidget {
             SurfaceCard(
               backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 4),
-              child: ListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(
-                  themeVm.themeMode == ThemeMode.dark
-                      ? Icons.dark_mode_rounded
-                      : (themeVm.themeMode == ThemeMode.light
-                          ? Icons.light_mode_rounded
-                          : Icons.brightness_auto_rounded),
-                  size: 20,
-                ),
-                title: Text(
-                  'Appearance',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+              child: Column(
+                children: [
+                  ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.translate_rounded, size: 20, color: AppColors.emeraldPrimary),
+                    title: const Text(
+                      'Language',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      '${localeVm.currentLanguage.flagEmoji} ${localeVm.currentLanguage.nativeName} (${localeVm.currentLanguage.englishName})',
+                      style: AppTypography.bodySmall(isDark: isDark),
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
+                    onTap: () {
+                      LanguageSelectSheet.show(context);
+                    },
                   ),
-                ),
-                subtitle: Text(
-                  themeVm.themeMode == ThemeMode.dark
-                      ? 'Dark mode'
-                      : (themeVm.themeMode == ThemeMode.light ? 'Light mode' : 'System auto'),
-                  style: AppTypography.bodySmall(isDark: isDark),
-                ),
-                trailing: DropdownButton<ThemeMode>(
-                  value: themeVm.themeMode,
-                  underline: const SizedBox.shrink(),
-                  dropdownColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
-                  items: const [
-                    DropdownMenuItem(value: ThemeMode.system, child: Text('System', style: TextStyle(fontSize: 12))),
-                    DropdownMenuItem(value: ThemeMode.light, child: Text('Light', style: TextStyle(fontSize: 12))),
-                    DropdownMenuItem(value: ThemeMode.dark, child: Text('Dark', style: TextStyle(fontSize: 12))),
-                  ],
-                  onChanged: (mode) {
-                    if (mode != null) {
-                      themeVm.setThemeMode(mode);
-                      HapticHelper.selection();
-                    }
-                  },
-                ),
+                  Divider(height: 1, color: isDark ? Colors.white10 : Colors.black12),
+                  ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      themeVm.themeMode == ThemeMode.dark
+                          ? Icons.dark_mode_rounded
+                          : (themeVm.themeMode == ThemeMode.light
+                              ? Icons.light_mode_rounded
+                              : Icons.brightness_auto_rounded),
+                      size: 20,
+                    ),
+                    title: Text(
+                      'Appearance',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                      ),
+                    ),
+                    subtitle: Text(
+                      themeVm.themeMode == ThemeMode.dark
+                          ? 'Dark mode'
+                          : (themeVm.themeMode == ThemeMode.light ? 'Light mode' : 'System auto'),
+                      style: AppTypography.bodySmall(isDark: isDark),
+                    ),
+                    trailing: DropdownButton<ThemeMode>(
+                      value: themeVm.themeMode,
+                      underline: const SizedBox.shrink(),
+                      dropdownColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+                      items: const [
+                        DropdownMenuItem(value: ThemeMode.system, child: Text('System', style: TextStyle(fontSize: 12))),
+                        DropdownMenuItem(value: ThemeMode.light, child: Text('Light', style: TextStyle(fontSize: 12))),
+                        DropdownMenuItem(value: ThemeMode.dark, child: Text('Dark', style: TextStyle(fontSize: 12))),
+                      ],
+                      onChanged: (mode) {
+                        if (mode != null) {
+                          themeVm.setThemeMode(mode);
+                          HapticHelper.selection();
+                        }
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
 
@@ -490,7 +522,27 @@ class ProfileSheet extends StatelessWidget {
                   ListTile(
                     dense: true,
                     contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.help_center_outlined, size: 20, color: AppColors.emeraldPrimary),
+                    leading: const Icon(Icons.menu_book_rounded, size: 20, color: AppColors.emeraldPrimary),
+                    title: Text(
+                      l10n.guideTitle,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                      ),
+                    ),
+                    subtitle: Text(l10n.guideSubtitle, style: AppTypography.bodySmall(isDark: isDark)),
+                    trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
+                    onTap: () {
+                      Navigator.pop(context);
+                      context.push('/guide');
+                    },
+                  ),
+                  Divider(height: 1, color: isDark ? Colors.white10 : Colors.black12),
+                  ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.help_center_outlined, size: 20, color: AppColors.tealAccent),
                     title: Text(
                       'Help & FAQ',
                       style: TextStyle(

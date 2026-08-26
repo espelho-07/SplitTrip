@@ -1,8 +1,10 @@
 import 'package:go_router/go_router.dart';
 import '../views/add_expense/add_expense_view.dart';
 import '../views/cloud/cloud_settings_view.dart';
+import '../views/guide/setup_guide_view.dart';
 import '../views/help/help_faq_view.dart';
 import '../views/home/home_view.dart';
+import '../views/language/language_select_view.dart';
 import '../views/onboarding/onboarding_view.dart';
 import '../views/personal/category_breakdown_view.dart';
 import '../views/personal/lending_borrowing_view.dart';
@@ -22,12 +24,23 @@ class AppRouter {
         builder: (context, state) => const SplashView(),
       ),
       GoRoute(
+        path: '/language-select',
+        builder: (context, state) {
+          final isSettings = state.uri.queryParameters['isSettings'] == 'true';
+          return LanguageSelectView(isFromSettings: isSettings);
+        },
+      ),
+      GoRoute(
         path: '/onboarding',
         builder: (context, state) => const OnboardingView(),
       ),
       GoRoute(
         path: '/home',
         builder: (context, state) => const HomeView(),
+      ),
+      GoRoute(
+        path: '/guide',
+        builder: (context, state) => const SetupGuideView(),
       ),
       GoRoute(
         path: '/help',
