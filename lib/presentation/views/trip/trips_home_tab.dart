@@ -3,13 +3,11 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_elevation.dart';
-import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
-import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/currency_formatter.dart';
-import '../../../core/widgets/currency_display.dart';
-import '../../../core/widgets/empty_state_view.dart';
+import '../../../core/utils/haptic_feedback_helper.dart';
+import '../../../core/widgets/kith_amount_display.dart';
+import '../../../core/widgets/kith_components.dart';
 import '../../../core/widgets/member_avatar.dart';
 import '../../../core/widgets/pill_badge.dart';
 import '../../../core/widgets/shimmer_skeleton.dart';
@@ -17,7 +15,6 @@ import '../../../core/widgets/surface_card.dart';
 import '../../../domain/models/trip.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
-import '../../widgets/tooltips/contextual_hint_card.dart';
 
 class TripsHomeTab extends StatelessWidget {
   const TripsHomeTab({super.key});
@@ -30,6 +27,27 @@ class TripsHomeTab extends StatelessWidget {
     final l10n = context.l10n;
     final user = authVm.currentUser;
 
+    final totalSpentPaise = homeVm.totalSpentOnTripsInPaise;
+    final net = homeVm.overallNetBalanceInPaise;
+
+    String? insightText;
+    IconData? insightIcon;
+    Color? insightColor;
+
+    if (net > 0) {
+      insightText = 'You get back ${CurrencyFormatter.formatPaise(net, currencyCode: 'INR')} overall';
+      insightIcon = Icons.arrow_downward_rounded;
+      insightColor = isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight;
+    } else if (net < 0) {
+      insightText = 'You owe ${CurrencyFormatter.formatPaise(net.abs(), currencyCode: 'INR')} overall';
+      insightIcon = Icons.arrow_upward_rounded;
+      insightColor = isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight;
+    } else if (homeVm.trips.isNotEmpty) {
+      insightText = 'All trip balances settled ✓';
+      insightIcon = Icons.check_circle_outline_rounded;
+      insightColor = isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary;
+    }
+
     return RefreshIndicator(
       onRefresh: () async {
         if (user != null) {
@@ -38,162 +56,54 @@ class TripsHomeTab extends StatelessWidget {
       },
       child: homeVm.isLoading && homeVm.trips.isEmpty
           ? _buildLoadingSkeleton()
-          : SingleChildScrollView(
+          : ListView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // First-use Contextual Hint
-                  ContextualHintCard(
-                    hintKey: 'trips_home',
-                    title: l10n.hintTripsTitle,
-                    description: l10n.hintTripsDesc,
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+              children: [
+                // 1. Hero Trips Spending Display
+                KithAmountDisplay(
+                  amountInPaise: totalSpentPaise,
+                  periodSubtitle: '${homeVm.trips.length} ${homeVm.trips.length == 1 ? 'Trip' : 'Trips'} Active',
+                  contextualInsight: insightText,
+                  insightIcon: insightIcon,
+                  insightColor: insightColor,
+                ),
+
+                const SizedBox(height: AppSpacing.xl),
+
+                // 2. Section Header & Quick Join Action
+                KithSectionHeader(
+                  title: l10n.tripsMyTrips,
+                  actionLabel: l10n.tripsJoin,
+                  onAction: () {
+                    HapticHelper.light();
+                    context.push('/join-trip');
+                  },
+                ),
+
+                const SizedBox(height: AppSpacing.sm),
+
+                // 3. Trips List or Clean Empty State
+                if (homeVm.trips.isEmpty)
+                  KithEmptyState(
+                    title: 'No trips yet',
+                    subtitle: 'Create a trip when you\'re ready to split group expenses with friends.',
                     icon: Icons.flight_takeoff_rounded,
-                    iconColor: AppColors.tealAccent,
-                  ),
+                    actionLabel: 'Create Trip',
+                    onAction: () => context.push('/create-trip'),
+                  )
+                else
+                  ...homeVm.trips.map((trip) {
+                    final balance = homeVm.tripBalances[trip.id];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                      child: _buildTripCard(context, trip, balance, isDark, user?.id ?? ''),
+                    );
+                  }),
 
-                  // Balance Overview Card
-                  _buildBalanceCard(homeVm, isDark),
-
-                  const SizedBox(height: AppSpacing.xxl),
-
-                  // Active Trips Header & Quick Actions
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        l10n.tripsMyTrips,
-                        style: AppTypography.titleMedium(isDark: isDark),
-                      ),
-                      TextButton.icon(
-                        onPressed: () => context.push('/join-trip'),
-                        icon: const Icon(Icons.group_add_outlined, size: 16),
-                        label: Text(l10n.tripsJoin, style: const TextStyle(fontSize: 13)),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: AppSpacing.sm),
-
-                  if (homeVm.trips.isEmpty)
-                    EmptyStateView(
-                      emoji: '🗺️',
-                      title: 'No trips yet',
-                      subtitle: 'Create a trip when you\'re ready to split group expenses with friends.',
-                      buttonText: 'New Trip',
-                      buttonIcon: Icons.add_rounded,
-                      onButtonPressed: () => context.push('/create-trip'),
-                    )
-                  else
-                    ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: homeVm.trips.length,
-                      separatorBuilder: (context, index) => const SizedBox(height: AppSpacing.md),
-                      itemBuilder: (context, index) {
-                        final trip = homeVm.trips[index];
-                        final balance = homeVm.tripBalances[trip.id];
-                        return _buildTripCard(context, trip, balance, isDark, user?.id ?? '');
-                      },
-                    ),
-
-                  const SizedBox(height: 80),
-                ],
-              ),
+                const SizedBox(height: 80),
+              ],
             ),
-    );
-  }
-
-  Widget _buildBalanceCard(HomeViewModel homeVm, bool isDark) {
-    final totalSpentPaise = homeVm.totalSpentOnTripsInPaise;
-    final net = homeVm.overallNetBalanceInPaise;
-    final isOwed = net > 0;
-    final isDebt = net < 0;
-
-    String subtitleText;
-    Color statusColor;
-    IconData statusIcon;
-
-    if (isOwed) {
-      subtitleText = 'You are owed ${CurrencyFormatter.formatPaise(net, currencyCode: 'INR')} overall';
-      statusColor = isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight;
-      statusIcon = Icons.arrow_downward_rounded;
-    } else if (isDebt) {
-      subtitleText = 'You owe ${CurrencyFormatter.formatPaise(net.abs(), currencyCode: 'INR')} overall';
-      statusColor = isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight;
-      statusIcon = Icons.arrow_upward_rounded;
-    } else {
-      subtitleText = 'All trip balances settled up';
-      statusColor = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
-      statusIcon = Icons.check_circle_outline_rounded;
-    }
-
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
-        borderRadius: AppRadius.xlBorder,
-        border: Border.all(
-          color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
-          width: 1,
-        ),
-        boxShadow: isDark ? AppElevation.darkCard : AppElevation.lightCard,
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 22.0, vertical: 20.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'TOTAL SPENT ON TRIPS',
-                style: TextStyle(
-                  fontSize: 12,
-                  letterSpacing: 1.1,
-                  fontWeight: FontWeight.w700,
-                  color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                ),
-              ),
-              PillBadge(
-                label: '${homeVm.trips.length} ${homeVm.trips.length == 1 ? 'Trip' : 'Trips'}',
-                color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          CurrencyDisplay(
-            amountInPaise: totalSpentPaise,
-            size: CurrencyDisplaySize.hero,
-            colorMode: CurrencyColorMode.neutral,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(statusIcon, size: 14, color: statusColor),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  subtitleText,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: statusColor,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
     );
   }
 
@@ -202,7 +112,10 @@ class TripsHomeTab extends StatelessWidget {
     final userNetPaise = balance?.currentUserNetBalanceInPaise ?? 0;
 
     return SurfaceCard(
-      onTap: () => context.push('/trip/${trip.id}'),
+      onTap: () {
+        HapticHelper.light();
+        context.push('/trip/${trip.id}');
+      },
       padding: EdgeInsets.zero,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -314,7 +227,7 @@ class TripsHomeTab extends StatelessWidget {
                   children: [
                     Text(
                       userNetPaise > 0
-                          ? 'You receive'
+                          ? 'You get back'
                           : (userNetPaise < 0 ? 'You owe' : 'Settled'),
                       style: TextStyle(
                         fontSize: 11,
@@ -323,13 +236,18 @@ class TripsHomeTab extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 2),
-                    CurrencyDisplay(
-                      amountInPaise: userNetPaise.abs(),
-                      size: CurrencyDisplaySize.medium,
-                      colorMode: userNetPaise > 0
-                          ? CurrencyColorMode.positive
-                          : (userNetPaise < 0 ? CurrencyColorMode.negative : CurrencyColorMode.neutral),
-                      currencyCode: trip.currencyCode,
+                    Text(
+                      CurrencyFormatter.formatPaise(userNetPaise.abs(), currencyCode: trip.currencyCode),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                        color: userNetPaise > 0
+                            ? (isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight)
+                            : (userNetPaise < 0
+                                ? (isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight)
+                                : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary)),
+                      ),
                     ),
                   ],
                 ),
@@ -343,14 +261,14 @@ class TripsHomeTab extends StatelessWidget {
 
   Widget _buildLoadingSkeleton() {
     return Padding(
-      padding: const EdgeInsets.all(20.0),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
         children: [
-          const ShimmerSkeleton(height: 140),
-          const SizedBox(height: 24),
           const ShimmerSkeleton(height: 120),
-          const SizedBox(height: 16),
-          const ShimmerSkeleton(height: 120),
+          const SizedBox(height: AppSpacing.lg),
+          const ShimmerSkeleton(height: 100),
+          const SizedBox(height: AppSpacing.md),
+          const ShimmerSkeleton(height: 100),
         ],
       ),
     );

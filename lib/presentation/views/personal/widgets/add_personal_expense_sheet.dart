@@ -8,7 +8,7 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/date_formatter.dart';
 import '../../../../core/utils/haptic_feedback_helper.dart';
-import '../../../../core/widgets/app_button.dart';
+import '../../../../core/widgets/kith_components.dart';
 import '../../../../core/widgets/surface_card.dart';
 import '../../../../data/repositories/expense_repository.dart';
 import '../../../../domain/engine/money_engine.dart';
@@ -743,16 +743,17 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
                 },
               ),
 
-              const SizedBox(height: AppSpacing.xl),
+              const SizedBox(height: AppSpacing.lg),
 
-              // Save Button
-              AppButton(
-                text: _mode == PersonalEntryMode.expense
+              // Save Button (Primary Action)
+              KithButton(
+                label: _mode == PersonalEntryMode.expense
                     ? 'Save Expense'
                     : (_mode == PersonalEntryMode.lent ? 'Record Lending' : 'Record Borrowing'),
                 icon: Icons.check_rounded,
                 isLoading: _isSaving,
-                isFullWidth: true,
+                width: double.infinity,
+                variant: KithButtonVariant.primary,
                 onPressed: _isSaving ? null : _handleSave,
               ),
             ],

@@ -14,7 +14,6 @@ import '../../../domain/enums/app_experience_mode.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/personal_expense_viewmodel.dart';
-import '../../viewmodels/theme_viewmodel.dart';
 import '../../widgets/progress/progress.dart';
 import '../personal/personal_home_tab.dart';
 import '../personal/widgets/add_personal_expense_sheet.dart';
@@ -210,7 +209,6 @@ class _HomeViewState extends State<HomeView> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final authVm = context.watch<AuthViewModel>();
-    final themeVm = context.watch<ThemeViewModel>();
     final l10n = context.l10n;
     final user = authVm.currentUser;
     final isTripsOnly = authVm.appExperienceMode == AppExperienceMode.tripsOnly;
@@ -262,29 +260,14 @@ class _HomeViewState extends State<HomeView> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.menu_book_rounded, size: 22),
-            tooltip: l10n.guideTitle,
-            onPressed: () {
-              HapticHelper.light();
-              context.push('/guide');
-            },
-          ),
-          IconButton(
-            icon: Icon(
-              isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-              size: 22,
-            ),
-            onPressed: () {
-              HapticHelper.light();
-              themeVm.toggleTheme();
-            },
-          ),
-          IconButton(
             icon: const Icon(Icons.qr_code_scanner_rounded, size: 22),
             tooltip: l10n.tripsJoin,
-            onPressed: () => context.push('/join-trip'),
+            onPressed: () {
+              HapticHelper.light();
+              context.push('/join-trip');
+            },
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 8),
         ],
       ),
       body: isTripsOnly
