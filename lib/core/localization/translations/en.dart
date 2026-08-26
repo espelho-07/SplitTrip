@@ -580,5 +580,20 @@ const Map<String, String> enTranslations = {
   'trips_home_yours_label': 'yours',
   'trips_home_members_count': '{count} members',
   'trips_home_card_settled': 'Settled',
+
+  // Feature Under Crafting Teasers (Voice & Receipt)
+  'expense_crafting_badge': '✦ IN THE LAB',
+  'expense_voice_crafting_title': 'Natural Voice AI Split',
+  'expense_voice_crafting_desc': 'We\'re fine-tuning multilingual speech recognition for English, Hindi & Gujarati so you can just speak and split expenses effortlessly.',
+  'expense_voice_tag_train': 'Train tickets ₹6000',
+  'expense_voice_tag_dinner': 'Dinner ₹850 with Rahul',
+  'expense_voice_tag_cab': 'Cab ride ₹1200',
+  'expense_receipt_crafting_title': 'Smart Receipt & Bill OCR',
+  'expense_receipt_crafting_desc': 'We\'re training our on-device neural receipt reader to extract line items, taxes, and totals in milliseconds.',
+  'expense_receipt_tag_total': 'Total ₹850.00',
+  'expense_receipt_tag_merchant': 'Cafe Coffee Day',
+  'expense_receipt_tag_tax': 'Tax 5% Computed',
+  'expense_crafting_next_update': 'Available in the next update · Handcrafted with care',
+  'expense_crafting_switch_manual': 'Enter Manually Now',
 };
 

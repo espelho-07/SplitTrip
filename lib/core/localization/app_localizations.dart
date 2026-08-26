@@ -624,6 +624,21 @@ class AppLocalizations {
   String get tripsHomeYoursLabel => translate('trips_home_yours_label');
   String tripsHomeMembersCount(int count) => translate('trips_home_members_count').replaceAll('{count}', count.toString());
   String get tripsHomeCardSettled => translate('trips_home_card_settled');
+
+  // Feature Under Crafting Teasers (Voice & Receipt)
+  String get expenseCraftingBadge => translate('expense_crafting_badge');
+  String get expenseVoiceCraftingTitle => translate('expense_voice_crafting_title');
+  String get expenseVoiceCraftingDesc => translate('expense_voice_crafting_desc');
+  String get expenseVoiceTagTrain => translate('expense_voice_tag_train');
+  String get expenseVoiceTagDinner => translate('expense_voice_tag_dinner');
+  String get expenseVoiceTagCab => translate('expense_voice_tag_cab');
+  String get expenseReceiptCraftingTitle => translate('expense_receipt_crafting_title');
+  String get expenseReceiptCraftingDesc => translate('expense_receipt_crafting_desc');
+  String get expenseReceiptTagTotal => translate('expense_receipt_tag_total');
+  String get expenseReceiptTagMerchant => translate('expense_receipt_tag_merchant');
+  String get expenseReceiptTagTax => translate('expense_receipt_tag_tax');
+  String get expenseCraftingNextUpdate => translate('expense_crafting_next_update');
+  String get expenseCraftingSwitchManual => translate('expense_crafting_switch_manual');
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

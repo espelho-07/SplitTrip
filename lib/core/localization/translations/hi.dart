@@ -580,4 +580,19 @@ const Map<String, String> hiTranslations = {
   'trips_home_yours_label': 'आपका',
   'trips_home_members_count': '{count} सदस्य',
   'trips_home_card_settled': 'चुकता',
+
+  // Feature Under Crafting Teasers (Voice & Receipt)
+  'expense_crafting_badge': '✦ निर्माण कार्य जारी',
+  'expense_voice_crafting_title': 'नेचुरल वॉयस AI स्प्लिट',
+  'expense_voice_crafting_desc': 'हम अंग्रेजी, हिन्दी और गुजराती के लिए वॉयस रिकग्निशन पर काम कर रहे हैं ताकि आप बोलकर तुरंत हिसाब बांट सकें।',
+  'expense_voice_tag_train': 'ट्रेन टिकट ₹6000',
+  'expense_voice_tag_dinner': 'राहुल के साथ डिनर ₹850',
+  'expense_voice_tag_cab': 'कैब राइड ₹1200',
+  'expense_receipt_crafting_title': 'स्मार्ट रसीद और बिल OCR',
+  'expense_receipt_crafting_desc': 'हम ऑन-डिवाइस न्यूरल रीडर को प्रशिक्षित कर रहे हैं ताकि बिल और टैक्स सेकंडों में स्कैन हो जाएं।',
+  'expense_receipt_tag_total': 'कुल ₹850.00',
+  'expense_receipt_tag_merchant': 'कैफे कॉफी डे',
+  'expense_receipt_tag_tax': 'टैक्स 5% निकाला गया',
+  'expense_crafting_next_update': 'अगले अपडेट में उपलब्ध होगा · सावधानीपूर्वक निर्मित',
+  'expense_crafting_switch_manual': 'मैन्युअल रूप से खर्च जोड़ें',
 };

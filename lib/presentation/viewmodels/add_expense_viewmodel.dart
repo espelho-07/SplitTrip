@@ -87,6 +87,7 @@ class AddExpenseViewModel extends ChangeNotifier {
     _isEditMode = false;
     _editingExpenseId = null;
     _createdAt = null;
+    _currentTab = 2; // Default to Manual tab
     _title = '';
     _amountInPaise = 0;
     _category = ExpenseCategory.general;

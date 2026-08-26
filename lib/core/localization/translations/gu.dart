@@ -580,4 +580,19 @@ const Map<String, String> guTranslations = {
   'trips_home_yours_label': 'તમારો',
   'trips_home_members_count': '{count} સભ્યો',
   'trips_home_card_settled': 'ચુકતે',
+
+  // Feature Under Crafting Teasers (Voice & Receipt)
+  'expense_crafting_badge': '✦ નિર્માણ હેઠળ',
+  'expense_voice_crafting_title': 'નેચરલ વૉઇસ AI સ્પ્લિટ',
+  'expense_voice_crafting_desc': 'અમે અંગ્રેજી, હિન્દી અને ગુજરાતી માટે વૉઇસ રેકગ્નિશન પર કામ કરી રહ્યા છીએ જેથી તમે બોલીને તરત હિસાબ વહેંચી શકો.',
+  'expense_voice_tag_train': 'ટ્રેન ટિકિટ ₹6000',
+  'expense_voice_tag_dinner': 'રાહુલ સાથે જમવાનું ₹850',
+  'expense_voice_tag_cab': 'કેબ રાઇડ ₹1200',
+  'expense_receipt_crafting_title': 'સ્માર્ટ રસીદ અને બિલ OCR',
+  'expense_receipt_crafting_desc': 'અમે ઓન-ડિવાઇસ ન્યુરલ રીડરને ટ્રેન કરી રહ્યા છીએ જેથી બિલ અને ટેક્સ સેકન્ડોમાં સ્કેન થઈ જાય.',
+  'expense_receipt_tag_total': 'કુલ ₹850.00',
+  'expense_receipt_tag_merchant': 'કાફે કોફી ડે',
+  'expense_receipt_tag_tax': 'ટેક્સ 5% ગણાયો',
+  'expense_crafting_next_update': 'આગામી અપડેટમાં ઉપલબ્ધ થશે · પ્રેમપૂર્વક નિર્મિત',
+  'expense_crafting_switch_manual': 'હવે જાતે ખર્ચ ઉમેરો',
 };

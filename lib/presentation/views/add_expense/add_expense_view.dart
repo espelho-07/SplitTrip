@@ -12,18 +12,16 @@ import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/currency_display.dart';
 import '../../../core/widgets/member_avatar.dart';
 import '../../../core/widgets/surface_card.dart';
-import '../../../core/widgets/waveform_visualizer.dart';
 import '../../../domain/enums/expense_category.dart';
 import '../../../domain/enums/split_type.dart';
 import '../../../domain/models/expense.dart';
-import '../../../domain/models/expense_draft.dart';
 import '../../../domain/models/trip.dart';
 import '../../../domain/models/trip_member.dart';
 import '../../viewmodels/add_expense_viewmodel.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/trip_detail_viewmodel.dart';
-import '../../widgets/progress/progress.dart';
-import 'widgets/expense_draft_confirmation_sheet.dart';
+import '../../widgets/progress/kith_success_toast.dart';
+import 'widgets/feature_crafting_hero.dart';
 
 class AddExpenseView extends StatefulWidget {
   final String tripId;
@@ -45,29 +43,6 @@ class _AddExpenseViewState extends State<AddExpenseView> {
   final Map<String, TextEditingController> _exactControllers = {};
   final Map<String, TextEditingController> _percentControllers = {};
   bool _hasAttemptedSave = false;
-
-  static const List<String> _sampleVoicePrompts = [
-    'Maine 6000 train ke diye sabke liye',
-    'I paid 850 for dinner for me and Rahul',
-    'Rahul ne hotel ke 3000 diye sabke liye',
-    '500 coffee aur chai',
-    'Cab ride 1200',
-  ];
-
-  static const List<Map<String, String>> _sampleReceipts = [
-    {
-      'title': 'Cafe Coffee Day',
-      'text': 'CAFE COFFEE DAY\nMG Road, Bangalore\nTAX INVOICE\n1x Cappuccino ₹220\n1x Croissant ₹180\n1x Cold Coffee ₹250\nSubtotal: ₹650\nCGST 2.5%: ₹16.25\nSGST 2.5%: ₹16.25\nTOTAL AMOUNT: ₹850.00\nThank you visit again!',
-    },
-    {
-      'title': 'Taj Gateway Resort',
-      'text': 'TAJ GATEWAY RESORT\nCalangute Beach, Goa\nROOM BILL\nRoom Charges: ₹5,000.00\nDining: ₹1,500.00\nService Charge: ₹500.00\nGRAND TOTAL: ₹7,000.00\nPaid via Card',
-    },
-    {
-      'title': 'HP Petrol Pump',
-      'text': 'HINDUSTAN PETROLEUM\nHighway Station #402\nPetrol 20.5L @ ₹102.50\nNET AMOUNT: ₹2,100.00\nCash Payment Received',
-    },
-  ];
 
   @override
   void initState() {
@@ -108,33 +83,6 @@ class _AddExpenseViewState extends State<AddExpenseView> {
       c.dispose();
     }
     super.dispose();
-  }
-
-  void _showDraftConfirmation(ExpenseDraft draft, Trip trip) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => ExpenseDraftConfirmationSheet(
-        draft: draft,
-        trip: trip,
-        onEditManual: () {
-          final addVm = context.read<AddExpenseViewModel>();
-          addVm.setTab(2); // Switch to Manual tab
-          _titleController.text = addVm.title;
-          _amountController.text = addVm.amountInPaise > 0
-              ? CurrencyFormatter.toRupees(addVm.amountInPaise).toString()
-              : '';
-        },
-        onConfirm: (confirmedDraft) async {
-          final addVm = context.read<AddExpenseViewModel>();
-          final expense = await addVm.saveConfirmedDraft(trip.id, confirmedDraft);
-          if (expense != null && mounted) {
-            context.pop(true);
-          }
-        },
-      ),
-    );
   }
 
   Future<void> _handleSave() async {
@@ -271,11 +219,9 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final tripDetailVm = context.watch<TripDetailViewModel>();
     final addVm = context.watch<AddExpenseViewModel>();
-    final authVm = context.watch<AuthViewModel>();
     final l10n = context.l10n;
 
     final trip = tripDetailVm.trip;
-    final currentUserId = authVm.currentUser?.id ?? '';
     if (trip == null) {
       return const Scaffold(body: Center(child: Text('Trip not found')));
     }
@@ -393,73 +339,80 @@ class _AddExpenseViewState extends State<AddExpenseView> {
 
             // Tab Body
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
-                child: addVm.currentTab == 0
-                    ? _buildVoiceInputTab(addVm, trip, currentUserId, isDark, l10n)
-                    : (addVm.currentTab == 1
-                        ? _buildReceiptScanTab(addVm, trip, currentUserId, isDark, l10n)
-                        : _buildManualInputTab(addVm, trip, isDark, l10n)),
-              ),
+              child: addVm.currentTab == 0
+                  ? FeatureCraftingHero(
+                      type: FeatureCraftingType.voice,
+                      onSwitchToManual: () => addVm.setTab(2),
+                    )
+                  : (addVm.currentTab == 1
+                      ? FeatureCraftingHero(
+                          type: FeatureCraftingType.receipt,
+                          onSwitchToManual: () => addVm.setTab(2),
+                        )
+                      : SingleChildScrollView(
+                          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+                          child: _buildManualInputTab(addVm, trip, isDark, l10n),
+                        )),
             ),
 
-            // Bottom Save Action Bar
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
-                border: Border(
-                  top: BorderSide(
-                    color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+            // Bottom Save Action Bar (Shown on Manual Tab or Edit Mode)
+            if (addVm.currentTab == 2 || addVm.isEditMode)
+              Container(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                decoration: BoxDecoration(
+                  color: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+                  border: Border(
+                    top: BorderSide(
+                      color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+                    ),
                   ),
                 ),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (addVm.errorMessage != null) ...[
-                    Text(
-                      addVm.errorMessage!,
-                      style: TextStyle(
-                        color: isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(l10n.expenseAmountLabel, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                            CurrencyDisplay(
-                              amountInPaise: addVm.amountInPaise,
-                              size: CurrencyDisplaySize.large,
-                              currencyCode: trip.currencyCode,
-                            ),
-                          ],
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (addVm.errorMessage != null) ...[
+                      Text(
+                        addVm.errorMessage!,
+                        style: TextStyle(
+                          color: isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
                         ),
+                        textAlign: TextAlign.center,
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: AppButton(
-                          text: addVm.isEditMode ? l10n.actionEdit : l10n.expenseSaveBtn,
-                          icon: Icons.check_rounded,
-                          isLoading: addVm.isSaving,
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          onPressed: _handleSave,
-                        ),
-                      ),
+                      const SizedBox(height: 8),
                     ],
-                  ),
-                ],
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(l10n.expenseAmountLabel, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                              CurrencyDisplay(
+                                amountInPaise: addVm.amountInPaise,
+                                size: CurrencyDisplaySize.large,
+                                currencyCode: trip.currencyCode,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: AppButton(
+                            text: addVm.isEditMode ? l10n.actionEdit : l10n.expenseSaveBtn,
+                            icon: Icons.check_rounded,
+                            isLoading: addVm.isSaving,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            onPressed: _handleSave,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -512,327 +465,6 @@ class _AddExpenseViewState extends State<AddExpenseView> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildVoiceInputTab(AddExpenseViewModel addVm, Trip trip, String currentUserId, bool isDark, AppLocalizations l10n) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        const SizedBox(height: AppSpacing.md),
-        Text(
-          l10n.expenseVoiceTitle,
-          style: AppTypography.titleLarge(isDark: isDark),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          l10n.expenseVoiceSub,
-          style: AppTypography.bodyMedium(isDark: isDark),
-          textAlign: TextAlign.center,
-        ),
-
-        const SizedBox(height: AppSpacing.xl),
-
-        // Waveform Visualizer & Live Mic Button
-        Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
-            borderRadius: AppRadius.xlBorder,
-            border: Border.all(
-              color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
-            ),
-          ),
-          child: Column(
-            children: [
-              WaveformVisualizer(
-                isListening: addVm.isListening,
-                height: 52,
-              ),
-              const SizedBox(height: AppSpacing.lg),
-
-              GestureDetector(
-                onTap: () async {
-                  HapticHelper.medium();
-                  if (addVm.isListening) {
-                    await addVm.stopLiveVoiceListening(
-                      tripMembers: trip.members,
-                      currentUserId: currentUserId,
-                      onDraftReady: (draft) {
-                        if (mounted) {
-                          _showDraftConfirmation(draft, trip);
-                        }
-                      },
-                    );
-                  } else {
-                    final started = await addVm.startLiveVoiceListening(
-                      tripMembers: trip.members,
-                      currentUserId: currentUserId,
-                      onDraftReady: (draft) {
-                        if (mounted) {
-                          _showDraftConfirmation(draft, trip);
-                        }
-                      },
-                    );
-
-                    if (!started && mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Microphone permission required or speech recognition unavailable. Please grant permission in Settings.'),
-                          duration: Duration(seconds: 3),
-                        ),
-                      );
-                    }
-                  }
-                },
-                child: Container(
-                  width: 68,
-                  height: 68,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: addVm.isListening
-                        ? AppColors.roseAccent
-                        : (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary),
-                    boxShadow: [
-                      BoxShadow(
-                        color: (addVm.isListening
-                                ? AppColors.roseAccent
-                                : (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary))
-                            .withValues(alpha: 0.4),
-                        blurRadius: 20,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(
-                    addVm.isListening ? Icons.stop_rounded : Icons.mic_rounded,
-                    color: Colors.white,
-                    size: 32,
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                addVm.isListening ? 'Listening... Tap to stop & parse' : 'Tap microphone to speak',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                  color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                ),
-              ),
-
-              if (addVm.voiceTranscript.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.md),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.1),
-                    borderRadius: AppRadius.mdBorder,
-                    border: Border.all(
-                      color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.25),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.record_voice_over_rounded, size: 16, color: AppColors.emeraldPrimary),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          '"${addVm.voiceTranscript}"',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                            fontStyle: FontStyle.italic,
-                            color: isDark ? AppColors.emeraldLight : AppColors.emeraldDark,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-
-        const SizedBox(height: AppSpacing.xl),
-
-        // Sample Voice Prompts
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            l10n.expenseVoiceTry,
-            style: AppTypography.titleSmall(isDark: isDark),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _sampleVoicePrompts.map((prompt) {
-            return ActionChip(
-              label: Text(
-                prompt,
-                style: const TextStyle(fontSize: 12),
-              ),
-              backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
-              onPressed: () {
-                HapticHelper.light();
-                final draft = addVm.parseVoiceToDraft(prompt, trip.members, currentUserId);
-                _showDraftConfirmation(draft, trip);
-              },
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _handleParseReceiptWithStages(String rawText, Trip trip, String currentUserId) async {
-    final addVm = context.read<AddExpenseViewModel>();
-    final stageNotifier = ValueNotifier<int>(0);
-    final stages = const [
-      ProgressStage(label: 'Capturing receipt', description: 'Scanning receipt geometry'),
-      ProgressStage(label: 'Reading text lines', description: 'Extracting optical characters'),
-      ProgressStage(label: 'Finding total & merchant', description: 'Computing tax and line items'),
-      ProgressStage(label: 'Preparing expense draft', description: 'Structuring participant split'),
-    ];
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => ValueListenableBuilder<int>(
-        valueListenable: stageNotifier,
-        builder: (c, activeStage, _) {
-          final isDark = Theme.of(c).brightness == Brightness.dark;
-          return Dialog(
-            backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
-            shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: KithStageProgress(
-                title: 'Scanning receipt…',
-                stages: stages,
-                currentStageIndex: activeStage,
-              ),
-            ),
-          );
-        },
-      ),
-    );
-
-    Future.delayed(const Duration(milliseconds: 250), () {
-      if (mounted) stageNotifier.value = 1;
-    });
-    Future.delayed(const Duration(milliseconds: 550), () {
-      if (mounted) stageNotifier.value = 2;
-    });
-    Future.delayed(const Duration(milliseconds: 800), () {
-      if (mounted) stageNotifier.value = 3;
-    });
-
-    await Future.delayed(const Duration(milliseconds: 950));
-    final draft = addVm.parseReceiptToDraft(rawText, trip.members, currentUserId);
-
-    if (mounted) {
-      Navigator.of(context, rootNavigator: true).pop(); // Close progress dialog
-      _showDraftConfirmation(draft, trip);
-    }
-  }
-
-  Widget _buildReceiptScanTab(AddExpenseViewModel addVm, Trip trip, String currentUserId, bool isDark, AppLocalizations l10n) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        const SizedBox(height: AppSpacing.md),
-        Text(
-          l10n.expenseReceiptTitle,
-          style: AppTypography.titleLarge(isDark: isDark),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          l10n.expenseReceiptSub,
-          style: AppTypography.bodyMedium(isDark: isDark),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: AppSpacing.xl),
-
-        // Camera / OCR Viewport
-        Container(
-          width: double.infinity,
-          height: 200,
-          decoration: BoxDecoration(
-            color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
-            borderRadius: AppRadius.xlBorder,
-            border: Border.all(
-              color: isDark ? AppColors.darkBorderStrong : AppColors.lightBorderStrong,
-              width: 1.5,
-            ),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.document_scanner_rounded,
-                size: 50,
-                color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Instant Receipt OCR',
-                style: AppTypography.titleSmall(isDark: isDark),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Tap below to scan or select a sample bill',
-                style: AppTypography.bodySmall(isDark: isDark),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: AppSpacing.xl),
-
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            'Test with sample bills:',
-            style: AppTypography.titleSmall(isDark: isDark),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        ..._sampleReceipts.map((rcpt) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8.0),
-            child: SurfaceCard(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(rcpt['title']!, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                      const SizedBox(height: 2),
-                      const Text('Ready to extract', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                    ],
-                  ),
-                  FilledButton.tonal(
-                    onPressed: () {
-                      HapticHelper.light();
-                      _handleParseReceiptWithStages(rcpt['text']!, trip, currentUserId);
-                    },
-                    child: const Text('Scan & Review'),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }),
-      ],
     );
   }
 
