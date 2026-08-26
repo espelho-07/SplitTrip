@@ -96,6 +96,7 @@ void main() async {
   widgetService.onDeepLinkReceived = (deepLinkUri) {
     AppRouter.handleDeepLink(deepLinkUri);
   };
+  unawaited(widgetService.checkInitialDeepLink());
 
   // Instant pre-sync widgets on startup from local storage
   final currentUser = authService.getCurrentUser();

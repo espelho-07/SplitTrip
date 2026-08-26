@@ -184,6 +184,17 @@ class KithWidgetService extends ChangeNotifier {
         }
       }
     });
+    // Check initial deep link on cold launch
+    checkInitialDeepLink();
+  }
+
+  Future<void> checkInitialDeepLink() async {
+    try {
+      final initialLink = await _channel.invokeMethod<String>('getInitialDeepLink');
+      if (initialLink != null && initialLink.isNotEmpty && onDeepLinkReceived != null) {
+        onDeepLinkReceived!(initialLink);
+      }
+    } catch (_) {}
   }
 
   Future<void> setPrivacyMode(bool enabled) async {

@@ -1,4 +1,4 @@
-﻿import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:kith_app/core/services/kith_widget_service.dart';
 import 'package:kith_app/data/services/local_storage_service.dart';
 import 'package:kith_app/domain/enums/expense_category.dart';
@@ -6,6 +6,7 @@ import 'package:kith_app/domain/models/guest_user.dart';
 import 'package:kith_app/domain/models/personal_budget.dart';
 import 'package:kith_app/domain/models/personal_debt.dart';
 import 'package:kith_app/domain/models/personal_expense.dart';
+import 'package:kith_app/presentation/router/app_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -174,6 +175,35 @@ void main() {
       final raw = storage.getString('kith_widget_snapshot');
       expect(raw, isNotNull);
       expect(raw, contains('Everything is up to date ✓'));
+    });
+
+    test('AppRouter.handleDeepLink safely processes all widget URIs without throwing exceptions', () {
+      final deepLinks = [
+        'kith://home',
+        'kith://create-trip',
+        'kith://create-trip/',
+        'kith://expense/add',
+        'kith://expense/voice',
+        'kith://expense/receipt',
+        'kith://budget',
+        'kith://personal/debts',
+        'kith://personal/categories',
+        'kith://trips',
+        'kith://trip/trip_sample_01',
+        'kith://widgets',
+        'kith://guide',
+        'kith://help',
+        'kith://cloud-settings',
+        'kith://auth',
+        'kith://join?code=KITH99',
+        'kith://unknown-route-safely-fallback',
+        '/',
+        '',
+      ];
+
+      for (final link in deepLinks) {
+        expect(() => AppRouter.handleDeepLink(link), returnsNormally);
+      }
     });
   });
 }
