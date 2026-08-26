@@ -475,6 +475,21 @@ class AppLocalizations {
   String get statusErrorGeneral => translate('status_error_general');
   String get statusNoInternet => translate('status_no_internet');
   String get statusSignedInAs => translate('status_signed_in_as');
+
+  // Settlement "Mark as Paid" & Recipient Notifications
+  String get settlementMarkPaidTitle => translate('settlement_mark_paid_title');
+  String settlementMarkPaidDesc(String name) => translate('settlement_mark_paid_desc').replaceAll('{name}', name);
+  String get settlementMarkPaidBtn => translate('settlement_mark_paid_btn');
+  String get settlementPaidSuccess => translate('settlement_paid_success');
+  String get settlementNotifTitle => translate('settlement_notif_title');
+  String settlementNotifBody(String name, String amount) =>
+      translate('settlement_notif_body').replaceAll('{name}', name).replaceAll('{amount}', amount);
+
+  // Clean QR Scanner
+  String get qrInvalidTitle => translate('qr_invalid_title');
+  String get qrScanAgain => translate('qr_scan_again');
+  String get qrJoinPrompt => translate('qr_join_prompt');
+  String qrHostedBy(String name) => translate('qr_hosted_by').replaceAll('{name}', name);
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

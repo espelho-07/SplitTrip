@@ -432,4 +432,18 @@ const Map<String, String> guTranslations = {
   'status_error_general': 'કંઈક ખોટું થયું. કૃપા કરીને ફરી પ્રયાસ કરો.',
   'status_no_internet': 'ઇન્ટરનેટ કનેક્શન નથી. નેટવર્ક મળતાં જ ફેરફારો સિંક થશે.',
   'status_signed_in_as': 'તરીકે સાઇન ઇન થયેલ',
+
+  // Settlement "Mark as Paid" & Recipient Notifications
+  'settlement_mark_paid_title': 'ચુકવણીને ચૂકવેલ તરીકે ચિહ્નિત કરો?',
+  'settlement_mark_paid_desc': 'તમે આ રકમ {name} ને ચૂકવેલ તરીકે ચિહ્નિત કરશો.',
+  'settlement_mark_paid_btn': 'ચૂકવેલ તરીકે ચિહ્નિત કરો',
+  'settlement_paid_success': 'ચુકવણી ચૂકવેલ તરીકે ચિહ્નિત થયેલ ✓',
+  'settlement_notif_title': 'ચુકવણી અપડેટ',
+  'settlement_notif_body': '{name} એ તમને {amount} ચૂકવેલ તરીકે ચિહ્નિત કર્યા.',
+  
+  // Clean QR Scanner
+  'qr_invalid_title': 'આ QR કોડ Kith ટ્રિપ કોડ નથી.',
+  'qr_scan_again': 'ફરીથી સ્કેન કરો',
+  'qr_join_prompt': 'આ ટ્રિપમાં જોડાઓ?',
+  'qr_hosted_by': '{name} દ્વારા હોસ્ટ કરેલ',
 };

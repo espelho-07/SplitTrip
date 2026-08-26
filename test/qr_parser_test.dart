@@ -33,11 +33,20 @@ void main() {
       expect(code, 'TRIP_1234ABCD5678');
     });
 
+    test('Extracts invite code from custom URI scheme path segment', () {
+      const url = 'kith://join/XYZ789';
+      final code = QrCodeParser.extractInviteCode(url);
+      expect(code, 'XYZ789');
+    });
+
     test('Returns null for malformed or non-invite inputs', () {
       expect(QrCodeParser.extractInviteCode(''), null);
       expect(QrCodeParser.extractInviteCode('   '), null);
       expect(QrCodeParser.extractInviteCode('random text string'), null);
       expect(QrCodeParser.extractInviteCode('https://google.com'), null);
+      expect(QrCodeParser.extractInviteCode('https://evil.com/join?code=ABC123'), null);
+      expect(QrCodeParser.extractInviteCode('https://phishing.site/kith/join/ABC123'), null);
+      expect(QrCodeParser.extractInviteCode('customscheme://join/ABC123'), null);
     });
   });
 }

@@ -27,6 +27,8 @@ import '../../../domain/services/trip_export_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/trip_detail_viewmodel.dart';
+import 'dart:async';
+import '../../../core/localization/app_localizations.dart';
 import '../add_expense/add_expense_view.dart';
 import 'widgets/activity_log_sheet.dart';
 import 'widgets/add_journey_moment_sheet.dart';
@@ -49,6 +51,7 @@ class _TripDetailViewState extends State<TripDetailView> {
   int _spendingSubTab = 0; // 0 = Expenses, 1 = People, 2 = Categories
   final TextEditingController _searchController = TextEditingController();
   bool _dismissedLocationPrompt = false;
+  StreamSubscription<Map<String, dynamic>>? _notifSubscription;
 
   static const List<Map<String, String?>> _categories = [
     {'label': 'All', 'value': null, 'emoji': '✨'},
@@ -64,6 +67,35 @@ class _TripDetailViewState extends State<TripDetailView> {
   @override
   void initState() {
     super.initState();
+    final vm = context.read<TripDetailViewModel>();
+    _notifSubscription = vm.notificationEvents.listen((notif) {
+      if (mounted) {
+        final payerName = notif['payerName'] as String? ?? 'A friend';
+        final amountInPaise = notif['amountInPaise'] as int? ?? 0;
+        final formatted = CurrencyFormatter.formatPaise(amountInPaise, currencyCode: notif['currency'] as String? ?? 'INR');
+        final l10n = context.l10n;
+        HapticHelper.success();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.payments_rounded, color: AppColors.emeraldLight, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    l10n.settlementNotifBody(payerName, formatted),
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    });
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final user = context.read<AuthViewModel>().currentUser;
       if (user != null) {
@@ -74,6 +106,7 @@ class _TripDetailViewState extends State<TripDetailView> {
 
   @override
   void dispose() {
+    _notifSubscription?.cancel();
     _searchController.dispose();
     super.dispose();
   }

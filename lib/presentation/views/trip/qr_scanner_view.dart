@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../domain/engine/qr_code_parser.dart';
@@ -71,9 +73,63 @@ class _QrScannerViewState extends State<QrScannerView> with SingleTickerProvider
           HapticHelper.success();
           context.pop(cleanCode);
           return;
+        } else {
+          // Unrecognized or non-Kith QR code: never display raw URL
+          _isProcessingCode = true;
+          HapticHelper.error();
+          _showInvalidQrDialog();
+          return;
         }
       }
     }
+  }
+
+  void _showInvalidQrDialog() {
+    final l10n = context.l10n;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
+        title: Row(
+          children: [
+            const Icon(Icons.qr_code_scanner_rounded, color: AppColors.negativeRedDark, size: 22),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                l10n.qrInvalidTitle,
+                style: AppTypography.titleSmall(isDark: isDark),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Please scan a valid Kith group trip QR code or enter the 6-character code manually.',
+          style: AppTypography.bodySmall(isDark: isDark),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+              foregroundColor: isDark ? Colors.black : Colors.white,
+              shape: const RoundedRectangleBorder(borderRadius: AppRadius.fullBorder),
+            ),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              Future.delayed(const Duration(milliseconds: 500), () {
+                if (mounted) {
+                  setState(() => _isProcessingCode = false);
+                }
+              });
+            },
+            child: Text(l10n.qrScanAgain),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showManualEntryDialog() {

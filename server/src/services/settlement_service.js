@@ -172,13 +172,45 @@ class SettlementService {
     db.insert('settlements', settlement);
     db.update('trips', tripId, { updatedAt: now });
 
+    // 1. Log Trip Activity for settlement event
+    const tripService = require('./trip_service');
+    tripService.logActivity(tripId, {
+      type: 'settlement_recorded',
+      actorId: user.id,
+      actorName: fromMember.displayName || user.displayName || 'Member',
+      description: `${fromMember.displayName} marked ₹${(amountInPaise / 100).toFixed(0)} as paid to ${toMember.displayName}`,
+      metadata: {
+        settlementId: settlement.id,
+        fromMemberId: fromMember.id,
+        fromUserId: fromMember.userId,
+        toMemberId: toMember.id,
+        toUserId: toMember.userId,
+        amountInPaise,
+        status: 'marked_paid',
+      },
+    });
+
     const allSettlements = this.getSettlementsForTrip(tripId);
 
+    // 2. Broadcast realtime event with recipient notification
     if (realtimeHub) {
       realtimeHub.broadcastToTrip(tripId, 'settlement_recorded', {
         tripId,
         settlement,
         settlements: allSettlements,
+        notification: {
+          type: 'settlement_marked_paid',
+          tripId,
+          tripName: trip.name,
+          payerName: fromMember.displayName || 'Friend',
+          payerUserId: fromMember.userId,
+          recipientMemberId: toMember.id,
+          recipientUserId: toMember.userId,
+          amountInPaise,
+          currency: trip.currencyCode || 'INR',
+          message: `${fromMember.displayName} marked ₹${(amountInPaise / 100).toFixed(0)} as paid to you`,
+          timestamp: now,
+        },
       });
     }
 

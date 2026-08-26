@@ -374,6 +374,17 @@ class ExpenseService {
     }
 
     const recordedSettlements = settlementService.getSettlementsForTrip(tripId);
+    const adjustedBalances = { ...netBalances };
+    for (const stl of recordedSettlements) {
+      if (stl.isSettled) {
+        if (adjustedBalances[stl.fromMemberId] !== undefined) {
+          adjustedBalances[stl.fromMemberId] += stl.amountInPaise;
+        }
+        if (adjustedBalances[stl.toMemberId] !== undefined) {
+          adjustedBalances[stl.toMemberId] -= stl.amountInPaise;
+        }
+      }
+    }
     const simplifiedSettlements = settlementService.simplifyDebts(netBalances, recordedSettlements);
 
     // Current user context
@@ -383,7 +394,7 @@ class ExpenseService {
     let currentUserReceivableInPaise = 0;
 
     if (currentMember) {
-      currentUserNetBalanceInPaise = netBalances[currentMember.id] || 0;
+      currentUserNetBalanceInPaise = adjustedBalances[currentMember.id] || 0;
       if (currentUserNetBalanceInPaise < 0) {
         currentUserOwedInPaise = -currentUserNetBalanceInPaise;
       } else {

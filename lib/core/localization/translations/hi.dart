@@ -432,4 +432,18 @@ const Map<String, String> hiTranslations = {
   'status_error_general': 'कुछ गड़बड़ हुई। कृपया पुनः प्रयास करें।',
   'status_no_internet': 'इंटरनेट कनेक्शन नहीं है। नेटवर्क मिलने पर बदलाव सिंक होंगे।',
   'status_signed_in_as': 'के रूप में साइन इन हैं',
+
+  // Settlement "Mark as Paid" & Recipient Notifications
+  'settlement_mark_paid_title': 'भुगतान को चुकता चिह्नित करें?',
+  'settlement_mark_paid_desc': 'आप यह राशि {name} को चुकता चिह्नित करेंगे।',
+  'settlement_mark_paid_btn': 'चुकता चिह्नित करें',
+  'settlement_paid_success': 'भुगतान चुकता चिह्नित किया गया ✓',
+  'settlement_notif_title': 'भुगतान अपडेट',
+  'settlement_notif_body': '{name} ने आपको {amount} चुकता चिह्नित किया।',
+  
+  // Clean QR Scanner
+  'qr_invalid_title': 'यह क्यूआर कोड किथ ट्रिप कोड नहीं है।',
+  'qr_scan_again': 'पुनः स्कैन करें',
+  'qr_join_prompt': 'इस ट्रिप में शामिल हों?',
+  'qr_hosted_by': '{name} द्वारा होस्ट किया गया',
 };

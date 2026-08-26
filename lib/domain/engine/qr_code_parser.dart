@@ -67,7 +67,7 @@ class QrCodeParser {
     if (codeRegex.hasMatch(clean)) return true;
 
     // Direct trip ID format (trip_xxxxxxxxxxxx)
-    final tripIdRegex = RegExp(r'^TRIP_[A-Z0-9]{8,16}$');
+    final tripIdRegex = RegExp(r'^TRIP_[A-Z0-9_]{6,32}$');
     if (tripIdRegex.hasMatch(clean)) return true;
 
     return false;

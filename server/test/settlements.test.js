@@ -134,4 +134,116 @@ describe('Settlement Service Ledger & Reduction Tests', () => {
       (err) => err.statusCode === 400
     );
   });
+
+  test('Partial payment: Darpan marks ₹400 paid of ₹1,000 debt -> remaining ₹600, logs activity and notifies Rahul', () => {
+    const { user: userRahul } = authService.createGuest({ displayName: 'Rahul' });
+    const { user: userDarpan } = authService.createGuest({ displayName: 'Darpan' });
+
+    const trip = tripService.createTrip(userRahul, { name: 'Goa Trip' });
+    const rahulMember = trip.members.find((m) => m.userId === userRahul.id);
+
+    const joinedTrip = tripService.joinTripByCode(userDarpan, trip.inviteCode);
+    const darpanMember = joinedTrip.members.find((m) => m.userId === userDarpan.id);
+
+    // Rahul pays ₹2,000 (split equally -> Darpan owes ₹1,000 / 100,000 paise)
+    expenseService.createExpense(userRahul, trip.id, {
+      title: 'Dinner at Beach',
+      amountInPaise: 200000,
+      paidById: rahulMember.id,
+      splitType: 'equal',
+      splits: [
+        { memberId: rahulMember.id, amountInPaise: 100000 },
+        { memberId: darpanMember.id, amountInPaise: 100000 },
+      ],
+    });
+
+    // Mock Realtime Hub to capture broadcast
+    let broadcastPayload = null;
+    const mockRealtimeHub = {
+      broadcastToTrip: (tId, event, data) => {
+        if (event === 'settlement_recorded') {
+          broadcastPayload = data;
+        }
+      },
+    };
+
+    // Darpan marks ₹400 (40,000 paise) paid to Rahul
+    const { settlement } = settlementService.recordSettlement(
+      userDarpan,
+      trip.id,
+      {
+        id: 'stl_partial_1',
+        fromMemberId: darpanMember.id,
+        toMemberId: rahulMember.id,
+        amountInPaise: 40000,
+        note: 'Partial beach dinner',
+      },
+      mockRealtimeHub
+    );
+
+    assert.equal(settlement.isSettled, true);
+    assert.equal(settlement.amountInPaise, 40000);
+
+    // Verify remaining balance is ₹600 (60,000 paise)
+    const balance = expenseService.getBalanceSummary(trip.id, userDarpan.id);
+    assert.equal(balance.currentUserOwedInPaise, 60000);
+    assert.equal(balance.simplifiedSettlements.length, 1);
+    assert.equal(balance.simplifiedSettlements[0].amountInPaise, 60000);
+
+    // Verify trip activity log was recorded
+    const logs = tripService.getActivityLogs(trip.id, userDarpan.id);
+    const settlementLog = logs.find((l) => l.type === 'settlement_recorded');
+    assert.ok(settlementLog, 'Activity log should exist');
+    assert.ok(settlementLog.description.includes('Darpan'));
+    assert.ok(settlementLog.description.includes('Rahul'));
+    assert.ok(settlementLog.description.includes('400'));
+
+    // Verify realtime notification targeted Rahul (recipient) and NOT Darpan (payer)
+    assert.ok(broadcastPayload, 'Realtime payload should be broadcast');
+    assert.equal(broadcastPayload.notification.type, 'settlement_marked_paid');
+    assert.equal(broadcastPayload.notification.recipientUserId, userRahul.id);
+    assert.equal(broadcastPayload.notification.payerUserId, userDarpan.id);
+    assert.equal(broadcastPayload.notification.amountInPaise, 40000);
+    assert.ok(broadcastPayload.notification.message.includes('Darpan marked'));
+  });
+
+  test('Duplicate tap protection: 10 rapid submissions with same ID produce exactly ONE settlement', () => {
+    const { user: userA } = authService.createGuest({ displayName: 'Alice' });
+    const { user: userB } = authService.createGuest({ displayName: 'Bob' });
+
+    const trip = tripService.createTrip(userA, { name: 'Roadtrip' });
+    const aliceMember = trip.members.find((m) => m.userId === userA.id);
+    const joinedTrip = tripService.joinTripByCode(userB, trip.inviteCode);
+    const bobMember = joinedTrip.members.find((m) => m.userId === userB.id);
+
+    expenseService.createExpense(userA, trip.id, {
+      title: 'Gas',
+      amountInPaise: 100000,
+      paidById: aliceMember.id,
+      splitType: 'equal',
+      splits: [
+        { memberId: aliceMember.id, amountInPaise: 50000 },
+        { memberId: bobMember.id, amountInPaise: 50000 },
+      ],
+    });
+
+    const mutationId = 'stl_idempotent_12345';
+    // Simulate 10 rapid taps
+    for (let i = 0; i < 10; i++) {
+      settlementService.recordSettlement(userB, trip.id, {
+        id: mutationId,
+        fromMemberId: bobMember.id,
+        toMemberId: aliceMember.id,
+        amountInPaise: 50000,
+      });
+    }
+
+    const settlements = settlementService.getSettlementsForTrip(userB, trip.id);
+    assert.equal(settlements.length, 1);
+    assert.equal(settlements[0].id, mutationId);
+
+    const balance = expenseService.getBalanceSummary(trip.id, userB.id);
+    assert.equal(balance.currentUserOwedInPaise, 0);
+  });
 });
+

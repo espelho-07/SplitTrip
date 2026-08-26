@@ -35,6 +35,10 @@ class TripDetailViewModel extends ChangeNotifier {
   String? _selectedCategory;
 
   StreamSubscription<RealtimeTripEvent>? _realtimeSubscription;
+  final StreamController<Map<String, dynamic>> _notificationEventController =
+      StreamController<Map<String, dynamic>>.broadcast();
+
+  Stream<Map<String, dynamic>> get notificationEvents => _notificationEventController.stream;
 
   TripDetailViewModel({
     required this.tripRepo,
@@ -99,6 +103,15 @@ class TripDetailViewModel extends ChangeNotifier {
     if (realtimeClient == null) return;
     _realtimeSubscription = realtimeClient!.events.listen((event) {
       if (_trip == null || event.tripId != _trip!.id) return;
+
+      // Check for settlement recipient notification
+      if (event.type == 'settlement_recorded' && event.data['notification'] is Map<String, dynamic>) {
+        final notif = event.data['notification'] as Map<String, dynamic>;
+        final recipientUserId = notif['recipientUserId'] as String?;
+        if (recipientUserId != null && recipientUserId == _currentUserId) {
+          _notificationEventController.add(notif);
+        }
+      }
 
       if (_currentUserId != null) {
         // Automatically reconcile trip state on realtime push
@@ -376,6 +389,7 @@ class TripDetailViewModel extends ChangeNotifier {
       realtimeClient?.unsubscribeFromTrip(_trip!.id);
     }
     _realtimeSubscription?.cancel();
+    _notificationEventController.close();
     super.dispose();
   }
 }

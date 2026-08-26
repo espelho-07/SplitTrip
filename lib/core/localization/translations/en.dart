@@ -432,4 +432,19 @@ const Map<String, String> enTranslations = {
   'status_error_general': 'Something went wrong. Please try again.',
   'status_no_internet': 'No internet connection. Changes will sync once connected.',
   'status_signed_in_as': 'Signed in as',
+
+  // Settlement "Mark as Paid" & Recipient Notifications
+  'settlement_mark_paid_title': 'Mark payment as paid?',
+  'settlement_mark_paid_desc': 'You’ll mark this amount as paid to {name}.',
+  'settlement_mark_paid_btn': 'Mark as Paid',
+  'settlement_paid_success': 'Payment marked as paid ✓',
+  'settlement_notif_title': 'Payment update',
+  'settlement_notif_body': '{name} marked {amount} as paid to you.',
+  
+  // Clean QR Scanner
+  'qr_invalid_title': 'This QR code isn’t a Kith trip code.',
+  'qr_scan_again': 'Scan Again',
+  'qr_join_prompt': 'Join this trip?',
+  'qr_hosted_by': 'Hosted by {name}',
 };
+

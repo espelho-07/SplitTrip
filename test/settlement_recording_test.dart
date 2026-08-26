@@ -1,4 +1,6 @@
+import 'dart:ui';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:kith_app/core/localization/app_localizations.dart';
 import 'package:kith_app/domain/enums/expense_category.dart';
 import 'package:kith_app/domain/enums/split_type.dart';
 import 'package:kith_app/domain/enums/trip_lifecycle.dart';
@@ -114,6 +116,23 @@ void main() {
       expect(csv, contains('Date,Title,Category,PaidBy,Amount,SplitType,Participants'));
       expect(csv, contains('"Cab to Manali","transport","Aarav Sharma","4000.00","equal","2"'));
       expect(csv, contains('"Cafe Dinner","food","Priya Patel","1500.00","equal","2"'));
+    });
+  });
+
+  group('Settlement Confirmation & Notification UI Tests', () {
+    test('Localization keys format dynamic variables accurately', () {
+      final en = AppLocalizations(const Locale('en'));
+      final hi = AppLocalizations(const Locale('hi'));
+      final gu = AppLocalizations(const Locale('gu'));
+
+      expect(en.settlementMarkPaidDesc('Rahul'), contains('paid to Rahul'));
+      expect(en.settlementNotifBody('Darpan', '₹1,000'), 'Darpan marked ₹1,000 as paid to you.');
+
+      expect(hi.settlementMarkPaidDesc('राहुल'), contains('राहुल'));
+      expect(hi.settlementNotifBody('दर्पण', '₹1,000'), contains('दर्पण'));
+
+      expect(gu.settlementMarkPaidDesc('રાહુલ'), contains('રાહુલ'));
+      expect(gu.settlementNotifBody('દર્પણ', '₹1,000'), contains('દર્પણ'));
     });
   });
 }

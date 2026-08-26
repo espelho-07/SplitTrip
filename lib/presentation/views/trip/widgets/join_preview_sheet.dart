@@ -48,6 +48,19 @@ class JoinPreviewSheet extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.lg),
 
+          Center(
+            child: Text(
+              'Join this trip?',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+
           // Trip Icon & Title Header
           Center(
             child: Container(
@@ -77,7 +90,7 @@ class JoinPreviewSheet extends StatelessWidget {
           const SizedBox(height: 4),
 
           Text(
-            'Created by ${preview.creatorName}',
+            'Hosted by ${preview.creatorName}',
             textAlign: TextAlign.center,
             style: AppTypography.bodyMedium(isDark: isDark).copyWith(
               color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,

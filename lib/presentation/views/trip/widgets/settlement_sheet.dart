@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/localization/app_localizations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
@@ -50,40 +51,93 @@ class _SettlementSheetState extends State<SettlementSheet> {
     int amountInPaise,
   ) async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = context.l10n;
     final formattedAmount = CurrencyFormatter.formatPaise(amountInPaise, currencyCode: widget.trip.currencyCode);
 
-    final shouldRecord = await showDialog<bool>(
+    final shouldRecord = await showModalBottomSheet<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
-        shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
-        title: Text(
-          'Record Payment',
-          style: AppTypography.titleMedium(isDark: isDark),
+      backgroundColor: Colors.transparent,
+      builder: (bCtx) => Container(
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+          borderRadius: AppRadius.topSheetBorder,
         ),
-        content: Text(
-          'Record that $fromName paid $formattedAmount to $toName? This will update balances for everyone in the trip.',
-          style: AppTypography.bodyMedium(isDark: isDark),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-              foregroundColor: isDark ? Colors.black : Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white24 : Colors.black12,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Record Payment'),
-          ),
-        ],
+            const SizedBox(height: 16),
+            Text(
+              l10n.settlementMarkPaidTitle,
+              style: AppTypography.titleMedium(isDark: isDark),
+            ),
+            const SizedBox(height: 16),
+            MemberAvatar(name: toName, size: 48),
+            const SizedBox(height: 8),
+            Text(
+              toName,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              formattedAmount,
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w800,
+                color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              l10n.settlementMarkPaidDesc(toName),
+              textAlign: TextAlign.center,
+              style: AppTypography.bodySmall(isDark: isDark).copyWith(
+                color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: AppButton(
+                    text: l10n.actionCancel,
+                    variant: AppButtonVariant.secondary,
+                    onPressed: () => Navigator.pop(bCtx, false),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: AppButton(
+                    text: l10n.settlementMarkPaidBtn,
+                    variant: AppButtonVariant.primary,
+                    onPressed: () => Navigator.pop(bCtx, true),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
+          ],
+        ),
       ),
     );
 
     if (shouldRecord == true && widget.onRecordTransfer != null) {
       final transferKey = fromMemberId + toMemberId;
+      if (_processingTransferIds.contains(transferKey)) return; // Debounce guard
+
       setState(() => _processingTransferIds.add(transferKey));
       HapticHelper.medium();
       try {
@@ -92,7 +146,8 @@ class _SettlementSheetState extends State<SettlementSheet> {
           setState(() {
             _paidTransferKeys.add(transferKey);
           });
-          KithSuccessToast.show(context, 'Payment recorded ✓');
+          HapticHelper.success();
+          KithSuccessToast.show(context, l10n.settlementPaidSuccess);
         }
       } finally {
         if (mounted) {
@@ -335,7 +390,7 @@ class _SettlementSheetState extends State<SettlementSheet> {
                                             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                                           )
                                         : const Icon(Icons.check_rounded, size: 14),
-                                    label: const Text('Mark Paid', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                                    label: Text(context.l10n.settlementMarkPaidBtn, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
                                     onPressed: isProcessing
                                         ? null
                                         : () => _confirmAndRecordTransfer(
