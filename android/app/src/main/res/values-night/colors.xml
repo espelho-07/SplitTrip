@@ -1,0 +1,26 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Kith Brand Colors -->
+    <color name="kith_emerald">#10B981</color>
+    <color name="kith_emerald_dark">#059669</color>
+    <color name="kith_emerald_subtle">#064E3B</color>
+    <color name="kith_indigo">#818CF8</color>
+    <color name="kith_amber">#FBBF24</color>
+    <color name="kith_rose">#FB7185</color>
+
+    <!-- Widget Surfaces (Dark/Obsidian Mode) -->
+    <color name="widget_background">#121215</color>
+    <color name="widget_surface_card">#1C1C21</color>
+    <color name="widget_surface_card_alt">#27272E</color>
+    <color name="widget_border">#2E2E38</color>
+    <color name="widget_border_subtle">#23232B</color>
+
+    <!-- Widget Typography (Dark Mode) -->
+    <color name="widget_text_primary">#F4F4F5</color>
+    <color name="widget_text_secondary">#A1A1AA</color>
+    <color name="widget_text_muted">#71717A</color>
+    <color name="widget_text_on_emerald">#FFFFFF</color>
+
+    <!-- Progress Colors -->
+    <color name="widget_progress_bg">#27272E</color>
+</resources>

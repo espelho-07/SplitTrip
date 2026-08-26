@@ -1,0 +1,70 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_quick_add_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:padding="12dp">
+
+    <!-- Primary + Add Expense Button -->
+    <LinearLayout
+        android:id="@+id/btn_quick_add_main"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:background="@drawable/widget_pill_button"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:paddingHorizontal="12dp">
+
+        <ImageView
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:src="@drawable/ic_widget_add"
+            android:contentDescription="Add" />
+
+        <TextView
+            android:id="@+id/txt_quick_add_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:text="Expense"
+            android:textColor="@color/widget_text_on_emerald"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Voice Shortcut -->
+    <LinearLayout
+        android:id="@+id/btn_quick_add_voice"
+        android:layout_width="40dp"
+        android:layout_height="match_parent"
+        android:layout_marginStart="8dp"
+        android:background="@drawable/widget_secondary_button"
+        android:gravity="center">
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_widget_mic"
+            android:contentDescription="Voice" />
+    </LinearLayout>
+
+    <!-- Receipt Scan Shortcut -->
+    <LinearLayout
+        android:id="@+id/btn_quick_add_receipt"
+        android:layout_width="40dp"
+        android:layout_height="match_parent"
+        android:layout_marginStart="8dp"
+        android:background="@drawable/widget_secondary_button"
+        android:gravity="center">
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_widget_receipt"
+            android:contentDescription="Receipt" />
+    </LinearLayout>
+</LinearLayout>

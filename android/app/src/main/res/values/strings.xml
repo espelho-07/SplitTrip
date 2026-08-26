@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Kith</string>
+    <string name="widget_snapshot_desc">Monthly spending overview, budget progress &amp; quick add</string>
+    <string name="widget_quick_add_desc">Instant one-tap expense entry with Voice, Receipt &amp; Presets</string>
+    <string name="widget_budget_desc">Live monthly budget tracking with daily runway calculation</string>
+    <string name="widget_debts_desc">Who owes you money and who you owe with instant settle links</string>
+    <string name="widget_trip_desc">Active trip balance, total spend &amp; member count</string>
+    <string name="widget_smart_kith_desc">Intelligent assistant surfacing your most important financial action</string>
+</resources>

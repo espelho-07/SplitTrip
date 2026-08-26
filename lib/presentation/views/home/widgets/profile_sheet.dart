@@ -505,6 +505,28 @@ class ProfileSheet extends StatelessWidget {
                       },
                     ),
                   ),
+                  Divider(height: 1, color: isDark ? Colors.white10 : Colors.black12),
+                  ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.widgets_outlined, size: 20, color: AppColors.emeraldPrimary),
+                    title: const Text(
+                      'Home Screen Widgets',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      'Snapshot, Budget, Quick Add, Debts & Smart Kith',
+                      style: AppTypography.bodySmall(isDark: isDark),
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
+                    onTap: () {
+                      Navigator.pop(context);
+                      context.push('/widgets');
+                    },
+                  ),
                 ],
               ),
             ),

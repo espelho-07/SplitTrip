@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/services/kith_widget_service.dart';
 import '../../../core/services/permission_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
@@ -56,6 +57,18 @@ class _HomeViewState extends State<HomeView> {
         await homeVm.loadTrips(user.id);
         await personalVm.loadData(user.id);
         await personalVm.syncTripExpenses(user.id);
+
+        if (mounted) {
+          final widgetService = context.read<KithWidgetService>();
+          await widgetService.syncSnapshot(
+            currentUser: user,
+            personalExpenses: personalVm.expenses,
+            budget: personalVm.budget,
+            debtsSummary: personalVm.debtsSummary,
+            trips: homeVm.trips,
+            tripBalances: homeVm.tripBalances,
+          );
+        }
       }
     } catch (e) {
       debugPrint('[HomeView] Data refresh notice: $e');

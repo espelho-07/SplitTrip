@@ -67,6 +67,15 @@ class _SetupGuideViewState extends State<SetupGuideView> {
         emoji: '🚀',
         items: [
           GuideItem(
+            title: 'Home Screen Widgets',
+            description: 'Add glanceable spending overviews, budget runway, debts and 1-tap quick add buttons to your Android home screen.',
+            location: 'Settings → Home Screen Widgets',
+            actionLabel: 'Explore Widgets',
+            icon: Icons.widgets_outlined,
+            iconColor: AppColors.emeraldPrimary,
+            onAction: (ctx) => ctx.push('/widgets'),
+          ),
+          GuideItem(
             title: 'Change App Language',
             description: 'Switch between English, Hindi (हिन्दी), and Gujarati (ગુજરાતી) instantly without restarting.',
             location: 'Settings → Language',

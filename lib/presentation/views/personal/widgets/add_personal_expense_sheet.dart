@@ -39,14 +39,28 @@ enum PersonalEntryMode {
 }
 
 class AddPersonalExpenseSheet extends StatefulWidget {
-  const AddPersonalExpenseSheet({super.key});
+  final bool initialVoice;
+  final String? initialAmount;
 
-  static Future<bool?> show(BuildContext context) {
+  const AddPersonalExpenseSheet({
+    super.key,
+    this.initialVoice = false,
+    this.initialAmount,
+  });
+
+  static Future<bool?> show(
+    BuildContext context, {
+    bool initialVoice = false,
+    String? initialAmount,
+  }) {
     return showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => const AddPersonalExpenseSheet(),
+      builder: (ctx) => AddPersonalExpenseSheet(
+        initialVoice: initialVoice,
+        initialAmount: initialAmount,
+      ),
     );
   }
 
@@ -57,7 +71,7 @@ class AddPersonalExpenseSheet extends StatefulWidget {
 class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
   PersonalEntryMode _mode = PersonalEntryMode.expense;
 
-  final TextEditingController _amountController = TextEditingController();
+  late final TextEditingController _amountController;
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _personController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
@@ -72,6 +86,17 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
   String? _voiceTranscript;
 
   final VoiceSpeechService _speechService = VoiceSpeechService();
+
+  @override
+  void initState() {
+    super.initState();
+    _amountController = TextEditingController(text: widget.initialAmount ?? '');
+    if (widget.initialVoice) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _toggleVoiceRecording();
+      });
+    }
+  }
 
   @override
   void dispose() {

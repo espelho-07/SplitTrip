@@ -10,6 +10,7 @@ import 'core/network/api_client.dart';
 import 'core/network/realtime_client.dart' as kith_realtime;
 import 'core/localization/app_language.dart';
 import 'core/localization/app_localizations.dart';
+import 'core/services/kith_widget_service.dart';
 import 'core/theme/app_theme.dart';
 import 'data/repositories/expense_repository.dart';
 import 'data/repositories/personal_repository.dart';
@@ -91,6 +92,11 @@ void main() async {
     apiClient: apiClient,
   );
 
+  final widgetService = KithWidgetService(storage: storageService);
+  widgetService.onDeepLinkReceived = (deepLinkUri) {
+    AppRouter.handleDeepLink(deepLinkUri);
+  };
+
   runApp(
     MultiProvider(
       providers: [
@@ -101,6 +107,7 @@ void main() async {
         Provider<TripRepository>.value(value: tripRepo),
         Provider<ExpenseRepository>.value(value: expenseRepo),
         Provider<PersonalRepository>.value(value: personalRepo),
+        ChangeNotifierProvider<KithWidgetService>.value(value: widgetService),
         ChangeNotifierProvider(create: (_) => ThemeViewModel(storage: storageService)),
         ChangeNotifierProvider(create: (_) => LocaleViewModel(storage: storageService)),
         ChangeNotifierProvider(create: (_) => AuthViewModel(userRepo: userRepo)),
