@@ -37,9 +37,10 @@ class ExpenseService {
     const authMember = db.findOne('trip_members', (m) => m.tripId === tripId && m.userId === user.id);
     if (!authMember) throw AppError.forbidden('You are not a member of this trip');
 
-    // Lifecycle check
+    // Lifecycle check & late expense handling
     if (trip.lifecycleState === 'completed' || trip.lifecycleState === 'settled') {
-      throw AppError.badRequest(`Cannot add expense to a ${trip.lifecycleState} trip`);
+      // Reopen trip to active state to incorporate late offline-added expense and preserve financial integrity
+      db.update('trips', tripId, { lifecycleState: 'active', updatedAt: new Date().toISOString() });
     }
 
     // Verify payer member exists in trip
@@ -164,12 +165,22 @@ class ExpenseService {
     if (!authMember) throw AppError.forbidden('Not a member of this trip');
 
     if (trip.lifecycleState === 'completed' || trip.lifecycleState === 'settled') {
-      throw AppError.badRequest(`Cannot edit expense in a ${trip.lifecycleState} trip`);
+      db.update('trips', tripId, { lifecycleState: 'active', updatedAt: new Date().toISOString() });
     }
 
     const existing = db.get('expenses', expenseId);
     if (!existing || existing.tripId !== tripId || existing.isDeleted) {
       throw AppError.notFound('Expense not found');
+    }
+
+    // Last-Write-Wins (LWW) conflict check: if client sent an older timestamp than existing updatedAt, retain latest
+    if (existing.updatedAt && arguments[3]?.updatedAt) {
+      const clientTime = new Date(arguments[3].updatedAt).getTime();
+      const serverTime = new Date(existing.updatedAt).getTime();
+      if (clientTime < serverTime) {
+        const balanceSummary = this.getBalanceSummary(tripId, user.id);
+        return { expense: existing, balanceSummary };
+      }
     }
 
     const isTripCreator = trip.creatorId === user.id || authMember.role === 'creator';
@@ -279,7 +290,7 @@ class ExpenseService {
     if (!authMember) throw AppError.forbidden('Not a member of this trip');
 
     if (trip.lifecycleState === 'completed' || trip.lifecycleState === 'settled') {
-      throw AppError.badRequest(`Cannot delete expense in a ${trip.lifecycleState} trip`);
+      db.update('trips', tripId, { lifecycleState: 'active', updatedAt: new Date().toISOString() });
     }
 
     const expense = db.get('expenses', expenseId);

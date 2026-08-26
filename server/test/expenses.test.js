@@ -61,22 +61,22 @@ describe('Expense Service Tests', () => {
     );
   });
 
-  test('Rejects adding expense to a completed or settled trip', () => {
+  test('Accepts late expense on completed trip and reopens trip to active', () => {
     const memberA = trip.members.find((m) => m.userId === userA.id);
-    const memberB = trip.members.find((m) => m.userId === userB.id);
 
     // Creator completes trip
     tripService.updateLifecycle(trip.id, userA.id, 'completed');
+    assert.strictEqual(db.get('trips', trip.id).lifecycleState, 'completed');
 
-    assert.throws(
-      () =>
-        expenseService.createExpense(userA, trip.id, {
-          title: 'Post-completion Expense',
-          amountInPaise: 2000,
-          paidById: memberA.id,
-          splits: [{ memberId: memberA.id, amountInPaise: 2000 }],
-        }),
-      (err) => err.statusCode === 400 && err.message.includes('completed')
-    );
+    // Member adds late expense from offline queue
+    const res = expenseService.createExpense(userA, trip.id, {
+      title: 'Late Offline Expense',
+      amountInPaise: 2000,
+      paidById: memberA.id,
+      splits: [{ memberId: memberA.id, amountInPaise: 2000 }],
+    });
+
+    assert.ok(res.expense);
+    assert.strictEqual(db.get('trips', trip.id).lifecycleState, 'active');
   });
 });

@@ -45,6 +45,13 @@ class PersonalService {
   }
 
   createPersonalExpense(userId, data) {
+    if (data.id) {
+      const existing = db.get('personal_expenses', data.id);
+      if (existing && existing.userId === userId && !existing.isDeleted) {
+        return existing;
+      }
+    }
+
     if (!data.title || !data.title.trim()) {
       throw AppError.badRequest('Expense title is required');
     }
@@ -177,6 +184,14 @@ class PersonalService {
   }
 
   createPersonalDebt(userId, data) {
+    if (data.id) {
+      const existing = db.get('personal_debts', data.id);
+      if (existing && existing.userId === userId && !existing.isDeleted) {
+        const repayments = db.find('personal_repayments', (r) => r.debtId === data.id);
+        return { ...existing, repayments };
+      }
+    }
+
     if (!data.personName || !data.personName.trim()) {
       throw AppError.badRequest('Person name is required');
     }
@@ -217,6 +232,21 @@ class PersonalService {
   }
 
   recordDebtRepayment(userId, debtId, data) {
+    if (data.id) {
+      const existing = db.get('personal_repayments', data.id);
+      if (existing && existing.userId === userId) {
+        const debt = db.get('personal_debts', debtId);
+        const allRepayments = db.find('personal_repayments', (r) => r.debtId === debtId);
+        return {
+          repayment: existing,
+          debt: {
+            ...debt,
+            repayments: allRepayments,
+          },
+        };
+      }
+    }
+
     const debt = db.get('personal_debts', debtId);
     if (!debt || debt.isDeleted) {
       throw AppError.notFound('Debt record not found');
@@ -241,7 +271,7 @@ class PersonalService {
       );
     }
 
-    const repaymentId = `prepay_${crypto.randomUUID().replace(/-/g, '').substring(0, 12)}`;
+    const repaymentId = data.id || `prepay_${crypto.randomUUID().replace(/-/g, '').substring(0, 12)}`;
     const now = new Date().toISOString();
 
     const repayment = {

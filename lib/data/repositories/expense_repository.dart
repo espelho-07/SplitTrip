@@ -219,14 +219,35 @@ class ExpenseRepository {
     required String fromMemberId,
     required String toMemberId,
     required int amountInPaise,
+    String? settlementId,
     String? paymentReference,
     String? note,
   }) async {
+    final id = settlementId ?? 'stl_loc_${DateTime.now().millisecondsSinceEpoch}';
+    final payload = {
+      'id': id,
+      'tripId': tripId,
+      'fromMemberId': fromMemberId,
+      'toMemberId': toMemberId,
+      'amountInPaise': amountInPaise,
+      'paymentReference': paymentReference,
+      'note': note,
+      'isSettled': true,
+      'createdAt': DateTime.now().toIso8601String(),
+    };
+
+    // Save locally
+    final saved = storage.getSavedTripSettlements(tripId);
+    saved.removeWhere((s) => s['id'] == id);
+    saved.insert(0, payload);
+    await storage.saveTripSettlements(tripId, saved);
+
     _logLocalActivity(
       tripId: tripId,
       type: 'settlement_recorded',
       description: 'Payment settled for ₹${(amountInPaise / 100).toStringAsFixed(2)}',
       metadata: {
+        'settlementId': id,
         'fromMemberId': fromMemberId,
         'toMemberId': toMemberId,
         'amountInPaise': amountInPaise,
@@ -236,16 +257,14 @@ class ExpenseRepository {
     try {
       await apiClient.post(
         '/trips/$tripId/settlements',
-        body: {
-          'fromMemberId': fromMemberId,
-          'toMemberId': toMemberId,
-          'amountInPaise': amountInPaise,
-          'paymentReference': paymentReference,
-          'note': note,
-        },
+        body: payload,
       );
     } catch (_) {
-      // Offline fallback
+      // Offline fallback: queue for sync
+      await syncService.enqueueMutation(
+        MutationType.recordTripSettlement,
+        payload,
+      );
     }
   }
 

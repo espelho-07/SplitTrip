@@ -251,6 +251,24 @@ class LocalStorageService {
     return _prefs.setString('$_journeyMomentsPrefix$tripId', jsonEncode(momentsJson));
   }
 
+  // --- Trip Settlements ---
+  static const String _tripSettlementsPrefix = 'kith_settlements_';
+
+  List<Map<String, dynamic>> getSavedTripSettlements(String tripId) {
+    final raw = _prefs.getString('$_tripSettlementsPrefix$tripId');
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      final list = jsonDecode(raw) as List<dynamic>;
+      return list.cast<Map<String, dynamic>>();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<bool> saveTripSettlements(String tripId, List<Map<String, dynamic>> settlementsJson) async {
+    return _prefs.setString('$_tripSettlementsPrefix$tripId', jsonEncode(settlementsJson));
+  }
+
   // --- Onboarding & Tutorial ---
   static const String _onboardingCompletedKey = 'kith_onboarding_completed';
 

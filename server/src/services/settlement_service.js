@@ -78,12 +78,20 @@ class SettlementService {
    * and ensures settlement amount does not exceed the debtor's actual pending debt.
    */
   recordSettlement(user, tripId, {
+    id = null,
     fromMemberId,
     toMemberId,
     amountInPaise,
     paymentReference = null,
     note = null,
   }, realtimeHub = null) {
+    if (id) {
+      const existing = db.get('settlements', id);
+      if (existing) {
+        return { settlement: existing, settlements: this.getSettlementsForTrip(tripId) };
+      }
+    }
+
     if (!Number.isInteger(amountInPaise) || amountInPaise <= 0) {
       throw AppError.badRequest('Settlement amount must be a positive integer in paise');
     }
@@ -148,7 +156,7 @@ class SettlementService {
 
     const now = new Date().toISOString();
     const settlement = {
-      id: `stl_${crypto.randomUUID().replace(/-/g, '').substring(0, 12)}`,
+      id: id || `stl_${crypto.randomUUID().replace(/-/g, '').substring(0, 12)}`,
       tripId,
       fromMemberId: fromMember.id,
       toMemberId: toMember.id,

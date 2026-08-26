@@ -20,6 +20,7 @@ enum MutationType {
   setPersonalBudget,
   createJourneyMoment,
   deleteJourneyMoment,
+  recordTripSettlement,
 }
 
 class SyncMutation {
@@ -184,6 +185,10 @@ class SyncService {
         final tripId = mutation.payload['tripId'] as String;
         final momentId = mutation.payload['momentId'] as String;
         await apiClient.delete('/trips/$tripId/moments/$momentId');
+        break;
+      case MutationType.recordTripSettlement:
+        final tripId = mutation.payload['tripId'] as String;
+        await apiClient.post('/trips/$tripId/settlements', body: mutation.payload);
         break;
     }
   }
