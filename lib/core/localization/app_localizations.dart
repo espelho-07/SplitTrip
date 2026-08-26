@@ -490,6 +490,29 @@ class AppLocalizations {
   String get qrScanAgain => translate('qr_scan_again');
   String get qrJoinPrompt => translate('qr_join_prompt');
   String qrHostedBy(String name) => translate('qr_hosted_by').replaceAll('{name}', name);
+
+  // Premium Onboarding & Sign-In Redesign
+  String get onboardingHeroTagline => translate('onboarding_hero_tagline');
+  String get onboardingHeroSub => translate('onboarding_hero_sub');
+  String get onboardingGoogleBtn => translate('onboarding_google_btn');
+  String get onboardingGuestBtn => translate('onboarding_guest_btn');
+  String get onboardingGuestSubtitle => translate('onboarding_guest_subtitle');
+  String get onboardingRecoveryLink => translate('onboarding_recovery_link');
+  String get onboardingTrustNote => translate('onboarding_trust_note');
+  String get onboardingSceneBudget => translate('onboarding_scene_budget');
+  String get onboardingSceneRemaining => translate('onboarding_scene_remaining');
+  String get onboardingSceneTrip => translate('onboarding_scene_trip');
+  String get onboardingSceneDinner => translate('onboarding_scene_dinner');
+  String get onboardingSceneCab => translate('onboarding_scene_cab');
+  String get onboardingSceneSplit => translate('onboarding_scene_split');
+  String get onboardingSceneSettled => translate('onboarding_scene_settled');
+  String get onboardingGuestSheetTitle => translate('onboarding_guest_sheet_title');
+  String get onboardingGuestSheetDesc => translate('onboarding_guest_sheet_desc');
+  String get onboardingGuestSheetCta => translate('onboarding_guest_sheet_cta');
+  String get onboardingRecoverySheetTitle => translate('onboarding_recovery_sheet_title');
+  String get onboardingRecoverySheetDesc => translate('onboarding_recovery_sheet_desc');
+  String get onboardingRecoverySheetCta => translate('onboarding_recovery_sheet_cta');
+  String get onboardingSigningInStatus => translate('onboarding_signing_in_status');
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

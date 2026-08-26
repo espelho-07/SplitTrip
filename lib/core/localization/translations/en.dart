@@ -446,5 +446,28 @@ const Map<String, String> enTranslations = {
   'qr_scan_again': 'Scan Again',
   'qr_join_prompt': 'Join this trip?',
   'qr_hosted_by': 'Hosted by {name}',
+
+  // Premium Onboarding & Sign-In Redesign
+  'onboarding_hero_tagline': 'Your money.\nYour trips.\nSimply together.',
+  'onboarding_hero_sub': 'One clean place for everyday expenses, group travel, and shared debt settlements.',
+  'onboarding_google_btn': 'Continue with Google',
+  'onboarding_guest_btn': 'Explore as Guest',
+  'onboarding_guest_subtitle': 'Store data locally on this device',
+  'onboarding_recovery_link': 'Restore with Recovery Key',
+  'onboarding_trust_note': 'Local-first & private · Your data stays yours',
+  'onboarding_scene_budget': 'Monthly Budget',
+  'onboarding_scene_remaining': 'Remaining',
+  'onboarding_scene_trip': 'Goa Vacation',
+  'onboarding_scene_dinner': 'Seafood Dinner',
+  'onboarding_scene_cab': 'Airport Taxi',
+  'onboarding_scene_split': 'Split equally',
+  'onboarding_scene_settled': 'Settled ✓',
+  'onboarding_guest_sheet_title': 'Explore Kith as Guest',
+  'onboarding_guest_sheet_desc': 'Choose your display name and how you’d like to use Kith.',
+  'onboarding_guest_sheet_cta': 'Start Exploring',
+  'onboarding_recovery_sheet_title': 'Restore Your Account',
+  'onboarding_recovery_sheet_desc': 'Enter your 8-character recovery key (e.g. KITH-XXXX-YYYY) to bring back your trips and finances.',
+  'onboarding_recovery_sheet_cta': 'Restore Account',
+  'onboarding_signing_in_status': 'Signing you in…',
 };
 
