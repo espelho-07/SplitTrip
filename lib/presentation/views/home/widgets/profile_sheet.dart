@@ -114,10 +114,8 @@ class ProfileSheet extends StatelessWidget {
     final syncService = context.watch<SyncService>();
     final l10n = context.l10n;
     final user = authVm.currentUser;
-
-    if (user == null) return const SizedBox.shrink();
-
-    final isGoogleLinked = user.isGoogleLinked;
+    final displayName = user?.displayName ?? 'Traveler';
+    final isGoogleLinked = user?.isGoogleLinked ?? false;
     final pendingCount = syncService.pendingCount;
 
     return Container(
@@ -152,14 +150,14 @@ class ProfileSheet extends StatelessWidget {
             // Profile Header Card
             Row(
               children: [
-                MemberAvatar(name: user.displayName, size: 52),
+                MemberAvatar(name: displayName, size: 52),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        user.displayName,
+                        displayName,
                         style: AppTypography.titleLarge(isDark: isDark),
                       ),
                       const SizedBox(height: 2),
@@ -184,7 +182,7 @@ class ProfileSheet extends StatelessWidget {
                           const SizedBox(width: 8),
                           Flexible(
                             child: Text(
-                              isGoogleLinked ? (user.email ?? '') : 'Data on this device',
+                              isGoogleLinked ? (user?.email ?? '') : 'Data on this device',
                               style: AppTypography.bodySmall(isDark: isDark),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -229,7 +227,7 @@ class ProfileSheet extends StatelessWidget {
                             ),
                             Text(
                               isGoogleLinked
-                                  ? (user.email ?? 'Cloud identity active')
+                                  ? (user?.email ?? 'Cloud identity active')
                                   : 'Sign in with Google to sync across devices',
                               style: AppTypography.bodySmall(isDark: isDark),
                             ),
@@ -358,7 +356,7 @@ class ProfileSheet extends StatelessWidget {
                               ),
                             ),
                             Text(
-                              user.recoveryKey,
+                              user?.recoveryKey ?? 'N/A',
                               style: const TextStyle(
                                 fontFamily: 'monospace',
                                 fontSize: 13,
@@ -373,14 +371,16 @@ class ProfileSheet extends StatelessWidget {
                         icon: const Icon(Icons.copy_rounded, size: 18),
                         tooltip: 'Copy key',
                         onPressed: () {
-                          Clipboard.setData(ClipboardData(text: user.recoveryKey));
-                          HapticHelper.success();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Recovery key copied to clipboard! Save it safely.'),
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
+                          if (user?.recoveryKey != null) {
+                            Clipboard.setData(ClipboardData(text: user!.recoveryKey));
+                            HapticHelper.success();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Recovery key copied to clipboard! Save it safely.'),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          }
                         },
                       ),
                     ],

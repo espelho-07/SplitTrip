@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/services/google_auth_service.dart';
@@ -121,6 +120,10 @@ class _AuthProgressDialogState extends State<AuthProgressDialog> with SingleTick
     final syncService = context.read<SyncService>();
 
     try {
+      // Allow bottom sheet transition to settle cleanly
+      await Future.delayed(const Duration(milliseconds: 200));
+      if (!mounted) return;
+
       // Step 1: Google Account Picker
       _updateProgress(
         0.15,
@@ -195,10 +198,9 @@ class _AuthProgressDialogState extends State<AuthProgressDialog> with SingleTick
       HapticHelper.success();
 
       // Smooth auto-navigation after celebration
-      await Future.delayed(const Duration(milliseconds: 900));
+      await Future.delayed(const Duration(milliseconds: 800));
       if (mounted) {
         Navigator.of(context).pop(true);
-        context.go('/home');
       }
     } on GoogleSignInException catch (e) {
       if (!mounted) return;

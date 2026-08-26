@@ -3,7 +3,6 @@ import 'package:kith_app/core/network/api_client.dart';
 import 'package:kith_app/data/repositories/user_repository.dart';
 import 'package:kith_app/data/services/auth_service.dart';
 import 'package:kith_app/data/services/local_storage_service.dart';
-import 'package:kith_app/data/services/sync_service.dart';
 import 'package:kith_app/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -18,7 +17,6 @@ void main() {
     setUp(() async {
       SharedPreferences.setMockInitialValues({});
       storage = await LocalStorageService.init();
-      final syncService = SyncService(storage);
       final apiClient = ApiClient();
       final authService = AuthService(apiClient: apiClient, storage: storage);
 

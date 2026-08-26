@@ -51,7 +51,10 @@ class _OnboardingViewState extends State<OnboardingView> {
     if (authVm.isLoading) return;
 
     HapticHelper.medium();
-    await AuthProgressDialog.startGoogleSignIn(context);
+    final success = await AuthProgressDialog.startGoogleSignIn(context);
+    if (success == true && mounted) {
+      context.go('/home');
+    }
   }
 
   Future<void> _handleStart() async {

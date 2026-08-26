@@ -85,6 +85,8 @@ class CreateTripViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  void reset() => resetForm();
+
   Future<Trip?> createTrip(GuestUser creator) async {
     if (!isValid || _isCreating) return null;
     _isCreating = true;

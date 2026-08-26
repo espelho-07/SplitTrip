@@ -204,40 +204,51 @@ class _HomeViewState extends State<HomeView> {
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: AppBar(
-        titleSpacing: 20,
-        title: Row(
-          children: [
-            GestureDetector(
-              onTap: _showProfileSheet,
-              child: MemberAvatar(
+        titleSpacing: 16,
+        title: GestureDetector(
+          onTap: _showProfileSheet,
+          behavior: HitTestBehavior.opaque,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              MemberAvatar(
                 name: user?.displayName ?? 'Traveler',
                 size: 34,
               ),
-            ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _getGreeting(),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _getGreeting(),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                    ),
                   ),
-                ),
-                Text(
-                  user?.displayName ?? 'Traveler',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                  Text(
+                    user?.displayName ?? 'Traveler',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.account_circle_outlined, size: 24),
+            tooltip: l10n.navProfile,
+            onPressed: () {
+              HapticHelper.light();
+              _showProfileSheet();
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.menu_book_rounded, size: 22),
             tooltip: l10n.guideTitle,
@@ -258,9 +269,10 @@ class _HomeViewState extends State<HomeView> {
           ),
           IconButton(
             icon: const Icon(Icons.qr_code_scanner_rounded, size: 22),
+            tooltip: 'Join Trip',
             onPressed: () => context.push('/join-trip'),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
         ],
       ),
       body: isTripsOnly

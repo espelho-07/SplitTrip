@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'app_language.dart';
 import 'translations/en.dart';
 import 'translations/gu.dart';
 import 'translations/hi.dart';
@@ -209,9 +208,7 @@ class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> 
   const _AppLocalizationsDelegate();
 
   @override
-  bool isSupported(Locale locale) {
-    return AppLanguage.values.any((lang) => lang.code == locale.languageCode);
-  }
+  bool isSupported(Locale locale) => true;
 
   @override
   Future<AppLocalizations> load(Locale locale) {

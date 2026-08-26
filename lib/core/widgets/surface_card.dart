@@ -96,7 +96,10 @@ class _SurfaceCardState extends State<SurfaceCard> with SingleTickerProviderStat
         boxShadow: shadows,
       ),
       padding: widget.padding,
-      child: widget.child,
+      child: Material(
+        color: Colors.transparent,
+        child: widget.child,
+      ),
     );
 
     if (widget.onTap != null) {

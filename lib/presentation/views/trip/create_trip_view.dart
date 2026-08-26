@@ -117,7 +117,10 @@ class _CreateTripViewState extends State<CreateTripView> {
 
       if (trip != null) {
         homeVm.addTripLocally(trip, user.id);
-        context.go('/trip/${trip.id}');
+        _nameController.clear();
+        _friendController.clear();
+        createVm.reset();
+        context.pushReplacement('/trip/${trip.id}');
         KithSuccessToast.show(context, 'Trip created ✓');
       } else {
         HapticHelper.error();
