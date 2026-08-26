@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/services/kith_widget_service.dart';
 import '../../../core/theme/app_colors.dart';
@@ -11,6 +11,8 @@ import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/personal_expense_viewmodel.dart';
 
+import '../../../core/localization/app_localizations.dart';
+
 class WidgetGalleryView extends StatefulWidget {
   const WidgetGalleryView({super.key});
 
@@ -21,6 +23,7 @@ class WidgetGalleryView extends StatefulWidget {
 class _WidgetGalleryViewState extends State<WidgetGalleryView> {
   Future<void> _handlePinWidget(String type, String name) async {
     final widgetService = context.read<KithWidgetService>();
+    final l10n = context.l10n;
     HapticHelper.medium();
 
     final isSupported = await widgetService.isPinningSupported();
@@ -29,7 +32,7 @@ class _WidgetGalleryViewState extends State<WidgetGalleryView> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Long press your home screen and select Widgets → Kith to add $name.'),
+            content: Text(l10n.widgetsLongPressHelp),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -42,7 +45,7 @@ class _WidgetGalleryViewState extends State<WidgetGalleryView> {
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Added $name widget to home screen! ✓'),
+            content: Text('${l10n.widgetsPinButton} - $name ✓'),
             backgroundColor: AppColors.emeraldPrimary,
             behavior: SnackBarBehavior.floating,
           ),
@@ -50,7 +53,7 @@ class _WidgetGalleryViewState extends State<WidgetGalleryView> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Long press your home screen to place $name widget.'),
+            content: Text(l10n.widgetsLongPressHelp),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -65,11 +68,12 @@ class _WidgetGalleryViewState extends State<WidgetGalleryView> {
     final authVm = context.watch<AuthViewModel>();
     final personalVm = context.watch<PersonalExpenseViewModel>();
     final homeVm = context.watch<HomeViewModel>();
+    final l10n = context.l10n;
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: AppBar(
-        title: const Text('Home Screen Widgets'),
+        title: Text(l10n.profileWidgets),
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
@@ -81,12 +85,12 @@ class _WidgetGalleryViewState extends State<WidgetGalleryView> {
         children: [
           // Header Intro
           Text(
-            'Keep Kith on your home screen',
+            l10n.widgetsGalleryHeader,
             style: AppTypography.titleLarge(isDark: isDark),
           ),
           const SizedBox(height: 4),
           Text(
-            'Glanceable numbers, live budgets, debts and 1-tap expense logging without opening the app.',
+            l10n.widgetsGallerySub,
             style: AppTypography.bodyMedium(isDark: isDark),
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -107,7 +111,7 @@ class _WidgetGalleryViewState extends State<WidgetGalleryView> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Privacy Mode',
+                        l10n.widgetsPrivacyTitle,
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
@@ -115,7 +119,7 @@ class _WidgetGalleryViewState extends State<WidgetGalleryView> {
                         ),
                       ),
                       Text(
-                        'Mask financial amounts as ₹•••• on lock & home screens',
+                        l10n.widgetsPrivacyDesc,
                         style: AppTypography.bodySmall(isDark: isDark),
                       ),
                     ],
@@ -144,7 +148,7 @@ class _WidgetGalleryViewState extends State<WidgetGalleryView> {
 
           // Section Title
           Text(
-            'AVAILABLE WIDGETS',
+            l10n.widgetsSecAvailable,
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w800,
@@ -246,7 +250,7 @@ class _WidgetGalleryViewState extends State<WidgetGalleryView> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Adding from your home screen',
+                        l10n.widgetsLauncherHelpTitle,
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
@@ -255,7 +259,7 @@ class _WidgetGalleryViewState extends State<WidgetGalleryView> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'You can also touch & hold any empty spot on your phone\'s home screen, tap Widgets, and scroll to Kith to pick your preferred size.',
+                        l10n.widgetsLauncherHelpDesc,
                         style: AppTypography.bodySmall(isDark: isDark),
                       ),
                     ],
@@ -358,7 +362,7 @@ class _WidgetGalleryViewState extends State<WidgetGalleryView> {
           SizedBox(
             width: double.infinity,
             child: AppButton(
-              text: 'Add to Home Screen',
+              text: context.l10n.widgetsPinButton,
               icon: Icons.add_to_home_screen_rounded,
               variant: AppButtonVariant.primary,
               height: 44.0,

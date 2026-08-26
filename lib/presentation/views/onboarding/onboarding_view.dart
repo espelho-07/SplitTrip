@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -14,6 +15,7 @@ import '../../../core/services/permission_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/locale_viewmodel.dart';
+import '../../viewmodels/personal_expense_viewmodel.dart';
 import '../../widgets/progress/progress.dart';
 import '../language/language_select_sheet.dart';
 import 'interactive_tutorial_sheet.dart';
@@ -59,12 +61,13 @@ class _OnboardingViewState extends State<OnboardingView> {
 
   Future<void> _handleStart() async {
     final authVm = context.read<AuthViewModel>();
+    final l10n = context.l10n;
     if (authVm.isLoading) return;
 
     final name = _nameController.text.trim();
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your name or nickname to continue')),
+        SnackBar(content: Text(l10n.onboardingErrNameRequired)),
       );
       return;
     }
@@ -73,18 +76,19 @@ class _OnboardingViewState extends State<OnboardingView> {
     await authVm.createGuestSession(name, _selectedMode);
     if (mounted) {
       context.go('/home');
-      KithSuccessToast.show(context, 'Welcome to Kith ✓');
+      KithSuccessToast.show(context, l10n.onboardingWelcomeToast);
     }
   }
 
   Future<void> _handleRecover() async {
     final authVm = context.read<AuthViewModel>();
+    final l10n = context.l10n;
     if (authVm.isLoading) return;
 
     final key = _recoveryKeyController.text.trim().toUpperCase();
     if (key.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your recovery key (e.g. KITH-XXXX-YYYY)')),
+        SnackBar(content: Text(l10n.onboardingErrRecoveryRequired)),
       );
       return;
     }
@@ -92,10 +96,10 @@ class _OnboardingViewState extends State<OnboardingView> {
     HapticHelper.medium();
 
     final stageNotifier = ValueNotifier<int>(0);
-    final stages = const [
-      ProgressStage(label: 'Checking recovery code', description: 'Validating security key hash'),
-      ProgressStage(label: 'Restoring identity', description: 'Resolving canonical user account'),
-      ProgressStage(label: 'Syncing cloud data', description: 'Loading all trips & personal finance'),
+    final stages = [
+      ProgressStage(label: l10n.statusRestoring, description: l10n.authRecoveryKey),
+      ProgressStage(label: l10n.statusSyncing, description: l10n.authGoogleConnected),
+      ProgressStage(label: l10n.statusSaved, description: l10n.tripsBalances),
     ];
 
     showDialog(
@@ -111,7 +115,7 @@ class _OnboardingViewState extends State<OnboardingView> {
             child: Padding(
               padding: const EdgeInsets.all(24.0),
               child: KithStageProgress(
-                title: 'Restoring account…',
+                title: l10n.onboardingRestoringDialog,
                 stages: stages,
                 currentStageIndex: activeStage,
               ),
@@ -135,14 +139,17 @@ class _OnboardingViewState extends State<OnboardingView> {
 
       if (user != null) {
         final homeVm = context.read<HomeViewModel>();
+        final personalVm = context.read<PersonalExpenseViewModel>();
         await homeVm.loadTrips(user.id);
+        await personalVm.loadData(user.id);
+        await personalVm.syncTripExpenses(user.id);
         if (mounted) {
           context.go('/home');
-          KithSuccessToast.show(context, 'Welcome back, ${user.displayName} ✓');
+          KithSuccessToast.show(context, '${l10n.onboardingWelcomeBack}, ${user.displayName} ✓');
         }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not restore session with this key. Please check the code and try again.')),
+          SnackBar(content: Text(l10n.onboardingErrRecoveryFailed)),
         );
       }
     }
@@ -152,6 +159,7 @@ class _OnboardingViewState extends State<OnboardingView> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final authVm = context.watch<AuthViewModel>();
+    final l10n = context.l10n;
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
@@ -183,7 +191,7 @@ child: Column(
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          'Effortless Group Splitting',
+                          l10n.tabTrips,
                           style: AppTypography.badgeText(
                             color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
                           ),
@@ -215,9 +223,9 @@ child: Column(
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
                         icon: const Icon(Icons.help_outline_rounded, size: 14, color: AppColors.emeraldPrimary),
-                        label: const Text(
-                          'Quick Tour',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.emeraldPrimary),
+                        label: Text(
+                          l10n.onboardingQuickTour,
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.emeraldPrimary),
                         ),
                         onPressed: () => InteractiveTutorialSheet.show(context),
                       ),
@@ -230,7 +238,7 @@ child: Column(
 
               // Title
               Text(
-                'Share moments.\nNot money stress.',
+                l10n.onboardingHeroTitle,
                 style: AppTypography.displayHero(isDark: isDark),
               ).animate().fadeIn(delay: 150.ms, duration: 400.ms),
 
@@ -238,7 +246,7 @@ child: Column(
 
               // Brand credit
               Text(
-                'Kith by Nirniq',
+                l10n.onboardingBrandCredit,
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w500,
@@ -252,7 +260,7 @@ child: Column(
 
               // Description
               Text(
-                'Speak expenses naturally in Hindi or English, let Kith compute deterministic splits, and settle up in one tap.',
+                l10n.onboardingHeroDesc,
                 style: AppTypography.bodyLarge(isDark: isDark),
               ).animate().fadeIn(delay: 250.ms, duration: 400.ms),
 
@@ -261,8 +269,8 @@ child: Column(
               // Feature Highlights
               _buildFeatureRow(
                 icon: Icons.mic_none_rounded,
-                title: 'Natural Voice Entry',
-                subtitle: '"Maine 6 hazar train ke diye sabke liye"',
+                title: l10n.onboardingFeatureVoiceTitle,
+                subtitle: l10n.onboardingFeatureVoiceSub,
                 isDark: isDark,
               ).animate().fadeIn(delay: 350.ms),
 
@@ -270,8 +278,8 @@ child: Column(
 
               _buildFeatureRow(
                 icon: Icons.calculate_outlined,
-                title: 'Deterministic Math Engine',
-                subtitle: 'Zero floating-point inaccuracies or penny leaks',
+                title: l10n.onboardingFeatureMathTitle,
+                subtitle: l10n.onboardingFeatureMathSub,
                 isDark: isDark,
               ).animate().fadeIn(delay: 450.ms),
 
@@ -279,8 +287,8 @@ child: Column(
 
               _buildFeatureRow(
                 icon: Icons.bolt_outlined,
-                title: 'Simplified Debt Graph',
-                subtitle: 'Minimizes settlement transactions between friends',
+                title: l10n.onboardingFeatureDebtTitle,
+                subtitle: l10n.onboardingFeatureDebtSub,
                 isDark: isDark,
               ).animate().fadeIn(delay: 550.ms),
 
@@ -307,8 +315,8 @@ child: Column(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Primary Sign-In', style: AppTypography.titleSmall(isDark: isDark)),
-                              Text('Sync your Kith account across devices', style: AppTypography.bodySmall(isDark: isDark)),
+                              Text(l10n.onboardingPrimarySignin, style: AppTypography.titleSmall(isDark: isDark)),
+                              Text(l10n.onboardingSyncDevices, style: AppTypography.bodySmall(isDark: isDark)),
                             ],
                           ),
                         ),
@@ -316,7 +324,7 @@ child: Column(
                     ),
                     const SizedBox(height: AppSpacing.md),
                     AppButton(
-                      text: 'Continue with Google',
+                      text: l10n.onboardingGoogleSignin,
                       icon: Icons.g_mobiledata_rounded,
                       isFullWidth: true,
                       isLoading: authVm.isLoading,
@@ -335,7 +343,7 @@ child: Column(
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Text(
-                      'OR START AS GUEST',
+                      l10n.onboardingOrGuest,
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
@@ -357,21 +365,21 @@ child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'What should your friends call you?',
+                      l10n.onboardingGuestName,
                       style: AppTypography.titleSmall(isDark: isDark),
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     Text(
-                      'No passwords or phone numbers required to start.',
+                      l10n.onboardingGuestDesc,
                       style: AppTypography.bodySmall(isDark: isDark),
                     ),
                     const SizedBox(height: AppSpacing.md),
                     TextField(
                       controller: _nameController,
                       textCapitalization: TextCapitalization.words,
-                      decoration: const InputDecoration(
-                        hintText: 'e.g. Darpan or Alex',
-                        prefixIcon: Icon(Icons.person_outline_rounded, size: 20),
+                      decoration: InputDecoration(
+                        hintText: l10n.onboardingNameHint,
+                        prefixIcon: const Icon(Icons.person_outline_rounded, size: 20),
                       ),
                       onSubmitted: (_) => _handleStart(),
                     ),
@@ -379,12 +387,12 @@ child: Column(
 
                     // App Experience Mode Selection
                     Text(
-                      'What would you like to track?',
+                      l10n.onboardingModeSelect,
                       style: AppTypography.titleSmall(isDark: isDark),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'You can change or switch this anytime from profile settings.',
+                      l10n.profileSecExperience,
                       style: AppTypography.bodySmall(isDark: isDark),
                     ),
                     const SizedBox(height: AppSpacing.sm),
@@ -419,7 +427,7 @@ child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Trips & Group Splitting Only',
+                                    l10n.onboardingModeTripsOnly,
                                     style: TextStyle(
                                       fontWeight: FontWeight.w700,
                                       fontSize: 13,
@@ -428,7 +436,7 @@ child: Column(
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    'Group travel costs, shared expenses & instant settlements',
+                                    l10n.onboardingModeTripsSub,
                                     style: AppTypography.bodySmall(isDark: isDark),
                                   ),
                                 ],
@@ -473,7 +481,7 @@ child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Trips & Personal Expenses',
+                                    l10n.onboardingModeAll,
                                     style: TextStyle(
                                       fontWeight: FontWeight.w700,
                                       fontSize: 13,
@@ -482,7 +490,7 @@ child: Column(
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    'Full suite: personal finance, lending/borrowing + group trips',
+                                    l10n.onboardingModeAllSub,
                                     style: AppTypography.bodySmall(isDark: isDark),
                                   ),
                                 ],
@@ -497,7 +505,7 @@ child: Column(
 
                     const SizedBox(height: AppSpacing.lg),
                     AppButton(
-                      text: 'Start as Guest',
+                      text: l10n.onboardingGuestStart,
                       icon: Icons.arrow_forward_rounded,
                       variant: AppButtonVariant.secondary,
                       isFullWidth: true,
@@ -520,7 +528,7 @@ child: Column(
                   },
                   icon: const Icon(Icons.key_rounded, size: 16),
                   label: Text(
-                    _showRecoveryField ? 'Hide Recovery Option' : 'Use Recovery Key',
+                    _showRecoveryField ? l10n.onboardingRecoveryHide : l10n.onboardingRecoveryPrompt,
                     style: TextStyle(
                       color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
                       fontWeight: FontWeight.w600,
@@ -538,26 +546,26 @@ child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Restore from 12-character Code',
+                        l10n.dialogRestoreTitle,
                         style: AppTypography.titleSmall(isDark: isDark),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Enter your KITH-XXXX-YYYY recovery code to restore your trips on this device.',
+                        l10n.onboardingRecoveryDesc,
                         style: AppTypography.bodySmall(isDark: isDark),
                       ),
                       const SizedBox(height: AppSpacing.md),
                       TextField(
                         controller: _recoveryKeyController,
                         textCapitalization: TextCapitalization.characters,
-                        decoration: const InputDecoration(
-                          hintText: 'KITH-XXXX-YYYY',
-                          prefixIcon: Icon(Icons.key_rounded, size: 20),
+                        decoration: InputDecoration(
+                          hintText: l10n.onboardingRecoveryInputHint,
+                          prefixIcon: const Icon(Icons.key_rounded, size: 20),
                         ),
                       ),
                       const SizedBox(height: AppSpacing.md),
                       AppButton(
-                        text: 'Restore Session',
+                        text: l10n.onboardingRestoreBtn,
                         variant: AppButtonVariant.secondary,
                         isFullWidth: true,
                         isLoading: authVm.isLoading,

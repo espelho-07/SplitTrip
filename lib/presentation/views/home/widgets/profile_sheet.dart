@@ -171,7 +171,7 @@ class ProfileSheet extends StatelessWidget {
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
-                              isGoogleLinked ? 'Google Connected' : 'Guest Account',
+                              isGoogleLinked ? l10n.profileGoogleConnected : l10n.profileGuestAccount,
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
@@ -182,7 +182,7 @@ class ProfileSheet extends StatelessWidget {
                           const SizedBox(width: 8),
                           Flexible(
                             child: Text(
-                              isGoogleLinked ? (user?.email ?? '') : 'Data on this device',
+                              isGoogleLinked ? (user?.email ?? '') : l10n.profileLocalData,
                               style: AppTypography.bodySmall(isDark: isDark),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -198,7 +198,7 @@ class ProfileSheet extends StatelessWidget {
             const SizedBox(height: AppSpacing.lg),
 
             // SECTION 1: ACCOUNT & IDENTITY
-            _buildSectionHeader('ACCOUNT', isDark),
+            _buildSectionHeader(l10n.profileSecAccount, isDark),
             const SizedBox(height: AppSpacing.xs),
             SurfaceCard(
               backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
@@ -218,7 +218,7 @@ class ProfileSheet extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              isGoogleLinked ? 'Connected with Google' : 'Sign in with Google',
+                              isGoogleLinked ? l10n.profileGoogleConnected : l10n.profileConnectGoogle,
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
@@ -227,8 +227,8 @@ class ProfileSheet extends StatelessWidget {
                             ),
                             Text(
                               isGoogleLinked
-                                  ? (user?.email ?? 'Cloud identity active')
-                                  : 'Sign in with Google to sync across devices',
+                                  ? (user?.email ?? l10n.profileGoogleConnected)
+                                  : l10n.onboardingSyncDevices,
                               style: AppTypography.bodySmall(isDark: isDark),
                             ),
                           ],
@@ -251,7 +251,7 @@ class ProfileSheet extends StatelessWidget {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'Continue with Google',
+                                l10n.onboardingGoogleSignin,
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w700,
@@ -272,7 +272,7 @@ class ProfileSheet extends StatelessWidget {
             const SizedBox(height: AppSpacing.lg),
 
             // SECTION 2: CLOUD & SYNCHRONIZATION
-            _buildSectionHeader('CLOUD', isDark),
+            _buildSectionHeader(l10n.profileSecCloud, isDark),
             const SizedBox(height: AppSpacing.xs),
             SurfaceCard(
               backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
@@ -284,7 +284,7 @@ class ProfileSheet extends StatelessWidget {
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.cloud_sync_rounded, size: 20, color: AppColors.emeraldPrimary),
                     title: Text(
-                      'Cloud Sync',
+                      l10n.authCloudSync,
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
@@ -292,7 +292,7 @@ class ProfileSheet extends StatelessWidget {
                       ),
                     ),
                     subtitle: Text(
-                      pendingCount > 0 ? '$pendingCount changes waiting to sync' : '✓ Up to date',
+                      pendingCount > 0 ? '$pendingCount ${l10n.statusPending}' : '✓ ${l10n.authSyncStatusSynced}',
                       style: AppTypography.bodySmall(isDark: isDark),
                     ),
                     trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
@@ -307,7 +307,7 @@ class ProfileSheet extends StatelessWidget {
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.dns_outlined, size: 20),
                     title: Text(
-                      'Cloud Settings',
+                      l10n.settingsTitle,
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
@@ -315,7 +315,7 @@ class ProfileSheet extends StatelessWidget {
                       ),
                     ),
                     subtitle: Text(
-                      'Sync controls, privacy, and account settings',
+                      l10n.profileCloudSyncDesc,
                       style: AppTypography.bodySmall(isDark: isDark),
                     ),
                     trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
@@ -331,7 +331,7 @@ class ProfileSheet extends StatelessWidget {
             const SizedBox(height: AppSpacing.lg),
 
             // SECTION 3: RECOVERY KEY
-            _buildSectionHeader('EMERGENCY RECOVERY KEY', isDark),
+            _buildSectionHeader(l10n.profileSecRecovery, isDark),
             const SizedBox(height: AppSpacing.xs),
             SurfaceCard(
               backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
@@ -348,7 +348,7 @@ class ProfileSheet extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Recovery Key',
+                              l10n.authRecoveryKey,
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
@@ -369,14 +369,13 @@ class ProfileSheet extends StatelessWidget {
                       ),
                       IconButton(
                         icon: const Icon(Icons.copy_rounded, size: 18),
-                        tooltip: 'Copy key',
                         onPressed: () {
                           if (user?.recoveryKey != null) {
                             Clipboard.setData(ClipboardData(text: user!.recoveryKey));
                             HapticHelper.success();
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Recovery key copied to clipboard! Save it safely.'),
+                              SnackBar(
+                                content: Text(l10n.profileRecoveryCopied),
                                 behavior: SnackBarBehavior.floating,
                               ),
                             );
@@ -387,7 +386,7 @@ class ProfileSheet extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Keep this key safe. You can use it to restore your account on any new phone.',
+                    l10n.profileRecoverySafe,
                     style: TextStyle(fontSize: 11, color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
                   ),
                 ],
@@ -397,7 +396,7 @@ class ProfileSheet extends StatelessWidget {
             const SizedBox(height: AppSpacing.lg),
 
             // SECTION 4: APP EXPERIENCE & MODES
-            _buildSectionHeader('APP EXPERIENCE', isDark),
+            _buildSectionHeader(l10n.profileSecExperience, isDark),
             const SizedBox(height: AppSpacing.xs),
             SurfaceCard(
               backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
@@ -405,8 +404,8 @@ class ProfileSheet extends StatelessWidget {
               child: Column(
                 children: [
                   _buildModeOption(
-                    title: 'Trips & Group Splitting Only',
-                    subtitle: 'Clean interface focused purely on travel and group ledger',
+                    title: l10n.onboardingModeTripsOnly,
+                    subtitle: l10n.onboardingModeTripsSub,
                     emoji: '✈️',
                     isSelected: authVm.appExperienceMode == AppExperienceMode.tripsOnly,
                     isDark: isDark,
@@ -418,8 +417,8 @@ class ProfileSheet extends StatelessWidget {
                   ),
                   Divider(height: 1, color: isDark ? Colors.white10 : Colors.black12),
                   _buildModeOption(
-                    title: 'Trips & Personal Expenses',
-                    subtitle: 'Full suite with personal tracking, lending/borrowing, & budgets',
+                    title: l10n.onboardingModeAll,
+                    subtitle: l10n.onboardingModeAllSub,
                     emoji: '💼',
                     isSelected: authVm.appExperienceMode == AppExperienceMode.all,
                     isDark: isDark,
@@ -435,7 +434,7 @@ class ProfileSheet extends StatelessWidget {
             const SizedBox(height: AppSpacing.lg),
 
             // SECTION 5: PREFERENCES
-            _buildSectionHeader('PREFERENCES', isDark),
+            _buildSectionHeader(l10n.profileSecPreferences, isDark),
             const SizedBox(height: AppSpacing.xs),
             SurfaceCard(
               backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
@@ -446,9 +445,9 @@ class ProfileSheet extends StatelessWidget {
                     dense: true,
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.translate_rounded, size: 20, color: AppColors.emeraldPrimary),
-                    title: const Text(
-                      'Language',
-                      style: TextStyle(
+                    title: Text(
+                      l10n.profileLanguage,
+                      style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                       ),
@@ -475,7 +474,7 @@ class ProfileSheet extends StatelessWidget {
                       size: 20,
                     ),
                     title: Text(
-                      'Appearance',
+                      l10n.profileAppearance,
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
@@ -484,18 +483,18 @@ class ProfileSheet extends StatelessWidget {
                     ),
                     subtitle: Text(
                       themeVm.themeMode == ThemeMode.dark
-                          ? 'Dark mode'
-                          : (themeVm.themeMode == ThemeMode.light ? 'Light mode' : 'System auto'),
+                          ? l10n.profileThemeDark
+                          : (themeVm.themeMode == ThemeMode.light ? l10n.profileThemeLight : l10n.profileThemeSystem),
                       style: AppTypography.bodySmall(isDark: isDark),
                     ),
                     trailing: DropdownButton<ThemeMode>(
                       value: themeVm.themeMode,
                       underline: const SizedBox.shrink(),
                       dropdownColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
-                      items: const [
-                        DropdownMenuItem(value: ThemeMode.system, child: Text('System', style: TextStyle(fontSize: 12))),
-                        DropdownMenuItem(value: ThemeMode.light, child: Text('Light', style: TextStyle(fontSize: 12))),
-                        DropdownMenuItem(value: ThemeMode.dark, child: Text('Dark', style: TextStyle(fontSize: 12))),
+                      items: [
+                        DropdownMenuItem(value: ThemeMode.system, child: Text(l10n.profileThemeSystem, style: const TextStyle(fontSize: 12))),
+                        DropdownMenuItem(value: ThemeMode.light, child: Text(l10n.profileThemeLight, style: const TextStyle(fontSize: 12))),
+                        DropdownMenuItem(value: ThemeMode.dark, child: Text(l10n.profileThemeDark, style: const TextStyle(fontSize: 12))),
                       ],
                       onChanged: (mode) {
                         if (mode != null) {
@@ -510,15 +509,15 @@ class ProfileSheet extends StatelessWidget {
                     dense: true,
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.widgets_outlined, size: 20, color: AppColors.emeraldPrimary),
-                    title: const Text(
-                      'Home Screen Widgets',
-                      style: TextStyle(
+                    title: Text(
+                      l10n.profileWidgets,
+                      style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     subtitle: Text(
-                      'Snapshot, Budget, Quick Add, Debts & Smart Kith',
+                      l10n.profileWidgetsDesc,
                       style: AppTypography.bodySmall(isDark: isDark),
                     ),
                     trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
@@ -534,7 +533,7 @@ class ProfileSheet extends StatelessWidget {
             const SizedBox(height: AppSpacing.lg),
 
             // SECTION 6: HELP & SUPPORT
-            _buildSectionHeader('HELP & ABOUT', isDark),
+            _buildSectionHeader(l10n.profileSecHelp, isDark),
             const SizedBox(height: AppSpacing.xs),
             SurfaceCard(
               backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
@@ -566,14 +565,14 @@ class ProfileSheet extends StatelessWidget {
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.help_center_outlined, size: 20, color: AppColors.tealAccent),
                     title: Text(
-                      'Help & FAQ',
+                      l10n.profileFaq,
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                       ),
                     ),
-                    subtitle: Text('Searchable guides & answers for all features', style: AppTypography.bodySmall(isDark: isDark)),
+                    subtitle: Text(l10n.profileFaqDesc, style: AppTypography.bodySmall(isDark: isDark)),
                     trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
                     onTap: () {
                       Navigator.pop(context);
@@ -586,14 +585,14 @@ class ProfileSheet extends StatelessWidget {
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.auto_stories_outlined, size: 20, color: AppColors.indigoAccent),
                     title: Text(
-                      'Replay Kith Tour',
+                      l10n.profileTour,
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                       ),
                     ),
-                    subtitle: Text('Review the 5-step quick onboarding', style: AppTypography.bodySmall(isDark: isDark)),
+                    subtitle: Text(l10n.profileTourDesc, style: AppTypography.bodySmall(isDark: isDark)),
                     trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
                     onTap: () {
                       Navigator.pop(context);
@@ -606,7 +605,7 @@ class ProfileSheet extends StatelessWidget {
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.feedback_outlined, size: 20),
                     title: Text(
-                      'Send Feedback',
+                      l10n.profileFeedback,
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
@@ -631,7 +630,7 @@ class ProfileSheet extends StatelessWidget {
             const SizedBox(height: AppSpacing.lg),
 
             // SECTION 7: DANGER ZONE
-            _buildSectionHeader('DANGER ZONE', isDark),
+            _buildSectionHeader(l10n.profileSecDanger, isDark),
             const SizedBox(height: AppSpacing.xs),
             SurfaceCard(
               backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
@@ -640,12 +639,12 @@ class ProfileSheet extends StatelessWidget {
                 dense: true,
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.logout_rounded, size: 20, color: Colors.redAccent),
-                title: const Text(
-                  'Sign Out',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.redAccent),
+                title: Text(
+                  l10n.profileSignOutTitle,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.redAccent),
                 ),
                 subtitle: Text(
-                  'Clear credentials from this device',
+                  l10n.profileSignOutDesc,
                   style: AppTypography.bodySmall(isDark: isDark),
                 ),
                 trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
@@ -669,7 +668,7 @@ class ProfileSheet extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'by Nirniq',
+                    l10n.onboardingBrandCredit,
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w500,
@@ -695,7 +694,7 @@ class ProfileSheet extends StatelessWidget {
 
             // Done Button
             AppButton(
-              text: 'Done',
+              text: l10n.actionDone,
               isFullWidth: true,
               variant: AppButtonVariant.secondary,
               onPressed: () => Navigator.pop(context),

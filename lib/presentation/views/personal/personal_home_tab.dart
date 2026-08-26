@@ -106,6 +106,7 @@ class PersonalHomeTab extends StatelessWidget {
     PersonalExpenseViewModel vm,
     bool isDark,
   ) {
+    final l10n = context.l10n;
     final monthFormat = DateFormat('MMMM yyyy');
     final formattedMonth = monthFormat.format(vm.selectedMonth);
 
@@ -118,7 +119,6 @@ class PersonalHomeTab extends StatelessWidget {
             IconButton(
               icon: const Icon(Icons.chevron_left_rounded, size: 28),
               onPressed: vm.previousMonth,
-              tooltip: 'Previous month',
             ),
             Text(
               formattedMonth,
@@ -131,7 +131,6 @@ class PersonalHomeTab extends StatelessWidget {
             IconButton(
               icon: const Icon(Icons.chevron_right_rounded, size: 28),
               onPressed: vm.nextMonth,
-              tooltip: 'Next month',
             ),
           ],
         ),
@@ -143,11 +142,11 @@ class PersonalHomeTab extends StatelessWidget {
           child: Row(
             children: PersonalTimeFilter.values.map((filter) {
               final isSelected = vm.timeFilter == filter;
-              String chipLabel = filter.label;
+              String chipLabel = filter.localizedLabel(l10n);
               if (filter == PersonalTimeFilter.custom && vm.customDateRange != null && isSelected) {
                 final startStr = DateFormat('d MMM').format(vm.customDateRange!.start);
                 final endStr = DateFormat('d MMM').format(vm.customDateRange!.end);
-                chipLabel = 'Custom: $startStr - $endStr';
+                chipLabel = '${l10n.filterCustom}: $startStr - $endStr';
               }
 
               return Padding(
@@ -224,6 +223,7 @@ class PersonalHomeTab extends StatelessWidget {
     dynamic budget,
   ) {
     final statusRed = isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight;
+    final l10n = context.l10n;
 
     return SurfaceCard(
       backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
@@ -236,7 +236,7 @@ class PersonalHomeTab extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  'SPENT ${vm.timeFilter.label.toUpperCase()}',
+                  '${l10n.personalSpentPrefix.toUpperCase()} ${vm.timeFilter.localizedLabel(l10n).toUpperCase()}',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
@@ -270,8 +270,8 @@ class PersonalHomeTab extends StatelessWidget {
                       const SizedBox(width: 4),
                       Text(
                         budget.hasBudget
-                            ? 'Budget: ${CurrencyFormatter.formatPaise(budget.monthlyLimitInPaise, currencyCode: 'INR')}'
-                            : 'Set Budget',
+                            ? '${l10n.personalBudgetLabel} ${CurrencyFormatter.formatPaise(budget.monthlyLimitInPaise, currencyCode: 'INR')}'
+                            : l10n.personalBudgetSet,
                         style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -300,16 +300,16 @@ class PersonalHomeTab extends StatelessWidget {
                   children: [
                     Text(
                       avgPerDayPaise > 0
-                          ? '${CurrencyFormatter.formatPaise(avgPerDayPaise, currencyCode: 'INR')} / day avg'
-                          : 'No spending recorded',
+                          ? '${CurrencyFormatter.formatPaise(avgPerDayPaise, currencyCode: 'INR')} / ${l10n.personalDailyAverage.toLowerCase()}'
+                          : l10n.personalNoExpenses,
                       style: AppTypography.bodySmall(isDark: isDark),
                       overflow: TextOverflow.ellipsis,
                     ),
                     if (vm.includeTripExpenses) ...[
                       const SizedBox(height: 2),
-                      const Text(
-                        '✓ Trip spends included',
-                        style: TextStyle(
+                      Text(
+                        '✓ ${l10n.tabTrips}',
+                        style: const TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
                           color: AppColors.emeraldPrimary,
@@ -360,7 +360,7 @@ class PersonalHomeTab extends StatelessWidget {
                         ),
                         const SizedBox(width: 5),
                         Text(
-                          'Syncing ${(vm.syncProgress * 100).toInt()}%',
+                          '${l10n.statusSyncing} ${(vm.syncProgress * 100).toInt()}%',
                           style: const TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
@@ -377,7 +377,7 @@ class PersonalHomeTab extends StatelessWidget {
                         ),
                         const SizedBox(width: 5),
                         Text(
-                          vm.includeTripExpenses ? 'Trips Synced' : 'Sync from Trips',
+                          vm.includeTripExpenses ? l10n.authSyncStatusSynced : l10n.personalNextActionSyncBtn,
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
@@ -411,7 +411,7 @@ class PersonalHomeTab extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  '${budget.percentageUsed}% of monthly budget',
+                  '${budget.percentageUsed}% / ${l10n.personalBudget.toLowerCase()}',
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
@@ -422,8 +422,8 @@ class PersonalHomeTab extends StatelessWidget {
                 ),
                 Text(
                   budget.remainingInPaise < 0
-                      ? '${CurrencyFormatter.formatPaise(budget.remainingInPaise.abs(), currencyCode: 'INR')} over budget'
-                      : '${CurrencyFormatter.formatPaise(budget.remainingInPaise, currencyCode: 'INR')} left',
+                      ? '${CurrencyFormatter.formatPaise(budget.remainingInPaise.abs(), currencyCode: 'INR')} ${l10n.personalOverBudgetBy}'
+                      : '${CurrencyFormatter.formatPaise(budget.remainingInPaise, currencyCode: 'INR')} ${l10n.personalRemainingLabel}',
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
@@ -449,6 +449,7 @@ class PersonalHomeTab extends StatelessWidget {
     dynamic budget,
     List<PersonalExpense> expenses,
   ) {
+    final l10n = context.l10n;
     // 1. Outstanding money owed to you
     final uncollected = debtsSummary.debts
         .where((d) => d.debtType == PersonalDebtType.lent && !d.isSettled)
@@ -469,7 +470,7 @@ class PersonalHomeTab extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                '${uncollected.personName} owes you ${CurrencyFormatter.formatPaise(uncollected.remainingAmountInPaise, currencyCode: 'INR')}',
+                '${uncollected.personName} · ${CurrencyFormatter.formatPaise(uncollected.remainingAmountInPaise, currencyCode: 'INR')} (${l10n.personalYouAreOwed})',
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: green),
               ),
             ),
@@ -479,7 +480,7 @@ class PersonalHomeTab extends StatelessWidget {
                 visualDensity: VisualDensity.compact,
                 padding: const EdgeInsets.symmetric(horizontal: 10),
               ),
-              child: Text('Settle', style: TextStyle(fontWeight: FontWeight.w700, color: green)),
+              child: Text(l10n.personalSettled, style: TextStyle(fontWeight: FontWeight.w700, color: green)),
             ),
           ],
         ),
@@ -505,7 +506,7 @@ class PersonalHomeTab extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                'You owe ${unpayed.personName} ${CurrencyFormatter.formatPaise(unpayed.remainingAmountInPaise, currencyCode: 'INR')}',
+                '${unpayed.personName} · ${CurrencyFormatter.formatPaise(unpayed.remainingAmountInPaise, currencyCode: 'INR')} (${l10n.personalYouOwe})',
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.emeraldPrimary),
               ),
             ),
@@ -515,7 +516,7 @@ class PersonalHomeTab extends StatelessWidget {
                 visualDensity: VisualDensity.compact,
                 padding: const EdgeInsets.symmetric(horizontal: 10),
               ),
-              child: const Text('Repay', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.emeraldPrimary)),
+              child: Text(l10n.personalRecordRepayment, style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.emeraldPrimary)),
             ),
           ],
         ),
@@ -539,8 +540,8 @@ class PersonalHomeTab extends StatelessWidget {
             Expanded(
               child: Text(
                 budget.remainingInPaise < 0
-                    ? '${CurrencyFormatter.formatPaise(budget.remainingInPaise.abs(), currencyCode: 'INR')} over budget this month (${budget.percentageUsed}% spent)'
-                    : '${CurrencyFormatter.formatPaise(budget.remainingInPaise, currencyCode: 'INR')} left this month (${budget.percentageUsed}% spent)',
+                    ? '${CurrencyFormatter.formatPaise(budget.remainingInPaise.abs(), currencyCode: 'INR')} ${l10n.personalOverBudgetBy} (${budget.percentageUsed}%)'
+                    : '${CurrencyFormatter.formatPaise(budget.remainingInPaise, currencyCode: 'INR')} ${l10n.personalRemainingLabel} (${budget.percentageUsed}%)',
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: statusRed),
               ),
             ),
@@ -556,7 +557,7 @@ class PersonalHomeTab extends StatelessWidget {
                 visualDensity: VisualDensity.compact,
                 padding: const EdgeInsets.symmetric(horizontal: 10),
               ),
-              child: Text('Budget', style: TextStyle(fontWeight: FontWeight.w700, color: statusRed)),
+              child: Text(l10n.personalBudget, style: TextStyle(fontWeight: FontWeight.w700, color: statusRed)),
             ),
           ],
         ),
@@ -573,6 +574,7 @@ class PersonalHomeTab extends StatelessWidget {
     bool isDark,
     PersonalDebtsSummary summary,
   ) {
+    final l10n = context.l10n;
     final lentDebts = summary.debts.where((d) => d.debtType == PersonalDebtType.lent).toList();
     final borrowedDebts = summary.debts.where((d) => d.debtType == PersonalDebtType.borrowed).toList();
     final green = isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight;
@@ -583,7 +585,7 @@ class PersonalHomeTab extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Lending & Borrowing', style: AppTypography.titleMedium(isDark: isDark)),
+            Text(l10n.personalDebtsTitle, style: AppTypography.titleMedium(isDark: isDark)),
             TextButton.icon(
               style: TextButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -593,7 +595,7 @@ class PersonalHomeTab extends StatelessWidget {
               onPressed: () => context.push('/personal/debts'),
               icon: const Icon(Icons.arrow_forward_rounded, size: 14, color: AppColors.emeraldPrimary),
               label: Text(
-                'View Detailed (${summary.debts.length})',
+                '${l10n.personalViewAll} (${summary.debts.length})',
                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.emeraldPrimary),
               ),
             ),
@@ -617,7 +619,7 @@ class PersonalHomeTab extends StatelessWidget {
                         Icon(Icons.arrow_downward_rounded, size: 16, color: green),
                         const SizedBox(width: 6),
                         Text(
-                          "YOU'RE OWED",
+                          l10n.personalYouAreOwed.toUpperCase(),
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
@@ -662,9 +664,9 @@ class PersonalHomeTab extends StatelessWidget {
                       children: [
                         const Icon(Icons.arrow_upward_rounded, size: 16, color: AppColors.emeraldPrimary),
                         const SizedBox(width: 6),
-                        const Text(
-                          "YOU OWE",
-                          style: TextStyle(
+                        Text(
+                          l10n.personalYouOwe.toUpperCase(),
+                          style: const TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 1.1,
@@ -696,6 +698,7 @@ class PersonalHomeTab extends StatelessWidget {
   }
 
   Widget _buildDebtItem(BuildContext context, PersonalDebt debt, bool isDark) {
+    final l10n = context.l10n;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -758,7 +761,7 @@ class PersonalHomeTab extends StatelessWidget {
                       ),
                       const SizedBox(width: 3),
                       Text(
-                        'Paid',
+                        l10n.personalSettled,
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
@@ -773,11 +776,11 @@ class PersonalHomeTab extends StatelessWidget {
                   onTap: () {
                     RecordRepaymentSheet.show(context, debt: debt);
                   },
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 2),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
                     child: Text(
-                      'Mark Paid',
-                      style: TextStyle(
+                      l10n.debtsMarkSettled,
+                      style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                         color: AppColors.emeraldPrimary,
@@ -797,6 +800,7 @@ class PersonalHomeTab extends StatelessWidget {
     PersonalExpenseViewModel vm,
     bool isDark,
   ) {
+    final l10n = context.l10n;
     final totals = vm.categoryTotalsInPaise;
     final totalSpent = vm.totalSpentInPaise;
     if (totals.isEmpty || totalSpent == 0) return const SizedBox.shrink();
@@ -810,7 +814,7 @@ class PersonalHomeTab extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Category Breakdown', style: AppTypography.titleMedium(isDark: isDark)),
+            Text(l10n.categoryTitle, style: AppTypography.titleMedium(isDark: isDark)),
             TextButton.icon(
               style: TextButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -819,9 +823,9 @@ class PersonalHomeTab extends StatelessWidget {
               ),
               onPressed: () => context.push('/personal/categories'),
               icon: const Icon(Icons.arrow_forward_rounded, size: 14, color: AppColors.emeraldPrimary),
-              label: const Text(
-                'View Detailed',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.emeraldPrimary),
+              label: Text(
+                l10n.personalViewDetails,
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.emeraldPrimary),
               ),
             ),
           ],
@@ -852,7 +856,7 @@ class PersonalHomeTab extends StatelessWidget {
                             child: Row(
                               children: [
                                 Text(
-                                  cat.displayName,
+                                  cat.localizedName(l10n),
                                   style: AppTypography.titleSmall(isDark: isDark),
                                 ),
                                 if (isSelected) ...[
@@ -863,7 +867,7 @@ class PersonalHomeTab extends StatelessWidget {
                                       color: AppColors.emeraldPrimary.withValues(alpha: 0.15),
                                       borderRadius: BorderRadius.circular(4),
                                     ),
-                                    child: const Text('Filtered', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.emeraldPrimary)),
+                                    child: Text(l10n.personalFilter, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.emeraldPrimary)),
                                   ),
                                 ],
                               ],
@@ -906,6 +910,7 @@ class PersonalHomeTab extends StatelessWidget {
     bool isDark,
     int expenseCount,
   ) {
+    final l10n = context.l10n;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -928,7 +933,7 @@ class PersonalHomeTab extends StatelessWidget {
                     color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                   ),
                   decoration: InputDecoration(
-                    hintText: 'Search expenses, merchant, notes...',
+                    hintText: l10n.actionSearch,
                     hintStyle: TextStyle(
                       fontSize: 13,
                       color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
@@ -977,7 +982,7 @@ class PersonalHomeTab extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      'Filters',
+                      l10n.personalFilter,
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
@@ -1011,7 +1016,7 @@ class PersonalHomeTab extends StatelessWidget {
           child: Row(
             children: [
               ChoiceChip(
-                label: const Text('All', style: TextStyle(fontSize: 12)),
+                label: Text(l10n.debtsTabAll, style: const TextStyle(fontSize: 12)),
                 selected: vm.selectedCategoryFilter == null,
                 onSelected: (_) => vm.setCategoryFilter(null),
                 visualDensity: VisualDensity.compact,
@@ -1023,7 +1028,7 @@ class PersonalHomeTab extends StatelessWidget {
                   padding: const EdgeInsets.only(right: 6),
                   child: ChoiceChip(
                     avatar: Text(cat.emoji, style: const TextStyle(fontSize: 13)),
-                    label: Text(cat.displayName, style: const TextStyle(fontSize: 12)),
+                    label: Text(cat.localizedName(l10n), style: const TextStyle(fontSize: 12)),
                     selected: isSelected,
                     onSelected: (_) => vm.setCategoryFilter(cat),
                     visualDensity: VisualDensity.compact,
@@ -1041,7 +1046,7 @@ class PersonalHomeTab extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  'Filters active (${vm.filteredExpenses.length} results)',
+                  '${l10n.personalFilter} (${vm.filteredExpenses.length})',
                   style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
@@ -1052,11 +1057,11 @@ class PersonalHomeTab extends StatelessWidget {
               ),
               InkWell(
                 onTap: vm.resetAllFilters,
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                   child: Text(
-                    'Clear All',
-                    style: TextStyle(
+                    l10n.actionReset,
+                    style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
                       color: Colors.redAccent,
@@ -1073,11 +1078,11 @@ class PersonalHomeTab extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Expenses',
+              l10n.personalSecExpenses,
               style: AppTypography.titleMedium(isDark: isDark),
             ),
             Text(
-              '$expenseCount total',
+              '$expenseCount',
               style: AppTypography.bodySmall(isDark: isDark),
             ),
           ],
@@ -1087,8 +1092,9 @@ class PersonalHomeTab extends StatelessWidget {
   }
 
   Widget _buildExpenseTile(BuildContext context, PersonalExpense expense, bool isDark) {
+    final l10n = context.l10n;
     final dateStr = DateFormatter.isToday(expense.date)
-        ? 'Today'
+        ? l10n.translate('filter_today')
         : DateFormatter.formatDate(expense.date);
 
     return Padding(
@@ -1137,7 +1143,7 @@ class PersonalHomeTab extends StatelessWidget {
                       Row(
                         children: [
                           Text(
-                            '$dateStr · ${expense.category.displayName}',
+                            '$dateStr · ${expense.category.localizedName(l10n)}',
                             style: AppTypography.bodySmall(isDark: isDark),
                           ),
                           if (expense.id.startsWith('trip_') || (expense.notes?.contains('Trip Spend') ?? false)) ...[
@@ -1148,9 +1154,9 @@ class PersonalHomeTab extends StatelessWidget {
                                 color: AppColors.indigoAccent.withValues(alpha: 0.14),
                                 borderRadius: BorderRadius.circular(4),
                               ),
-                              child: const Text(
-                                'Trip',
-                                style: TextStyle(
+                              child: Text(
+                                l10n.tabTrips,
+                                style: const TextStyle(
                                   fontSize: 9,
                                   fontWeight: FontWeight.w700,
                                   color: AppColors.indigoAccent,
@@ -1182,6 +1188,7 @@ class PersonalHomeTab extends StatelessWidget {
   }
 
   Widget _buildEmptyState(BuildContext context, bool isDark) {
+    final l10n = context.l10n;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
       child: Center(
@@ -1197,18 +1204,18 @@ class PersonalHomeTab extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.md),
             Text(
-              'No expenses yet',
+              l10n.personalEmptyTitle,
               style: AppTypography.titleMedium(isDark: isDark),
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              'Your spending and lending will appear here.',
+              l10n.personalEmptySub,
               textAlign: TextAlign.center,
               style: AppTypography.bodySmall(isDark: isDark),
             ),
             const SizedBox(height: AppSpacing.lg),
             AppButton(
-              text: 'Add Expense',
+              text: l10n.personalAddExpense,
               icon: Icons.add_rounded,
               onPressed: () {
                 AddPersonalExpenseSheet.show(context);

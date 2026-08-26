@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
 import '../../domain/enums/trip_lifecycle.dart';
 import '../../domain/models/guest_user.dart';
 import '../../domain/models/personal_budget.dart';

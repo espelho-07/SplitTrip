@@ -8,11 +8,26 @@ import '../../domain/models/personal_budget.dart';
 import '../../domain/models/personal_debt.dart';
 import '../../domain/models/personal_expense.dart';
 
+import '../../core/localization/app_localizations.dart';
+
 enum PersonalTimeFilter {
   today,
   thisWeek,
   thisMonth,
   custom;
+
+  String localizedLabel(AppLocalizations l10n) {
+    switch (this) {
+      case PersonalTimeFilter.today:
+        return l10n.translate('filter_today');
+      case PersonalTimeFilter.thisWeek:
+        return l10n.translate('filter_this_week');
+      case PersonalTimeFilter.thisMonth:
+        return l10n.filterThisMonth;
+      case PersonalTimeFilter.custom:
+        return l10n.filterCustom;
+    }
+  }
 
   String get label {
     switch (this) {

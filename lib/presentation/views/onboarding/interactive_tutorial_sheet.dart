@@ -40,7 +40,7 @@ class _InteractiveTutorialSheetState extends State<InteractiveTutorialSheet> {
         'subtitle': l10n.tutorialSlide1Desc,
         'icon': Icons.account_balance_wallet_rounded,
         'color': AppColors.emeraldPrimary,
-        'badge': 'KITH OVERVIEW',
+        'badge': l10n.tutorialBadge1,
         'highlight': l10n.tutorialSlide1Desc,
       },
       {
@@ -48,7 +48,7 @@ class _InteractiveTutorialSheetState extends State<InteractiveTutorialSheet> {
         'subtitle': l10n.tutorialSlide2Desc,
         'icon': Icons.account_balance_wallet_rounded,
         'color': AppColors.emeraldPrimary,
-        'badge': 'PERSONAL FINANCES',
+        'badge': l10n.tutorialBadge2,
         'highlight': l10n.tutorialSlide2Desc,
       },
       {
@@ -56,7 +56,7 @@ class _InteractiveTutorialSheetState extends State<InteractiveTutorialSheet> {
         'subtitle': l10n.tutorialSlide3Desc,
         'icon': Icons.flight_takeoff_rounded,
         'color': AppColors.indigoAccent,
-        'badge': 'GROUP TRAVEL & LEDGERS',
+        'badge': l10n.tutorialBadge3,
         'highlight': l10n.tutorialSlide3Desc,
       },
       {
@@ -64,7 +64,7 @@ class _InteractiveTutorialSheetState extends State<InteractiveTutorialSheet> {
         'subtitle': l10n.tutorialSlide4Desc,
         'icon': Icons.mic_none_rounded,
         'color': AppColors.amberAccent,
-        'badge': 'INTELLIGENT INPUT',
+        'badge': l10n.tutorialBadge4,
         'highlight': l10n.tutorialSlide4Desc,
       },
       {
@@ -72,7 +72,7 @@ class _InteractiveTutorialSheetState extends State<InteractiveTutorialSheet> {
         'subtitle': l10n.tutorialSlide5Desc,
         'icon': Icons.cloud_sync_rounded,
         'color': AppColors.emeraldPrimary,
-        'badge': 'CLOUD & RECOVERY',
+        'badge': l10n.tutorialBadge5,
         'highlight': l10n.tutorialSlide5Desc,
       },
       {
@@ -80,7 +80,7 @@ class _InteractiveTutorialSheetState extends State<InteractiveTutorialSheet> {
         'subtitle': l10n.tutorialSlide6Desc,
         'icon': Icons.all_inclusive_rounded,
         'color': AppColors.emeraldPrimary,
-        'badge': 'READY TO GO',
+        'badge': l10n.tutorialBadge6,
         'highlight': l10n.tutorialSlide6Desc,
       },
     ];
@@ -277,7 +277,7 @@ class _InteractiveTutorialSheetState extends State<InteractiveTutorialSheet> {
                 const Spacer(),
                 // Next / Get Started Button
                 AppButton(
-                  text: isLast ? l10n.actionDone : l10n.actionNext,
+                  text: isLast ? l10n.tutorialBtnGetStarted : l10n.tutorialBtnNext,
                   icon: isLast ? Icons.check_rounded : Icons.arrow_forward_rounded,
                   height: 44,
                   padding: const EdgeInsets.symmetric(horizontal: 20),

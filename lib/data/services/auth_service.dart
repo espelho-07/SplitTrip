@@ -102,14 +102,14 @@ class AuthService {
   /// Normalizes a recovery key format regardless of casing, spaces, underscores, or missing KITH- prefix.
   static String normalizeRecoveryKey(String raw) {
     final trimmed = raw.trim().toUpperCase();
-    String clean = trimmed.replaceAll(RegExp(r'[\s\-_:]'), '');
+    String clean = trimmed.replaceAll(RegExp(r'[\s\-_:\r\n]'), '');
     if (clean.startsWith('KITH')) {
       clean = clean.substring(4);
     }
     if (clean.length == 8) {
       return 'KITH-${clean.substring(0, 4)}-${clean.substring(4, 8)}';
     }
-    return trimmed.isEmpty ? '' : (clean.length > 8 ? 'KITH-${clean.substring(0, 4)}-${clean.substring(4, 8)}' : clean);
+    return clean.isEmpty ? '' : (clean.length > 8 ? 'KITH-${clean.substring(0, 4)}-${clean.substring(4, 8)}' : clean);
   }
 
   /// Recovers a session across devices via recovery key.
@@ -132,7 +132,10 @@ class AuthService {
         final userData = res['user'] as Map<String, dynamic>;
         final token = res['token'] as String? ?? userData['anonymousToken'] as String? ?? '';
 
-        final user = GuestUser.fromJson(userData);
+        var user = GuestUser.fromJson(userData);
+        if (user.recoveryKey.isEmpty) {
+          user = user.copyWith(recoveryKey: cleanKey);
+        }
         apiClient.setAuthToken(token);
         realtimeClient?.setAuthToken(token);
         await storage.saveUser(user.toJson());
@@ -214,7 +217,13 @@ class AuthService {
         final userData = res['user'] as Map<String, dynamic>;
         final token = res['token'] as String? ?? userData['anonymousToken'] as String? ?? '';
 
-        final user = GuestUser.fromJson(userData);
+        var user = GuestUser.fromJson(userData);
+        if (user.recoveryKey.isEmpty) {
+          final recoveryKey = (currentGuest != null && currentGuest.recoveryKey.isNotEmpty)
+              ? currentGuest.recoveryKey
+              : _generateRecoveryKey();
+          user = user.copyWith(recoveryKey: recoveryKey);
+        }
         apiClient.setAuthToken(token);
         realtimeClient?.setAuthToken(token);
         await storage.saveUser(user.toJson());
@@ -224,6 +233,7 @@ class AuthService {
           await _reTagLocalGuestData(currentGuest.id, user.id);
         }
 
+        syncLocalGuestSession(user);
         return user;
       }
     } catch (e) {

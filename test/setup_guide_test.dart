@@ -85,7 +85,7 @@ void main() {
 
       expect(find.text('Create a Group Trip'), findsOneWidget);
       expect(find.text("Join a Friend's Trip"), findsOneWidget);
-      expect(find.text('Splitting Options'), findsOneWidget);
+      expect(find.text('Settle Balances & Simplify Debts'), findsOneWidget);
     });
   });
 }

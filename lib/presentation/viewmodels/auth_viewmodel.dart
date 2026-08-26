@@ -86,7 +86,9 @@ class AuthViewModel extends ChangeNotifier {
     try {
       final user = await userRepo.recoverUser(recoveryKey);
       _currentUser = user;
-      _authState = AuthState.authenticated;
+      if (user != null) {
+        _authState = AuthState.authenticated;
+      }
       return user;
     } catch (e) {
       _errorMessage = 'Invalid recovery key';

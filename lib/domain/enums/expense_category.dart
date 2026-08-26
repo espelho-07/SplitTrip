@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/localization/app_localizations.dart';
 
 /// Categories for group travel & everyday social expenses.
 enum ExpenseCategory {
@@ -10,6 +11,25 @@ enum ExpenseCategory {
   shopping,
   groceries,
   general;
+
+  String localizedName(AppLocalizations l10n) {
+    switch (this) {
+      case ExpenseCategory.transport:
+        return l10n.catTransport;
+      case ExpenseCategory.food:
+      case ExpenseCategory.drinks:
+        return l10n.catFood;
+      case ExpenseCategory.stay:
+        return l10n.catStay;
+      case ExpenseCategory.activities:
+        return l10n.catEntertainment;
+      case ExpenseCategory.shopping:
+      case ExpenseCategory.groceries:
+        return l10n.catShopping;
+      case ExpenseCategory.general:
+        return l10n.catOther;
+    }
+  }
 
   String get displayName {
     switch (this) {

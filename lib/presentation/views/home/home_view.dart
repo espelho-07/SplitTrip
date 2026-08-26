@@ -79,11 +79,11 @@ class _HomeViewState extends State<HomeView> {
     }
   }
 
-  String _getGreeting() {
+  String _getGreeting(AppLocalizations l10n) {
     final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
+    if (hour < 12) return l10n.greetingMorning;
+    if (hour < 17) return l10n.greetingAfternoon;
+    return l10n.greetingEvening;
   }
 
   void _showProfileSheet() {
@@ -101,27 +101,28 @@ class _HomeViewState extends State<HomeView> {
     final authVm = context.read<AuthViewModel>();
     final homeVm = context.read<HomeViewModel>();
     final personalVm = context.read<PersonalExpenseViewModel>();
+    final l10n = context.l10n;
 
     showDialog(
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          title: const Text('Restore from Recovery Key'),
+          title: Text(l10n.dialogRestoreTitle),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Enter the recovery key of the account you want to restore or switch to.',
-                style: TextStyle(fontSize: 13),
+              Text(
+                l10n.dialogRestoreDesc,
+                style: const TextStyle(fontSize: 13),
               ),
               const SizedBox(height: 16),
               TextField(
                 controller: keyController,
                 textCapitalization: TextCapitalization.characters,
-                decoration: const InputDecoration(
-                  hintText: 'e.g. KITH-XXXX-YYYY or XXXX-YYYY',
-                  prefixIcon: Icon(Icons.key_rounded, size: 20),
+                decoration: InputDecoration(
+                  hintText: l10n.dialogRestoreHint,
+                  prefixIcon: const Icon(Icons.key_rounded, size: 20),
                 ),
               ),
             ],
@@ -129,7 +130,7 @@ class _HomeViewState extends State<HomeView> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
+              child: Text(l10n.actionCancel),
             ),
             FilledButton(
               onPressed: () async {
@@ -138,10 +139,10 @@ class _HomeViewState extends State<HomeView> {
                 Navigator.pop(ctx);
 
                 final stageNotifier = ValueNotifier<int>(0);
-                final stages = const [
-                  ProgressStage(label: 'Validating recovery key', description: 'Checking hash on server'),
-                  ProgressStage(label: 'Restoring account session', description: 'Loading canonical user identity'),
-                  ProgressStage(label: 'Syncing cloud data', description: 'Restoring trips, expenses & balances'),
+                final stages = [
+                  ProgressStage(label: l10n.statusRestoring, description: l10n.authRecoveryKey),
+                  ProgressStage(label: l10n.statusSyncing, description: l10n.authGoogleConnected),
+                  ProgressStage(label: l10n.statusSaved, description: l10n.tripsBalances),
                 ];
 
                 showDialog(
@@ -157,7 +158,7 @@ class _HomeViewState extends State<HomeView> {
                         child: Padding(
                           padding: const EdgeInsets.all(24.0),
                           child: KithStageProgress(
-                            title: 'Restoring account…',
+                            title: l10n.statusRestoring,
                             stages: stages,
                             currentStageIndex: activeStage,
                           ),
@@ -188,16 +189,16 @@ class _HomeViewState extends State<HomeView> {
                     await personalVm.syncTripExpenses(restoredUser.id);
 
                     if (mounted) {
-                      KithSuccessToast.show(context, 'Account restored for ${restoredUser.displayName} ✓');
+                      KithSuccessToast.show(context, '${l10n.onboardingWelcomeBack}, ${restoredUser.displayName} ✓');
                     }
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Could not restore session. Please verify your recovery code.')),
+                      SnackBar(content: Text(l10n.onboardingErrRecoveryFailed)),
                     );
                   }
                 }
               },
-              child: const Text('Restore'),
+              child: Text(l10n.actionRestore),
             ),
           ],
         );
@@ -219,29 +220,35 @@ class _HomeViewState extends State<HomeView> {
       appBar: AppBar(
         titleSpacing: 16,
         title: GestureDetector(
-          onTap: _showProfileSheet,
+          onTap: () {
+            HapticHelper.light();
+            _showProfileSheet();
+          },
           behavior: HitTestBehavior.opaque,
           child: Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
-              MemberAvatar(
-                name: user?.displayName ?? 'Traveler',
-                size: 34,
+              Hero(
+                tag: 'user-avatar-${user?.id ?? "guest"}',
+                child: MemberAvatar(
+                  name: user?.displayName ?? 'User',
+                  avatarUrl: user?.avatarUrl,
+                  size: 38,
+                ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    _getGreeting(),
+                    _getGreeting(l10n),
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
                       color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                     ),
                   ),
                   Text(
-                    user?.displayName ?? 'Traveler',
+                    user?.displayName ?? l10n.greetingTraveler,
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
@@ -254,14 +261,6 @@ class _HomeViewState extends State<HomeView> {
           ),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.account_circle_outlined, size: 24),
-            tooltip: l10n.navProfile,
-            onPressed: () {
-              HapticHelper.light();
-              _showProfileSheet();
-            },
-          ),
           IconButton(
             icon: const Icon(Icons.menu_book_rounded, size: 22),
             tooltip: l10n.guideTitle,
@@ -282,7 +281,7 @@ class _HomeViewState extends State<HomeView> {
           ),
           IconButton(
             icon: const Icon(Icons.qr_code_scanner_rounded, size: 22),
-            tooltip: 'Join Trip',
+            tooltip: l10n.tripsJoin,
             onPressed: () => context.push('/join-trip'),
           ),
           const SizedBox(width: 4),

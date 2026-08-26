@@ -5,15 +5,15 @@ const { AppError } = require('../middleware/error_handler');
 class AuthService {
   _normalizeRecoveryKey(rawKey) {
     if (!rawKey) return '';
-    const trimmed = rawKey.trim().toUpperCase();
-    let clean = trimmed.replace(/[\s\-_:]/g, '');
+    const trimmed = String(rawKey).trim().toUpperCase();
+    let clean = trimmed.replace(/[\s\-_:\r\n]/g, '');
     if (clean.startsWith('KITH')) {
       clean = clean.substring(4);
     }
     if (clean.length === 8) {
       return `KITH-${clean.substring(0, 4)}-${clean.substring(4, 8)}`;
     }
-    return trimmed;
+    return clean ? (clean.length > 8 ? `KITH-${clean.substring(0, 4)}-${clean.substring(4, 8)}` : clean) : '';
   }
 
   _hashKey(key) {
@@ -84,19 +84,26 @@ class AuthService {
   }
 
   recoverGuest({ recoveryKey }) {
-    if (!recoveryKey || !recoveryKey.trim()) {
+    if (!recoveryKey || !String(recoveryKey).trim()) {
       throw AppError.badRequest('Recovery key is required');
     }
 
     const normalizedKey = this._normalizeRecoveryKey(recoveryKey);
+    const rawClean = String(recoveryKey).trim().toUpperCase();
+    const noSpecial = rawClean.replace(/[\s\-_:\r\n]/g, '');
+    const strippedKith = noSpecial.startsWith('KITH') ? noSpecial.substring(4) : noSpecial;
+
     const candidateHashes = new Set([
       this._hashKey(recoveryKey),
       this._hashKey(normalizedKey),
-      crypto.createHash('sha256').update(recoveryKey.trim().toUpperCase()).digest('hex'),
-      crypto.createHash('sha256').update(recoveryKey.trim().toUpperCase().replace(/[\s\-_:]/g, '')).digest('hex'),
+      crypto.createHash('sha256').update(rawClean).digest('hex'),
+      crypto.createHash('sha256').update(noSpecial).digest('hex'),
+      crypto.createHash('sha256').update(normalizedKey).digest('hex'),
+      crypto.createHash('sha256').update(`KITH-${strippedKith}`).digest('hex'),
+      crypto.createHash('sha256').update(strippedKith).digest('hex'),
     ]);
 
-    const user = db.findOne('users', (u) => candidateHashes.has(u.recoveryKeyHash));
+    const user = db.findOne('users', (u) => u.recoveryKeyHash && candidateHashes.has(u.recoveryKeyHash));
 
     if (!user) {
       throw AppError.unauthorized('Invalid recovery key. No account matches this key.');
@@ -143,7 +150,7 @@ class AuthService {
       db.insert('users', user);
     } else {
       const updates = { lastActiveAt: now };
-      if (recoveryKeyHash && !user.recoveryKeyHash) {
+      if (recoveryKeyHash) {
         updates.recoveryKeyHash = recoveryKeyHash;
       }
       if (displayName && displayName.trim()) {
@@ -255,6 +262,10 @@ class AuthService {
       if (cleanSupabaseUserId && !user.supabaseUserId) updates.supabaseUserId = cleanSupabaseUserId;
       if (displayName && displayName.trim()) updates.displayName = displayName.trim();
       if (photoUrl && !user.avatarUrl) updates.avatarUrl = photoUrl;
+      if (!user.recoveryKeyHash) {
+        const generatedKey = this._generateRecoveryKey();
+        updates.recoveryKeyHash = this._hashKey(generatedKey);
+      }
 
       db.update('users', user.id, updates);
       user = db.get('users', user.id);
@@ -267,26 +278,29 @@ class AuthService {
       // 2. Check if we should upgrade the current active guest user
       const guestUser = currentGuestUserId ? db.get('users', currentGuestUserId) : null;
       if (guestUser && guestUser.isGuest) {
+        const generatedKey = guestUser.recoveryKeyHash ? null : this._generateRecoveryKey();
         db.update('users', guestUser.id, {
           email: cleanEmail,
           googleId: cleanGoogleId,
           supabaseUserId: cleanSupabaseUserId,
           displayName: displayName && displayName.trim() ? displayName.trim() : guestUser.displayName,
           avatarUrl: photoUrl || guestUser.avatarUrl,
+          recoveryKeyHash: guestUser.recoveryKeyHash || (generatedKey ? this._hashKey(generatedKey) : null),
           isGuest: false,
           lastActiveAt: now,
         });
         user = db.get('users', guestUser.id);
       } else {
-        // Create new permanent canonical user with stable ID
+        // Create new permanent canonical user with stable ID and recovery key
         const newId = cleanSupabaseUserId || (cleanGoogleId ? `usr_g_${cleanGoogleId}` : `usr_g_${crypto.randomUUID().replace(/-/g, '').substring(0, 12)}`);
+        const generatedKey = this._generateRecoveryKey();
         user = {
           id: newId,
           displayName: displayName && displayName.trim() ? displayName.trim() : cleanEmail.split('@')[0],
           avatarUrl: photoUrl || null,
           googleId: cleanGoogleId,
           supabaseUserId: cleanSupabaseUserId,
-          recoveryKeyHash: null,
+          recoveryKeyHash: this._hashKey(generatedKey),
           isGuest: false,
           email: cleanEmail,
           createdAt: now,
