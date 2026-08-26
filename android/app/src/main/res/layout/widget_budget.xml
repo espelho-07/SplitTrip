@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_budget_root"
     android:layout_width="match_parent"
@@ -41,7 +41,6 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
-        android:includeFontPadding="false"
         android:text="₹14,250 / ₹20,000"
         android:textColor="@color/widget_text_primary"
         android:textSize="18sp"
@@ -50,16 +49,17 @@
     <!-- Progress Bar -->
     <ProgressBar
         android:id="@+id/progress_budget_bar"
-        style="?android:attr/progressBarStyleHorizontal"
+        style="@android:style/Widget.ProgressBar.Horizontal"
         android:layout_width="match_parent"
         android:layout_height="8dp"
         android:layout_marginTop="8dp"
+        android:indeterminate="false"
         android:max="100"
         android:progress="71"
         android:progressDrawable="@drawable/widget_progress_bar" />
 
-    <!-- Spacer -->
-    <View
+    <!-- Spacer FrameLayout (allowed in RemoteViews) -->
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1" />

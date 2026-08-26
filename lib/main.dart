@@ -97,6 +97,26 @@ void main() async {
     AppRouter.handleDeepLink(deepLinkUri);
   };
 
+  // Instant pre-sync widgets on startup from local storage
+  final currentUser = authService.getCurrentUser();
+  if (currentUser != null) {
+    final now = DateTime.now();
+    final monthKey = '${now.year}-${now.month.toString().padLeft(2, '0')}';
+    final cachedExpenses = personalRepo.getCachedPersonalExpenses();
+    final cachedBudget = personalRepo.getCachedPersonalBudget(monthKey);
+    final cachedDebts = personalRepo.getCachedPersonalDebts();
+    final cachedTrips = tripRepo.getCachedTrips();
+    unawaited(widgetService.syncSnapshot(
+      currentUser: currentUser,
+      personalExpenses: cachedExpenses,
+      budget: cachedBudget,
+      debtsSummary: cachedDebts,
+      trips: cachedTrips,
+    ));
+  } else {
+    unawaited(widgetService.syncSnapshot(currentUser: null));
+  }
+
   runApp(
     MultiProvider(
       providers: [

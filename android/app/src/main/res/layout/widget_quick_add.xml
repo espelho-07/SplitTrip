@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_quick_add_root"
     android:layout_width="match_parent"
@@ -17,7 +17,8 @@
         android:background="@drawable/widget_pill_button"
         android:gravity="center"
         android:orientation="horizontal"
-        android:paddingHorizontal="12dp">
+        android:paddingLeft="12dp"
+        android:paddingRight="12dp">
 
         <ImageView
             android:layout_width="18dp"
