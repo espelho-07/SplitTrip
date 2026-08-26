@@ -14,6 +14,7 @@ import '../../../../core/localization/app_localizations.dart';
 import '../../../../data/services/local_storage_service.dart';
 import '../../../../data/services/sync_service.dart';
 import '../../../../domain/enums/app_experience_mode.dart';
+import '../../../router/app_router.dart';
 import '../../../viewmodels/auth_viewmodel.dart';
 import '../../../viewmodels/home_viewmodel.dart';
 import '../../../viewmodels/locale_viewmodel.dart';
@@ -40,7 +41,8 @@ class ProfileSheet extends StatelessWidget {
     VoidCallback? onSwitchToTrips,
     void Function(BuildContext)? onShowRestoreAccount,
   }) {
-    return showModalBottomSheet(
+    HapticHelper.light();
+    return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -64,6 +66,12 @@ class ProfileSheet extends StatelessWidget {
 
   void _showSignOutDialog(BuildContext context) async {
     final l10n = context.l10n;
+    final nav = Navigator.of(context);
+    final authVm = context.read<AuthViewModel>();
+    final homeVm = context.read<HomeViewModel>();
+    final personalVm = context.read<PersonalExpenseViewModel>();
+    final storage = context.read<LocalStorageService>();
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (dCtx) => AlertDialog(
@@ -84,23 +92,19 @@ class ProfileSheet extends StatelessWidget {
       ),
     );
 
-    if (confirm == true && context.mounted) {
-      final authVm = context.read<AuthViewModel>();
-      final homeVm = context.read<HomeViewModel>();
-      final personalVm = context.read<PersonalExpenseViewModel>();
-      final storage = context.read<LocalStorageService>();
-
-      // Close profile sheet first
-      Navigator.of(context).pop();
+    if (confirm == true) {
+      // Dismiss profile sheet and navigate to onboarding immediately
+      nav.pop();
+      AppRouter.router.go('/onboarding');
 
       await authVm.logout();
       await storage.clearAllUserData();
       homeVm.clearData();
       personalVm.clearData();
 
-      if (context.mounted) {
-        context.go('/onboarding');
-        KithSuccessToast.show(context, l10n.authSignOutSuccess);
+      final rootCtx = AppRouter.navigatorKey.currentContext;
+      if (rootCtx != null && rootCtx.mounted) {
+        KithSuccessToast.show(rootCtx, l10n.authSignOutSuccess);
       }
     }
   }

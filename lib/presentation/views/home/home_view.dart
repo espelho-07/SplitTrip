@@ -11,6 +11,7 @@ import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/widgets/member_avatar.dart';
 import '../../../data/services/sync_service.dart';
 import '../../../domain/enums/app_experience_mode.dart';
+import '../../router/app_router.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/personal_expense_viewmodel.dart';
@@ -121,7 +122,10 @@ class _HomeViewState extends State<HomeView> {
                 textCapitalization: TextCapitalization.characters,
                 decoration: InputDecoration(
                   hintText: l10n.dialogRestoreHint,
-                  prefixIcon: const Icon(Icons.key_rounded, size: 20),
+                  labelText: l10n.authRecoveryKey,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
                 ),
               ),
             ],
@@ -213,6 +217,17 @@ class _HomeViewState extends State<HomeView> {
     final user = authVm.currentUser;
     final isTripsOnly = authVm.appExperienceMode == AppExperienceMode.tripsOnly;
 
+    // Safety guard: If user is logged out or unauthenticated, route directly to onboarding
+    if (!authVm.isAuthenticated || user == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        AppRouter.router.go('/onboarding');
+      });
+      return Scaffold(
+        backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
+        body: const SizedBox.shrink(),
+      );
+    }
+
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: AppBar(
@@ -226,10 +241,10 @@ class _HomeViewState extends State<HomeView> {
           child: Row(
             children: [
               Hero(
-                tag: 'user-avatar-${user?.id ?? "guest"}',
+                tag: 'user-avatar-${user.id}',
                 child: MemberAvatar(
-                  name: user?.displayName ?? 'User',
-                  avatarUrl: user?.avatarUrl,
+                  name: user.displayName,
+                  avatarUrl: user.avatarUrl,
                   size: 38,
                 ),
               ),
@@ -246,7 +261,7 @@ class _HomeViewState extends State<HomeView> {
                     ),
                   ),
                   Text(
-                    user?.displayName ?? l10n.greetingTraveler,
+                    user.displayName,
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,

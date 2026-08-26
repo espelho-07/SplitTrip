@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
@@ -10,6 +9,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/widgets/surface_card.dart';
 import '../../../data/services/sync_service.dart';
+import '../../router/app_router.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/personal_expense_viewmodel.dart';
@@ -23,20 +23,25 @@ class CloudSettingsView extends StatelessWidget {
     if (time == null) return 'Never synced';
     final now = DateTime.now();
     final diff = now.difference(time);
-    if (diff.inMinutes < 1) return 'Just now';
+
+    if (diff.inSeconds < 60) return 'Just now';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return 'Today at ${DateFormat.jm().format(time)}';
-    return DateFormat('MMM d, h:mm a').format(time);
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return DateFormat('dd MMM, hh:mm a').format(time);
   }
 
   void _showSignOutDialog(BuildContext context) async {
+    final authVm = context.read<AuthViewModel>();
+    final homeVm = context.read<HomeViewModel>();
+    final personalVm = context.read<PersonalExpenseViewModel>();
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (dCtx) => AlertDialog(
         shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
-        title: const Text('Sign out of Kith?'),
+        title: const Text('Sign Out of Kith?'),
         content: const Text(
-          'Your cloud data will remain safe. You can sign back in anytime using your Google account or Recovery Key.',
+          'Your active cloud session will be closed on this device. You can restore your data anytime using Google or your Recovery Key.',
         ),
         actions: [
           TextButton(
@@ -46,24 +51,21 @@ class CloudSettingsView extends StatelessWidget {
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () => Navigator.pop(dCtx, true),
-            child: const Text('Sign out'),
+            child: const Text('Sign Out'),
           ),
         ],
       ),
     );
 
-    if (confirm == true && context.mounted) {
-      final authVm = context.read<AuthViewModel>();
-      final homeVm = context.read<HomeViewModel>();
-      final personalVm = context.read<PersonalExpenseViewModel>();
-
+    if (confirm == true) {
+      AppRouter.router.go('/onboarding');
       await authVm.logout();
       homeVm.clearData();
       personalVm.clearData();
 
-      if (context.mounted) {
-        context.go('/onboarding');
-        KithSuccessToast.show(context, 'Signed out successfully ✓');
+      final rootCtx = AppRouter.navigatorKey.currentContext;
+      if (rootCtx != null && rootCtx.mounted) {
+        KithSuccessToast.show(rootCtx, 'Signed out successfully ✓');
       }
     }
   }
