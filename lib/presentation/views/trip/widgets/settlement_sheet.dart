@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/utils/haptic_feedback_helper.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/currency_display.dart';
@@ -12,6 +14,7 @@ import '../../../../core/widgets/surface_card.dart';
 import '../../../../domain/models/balance_summary.dart';
 import '../../../../domain/models/trip.dart';
 import '../../../../domain/models/trip_member.dart';
+import '../../../viewmodels/trip_detail_viewmodel.dart';
 
 class SettlementSheet extends StatefulWidget {
   final Trip trip;
@@ -35,15 +38,27 @@ class SettlementSheet extends StatefulWidget {
 
 class _SettlementSheetState extends State<SettlementSheet> {
   final Set<String> _processingTransferIds = {};
+  final Set<String> _settledTransferKeys = {};
 
-  TripMember? _findMember(String memberId) {
-    return widget.trip.members.where((m) => m.id == memberId).firstOrNull;
+  TripMember? _findMember(Trip activeTrip, String memberId) {
+    return activeTrip.members.where((m) => m.id == memberId).firstOrNull;
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final settlements = widget.balanceSummary.simplifiedSettlements;
+    
+    // Reactively watch TripDetailViewModel for live balance recalculations
+    TripDetailViewModel? tripDetailVm;
+    try {
+      tripDetailVm = context.watch<TripDetailViewModel?>();
+    } catch (_) {}
+
+    final activeTrip = tripDetailVm?.trip ?? widget.trip;
+    final activeSummary = tripDetailVm?.balanceSummary ?? widget.balanceSummary;
+    final settlements = activeSummary.simplifiedSettlements.where((s) {
+      return !_settledTransferKeys.contains(s.fromMemberId + s.toMemberId);
+    }).toList();
 
     return Container(
       decoration: BoxDecoration(
@@ -58,19 +73,21 @@ class _SettlementSheetState extends State<SettlementSheet> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Simplified Settlement',
-                    style: AppTypography.titleLarge(isDark: isDark),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Min-cash-flow algorithm reduced debts to ${settlements.length} direct transfers',
-                    style: AppTypography.bodySmall(isDark: isDark),
-                  ),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Simplified Settlement',
+                      style: AppTypography.titleLarge(isDark: isDark),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Min-cash-flow algorithm reduced debts to ${settlements.length} direct transfers',
+                      style: AppTypography.bodySmall(isDark: isDark),
+                    ),
+                  ],
+                ),
               ),
               IconButton(
                 icon: const Icon(Icons.close_rounded),
@@ -114,14 +131,14 @@ class _SettlementSheetState extends State<SettlementSheet> {
                 separatorBuilder: (context, index) => const SizedBox(height: AppSpacing.md),
                 itemBuilder: (context, index) {
                   final s = settlements[index];
-                  final fromMember = _findMember(s.fromMemberId);
-                  final toMember = _findMember(s.toMemberId);
+                  final fromMember = _findMember(activeTrip, s.fromMemberId);
+                  final toMember = _findMember(activeTrip, s.toMemberId);
 
                   final fromName = fromMember?.displayName ?? 'Member';
                   final toName = toMember?.displayName ?? 'Member';
                   final isPayerCurrentUser = fromMember?.userId == widget.currentUserId;
                   final isReceiverCurrentUser = toMember?.userId == widget.currentUserId;
-                  final isTripCreator = widget.trip.creatorId == widget.currentUserId;
+                  final isTripCreator = activeTrip.creatorId == widget.currentUserId;
                   final canRecord = isPayerCurrentUser || isReceiverCurrentUser || isTripCreator;
                   final isProcessing = _processingTransferIds.contains(s.fromMemberId + s.toMemberId);
 
@@ -248,11 +265,26 @@ class _SettlementSheetState extends State<SettlementSheet> {
                                           setState(() => _processingTransferIds.add(transferKey));
                                           HapticHelper.medium();
                                           try {
-                                            await widget.onRecordTransfer!(
-                                              s.fromMemberId,
-                                              s.toMemberId,
-                                              s.amountInPaise,
-                                            );
+                                            if (widget.onRecordTransfer != null) {
+                                              await widget.onRecordTransfer!(
+                                                s.fromMemberId,
+                                                s.toMemberId,
+                                                s.amountInPaise,
+                                              );
+                                            }
+                                            if (mounted) {
+                                              setState(() {
+                                                _settledTransferKeys.add(transferKey);
+                                              });
+                                              HapticHelper.success();
+                                              ScaffoldMessenger.of(this.context).showSnackBar(
+                                                SnackBar(
+                                                  behavior: SnackBarBehavior.floating,
+                                                  duration: const Duration(seconds: 2),
+                                                  content: Text('Payment of ${CurrencyFormatter.formatPaise(s.amountInPaise, currencyCode: activeTrip.currencyCode)} marked as paid!'),
+                                                ),
+                                              );
+                                            }
                                           } finally {
                                             if (mounted) {
                                               setState(() => _processingTransferIds.remove(transferKey));

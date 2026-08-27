@@ -2,8 +2,11 @@ import '../../core/network/api_client.dart';
 import '../../core/network/realtime_client.dart';
 import '../../domain/engine/balance_engine.dart';
 import '../../domain/engine/money_engine.dart';
+import '../../domain/enums/expense_category.dart';
+import '../../domain/enums/split_type.dart';
 import '../../domain/models/balance_summary.dart';
 import '../../domain/models/expense.dart';
+import '../../domain/models/expense_split.dart';
 import '../../domain/models/trip.dart';
 import '../services/local_storage_service.dart';
 import '../services/sync_service.dart';
@@ -139,6 +142,33 @@ class ExpenseRepository {
     String? paymentReference,
     String? note,
   }) async {
+    // 1. Create a zero-sum settlement expense locally
+    final settlementExpense = Expense(
+      id: 'settlement_${DateTime.now().millisecondsSinceEpoch}',
+      tripId: tripId,
+      title: 'Settlement Payment',
+      amountInPaise: amountInPaise,
+      category: ExpenseCategory.general,
+      paidById: fromMemberId,
+      splits: [
+        ExpenseSplit(
+          memberId: toMemberId,
+          amountInPaise: amountInPaise,
+        ),
+      ],
+      splitType: SplitType.exact,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+
+    final currentExpenses = await getExpenses(tripId);
+    currentExpenses.insert(0, settlementExpense);
+    await storage.saveExpenses(
+      tripId,
+      currentExpenses.map((e) => e.toJson()).toList(),
+    );
+
+    // 2. Transmit to remote or enqueue offline mutation
     try {
       await apiClient.post(
         '/trips/$tripId/settlements',
@@ -151,7 +181,10 @@ class ExpenseRepository {
         },
       );
     } catch (_) {
-      // Offline fallback
+      await syncService.enqueueMutation(
+        MutationType.addExpense,
+        settlementExpense.toJson(),
+      );
     }
   }
 }

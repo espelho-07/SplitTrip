@@ -17,6 +17,7 @@ import '../../../core/widgets/member_avatar.dart';
 import '../../../core/widgets/pill_badge.dart';
 import '../../../core/widgets/shimmer_skeleton.dart';
 import '../../../core/widgets/surface_card.dart';
+import '../../../core/network/connectivity_guard.dart';
 import '../../../domain/enums/trip_lifecycle.dart';
 import '../../../domain/models/balance_summary.dart';
 import '../../../domain/models/expense.dart';
@@ -27,6 +28,7 @@ import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/trip_detail_viewmodel.dart';
 import 'widgets/expense_detail_sheet.dart';
 import 'widgets/settlement_sheet.dart';
+import 'widgets/trip_completion_modal.dart';
 import 'widgets/trip_qr_sheet.dart';
 
 class TripDetailView extends StatefulWidget {
@@ -129,73 +131,155 @@ class _TripDetailViewState extends State<TripDetailView> {
     );
   }
 
-  void _showCompleteTripConfirmation() {
+  final ConnectivityGuard _connectivityGuard = ConnectivityGuard();
+  bool _isCompleting = false;
+
+  Future<void> _showCompleteTripConfirmation() async {
     final tripDetailVm = context.read<TripDetailViewModel>();
     final authVm = context.read<AuthViewModel>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final trip = tripDetailVm.trip;
+    if (trip == null) return;
 
+    // 1. Empty Trip Check Guard
+    if (tripDetailVm.expenses.isEmpty) {
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
+          title: const Row(
+            children: [
+              Icon(Icons.info_outline_rounded, color: Colors.amber, size: 24),
+              SizedBox(width: 8),
+              Text('Complete Empty Trip?'),
+            ],
+          ),
+          content: const Text(
+            'This trip has no recorded expenses. Would you like to add expenses first or mark it as completed anyway?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(ctx).pop(false);
+                context.push('/trip/${trip.id}/add-expense');
+              },
+              child: const Text('+ Add Expense'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.emeraldPrimary,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Complete Anyway'),
+            ),
+          ],
+        ),
+      );
+
+      if (proceed != true) return;
+    }
+
+    if (!mounted) return;
+
+    // 2. Online Connectivity Guard
+    final isOnline = await _connectivityGuard.checkOnlineOrNotify(
+      context,
+      actionName: 'complete this trip',
+      customMessage: 'You need to connect to the internet to complete this trip.',
+    );
+    if (!isOnline) return;
+
+    if (!mounted) return;
+
+    // 3. Show Confirmation Bottom Sheet
     showModalBottomSheet(
       context: context,
       backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
       shape: RoundedRectangleBorder(borderRadius: AppRadius.topSheetBorder),
       builder: (ctx) {
-        return Padding(
-          padding: AppSpacing.bottomSheetPadding,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: AppSpacing.bottomSheetPadding,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppColors.indigoAccent.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.lock_clock_outlined, color: AppColors.indigoAccent, size: 24),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.indigoAccent.withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.lock_clock_outlined, color: AppColors.indigoAccent, size: 24),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Text(
+                          'Complete Trip?',
+                          style: AppTypography.titleLarge(isDark: isDark),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Text(
-                      'Complete Trip?',
-                      style: AppTypography.titleLarge(isDark: isDark),
-                    ),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    'Completing this trip locks expense creation and generates simplified settlement transfers for all members to settle debts.',
+                    style: AppTypography.bodyMedium(isDark: isDark),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: AppButton(
+                          text: 'Keep Active',
+                          variant: AppButtonVariant.outline,
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: AppButton(
+                          text: _isCompleting ? 'Completing...' : 'Complete Trip',
+                          isLoading: _isCompleting,
+                          onPressed: _isCompleting
+                              ? null
+                              : () async {
+                                  setModalState(() => _isCompleting = true);
+                                  setState(() => _isCompleting = true);
+
+                                  try {
+                                    await tripDetailVm.completeTrip(authVm.currentUser?.id ?? '');
+                                    if (ctx.mounted) {
+                                      Navigator.pop(ctx);
+                                    }
+                                    if (mounted) {
+                                      // 4. Show Celebration Completion Modal
+                                      await TripCompletionModal.show(
+                                        this.context,
+                                        trip: tripDetailVm.trip ?? trip,
+                                        balanceSummary: tripDetailVm.balanceSummary,
+                                        expenseCount: tripDetailVm.expenses.length,
+                                        onViewSettlements: _showSettlementSheet,
+                                      );
+                                    }
+                                  } finally {
+                                    if (mounted) {
+                                      setState(() => _isCompleting = false);
+                                    }
+                                  }
+                                },
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                'Completing this trip locks expense creation and generates simplified settlement transfers for all members to settle debts.',
-                style: AppTypography.bodyMedium(isDark: isDark),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              Row(
-                children: [
-                  Expanded(
-                    child: AppButton(
-                      text: 'Keep Active',
-                      variant: AppButtonVariant.outline,
-                      onPressed: () => Navigator.pop(ctx),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: AppButton(
-                      text: 'Complete Trip',
-                      onPressed: () async {
-                        Navigator.pop(ctx);
-                        await tripDetailVm.completeTrip(authVm.currentUser?.id ?? '');
-                        if (mounted) {
-                          _showSettlementSheet();
-                        }
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
     );

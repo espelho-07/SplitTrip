@@ -46,33 +46,34 @@ class _SplashViewState extends State<SplashView> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Logo Mark
+            // Official Logo Mark
             Container(
-              width: 84,
-              height: 84,
+              width: 88,
+              height: 88,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(24),
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.emeraldLight,
-                    AppColors.emeraldDark,
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
                 boxShadow: [
                   BoxShadow(
-                    color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.35),
+                    color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.25),
                     blurRadius: 28,
                     offset: const Offset(0, 10),
                   ),
                 ],
               ),
               alignment: Alignment.center,
-              child: const Icon(
-                Icons.all_inclusive_rounded,
-                size: 44,
-                color: Colors.white,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(22),
+                child: Image.asset(
+                  'assets/images/logo.png',
+                  width: 88,
+                  height: 88,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => const Icon(
+                    Icons.flight_takeoff_rounded,
+                    size: 44,
+                    color: AppColors.emeraldPrimary,
+                  ),
+                ),
               ),
             )
             .animate()

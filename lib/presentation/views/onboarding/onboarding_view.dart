@@ -75,7 +75,36 @@ class _OnboardingViewState extends State<OnboardingView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: AppSpacing.xl),
+              // App Logo
+              Container(
+                width: 54,
+                height: 54,
+                margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.2),
+                      blurRadius: 16,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Image.asset(
+                    'assets/images/logo.png',
+                    width: 54,
+                    height: 54,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) => const Icon(
+                      Icons.flight_takeoff_rounded,
+                      size: 28,
+                      color: AppColors.emeraldPrimary,
+                    ),
+                  ),
+                ),
+              ).animate().scale(duration: 400.ms).fadeIn(),
 
               // Header Brand Badge
               Container(

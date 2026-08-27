@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'core/network/api_client.dart';
+import 'core/network/network_connectivity_service.dart';
 import 'core/network/realtime_client.dart';
 import 'core/theme/app_theme.dart';
 import 'data/repositories/expense_repository.dart';
@@ -43,6 +44,12 @@ void main() async {
     storage: storageService,
     apiClient: apiClient,
     realtimeClient: realtimeClient,
+  );
+
+  // Initialize Auto-Sync Network Connectivity Listener
+  NetworkConnectivityServiceImpl(
+    syncService: syncService,
+    apiClient: apiClient,
   );
 
   // Trigger background offline queue flush
