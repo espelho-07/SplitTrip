@@ -1,0 +1,47 @@
+﻿<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="280dp"
+    android:height="150dp"
+    android:viewportWidth="280"
+    android:viewportHeight="150">
+
+    <!-- Card Background -->
+    <path
+        android:fillColor="#1C1C21"
+        android:pathData="M 16,4 H 264 A 16,16 0 0 1 280,20 V 130 A 16,16 0 0 1 264,146 H 16 A 16,16 0 0 1 0,130 V 20 A 16,16 0 0 1 16,4 Z" />
+
+    <!-- Card Border -->
+    <path
+        android:strokeColor="#2E2E38"
+        android:strokeWidth="1.5"
+        android:pathData="M 16,4 H 264 A 16,16 0 0 1 280,20 V 130 A 16,16 0 0 1 264,146 H 16 A 16,16 0 0 1 0,130 V 20 A 16,16 0 0 1 16,4 Z" />
+
+    <!-- Trip Title: GOA '26 -->
+    <path
+        android:fillColor="#F4F4F5"
+        android:pathData="M 20,22 H 100 A 3,3 0 0 1 103,25 V 29 A 3,3 0 0 1 100,32 H 20 A 3,3 0 0 1 17,29 V 25 A 3,3 0 0 1 20,22 Z" />
+
+    <!-- Member Count: 3 members -->
+    <path
+        android:fillColor="#A1A1AA"
+        android:pathData="M 200,24 H 256 A 3,3 0 0 1 259,27 V 27 A 3,3 0 0 1 256,30 H 200 A 3,3 0 0 1 197,27 V 27 A 3,3 0 0 1 200,24 Z" />
+
+    <!-- Total Spend: ₹8,420 spent total -->
+    <path
+        android:fillColor="#71717A"
+        android:pathData="M 20,44 H 130 A 3,3 0 0 1 133,47 V 47 A 3,3 0 0 1 130,50 H 20 A 3,3 0 0 1 17,47 V 47 A 3,3 0 0 1 20,44 Z" />
+
+    <!-- Balance Card Box -->
+    <path
+        android:fillColor="#27272E"
+        android:pathData="M 20,86 H 260 A 10,10 0 0 1 270,96 V 118 A 10,10 0 0 1 260,128 H 20 A 10,10 0 0 1 10,118 V 96 A 10,10 0 0 1 20,86 Z" />
+
+    <!-- Your Balance Label -->
+    <path
+        android:fillColor="#A1A1AA"
+        android:pathData="M 26,104 H 96 A 3,3 0 0 1 99,107 V 107 A 3,3 0 0 1 96,110 H 26 A 3,3 0 0 1 23,107 V 107 A 3,3 0 0 1 26,104 Z" />
+
+    <!-- Balance Amount: +₹1,240 -->
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M 194,103 H 250 A 4,4 0 0 1 254,107 V 107 A 4,4 0 0 1 250,111 H 194 A 4,4 0 0 1 190,107 V 107 A 4,4 0 0 1 194,103 Z" />
+</vector>

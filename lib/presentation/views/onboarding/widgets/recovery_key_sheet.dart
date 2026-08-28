@@ -122,6 +122,33 @@ class _RecoveryKeySheetState extends State<RecoveryKeySheet> {
     }
   }
 
+  Future<void> _handleReviewerLogin() async {
+    final authVm = context.read<AuthViewModel>();
+    final l10n = context.l10n;
+    if (authVm.isLoading) return;
+
+    HapticHelper.medium();
+    final user = await authVm.signInAsReviewer(email: 'review.nirniq@gmail.com');
+
+    if (user != null && mounted) {
+      Navigator.pop(context);
+      final syncService = context.read<SyncService>();
+      final apiClient = context.read<ApiClient>();
+      final homeVm = context.read<HomeViewModel>();
+      final personalVm = context.read<PersonalExpenseViewModel>();
+
+      await syncService.flushQueue(apiClient);
+      await homeVm.loadTrips(user.id);
+      await personalVm.loadData(user.id);
+      await personalVm.syncTripExpenses(user.id);
+
+      if (mounted) {
+        context.go('/home');
+        KithSuccessToast.show(context, '${l10n.onboardingWelcomeBack}, ${user.displayName} ✓');
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -185,7 +212,7 @@ class _RecoveryKeySheetState extends State<RecoveryKeySheet> {
               ),
               onSubmitted: (_) => _handleRecover(),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
 
             // Restore CTA
             AppButton(
@@ -193,6 +220,24 @@ class _RecoveryKeySheetState extends State<RecoveryKeySheet> {
               isFullWidth: true,
               isLoading: authVm.isLoading,
               onPressed: _handleRecover,
+            ),
+
+            const SizedBox(height: 12),
+
+            // Play Reviewer Quick Access Button
+            Center(
+              child: TextButton.icon(
+                onPressed: _handleReviewerLogin,
+                icon: const Icon(Icons.verified_user_outlined, size: 16, color: AppColors.emeraldPrimary),
+                label: Text(
+                  'Reviewer Demo Access (review.nirniq@gmail.com)',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                  ),
+                ),
+              ),
             ),
           ],
         ),

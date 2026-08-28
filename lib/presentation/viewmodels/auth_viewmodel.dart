@@ -158,6 +158,27 @@ class AuthViewModel extends ChangeNotifier {
     }
   }
 
+  /// Fast one-tap sign in for Google Play Store Review team (review.nirniq@gmail.com)
+  Future<GuestUser?> signInAsReviewer({String email = 'review.nirniq@gmail.com'}) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final user = await userRepo.signInAsReviewer(email: email);
+      _currentUser = user;
+      _authState = AuthState.authenticated;
+      return user;
+    } catch (e) {
+      _errorMessage = 'Could not sign in as reviewer: $e';
+      _authState = AuthState.signedOut;
+      return null;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   /// Attempts to silently restore a Supabase session on app startup.
   /// Does NOT show loading state — this is a background restoration.
   Future<void> tryRestoreSupabaseSession() async {
@@ -186,6 +207,28 @@ class AuthViewModel extends ChangeNotifier {
       _errorMessage = 'Could not logout: $e';
       _currentUser = null;
       _authState = AuthState.signedOut;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Permanently deletes the account and all associated cloud data.
+  Future<bool> deleteAccount() async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      await userRepo.deleteAccount();
+      _currentUser = null;
+      _authState = AuthState.signedOut;
+      return true;
+    } catch (e) {
+      _errorMessage = 'Could not delete account: $e';
+      _currentUser = null;
+      _authState = AuthState.signedOut;
+      return false;
     } finally {
       _isLoading = false;
       notifyListeners();

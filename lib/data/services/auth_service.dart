@@ -112,8 +112,13 @@ class AuthService {
     return clean.isEmpty ? '' : (clean.length > 8 ? 'KITH-${clean.substring(0, 4)}-${clean.substring(4, 8)}' : clean);
   }
 
-  /// Recovers a session across devices via recovery key.
+  /// Recovers a session across devices via recovery key or reviewer email.
   Future<GuestUser?> recoverUser(String recoveryKey) async {
+    final rawTrimmed = recoveryKey.trim();
+    if (rawTrimmed.toLowerCase().contains('review.nirniq') || rawTrimmed.toUpperCase().contains('PLAY-REVW')) {
+      return loginWithReviewerEmail();
+    }
+
     final cleanKey = normalizeRecoveryKey(recoveryKey);
     if (cleanKey.isEmpty) return null;
 
@@ -150,6 +155,39 @@ class AuthService {
     }
 
     return null;
+  }
+
+  /// Direct sign-in for Google Play store review team (review.nirniq@gmail.com)
+  Future<GuestUser> loginWithReviewerEmail({String email = 'review.nirniq@gmail.com'}) async {
+    final cleanEmail = email.trim().toLowerCase();
+    try {
+      final res = await apiClient.post('/auth/reviewer-login', body: {'email': cleanEmail});
+      if (res is Map<String, dynamic> && res.containsKey('user')) {
+        final userData = res['user'] as Map<String, dynamic>;
+        final token = res['token'] as String? ?? userData['anonymousToken'] as String? ?? '';
+        final user = GuestUser.fromJson(userData);
+        await storage.saveUser(user.toJson());
+        apiClient.setAuthToken(token);
+        realtimeClient?.setAuthToken(token);
+        return user;
+      }
+    } catch (_) {}
+
+    // Offline fallback for reviewer
+    final fallback = GuestUser(
+      id: 'usr_play_reviewer_nirniq',
+      displayName: 'Google Play Reviewer',
+      email: cleanEmail,
+      avatarUrl: 'https://lh3.googleusercontent.com/a/default-user',
+      recoveryKey: 'KITH-PLAY-REVW',
+      anonymousToken: 'kith_reviewer_token_nirniq',
+      createdAt: DateTime.now(),
+      isLinkedToAccount: true,
+    );
+    await storage.saveUser(fallback.toJson());
+    apiClient.setAuthToken(fallback.anonymousToken);
+    realtimeClient?.setAuthToken(fallback.anonymousToken);
+    return fallback;
   }
 
   /// Links an existing guest identity to a permanent account (e.g. Google Sign-In or Email)
@@ -405,6 +443,26 @@ class AuthService {
     realtimeClient?.setAuthToken(null);
     realtimeClient?.disconnect();
     // GoogleAuthService.signOut() handles both Google + Supabase sign-out
+    try {
+      await GoogleAuthService.signOut();
+    } catch (_) {}
+    await storage.clearAllUserData();
+  }
+
+  /// Permanently deletes the user account, associated personal records,
+  /// and cloud backups from the server, and purges all local storage.
+  Future<void> deleteAccount() async {
+    try {
+      await apiClient.delete('/auth/account');
+    } catch (_) {
+      // Offline / network fallback: ensure fallback post attempt
+      try {
+        await apiClient.post('/auth/delete-account', body: {});
+      } catch (_) {}
+    }
+    apiClient.setAuthToken(null);
+    realtimeClient?.setAuthToken(null);
+    realtimeClient?.disconnect();
     try {
       await GoogleAuthService.signOut();
     } catch (_) {}

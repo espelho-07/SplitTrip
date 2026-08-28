@@ -1,0 +1,62 @@
+﻿<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="280dp"
+    android:height="150dp"
+    android:viewportWidth="280"
+    android:viewportHeight="150">
+
+    <!-- Card Background -->
+    <path
+        android:fillColor="#1C1C21"
+        android:pathData="M 16,4 H 264 A 16,16 0 0 1 280,20 V 130 A 16,16 0 0 1 264,146 H 16 A 16,16 0 0 1 0,130 V 20 A 16,16 0 0 1 16,4 Z" />
+
+    <!-- Card Border -->
+    <path
+        android:strokeColor="#2E2E38"
+        android:strokeWidth="1.5"
+        android:pathData="M 16,4 H 264 A 16,16 0 0 1 280,20 V 130 A 16,16 0 0 1 264,146 H 16 A 16,16 0 0 1 0,130 V 20 A 16,16 0 0 1 16,4 Z" />
+
+    <!-- Header Text Placeholder: KITH · THIS MONTH -->
+    <path
+        android:fillColor="#A1A1AA"
+        android:pathData="M 20,24 H 130 A 3,3 0 0 1 133,27 V 27 A 3,3 0 0 1 130,30 H 20 A 3,3 0 0 1 17,27 V 27 A 3,3 0 0 1 20,24 Z" />
+
+    <!-- Plus Button in Header -->
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M 242,18 H 258 A 6,6 0 0 1 264,24 V 32 A 6,6 0 0 1 258,38 H 242 A 6,6 0 0 1 236,32 V 24 A 6,6 0 0 1 242,18 Z" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M 247,28 H 253 M 250,25 V 31" />
+
+    <!-- Big Amount Placeholder: ₹14,250 -->
+    <path
+        android:fillColor="#F4F4F5"
+        android:pathData="M 20,44 H 140 A 5,5 0 0 1 145,49 V 59 A 5,5 0 0 1 140,64 H 20 A 5,5 0 0 1 15,49 V 49 A 5,5 0 0 1 20,44 Z" />
+
+    <!-- Subtitle: Spent this month -->
+    <path
+        android:fillColor="#71717A"
+        android:pathData="M 20,74 H 110 A 3,3 0 0 1 113,77 V 77 A 3,3 0 0 1 110,80 H 20 A 3,3 0 0 1 17,77 V 77 A 3,3 0 0 1 20,74 Z" />
+
+    <!-- Progress Track Background -->
+    <path
+        android:fillColor="#27272E"
+        android:pathData="M 24,104 H 256 A 4,4 0 0 1 260,108 V 108 A 4,4 0 0 1 256,112 H 24 A 4,4 0 0 1 20,108 V 108 A 4,4 0 0 1 24,104 Z" />
+
+    <!-- Progress Bar (Emerald fill ~70%) -->
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M 24,104 H 180 A 4,4 0 0 1 184,108 V 108 A 4,4 0 0 1 180,112 H 24 A 4,4 0 0 1 20,108 V 108 A 4,4 0 0 1 24,104 Z" />
+
+    <!-- Footer Left: Budget Info -->
+    <path
+        android:fillColor="#71717A"
+        android:pathData="M 20,124 H 100 A 3,3 0 0 1 103,127 V 127 A 3,3 0 0 1 100,130 H 20 A 3,3 0 0 1 17,127 V 127 A 3,3 0 0 1 20,124 Z" />
+
+    <!-- Footer Right: ₹5,750 left -->
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M 200,124 H 256 A 3,3 0 0 1 259,127 V 127 A 3,3 0 0 1 256,130 H 200 A 3,3 0 0 1 197,127 V 127 A 3,3 0 0 1 200,124 Z" />
+</vector>

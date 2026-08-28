@@ -221,7 +221,11 @@ class ExpenseRepository {
     required int amountInPaise,
     String? settlementId,
     String? paymentReference,
+    String? recipientUpiId,
+    String? fromName,
+    String? toName,
     String? note,
+    String paymentStatus = 'paid',
   }) async {
     final id = settlementId ?? 'stl_loc_${DateTime.now().millisecondsSinceEpoch}';
     final payload = {
@@ -231,26 +235,37 @@ class ExpenseRepository {
       'toMemberId': toMemberId,
       'amountInPaise': amountInPaise,
       'paymentReference': paymentReference,
+      'recipientUpiId': recipientUpiId,
+      'fromName': fromName,
+      'toName': toName,
       'note': note,
-      'isSettled': true,
+      'status': paymentStatus,
+      'isSettled': paymentStatus == 'paid',
       'createdAt': DateTime.now().toIso8601String(),
     };
 
-    // Save locally
+    // Save locally (idempotent)
     final saved = storage.getSavedTripSettlements(tripId);
     saved.removeWhere((s) => s['id'] == id);
     saved.insert(0, payload);
     await storage.saveTripSettlements(tripId, saved);
 
+    final payerDisplay = fromName ?? 'Member';
+    final receiverDisplay = toName ?? 'Member';
+    final formattedAmt = (amountInPaise / 100).toStringAsFixed(2);
+
     _logLocalActivity(
       tripId: tripId,
       type: 'settlement_recorded',
-      description: 'Payment settled for ₹${(amountInPaise / 100).toStringAsFixed(2)}',
+      description: '$payerDisplay paid ₹$formattedAmt to $receiverDisplay',
       metadata: {
         'settlementId': id,
         'fromMemberId': fromMemberId,
         'toMemberId': toMemberId,
         'amountInPaise': amountInPaise,
+        'paymentReference': paymentReference,
+        'recipientUpiId': recipientUpiId,
+        'status': paymentStatus,
       },
     );
 

@@ -4,6 +4,7 @@ const authRoutes = require('./routes/auth_routes');
 const tripRoutes = require('./routes/trip_routes');
 const expenseRoutes = require('./routes/expense_routes');
 const personalRoutes = require('./routes/personal_routes');
+const webRoutes = require('./routes/web_routes');
 const { errorHandler } = require('./middleware/error_handler');
 const { dbManager } = require('./db/db_manager');
 const env = require('./config/env');
@@ -94,6 +95,7 @@ app.get('/ready', async (req, res) => {
 });
 
 // Mount Routes
+app.use('/', webRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/trips', tripRoutes);
 app.use('/api/trips/:tripId/expenses', expenseRoutes);

@@ -1,35 +1,15 @@
 import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
+/// Manages on-demand, contextual runtime permissions in strict compliance
+/// with Google Play Permissions and Data Minimization policies.
+///
+/// Permissions are NEVER requested in batch or on initial app startup.
+/// Each permission is requested only when the user explicitly invokes the corresponding feature.
 class PermissionService {
-  static const String _keyInitialPermissionsRequested = 'kith_initial_permissions_requested';
+  PermissionService._();
 
-  /// Requests core app permissions (Location, Microphone, Camera, Notifications) on first launch.
-  static Future<void> requestInitialPermissions({bool force = false}) async {
-    if (kIsWeb) return;
-
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final hasRequested = prefs.getBool(_keyInitialPermissionsRequested) ?? false;
-
-      if (!hasRequested || force) {
-        // Request essential permissions together on first app launch / onboarding
-        await [
-          Permission.locationWhenInUse,
-          Permission.microphone,
-          Permission.camera,
-          Permission.notification,
-        ].request();
-
-        await prefs.setBool(_keyInitialPermissionsRequested, true);
-      }
-    } catch (e) {
-      debugPrint('[PermissionService] Error requesting initial permissions: $e');
-    }
-  }
-
-  /// Explicitly requests Microphone permission when user taps on voice input.
+  /// Explicitly requests Microphone permission ONLY when user initiates voice expense recording.
   static Future<bool> requestMicrophonePermission() async {
     if (kIsWeb) return true;
 
@@ -45,7 +25,7 @@ class PermissionService {
     }
   }
 
-  /// Explicitly requests Camera permission when user taps on receipt scanner.
+  /// Explicitly requests Camera permission ONLY when user opens QR Scanner or Receipt Scanner.
   static Future<bool> requestCameraPermission() async {
     if (kIsWeb) return true;
 
@@ -61,7 +41,8 @@ class PermissionService {
     }
   }
 
-  /// Explicitly requests Location permission ONLY when user opts in to auto-journey on a trip.
+  /// Explicitly requests Notification permission ONLY when user enables cloud sync or notifications.
+  /// Explicitly requests Location permission ONLY when user adds a journey location pin.
   static Future<bool> requestLocationPermission() async {
     if (kIsWeb) return true;
 
@@ -73,6 +54,21 @@ class PermissionService {
       return result.isGranted;
     } catch (e) {
       debugPrint('[PermissionService] Error requesting location permission: $e');
+      return false;
+    }
+  }
+
+  static Future<bool> requestNotificationPermission() async {
+    if (kIsWeb) return true;
+
+    try {
+      final status = await Permission.notification.status;
+      if (status.isGranted) return true;
+
+      final result = await Permission.notification.request();
+      return result.isGranted;
+    } catch (e) {
+      debugPrint('[PermissionService] Error requesting notification permission: $e');
       return false;
     }
   }

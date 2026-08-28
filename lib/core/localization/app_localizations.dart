@@ -484,6 +484,14 @@ class AppLocalizations {
   String get settlementNotifTitle => translate('settlement_notif_title');
   String settlementNotifBody(String name, String amount) =>
       translate('settlement_notif_body').replaceAll('{name}', name).replaceAll('{amount}', amount);
+  String get payViaUpiBtn => translate('pay_via_upi_btn');
+  String get payManuallyBtn => translate('pay_manually_btn');
+  String get paymentInitiatedTitle => translate('payment_initiated_title');
+  String paymentInitiatedDesc(String name, String amount) =>
+      translate('payment_initiated_desc').replaceAll('{name}', name).replaceAll('{amount}', amount);
+  String get paymentYesMarkPaid => translate('payment_yes_mark_paid');
+  String get paymentNotYet => translate('payment_not_yet');
+  String get paymentOfflineWarning => translate('payment_offline_warning');
 
   // Clean QR Scanner
   String get qrInvalidTitle => translate('qr_invalid_title');
@@ -616,6 +624,11 @@ class AppLocalizations {
   String get tripDetailSearchExpenses => translate('trip_detail_search_expenses');
 
   // Trips Home Tab
+  String get tripsHomeTotalSpent => translate('trips_home_total_spent');
+  String get tripsHomeGroupTrips => translate('trips_home_group_trips');
+  String get tripsHomeNoTripsDesc => translate('trips_home_no_trips_desc');
+  String get tripsHomeAllSettledMsg => translate('trips_home_all_settled_msg');
+  String get tripsHomeNewTripBtn => translate('trips_home_new_trip_btn');
   String tripsHomeGetBackOverall(String amount) => translate('trips_home_get_back_overall').replaceAll('{amount}', amount);
   String tripsHomeOweOverall(String amount) => translate('trips_home_owe_overall').replaceAll('{amount}', amount);
   String get tripsHomeAllSettled => translate('trips_home_all_settled');
@@ -639,6 +652,142 @@ class AppLocalizations {
   String get expenseReceiptTagTax => translate('expense_receipt_tag_tax');
   String get expenseCraftingNextUpdate => translate('expense_crafting_next_update');
   String get expenseCraftingSwitchManual => translate('expense_crafting_switch_manual');
+
+  // Google Play Compliance: Account Deletion & Privacy Policy
+  String get profileDeleteAccountTitle => translate('profile_delete_account_title');
+  String get profileDeleteAccountDesc => translate('profile_delete_account_desc');
+  String get profileDeleteDialogTitle => translate('profile_delete_dialog_title');
+  String get profileDeleteDialogDesc => translate('profile_delete_dialog_desc');
+  String get profileDeleteConfirmBtn => translate('profile_delete_confirm_btn');
+  String get profileDeleteSuccess => translate('profile_delete_success');
+  String get profilePrivacyPolicy => translate('profile_privacy_policy');
+  String get profilePrivacyPolicyDesc => translate('profile_privacy_policy_desc');
+  String get privacyTitle => translate('privacy_title');
+  String get privacySubtitle => translate('privacy_subtitle');
+
+  // Master FAQ & Help Center
+  String get faqHeroTitle => translate('faq_hero_title');
+  String get faqHeroSub => translate('faq_hero_sub');
+  String get faqBadgeStats => translate('faq_badge_stats');
+  String get faqSearchHint => translate('faq_search_hint');
+  String faqSearchResults(int count) => translate('faq_search_results').replaceAll('{count}', count.toString());
+  String get faqCatAll => translate('faq_cat_all');
+  String get faqCatGettingStarted => translate('faq_cat_getting_started');
+  String get faqCatSecurity => translate('faq_cat_security');
+  String get faqCatPersonal => translate('faq_cat_personal');
+  String get faqCatTrips => translate('faq_cat_trips');
+  String get faqCatSplitting => translate('faq_cat_splitting');
+  String get faqCatSettlements => translate('faq_cat_settlements');
+  String get faqCatVoice => translate('faq_cat_voice');
+  String get faqCatReceipts => translate('faq_cat_receipts');
+  String get faqCatQr => translate('faq_cat_qr');
+  String get faqCatCloud => translate('faq_cat_cloud');
+  String get faqCatOffline => translate('faq_cat_offline');
+  String get faqCatPrivacy => translate('faq_cat_privacy');
+  String get faqCatTroubleshooting => translate('faq_cat_troubleshooting');
+  String get faqHelpfulQuestion => translate('faq_helpful_question');
+  String get faqHelpfulYes => translate('faq_helpful_yes');
+  String get faqHelpfulNo => translate('faq_helpful_no');
+  String get faqHelpfulThanks => translate('faq_helpful_thanks');
+  String get faqSupportTitle => translate('faq_support_title');
+  String get faqSupportDesc => translate('faq_support_desc');
+  String get faqSupportEmailBtn => translate('faq_support_email_btn');
+  String get faqSupportGuideBtn => translate('faq_support_guide_btn');
+    String get faqCopiedEmail => translate('faq_copied_email');
+
+  // Master Add Trip Getters
+  String get createTripHeroTitle => translate('create_trip_hero_title');
+  String get createTripHeroSub => translate('create_trip_hero_sub');
+  String get createTripBadgeStats => translate('create_trip_badge_stats');
+  String get createTripLivePreview => translate('create_trip_live_preview');
+  String get createTripSecIdentity => translate('create_trip_sec_identity');
+  String get createTripSecExperience => translate('create_trip_sec_experience');
+  String get createTripSecCurrency => translate('create_trip_sec_currency');
+  String get createTripSecCrew => translate('create_trip_sec_crew');
+  String get createTripCrewOrganizer => translate('create_trip_crew_organizer');
+  String createTripCrewCount(int count) => translate('create_trip_crew_count').replaceAll('{count}', count.toString());
+  String get createTripModeRecommended => translate('create_trip_mode_recommended');
+  String get createTripModeSplitFeature1 => translate('create_trip_mode_split_feature1');
+  String get createTripModeSplitFeature2 => translate('create_trip_mode_split_feature2');
+  String get createTripModeJourneyFeature1 => translate('create_trip_mode_journey_feature1');
+  String get createTripModeJourneyFeature2 => translate('create_trip_mode_journey_feature2');
+  String get createTripDraftingBadge => translate('create_trip_drafting_badge');
+  String get createTripCtaReady => translate('create_trip_cta_ready');
+    String get createTripCtaEmpty => translate('create_trip_cta_empty');
+
+  // Master Add Expense Getters
+  String get expenseSecAmount => translate('expense_sec_amount');
+  String get expenseSecDetails => translate('expense_sec_details');
+  String get expenseSecPayer => translate('expense_sec_payer');
+  String get expenseSecSplit => translate('expense_sec_split');
+  String get expenseQuickAdd => translate('expense_quick_add');
+  String get expenseSelectAll => translate('expense_select_all');
+  String get expenseDeselectAll => translate('expense_deselect_all');
+  String get expenseYouTag => translate('expense_you_tag');
+  String expenseSplitSummary(int count) => translate('expense_split_summary').replaceAll('{count}', count.toString());
+  String expenseSplitMatched(String amount) => translate('expense_split_matched').replaceAll('{amount}', amount);
+  String expenseSplitRemaining(String amount) => translate('expense_split_remaining').replaceAll('{amount}', amount);
+  String expenseSplitExceeds(String amount) => translate('expense_split_exceeds').replaceAll('{amount}', amount);
+  String get expensePctMatched => translate('expense_pct_matched');
+  String expensePctTotal(String pct) => translate('expense_pct_total').replaceAll('{pct}', pct);
+  String get expenseExplainSplitTitle => translate('expense_explain_split_title');
+  String get expenseExplainGotIt => translate('expense_explain_got_it');
+  String get expenseSaveSuccess => translate('expense_save_success');
+  String get expenseZeroLossPill => translate('expense_zero_loss_pill');
+
+  // Master Join Trip Getters
+  String get joinTripTitle => translate('join_trip_title');
+  String get joinTripSubtitle => translate('join_trip_subtitle');
+  String get joinSecCode => translate('join_sec_code');
+  String get joinSecQr => translate('join_sec_qr');
+  String get joinPasteChip => translate('join_paste_chip');
+  String get joinClearChip => translate('join_clear_chip');
+  String get joinFindTripBtn => translate('join_find_trip_btn');
+  String get joinScanQrBtn => translate('join_scan_qr_btn');
+  String get joinPreviewTitle => translate('join_preview_title');
+  String get joinPreviewHost => translate('join_preview_host');
+  String get joinPreviewMembers => translate('join_preview_members');
+  String get joinPreviewMode => translate('join_preview_mode');
+  String get joinPreviewCurrency => translate('join_preview_currency');
+  String get joinPreviewConfirm => translate('join_preview_confirm');
+  String get joinPreviewCancel => translate('join_preview_cancel');
+  String get joinStageValidating => translate('join_stage_validating');
+  String get joinStageJoining => translate('join_stage_joining');
+  String get joinStageSyncing => translate('join_stage_syncing');
+  String get joinErrEmpty => translate('join_err_empty');
+  String get joinSuccessToast => translate('join_success_toast');
+  // Notifications Getters
+  String get notificationsTitle => translate('notifications_title');
+  String get notificationsMarkRead => translate('notifications_mark_read');
+  String get notificationsEmptyTitle => translate('notifications_empty_title');
+  String get notificationsEmptyDesc => translate('notifications_empty_desc');
+  String get notificationsTabAll => translate('notifications_tab_all');
+  String get notificationsTabExpenses => translate('notifications_tab_expenses');
+  String get notificationsTabSettlements => translate('notifications_tab_settlements');
+  String get notificationsTabTrips => translate('notifications_tab_trips');
+  String get notificationsSettingsTitle => translate('notifications_settings_title');
+  String get notificationsPushToggle => translate('notifications_push_toggle');
+  String get notificationsExpenseToggle => translate('notifications_expense_toggle');
+  String get notificationsSettleToggle => translate('notifications_settle_toggle');
+  String get notificationsTripToggle => translate('notifications_trip_toggle');
+
+  // Payment Methods Getters
+  String get paymentsTitle => translate('payments_title');
+  String get paymentsSubtitle => translate('payments_subtitle');
+  String get paymentsAddUpiBtn => translate('payments_add_upi_btn');
+  String get paymentsPrimaryBadge => translate('payments_primary_badge');
+  String get paymentsShareQr => translate('payments_share_qr');
+  String get paymentsCopyUpi => translate('payments_copy_upi');
+  String get paymentsCopiedToast => translate('payments_copied_toast');
+  String get paymentsSavedTitle => translate('payments_saved_title');
+  String get paymentsAddSheetTitle => translate('payments_add_sheet_title');
+  String get paymentsAddSheetDesc => translate('payments_add_sheet_desc');
+  String get paymentsAddInputLabel => translate('payments_add_input_label');
+  String get paymentsAddInputHint => translate('payments_add_input_hint');
+  String get paymentsSetDefault => translate('payments_set_default');
+  String get paymentsSaveBtn => translate('payments_save_btn');
+  String get paymentsBankTitle => translate('payments_bank_title');
+  String get paymentsBankVerified => translate('payments_bank_verified');
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

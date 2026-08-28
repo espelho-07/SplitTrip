@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../../../core/localization/app_localizations.dart';
+import '../../../../core/payment/payment_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
-import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/utils/haptic_feedback_helper.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/currency_display.dart';
@@ -14,13 +14,26 @@ import '../../../../domain/models/balance_summary.dart';
 import '../../../../domain/models/trip.dart';
 import '../../../../domain/models/trip_member.dart';
 import '../../../widgets/progress/progress.dart';
+import '../../payment/upi_payment_dialog.dart';
+
+typedef RecordSettlementCallback = Future<void> Function(
+  String fromMemberId,
+  String toMemberId,
+  int amountInPaise, {
+  String? paymentReference,
+  String? recipientUpiId,
+  String? fromName,
+  String? toName,
+  String? paymentStatus,
+});
 
 class SettlementSheet extends StatefulWidget {
   final Trip trip;
   final BalanceSummary balanceSummary;
   final String currentUserId;
   final VoidCallback? onMarkSettled;
-  final Future<void> Function(String fromMemberId, String toMemberId, int amountInPaise)? onRecordTransfer;
+  final RecordSettlementCallback? onRecordTransfer;
+  final PaymentService? paymentService;
 
   const SettlementSheet({
     super.key,
@@ -29,6 +42,7 @@ class SettlementSheet extends StatefulWidget {
     required this.currentUserId,
     this.onMarkSettled,
     this.onRecordTransfer,
+    this.paymentService,
   });
 
   @override
@@ -38,122 +52,75 @@ class SettlementSheet extends StatefulWidget {
 class _SettlementSheetState extends State<SettlementSheet> {
   final Set<String> _processingTransferIds = {};
   final Set<String> _paidTransferKeys = {};
+  late PaymentService _paymentService;
+
+  @override
+  void initState() {
+    super.initState();
+    _paymentService = widget.paymentService ?? PaymentService();
+  }
 
   TripMember? _findMember(String memberId) {
     return widget.trip.members.where((m) => m.id == memberId).firstOrNull;
   }
 
-  Future<void> _confirmAndRecordTransfer(
+  Future<void> _openPaymentOrSettlementSheet(
     String fromMemberId,
     String toMemberId,
     String fromName,
     String toName,
     int amountInPaise,
   ) async {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final l10n = context.l10n;
-    final formattedAmount = CurrencyFormatter.formatPaise(amountInPaise, currencyCode: widget.trip.currencyCode);
+    final transferKey = fromMemberId + toMemberId;
+    if (_processingTransferIds.contains(transferKey)) return;
 
-    final shouldRecord = await showModalBottomSheet<bool>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (bCtx) => Container(
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
-          borderRadius: AppRadius.topSheetBorder,
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: isDark ? Colors.white24 : Colors.black12,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              l10n.settlementMarkPaidTitle,
-              style: AppTypography.titleMedium(isDark: isDark),
-            ),
-            const SizedBox(height: 16),
-            MemberAvatar(name: toName, size: 48),
-            const SizedBox(height: 8),
-            Text(
-              toName,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              formattedAmount,
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.w800,
-                color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              l10n.settlementMarkPaidDesc(toName),
-              textAlign: TextAlign.center,
-              style: AppTypography.bodySmall(isDark: isDark).copyWith(
-                color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-              ),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                Expanded(
-                  child: AppButton(
-                    text: l10n.actionCancel,
-                    variant: AppButtonVariant.secondary,
-                    onPressed: () => Navigator.pop(bCtx, false),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: AppButton(
-                    text: l10n.settlementMarkPaidBtn,
-                    variant: AppButtonVariant.primary,
-                    onPressed: () => Navigator.pop(bCtx, true),
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
-          ],
-        ),
-      ),
+    final toMember = _findMember(toMemberId);
+    final l10n = context.l10n;
+
+    final success = await UpiPaymentSheet.show(
+      context,
+      recipientName: toName,
+      initialRecipientUpiId: toMember?.upiId,
+      amountInPaise: amountInPaise,
+      currencyCode: widget.trip.currencyCode,
+      tripName: widget.trip.name,
+      tripId: widget.trip.id,
+      fromMemberId: fromMemberId,
+      toMemberId: toMemberId,
+      paymentService: _paymentService,
+      onConfirmSettlement: ({
+        required String paymentReference,
+        required String recipientUpiId,
+        required String paymentStatus,
+      }) async {
+        if (widget.onRecordTransfer != null) {
+          setState(() => _processingTransferIds.add(transferKey));
+          try {
+            await widget.onRecordTransfer!(
+              fromMemberId,
+              toMemberId,
+              amountInPaise,
+              paymentReference: paymentReference,
+              recipientUpiId: recipientUpiId,
+              fromName: fromName,
+              toName: toName,
+              paymentStatus: paymentStatus,
+            );
+          } finally {
+            if (mounted) {
+              setState(() => _processingTransferIds.remove(transferKey));
+            }
+          }
+        }
+      },
     );
 
-    if (shouldRecord == true && widget.onRecordTransfer != null) {
-      final transferKey = fromMemberId + toMemberId;
-      if (_processingTransferIds.contains(transferKey)) return; // Debounce guard
-
-      setState(() => _processingTransferIds.add(transferKey));
-      HapticHelper.medium();
-      try {
-        await widget.onRecordTransfer!(fromMemberId, toMemberId, amountInPaise);
-        if (mounted) {
-          setState(() {
-            _paidTransferKeys.add(transferKey);
-          });
-          HapticHelper.success();
-          KithSuccessToast.show(context, l10n.settlementPaidSuccess);
-        }
-      } finally {
-        if (mounted) {
-          setState(() => _processingTransferIds.remove(transferKey));
-        }
-      }
+    if (success == true && mounted) {
+      setState(() {
+        _paidTransferKeys.add(transferKey);
+      });
+      HapticHelper.success();
+      KithSuccessToast.show(context, l10n.settlementPaidSuccess);
     }
   }
 
@@ -329,15 +296,15 @@ class _SettlementSheetState extends State<SettlementSheet> {
                           ],
                         ),
 
-                        // Action Bar: Record payment & deliberate confirmation
+                        // Action Bar: Settle / Pay CTA
                         const SizedBox(height: AppSpacing.md),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              'Direct member payment',
+                              toMember?.upiId != null ? 'UPI Ready • ${toMember!.upiId}' : 'Direct member payment',
                               style: TextStyle(
-                                fontSize: 12,
+                                fontSize: 11.5,
                                 color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
                               ),
                             ),
@@ -378,7 +345,7 @@ class _SettlementSheetState extends State<SettlementSheet> {
                                   height: 32,
                                   child: ElevatedButton.icon(
                                     style: ElevatedButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                                      padding: const EdgeInsets.symmetric(horizontal: 12),
                                       backgroundColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
                                       foregroundColor: isDark ? Colors.black : Colors.white,
                                       shape: RoundedRectangleBorder(borderRadius: AppRadius.fullBorder),
@@ -389,11 +356,17 @@ class _SettlementSheetState extends State<SettlementSheet> {
                                             height: 12,
                                             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                                           )
-                                        : const Icon(Icons.check_rounded, size: 14),
-                                    label: Text(context.l10n.settlementMarkPaidBtn, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                                        : Icon(
+                                            isPayerCurrentUser ? Icons.bolt_rounded : Icons.check_rounded,
+                                            size: 15,
+                                          ),
+                                    label: Text(
+                                      isPayerCurrentUser ? 'Pay / Settle' : context.l10n.settlementMarkPaidBtn,
+                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                                    ),
                                     onPressed: isProcessing
                                         ? null
-                                        : () => _confirmAndRecordTransfer(
+                                        : () => _openPaymentOrSettlementSheet(
                                               s.fromMemberId,
                                               s.toMemberId,
                                               fromName,

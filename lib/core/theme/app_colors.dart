@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 /// Semantic design colors and color tokens for the Kith Design System.
-/// Supports true layered dark mode and calm, warm light mode.
+/// Features a Master OLED Obsidian dark mode and calm, warm light mode.
 class AppColors {
   AppColors._();
 
@@ -11,6 +11,7 @@ class AppColors {
   static const Color emeraldDark = Color(0xFF0D534D);    // Deep Forest
   static const Color emeraldContainer = Color(0xFFCCFBF1);
   static const Color emeraldGlow = Color(0x3314B8A6);
+  static const Color emeraldGlowDark = Color(0x4014B8A6);
 
   static const Color indigoAccent = Color(0xFF6366F1);
   static const Color tealAccent = Color(0xFF14B8A6);
@@ -24,7 +25,7 @@ class AppColors {
   static const Color negativeRedLight = Color(0xFFDC2626);
   static const Color negativeRedDark = Color(0xFFF87171);
   static const Color neutralPillLight = Color(0xFFF3F4F6);
-  static const Color neutralPillDark = Color(0xFF1F2937);
+  static const Color neutralPillDark = Color(0xFF161D24);
 
   // --- Light Theme Palette (Calm, Warm, Crisp Off-White Foundation) ---
   static const Color lightBackground = Color(0xFFF7F7F5);
@@ -37,16 +38,16 @@ class AppColors {
   static const Color lightTextSecondary = Color(0xFF475569);// Slate Grey
   static const Color lightTextMuted = Color(0xFF94A3B8);    // Soft Muted
 
-  // --- Dark Theme Palette (Obsidian Graphite Multi-layered Depth) ---
-  static const Color darkBackground = Color(0xFF0D0F12);
-  static const Color darkSurfaceCard = Color(0xFF16191E);
-  static const Color darkSurfaceSubtle = Color(0xFF1E2229);
-  static const Color darkSurfaceElevated = Color(0xFF262B34);
-  static const Color darkBorderSubtle = Color(0x14FFFFFF);  // 8% white
-  static const Color darkBorderStrong = Color(0x24FFFFFF);  // 14% white
-  static const Color darkTextPrimary = Color(0xFFF8FAFC);
-  static const Color darkTextSecondary = Color(0xFF94A3B8);
-  static const Color darkTextMuted = Color(0xFF64748B);
+  // --- Master Dark Theme Palette (OLED Obsidian Multi-layered Depth) ---
+  static const Color darkBackground = Color(0xFF080C0E);        // True Deep Obsidian Canvas
+  static const Color darkSurfaceCard = Color(0xFF0F1418);       // Deep Graphite Surface Card
+  static const Color darkSurfaceSubtle = Color(0xFF161D24);     // Tactile Inner Container
+  static const Color darkSurfaceElevated = Color(0xFF1E2630);   // Elevated Modals & Sheets
+  static const Color darkBorderSubtle = Color(0x1FFFFFFF);      // 12% Luminous Glass Border
+  static const Color darkBorderStrong = Color(0x33FFFFFF);      // 20% White for Active Rings
+  static const Color darkTextPrimary = Color(0xFFFFFFFF);       // Pure High-Contrast White
+  static const Color darkTextSecondary = Color(0xFF9EADC0);     // Readable Slate-Silver
+  static const Color darkTextMuted = Color(0xFF6C7F93);         // Crisp Subtext & Metadata
 
   // --- Trip Gradient Palettes ---
   static const List<List<Color>> tripGradients = [

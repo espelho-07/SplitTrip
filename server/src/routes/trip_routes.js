@@ -97,11 +97,11 @@ router.post('/:id/members', (req, res, next) => {
 router.post('/:id/settlements', (req, res, next) => {
   try {
     const settlementService = require('../services/settlement_service');
-    const { fromMemberId, toMemberId, amountInPaise, paymentReference, note } = req.body;
+    const { id, fromMemberId, toMemberId, amountInPaise, paymentReference, recipientUpiId, status, note } = req.body;
     const result = settlementService.recordSettlement(
       req.user,
       req.params.id,
-      { fromMemberId, toMemberId, amountInPaise, paymentReference, note },
+      { id, fromMemberId, toMemberId, amountInPaise, paymentReference, recipientUpiId, status, note },
       realtimeHub
     );
     res.status(201).json({ data: result });

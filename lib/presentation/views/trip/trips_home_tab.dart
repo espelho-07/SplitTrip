@@ -6,8 +6,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
-import '../../../core/widgets/kith_amount_display.dart';
-import '../../../core/widgets/kith_components.dart';
 import '../../../core/widgets/member_avatar.dart';
 import '../../../core/widgets/pill_badge.dart';
 import '../../../core/widgets/shimmer_skeleton.dart';
@@ -16,6 +14,9 @@ import '../../../domain/models/trip.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 
+/// Master Group Trips Home Tab.
+/// Features a prominent financial hero overview card, quick "+ Join Trip" action,
+/// polished empty state matching user design specification, and rich trip journey cards.
 class TripsHomeTab extends StatelessWidget {
   const TripsHomeTab({super.key});
 
@@ -30,8 +31,8 @@ class TripsHomeTab extends StatelessWidget {
     final totalSpentPaise = homeVm.totalSpentOnTripsInPaise;
     final net = homeVm.overallNetBalanceInPaise;
 
-    String? insightText;
-    IconData? insightIcon;
+    String insightText = l10n.tripsHomeAllSettledMsg;
+    IconData insightIcon = Icons.check_circle_outline_rounded;
     Color? insightColor;
 
     if (net > 0) {
@@ -42,10 +43,10 @@ class TripsHomeTab extends StatelessWidget {
       insightText = l10n.tripsHomeOweOverall(CurrencyFormatter.formatPaise(net.abs(), currencyCode: 'INR'));
       insightIcon = Icons.arrow_upward_rounded;
       insightColor = isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight;
-    } else if (homeVm.trips.isNotEmpty) {
-      insightText = l10n.tripsHomeAllSettled;
+    } else {
+      insightText = l10n.tripsHomeAllSettledMsg;
       insightIcon = Icons.check_circle_outline_rounded;
-      insightColor = isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary;
+      insightColor = isDark ? AppColors.darkTextSecondary : const Color(0xFF64748B);
     }
 
     return RefreshIndicator(
@@ -55,43 +56,32 @@ class TripsHomeTab extends StatelessWidget {
         }
       },
       child: homeVm.isLoading && homeVm.trips.isEmpty
-          ? _buildLoadingSkeleton()
+          ? _buildLoadingSkeleton(isDark)
           : ListView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
               children: [
-                // 1. Hero Trips Spending Display
-                KithAmountDisplay(
-                  amountInPaise: totalSpentPaise,
-                  periodSubtitle: l10n.tripsHomeActiveCount(homeVm.trips.length),
-                  contextualInsight: insightText,
+                // 1. Hero Financial Overview Card
+                _buildHeroFinancialCard(
+                  totalSpentPaise: totalSpentPaise,
+                  tripsCount: homeVm.trips.length,
+                  insightText: insightText,
                   insightIcon: insightIcon,
                   insightColor: insightColor,
+                  isDark: isDark,
+                  l10n: l10n,
                 ),
 
-                const SizedBox(height: AppSpacing.xl),
+                const SizedBox(height: 28),
 
-                // 2. Section Header & Quick Join Action
-                KithSectionHeader(
-                  title: l10n.tripsMyTrips,
-                  actionLabel: l10n.tripsJoin,
-                  onAction: () {
-                    HapticHelper.light();
-                    context.push('/join-trip');
-                  },
-                ),
+                // 2. Section Header: [ Your Group Trips ]     [ + Join Trip ]
+                _buildSectionHeader(context, isDark, l10n),
 
-                const SizedBox(height: AppSpacing.sm),
+                const SizedBox(height: 16),
 
-                // 3. Trips List or Clean Empty State
+                // 3. Trips List or Specification Empty State
                 if (homeVm.trips.isEmpty)
-                  KithEmptyState(
-                    title: l10n.tripsNoTrips,
-                    subtitle: l10n.tripsNoTripsSub,
-                    icon: Icons.flight_takeoff_rounded,
-                    actionLabel: l10n.tripsCreate,
-                    onAction: () => context.push('/create-trip'),
-                  )
+                  _buildEmptyState(context, isDark, l10n)
                 else
                   ...homeVm.trips.map((trip) {
                     final balance = homeVm.tripBalances[trip.id];
@@ -101,13 +91,278 @@ class TripsHomeTab extends StatelessWidget {
                     );
                   }),
 
-                const SizedBox(height: 80),
+                const SizedBox(height: 90),
               ],
             ),
     );
   }
 
-  Widget _buildTripCard(BuildContext context, Trip trip, dynamic balance, bool isDark, String currentUserId, AppLocalizations l10n) {
+  /// 1. Hero Financial Overview Card matching the screenshot specification
+  Widget _buildHeroFinancialCard({
+    required int totalSpentPaise,
+    required int tripsCount,
+    required String insightText,
+    required IconData insightIcon,
+    Color? insightColor,
+    required bool isDark,
+    required AppLocalizations l10n,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 20.0),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0F1418) : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorderSubtle : const Color(0xFFE2E8F0),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header Row: [ TOTAL SPENT ON TRIPS ]   [ 0 Trips ]
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                l10n.tripsHomeTotalSpent,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.8,
+                  color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF161D24) : const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isDark ? AppColors.darkBorderSubtle : const Color(0xFFE2E8F0),
+                    width: 1,
+                  ),
+                ),
+                child: Text(
+                  '$tripsCount ${tripsCount == 1 ? 'Trip' : 'Trips'}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? AppColors.darkTextSecondary : const Color(0xFF475569),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // Main Hero Number: ₹0 or ₹12,450
+          Text(
+            CurrencyFormatter.formatPaise(totalSpentPaise, currencyCode: 'INR'),
+            style: TextStyle(
+              fontSize: 38,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -1.0,
+              fontFeatures: const [FontFeature.tabularFigures()],
+              color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
+            ),
+          ),
+
+          const SizedBox(height: 14),
+
+          // Status Row: (icon) + All trip balances settled up / You get back ₹X / You owe ₹Y
+          Row(
+            children: [
+              Icon(
+                insightIcon,
+                size: 17,
+                color: insightColor ?? (isDark ? AppColors.darkTextMuted : const Color(0xFF64748B)),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  insightText,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: insightColor ?? (isDark ? AppColors.darkTextSecondary : const Color(0xFF64748B)),
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 2. Section Header: [ Your Group Trips ]     [ + Join Trip ]
+  Widget _buildSectionHeader(BuildContext context, bool isDark, AppLocalizations l10n) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          l10n.tripsHomeGroupTrips,
+          style: TextStyle(
+            fontSize: 19,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.4,
+            color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
+          ),
+        ),
+        GestureDetector(
+          onTap: () {
+            HapticHelper.light();
+            context.push('/join-trip');
+          },
+          behavior: HitTestBehavior.opaque,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 2.0),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.person_add_alt_1_outlined,
+                  size: 17,
+                  color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  l10n.tripsJoin,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 3. Specification Empty State matching the exact screenshot design
+  Widget _buildEmptyState(BuildContext context, bool isDark, AppLocalizations l10n) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 40.0, horizontal: 16.0),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Circular badge with map illustration
+          Container(
+            width: 84,
+            height: 84,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isDark ? const Color(0xFF161D24) : const Color(0xFFF1F5F9),
+              border: Border.all(
+                color: isDark ? AppColors.darkBorderSubtle : const Color(0xFFE2E8F0),
+                width: 1.2,
+              ),
+            ),
+            alignment: Alignment.center,
+            child: const Text(
+              '🗺️',
+              style: TextStyle(fontSize: 38),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            l10n.tripsNoTrips,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.4,
+              color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
+            ),
+          ),
+          const SizedBox(height: 8),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 290),
+            child: Text(
+              l10n.tripsHomeNoTripsDesc,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                height: 1.4,
+                color: isDark ? AppColors.darkTextSecondary : const Color(0xFF64748B),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          GestureDetector(
+            onTap: () {
+              HapticHelper.light();
+              context.push('/create-trip');
+            },
+            child: Container(
+              height: 48,
+              padding: const EdgeInsets.symmetric(horizontal: 28),
+              decoration: BoxDecoration(
+                gradient: isDark
+                    ? const LinearGradient(
+                        colors: [Color(0xFF14B8A6), Color(0xFF0F766E)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      )
+                    : null,
+                color: isDark ? null : AppColors.emeraldPrimary,
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.emeraldPrimary.withValues(alpha: isDark ? 0.35 : 0.25),
+                    blurRadius: 14,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              alignment: Alignment.center,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.add_rounded, size: 18, color: Colors.white),
+                  const SizedBox(width: 6),
+                  Text(
+                    l10n.tripsHomeNewTripBtn,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 4. Populated Trip Card
+  Widget _buildTripCard(
+    BuildContext context,
+    Trip trip,
+    dynamic balance,
+    bool isDark,
+    String currentUserId,
+    AppLocalizations l10n,
+  ) {
     final gradientColors = AppColors.getGradient(trip.coverGradientIndex);
     final userNetPaise = balance?.currentUserNetBalanceInPaise ?? 0;
 
@@ -259,16 +514,16 @@ class TripsHomeTab extends StatelessWidget {
     );
   }
 
-  Widget _buildLoadingSkeleton() {
+  Widget _buildLoadingSkeleton(bool isDark) {
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
         children: [
-          const ShimmerSkeleton(height: 120),
-          const SizedBox(height: AppSpacing.lg),
-          const ShimmerSkeleton(height: 100),
-          const SizedBox(height: AppSpacing.md),
-          const ShimmerSkeleton(height: 100),
+          ShimmerSkeleton(height: 140, borderRadius: BorderRadius.circular(24)),
+          const SizedBox(height: 24),
+          const ShimmerSkeleton(height: 24, width: 140),
+          const SizedBox(height: 16),
+          ShimmerSkeleton(height: 160, borderRadius: BorderRadius.circular(20)),
         ],
       ),
     );

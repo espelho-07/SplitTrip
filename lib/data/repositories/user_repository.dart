@@ -52,6 +52,10 @@ class UserRepository {
     );
   }
 
+  Future<GuestUser> signInAsReviewer({String email = 'review.nirniq@gmail.com'}) {
+    return authService.loginWithReviewerEmail(email: email);
+  }
+
   /// Attempts to restore a session from an active Supabase JWT on app startup.
   Future<GuestUser?> restoreSupabaseSession() {
     return authService.restoreSupabaseSession();
@@ -59,6 +63,10 @@ class UserRepository {
 
   Future<void> logout() {
     return authService.logout();
+  }
+
+  Future<void> deleteAccount() {
+    return authService.deleteAccount();
   }
 
   String? getAppExperienceMode() {

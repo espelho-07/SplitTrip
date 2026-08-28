@@ -39,7 +39,8 @@ class _KithHeroSceneState extends State<KithHeroScene> with SingleTickerProvider
     final l10n = context.l10n;
     final reduceMotion = MediaQuery.of(context).disableAnimations;
 
-    return LayoutBuilder(
+    return RepaintBoundary(
+      child: LayoutBuilder(
       builder: (context, constraints) {
         final double width = constraints.maxWidth;
         // Keep proportional height between 210 and 260dp
@@ -124,8 +125,9 @@ class _KithHeroSceneState extends State<KithHeroScene> with SingleTickerProvider
           },
         );
       },
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildLocationPill({
     required String label,

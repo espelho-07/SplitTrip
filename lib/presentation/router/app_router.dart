@@ -6,15 +6,26 @@ import '../views/guide/setup_guide_view.dart';
 import '../views/help/help_faq_view.dart';
 import '../views/home/home_view.dart';
 import '../views/language/language_select_view.dart';
+import '../views/legal/privacy_policy_view.dart';
 import '../views/onboarding/onboarding_view.dart';
 import '../views/personal/category_breakdown_view.dart';
+import '../views/personal/budgets_view.dart';
+import '../views/personal/spend_analytics_view.dart';
+import '../views/personal/balances_overall_view.dart';
+import '../views/trip/settle_up_view.dart';
 import '../views/personal/lending_borrowing_view.dart';
 import '../views/personal/widgets/add_personal_expense_sheet.dart';
 import '../views/splash/splash_view.dart';
 import '../views/trip/create_trip_view.dart';
 import '../views/trip/join_trip_view.dart';
 import '../views/trip/trip_detail_view.dart';
+import '../views/trip/trip_members_view.dart';
+import '../views/trip/trip_memories_view.dart';
 import '../views/widgets/widget_gallery_view.dart';
+import '../views/settings/master_settings_view.dart';
+import '../views/notifications/notifications_view.dart';
+import '../views/payment/payment_methods_view.dart';
+import '../views/trip/trip_preview_view.dart';
 
 class AppRouter {
   AppRouter._();
@@ -122,6 +133,22 @@ class AppRouter {
         builder: (context, state) => const HomeView(),
       ),
       GoRoute(
+        path: '/notifications',
+        builder: (context, state) => const NotificationsView(),
+      ),
+      GoRoute(
+        path: '/payment-methods',
+        builder: (context, state) => const PaymentMethodsView(),
+      ),
+      GoRoute(
+        path: '/trip-preview',
+        builder: (context, state) => TripPreviewView(code: state.uri.queryParameters['code']),
+      ),
+      GoRoute(
+        path: '/settings',
+        builder: (context, state) => const MasterSettingsView(),
+      ),
+      GoRoute(
         path: '/widgets',
         builder: (context, state) => const WidgetGalleryView(),
       ),
@@ -134,12 +161,43 @@ class AppRouter {
         builder: (context, state) => const HelpFaqView(),
       ),
       GoRoute(
+        path: '/privacy-policy',
+        builder: (context, state) => const PrivacyPolicyView(),
+      ),
+      GoRoute(
         path: '/cloud-settings',
         builder: (context, state) => const CloudSettingsView(),
       ),
       GoRoute(
         path: '/personal/debts',
         builder: (context, state) => const LendingBorrowingView(),
+      ),
+      GoRoute(
+        path: '/add-expense',
+        builder: (context, state) {
+          final tabStr = state.uri.queryParameters['tab'];
+          final initialTab = tabStr != null ? (int.tryParse(tabStr) ?? 2) : 2;
+          return AddExpenseView(
+            tripId: state.uri.queryParameters['tripId'] ?? '',
+            initialTab: initialTab,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/budgets',
+        builder: (context, state) => const BudgetsView(),
+      ),
+      GoRoute(
+        path: '/balances',
+        builder: (context, state) => const BalancesOverallView(),
+      ),
+      GoRoute(
+        path: '/settle-up',
+        builder: (context, state) => const SettleUpView(),
+      ),
+      GoRoute(
+        path: '/analytics',
+        builder: (context, state) => const SpendAnalyticsView(),
       ),
       GoRoute(
         path: '/personal/categories',
@@ -174,7 +232,26 @@ class AppRouter {
             path: 'add-expense',
             builder: (context, state) {
               final tripId = state.pathParameters['tripId']!;
-              return AddExpenseView(tripId: tripId);
+              final tabStr = state.uri.queryParameters['tab'];
+              final initialTab = tabStr != null ? (int.tryParse(tabStr) ?? 2) : 2;
+              return AddExpenseView(
+                tripId: tripId,
+                initialTab: initialTab,
+              );
+            },
+          ),
+          GoRoute(
+            path: 'members',
+            builder: (context, state) {
+              final tripId = state.pathParameters['tripId']!;
+              return TripMembersView(tripId: tripId);
+            },
+          ),
+          GoRoute(
+            path: 'memories',
+            builder: (context, state) {
+              final tripId = state.pathParameters['tripId']!;
+              return TripMemoriesView(tripId: tripId);
             },
           ),
         ],

@@ -2,24 +2,61 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
 
-/// Kith brand logo mark — a custom geometric emblem.
+/// Official Kith brand logo mark.
 ///
-/// Renders a precise, minimal mark: two overlapping rounded squares in
-/// complementary tones, forming a subtle "K" rhythm.
-/// Pure Flutter — no external assets, scales perfectly on all densities.
+/// Renders the official high-resolution brand logo asset with support for
+/// scaling, rounded clip, and smooth fallback rendering.
 class KithLogoMark extends StatelessWidget {
   final double size;
   final bool isDark;
+  final BorderRadius? borderRadius;
 
-  const KithLogoMark({super.key, this.size = 72, required this.isDark});
+  const KithLogoMark({
+    super.key,
+    this.size = 72,
+    required this.isDark,
+    this.borderRadius,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
+    final effectiveRadius = borderRadius ?? BorderRadius.circular(size * 0.22);
+
+    return Container(
       width: size,
       height: size,
-      child: CustomPaint(
-        painter: _KithMarkPainter(isDark: isDark),
+      decoration: BoxDecoration(
+        borderRadius: effectiveRadius,
+        boxShadow: isDark
+            ? [
+                BoxShadow(
+                  color: AppColors.emeraldLight.withValues(alpha: 0.25),
+                  blurRadius: size * 0.2,
+                  offset: Offset(0, size * 0.05),
+                ),
+              ]
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: size * 0.15,
+                  offset: Offset(0, size * 0.04),
+                ),
+              ],
+      ),
+      child: ClipRRect(
+        borderRadius: effectiveRadius,
+        child: Image.asset(
+          'assets/images/app_logo.png',
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) {
+            return CustomPaint(
+              size: Size(size, size),
+              painter: _KithMarkPainter(isDark: isDark),
+            );
+          },
+        ),
       ),
     );
   }
@@ -32,12 +69,11 @@ class _KithMarkPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final double s = size.width;
-    final double r = s * 0.22; // Corner radius
+    final double r = s * 0.22;
 
-    // Background square — full size, primary emerald
     final bgPaint = Paint()
-      ..shader = LinearGradient(
-        colors: [AppColors.emeraldPrimary, AppColors.emeraldDark],
+      ..shader = const LinearGradient(
+        colors: [Color(0xFF14B8A6), Color(0xFF0F766E)],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ).createShader(Rect.fromLTWH(0, 0, s, s));
@@ -48,19 +84,6 @@ class _KithMarkPainter extends CustomPainter {
     );
     canvas.drawRRect(bgRect, bgPaint);
 
-    // Accent square — upper-right quadrant, lighter teal, offset inward
-    final accentPaint = Paint()
-      ..color = AppColors.emeraldLight.withValues(alpha: 0.28)
-      ..blendMode = BlendMode.screen;
-
-    final accentSize = s * 0.55;
-    final accentRect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(s - accentSize - s * 0.04, s * 0.04, accentSize, accentSize),
-      Radius.circular(r * 0.7),
-    );
-    canvas.drawRRect(accentRect, accentPaint);
-
-    // "K" lettermark — drawn as two strokes for maximum sharpness
     final strokePaint = Paint()
       ..color = Colors.white
       ..strokeWidth = s * 0.085
@@ -74,13 +97,8 @@ class _KithMarkPainter extends CustomPainter {
     final mid = (top + bottom) / 2;
     final right = s * 0.72;
 
-    // Vertical stem of K
     canvas.drawLine(Offset(left, top), Offset(left, bottom), strokePaint);
-
-    // Upper diagonal of K (mid → top-right)
     canvas.drawLine(Offset(left, mid), Offset(right, top), strokePaint);
-
-    // Lower diagonal of K (mid → bottom-right)
     canvas.drawLine(Offset(left, mid), Offset(right, bottom), strokePaint);
   }
 
@@ -88,12 +106,7 @@ class _KithMarkPainter extends CustomPainter {
   bool shouldRepaint(_KithMarkPainter old) => old.isDark != isDark;
 }
 
-/// The complete Kith brand lockup: logo mark + wordmark + creator credit.
-///
-/// Hierarchy:
-///   [Logo mark]
-///   Kith          ← visual hero, 40sp Bold
-///   by Nirniq     ← refined creator signature, 12sp, muted
+/// The complete Kith brand lockup: official logo mark + wordmark + creator credit.
 class KithBrandLockup extends StatelessWidget {
   final bool isDark;
   final double logoSize;
@@ -101,7 +114,7 @@ class KithBrandLockup extends StatelessWidget {
   const KithBrandLockup({
     super.key,
     required this.isDark,
-    this.logoSize = 72,
+    this.logoSize = 88,
   });
 
   @override

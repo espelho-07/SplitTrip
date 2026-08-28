@@ -1,20 +1,17 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
-import '../../../../core/theme/app_spacing.dart';
-import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/utils/date_formatter.dart';
 import '../../../../core/utils/haptic_feedback_helper.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/currency_display.dart';
 import '../../../../core/widgets/member_avatar.dart';
-import '../../../../core/widgets/pill_badge.dart';
-import '../../../../core/widgets/surface_card.dart';
 import '../../../../domain/models/expense.dart';
 import '../../../../domain/models/trip.dart';
 import '../../../../domain/models/trip_member.dart';
 
+/// Master Redesigned Expense Detail Sheet for Kith.
 class ExpenseDetailSheet extends StatelessWidget {
   final Expense expense;
   final Trip trip;
@@ -46,10 +43,15 @@ class ExpenseDetailSheet extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+        color: isDark ? const Color(0xFF11161B) : Colors.white,
         borderRadius: AppRadius.topSheetBorder,
       ),
-      padding: AppSpacing.bottomSheetPadding,
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 12,
+        bottom: MediaQuery.of(context).padding.bottom + 16,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -57,35 +59,71 @@ class ExpenseDetailSheet extends StatelessWidget {
           // Drag handle
           Center(
             child: Container(
-              width: 40,
+              width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+                color: isDark ? Colors.white24 : Colors.black12,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
           ),
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: 16),
 
-          // Header
+          // Header Badges
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              PillBadge(
-                label: expense.category.displayName.toUpperCase(),
-                icon: expense.category.icon,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(expense.category.emoji, style: const TextStyle(fontSize: 13)),
+                    const SizedBox(width: 6),
+                    Text(
+                      expense.category.displayName.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.6,
+                        color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              PillBadge(
-                label: expense.splitType.name.toUpperCase(),
-                color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF182028) : const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '${expense.splitType.name.toUpperCase()} SPLIT',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                  ),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: 12),
 
+          // Title & Amount
           Text(
             expense.title,
-            style: AppTypography.titleLarge(isDark: isDark),
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.4,
+              color: isDark ? Colors.white : const Color(0xFF0F172A),
+            ),
           ),
           const SizedBox(height: 4),
 
@@ -95,11 +133,18 @@ class ExpenseDetailSheet extends StatelessWidget {
             colorMode: CurrencyColorMode.neutral,
             currencyCode: trip.currencyCode,
           ),
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: 16),
 
           // Payer Info Card
-          SurfaceCard(
+          Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF161E26) : const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.black.withValues(alpha: 0.04),
+              ),
+            ),
             child: Row(
               children: [
                 MemberAvatar(name: payerName, size: 36),
@@ -109,7 +154,7 @@ class ExpenseDetailSheet extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Paid by ${isPayerCurrentUser ? 'You' : payerName}',
+                        'Paid by ${isPayerCurrentUser ? "You" : payerName}',
                         style: TextStyle(
                           fontWeight: FontWeight.w700,
                           fontSize: 14,
@@ -118,7 +163,10 @@ class ExpenseDetailSheet extends StatelessWidget {
                       ),
                       Text(
                         DateFormatter.formatRelative(expense.createdAt),
-                        style: AppTypography.bodySmall(isDark: isDark),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                        ),
                       ),
                     ],
                   ),
@@ -129,17 +177,17 @@ class ExpenseDetailSheet extends StatelessWidget {
 
           // Voice Transcript (if available)
           if (expense.voiceTranscript != null && expense.voiceTranscript!.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.md),
-            SurfaceCard(
-              backgroundColor: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.08),
+            const SizedBox(height: 10),
+            Container(
               padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFF3B82F6).withValues(alpha: 0.2)),
+              ),
               child: Row(
                 children: [
-                  Icon(
-                    Icons.mic_rounded,
-                    size: 18,
-                    color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-                  ),
+                  const Icon(Icons.mic_rounded, size: 18, color: Color(0xFF3B82F6)),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -156,21 +204,26 @@ class ExpenseDetailSheet extends StatelessWidget {
             ),
           ],
 
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: 16),
 
           // Split Breakdown Header
           Text(
-            'Split Breakdown (${expense.splits.length} participants)',
-            style: AppTypography.titleSmall(isDark: isDark),
+            'SPLIT BREAKDOWN (${expense.splits.length} PARTICIPANTS)',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.8,
+              color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+            ),
           ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: 8),
 
           // Splits List
           Flexible(
             child: ListView.separated(
               shrinkWrap: true,
               itemCount: expense.splits.length,
-              separatorBuilder: (context, index) => const SizedBox(height: 8),
+              separatorBuilder: (context, index) => const SizedBox(height: 6),
               itemBuilder: (context, index) {
                 final split = expense.splits[index];
                 final member = _findMember(split.memberId);
@@ -180,14 +233,18 @@ class ExpenseDetailSheet extends StatelessWidget {
                     ? ((split.amountInPaise / expense.amountInPaise) * 100).toStringAsFixed(1)
                     : '0';
 
-                return SurfaceCard(
+                return Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF161E26) : const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Row(
                         children: [
-                          MemberAvatar(name: memberName, size: 28),
+                          MemberAvatar(name: memberName, size: 26),
                           const SizedBox(width: 10),
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -195,14 +252,17 @@ class ExpenseDetailSheet extends StatelessWidget {
                               Text(
                                 isCurrentMember ? 'You' : memberName,
                                 style: TextStyle(
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w700,
                                   fontSize: 13,
                                   color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                                 ),
                               ),
                               Text(
                                 '$percentage% split',
-                                style: AppTypography.bodySmall(isDark: isDark),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                                ),
                               ),
                             ],
                           ),
@@ -214,9 +274,9 @@ class ExpenseDetailSheet extends StatelessWidget {
                           currencyCode: trip.currencyCode,
                         ),
                         style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                          color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13,
+                          color: isDark ? Colors.white : const Color(0xFF0F172A),
                         ),
                       ),
                     ],
@@ -226,7 +286,7 @@ class ExpenseDetailSheet extends StatelessWidget {
             ),
           ),
 
-          const SizedBox(height: AppSpacing.xl),
+          const SizedBox(height: 20),
 
           // Actions
           if (canDelete) ...[
@@ -241,7 +301,7 @@ class ExpenseDetailSheet extends StatelessWidget {
                   onEdit?.call();
                 },
               ),
-              const SizedBox(height: AppSpacing.sm),
+              const SizedBox(height: 8),
             ],
             if (onDelete != null) ...[
               AppButton(
@@ -250,48 +310,35 @@ class ExpenseDetailSheet extends StatelessWidget {
                 icon: Icons.delete_outline_rounded,
                 isFullWidth: true,
                 onPressed: () {
-                  HapticHelper.medium();
-                  _confirmDelete(context);
+                  HapticHelper.warning();
+                  showDialog(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      backgroundColor: isDark ? const Color(0xFF161E26) : Colors.white,
+                      title: const Text('Delete Expense?'),
+                      content: const Text('Are you sure you want to delete this expense? This action will adjust all member balances immediately.'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text('Cancel'),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            Navigator.pop(context);
+                            onDelete?.call();
+                          },
+                          child: const Text('Delete', style: TextStyle(color: AppColors.negativeRedDark, fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ),
+                  );
                 },
               ),
-              const SizedBox(height: AppSpacing.sm),
             ],
           ],
-
-          AppButton(
-            text: 'Close',
-            variant: AppButtonVariant.ghost,
-            isFullWidth: true,
-            onPressed: () => Navigator.pop(context),
-          ),
         ],
       ),
-    );
-  }
-
-  void _confirmDelete(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Delete Expense?'),
-          content: Text('Remove "${expense.title}" from this trip? Balances will update automatically.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(ctx); // close dialog
-                Navigator.pop(context); // close sheet
-                onDelete?.call();
-              },
-              child: const Text('Delete', style: TextStyle(color: Colors.red)),
-            ),
-          ],
-        );
-      },
     );
   }
 }

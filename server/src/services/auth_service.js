@@ -399,6 +399,240 @@ class AuthService {
     return { success: true };
   }
 
+  deleteAccount(userId) {
+    if (!userId) {
+      throw AppError.badRequest('User ID is required');
+    }
+
+    // 1. Delete all user sessions
+    const sessions = db.find('sessions', (s) => s.userId === userId);
+    for (const s of sessions) {
+      db.delete('sessions', s.id);
+    }
+
+    // 2. Delete personal expenses
+    const personalExpenses = db.find('personal_expenses', (e) => e.userId === userId);
+    for (const exp of personalExpenses) {
+      db.delete('personal_expenses', exp.id);
+    }
+
+    // 3. Delete personal debts
+    const personalDebts = db.find('personal_debts', (d) => d.userId === userId);
+    for (const debt of personalDebts) {
+      db.delete('personal_debts', debt.id);
+    }
+
+    // 4. Delete personal repayments
+    const personalRepayments = db.find('personal_repayments', (r) => r.userId === userId);
+    for (const rep of personalRepayments) {
+      db.delete('personal_repayments', rep.id);
+    }
+
+    // 5. Delete personal budgets
+    const personalBudgets = db.find('personal_budgets', (b) => b.userId === userId);
+    for (const b of personalBudgets) {
+      db.delete('personal_budgets', b.id);
+    }
+
+    // 6. Delete trip memberships
+    const tripMembers = db.find('trip_members', (m) => m.userId === userId);
+    for (const tm of tripMembers) {
+      db.delete('trip_members', tm.id);
+    }
+
+    // 7. Delete the user record
+    db.delete('users', userId);
+
+    return { success: true, message: 'Account and associated personal/cloud data permanently deleted.' };
+  }
+
+  deleteAccountByEmailOrKey(identifier) {
+    if (!identifier || typeof identifier !== 'string') {
+      throw AppError.badRequest('Email address or Recovery Key is required.');
+    }
+    const clean = identifier.trim();
+    let user = null;
+
+    if (clean.includes('@')) {
+      const cleanEmail = clean.toLowerCase();
+      user = db.findOne('users', (u) => u.email && u.email.toLowerCase() === cleanEmail);
+    } else {
+      const keyHash = this._hashKey(clean);
+      user = db.findOne('users', (u) => u.recoveryKeyHash === keyHash);
+    }
+
+    if (user) {
+      return this.deleteAccount(user.id);
+    }
+
+    return {
+      success: true,
+      message: 'Deletion request processed. No active cloud data found for the provided identifier.',
+    };
+  }
+
+  loginReviewerAccount(email = 'review.nirniq@gmail.com') {
+    const cleanEmail = (email || 'review.nirniq@gmail.com').trim().toLowerCase();
+    const now = new Date().toISOString();
+
+    let user = db.findOne('users', (u) => u.email && u.email.toLowerCase() === cleanEmail);
+    if (!user) {
+      const generatedKey = this._generateRecoveryKey();
+      user = {
+        id: 'usr_play_reviewer_nirniq',
+        displayName: 'Google Play Reviewer',
+        avatarUrl: 'https://lh3.googleusercontent.com/a/default-user',
+        email: cleanEmail,
+        googleId: 'google_reviewer_nirniq_001',
+        supabaseUserId: 'sub_reviewer_nirniq_001',
+        recoveryKeyHash: this._hashKey(generatedKey),
+        isGuest: false,
+        createdAt: now,
+        lastActiveAt: now,
+      };
+      db.insert('users', user);
+    } else {
+      db.update('users', user.id, { lastActiveAt: now, isGuest: false });
+      user = db.get('users', user.id);
+    }
+
+    // Seed realistic reviewer trip and expenses if none exist
+    this._seedReviewerDataIfEmpty(user.id);
+
+    const session = this._createSession(user.id);
+
+    return {
+      user: {
+        id: user.id,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl,
+        email: user.email,
+        googleId: user.googleId,
+        supabaseUserId: user.supabaseUserId,
+        isGuest: false,
+        isLinkedToAccount: true,
+        anonymousToken: session.token,
+        createdAt: user.createdAt,
+      },
+      token: session.token,
+    };
+  }
+
+  _seedReviewerDataIfEmpty(userId) {
+    try {
+      const existingMemberships = db.find('trip_members', (m) => m.userId === userId);
+      if (existingMemberships.length > 0) return; // Already seeded
+
+      const now = new Date().toISOString();
+      const tripId = 'trip_goa_reviewer_2026';
+
+      // 1. Create Trip
+      const trip = {
+        id: tripId,
+        name: 'Goa Beach Getaway 🌴',
+        description: 'Annual vacation and beach exploration trip with friends',
+        joinCode: 'GOA202',
+        creatorId: userId,
+        currency: 'INR',
+        mode: 'split_and_journey',
+        status: 'active',
+        createdAt: now,
+        updatedAt: now,
+      };
+      db.insert('trips', trip);
+
+      // 2. Members
+      const members = [
+        { id: `tm_${userId}`, tripId, userId, displayName: 'Google Play Reviewer', role: 'creator', joinedAt: now },
+        { id: 'tm_member_priya', tripId, userId: 'usr_priya_demo', displayName: 'Priya Sharma', role: 'member', joinedAt: now },
+        { id: 'tm_member_rahul', tripId, userId: 'usr_rahul_demo', displayName: 'Rahul Verma', role: 'member', joinedAt: now },
+        { id: 'tm_member_alex', tripId, userId: 'usr_alex_demo', displayName: 'Alex Chen', role: 'member', joinedAt: now },
+      ];
+      for (const m of members) db.insert('trip_members', m);
+
+      // 3. Trip Expenses
+      const exp1Id = 'exp_villa_stay';
+      db.insert('expenses', {
+        id: exp1Id,
+        tripId,
+        description: 'Luxury Heritage Villa Booking (3 Nights)',
+        amountPaise: 2400000, // ₹24,000
+        category: 'Stay',
+        paidById: userId,
+        splitType: 'EQUAL',
+        splitWith: [userId, 'usr_priya_demo', 'usr_rahul_demo', 'usr_alex_demo'],
+        createdAt: now,
+      });
+
+      const exp2Id = 'exp_shack_dinner';
+      db.insert('expenses', {
+        id: exp2Id,
+        tripId,
+        description: 'Curlies Beach Shack Dinner & Drinks',
+        amountPaise: 480000, // ₹4,800
+        category: 'Food',
+        paidById: 'usr_priya_demo',
+        splitType: 'EQUAL',
+        splitWith: [userId, 'usr_priya_demo', 'usr_rahul_demo', 'usr_alex_demo'],
+        createdAt: now,
+      });
+
+      // 4. Personal Expenses for reviewer
+      db.insert('personal_expenses', {
+        id: 'pexp_flight_tickets',
+        userId,
+        title: 'Mumbai to Goa Flight Tickets',
+        amountPaise: 650000, // ₹6,500
+        category: 'Travel',
+        date: now.split('T')[0],
+        notes: 'IndiGo 6E-243',
+        createdAt: now,
+      });
+
+      db.insert('personal_expenses', {
+        id: 'pexp_airport_coffee',
+        userId,
+        title: 'Blue Tokai Airport Coffee',
+        amountPaise: 32000, // ₹320
+        category: 'Food & Dining',
+        date: now.split('T')[0],
+        notes: 'Iced Latte & Croissant',
+        createdAt: now,
+      });
+
+      // 5. Personal Budget
+      db.insert('personal_budgets', {
+        id: `pbudg_${userId}`,
+        userId,
+        monthlyLimitPaise: 5000000, // ₹50,000
+        month: now.substring(0, 7),
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      // 6. Personal Debt
+      db.insert('personal_debts', {
+        id: 'pdebt_alex_lend',
+        userId,
+        counterpartyName: 'Alex Chen',
+        type: 'lent',
+        amountPaise: 500000, // ₹5,000
+        note: 'Advance for scuba diving gear',
+        createdAt: now,
+      });
+
+      db.insert('personal_repayments', {
+        id: 'prep_alex_part',
+        debtId: 'pdebt_alex_lend',
+        userId,
+        amountPaise: 200000, // ₹2,000 repaid
+        date: now,
+        note: 'UPI transfer back',
+        createdAt: now,
+      });
+    } catch (_) {}
+  }
+
   getProfile(userId) {
     const user = db.get('users', userId);
     if (!user) {

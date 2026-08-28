@@ -81,11 +81,27 @@ class _AppButtonState extends State<AppButton> with SingleTickerProviderStateMix
     Color backgroundColor;
     Color textColor;
     Border? border;
+    Gradient? gradient;
+    List<BoxShadow>? boxShadow;
 
     switch (widget.variant) {
       case AppButtonVariant.primary:
-        backgroundColor = isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary;
-        textColor = isDark ? AppColors.darkBackground : Colors.white;
+        backgroundColor = AppColors.emeraldPrimary;
+        textColor = Colors.white;
+        if (isEnabled && isDark) {
+          gradient = const LinearGradient(
+            colors: [Color(0xFF14B8A6), Color(0xFF0F766E)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          );
+          boxShadow = [
+            BoxShadow(
+              color: AppColors.emeraldLight.withValues(alpha: 0.3),
+              blurRadius: 12,
+              offset: const Offset(0, 3),
+            ),
+          ];
+        }
         break;
       case AppButtonVariant.secondary:
         backgroundColor = isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle;
@@ -118,6 +134,8 @@ class _AppButtonState extends State<AppButton> with SingleTickerProviderStateMix
     if (!isEnabled && widget.variant == AppButtonVariant.primary) {
       backgroundColor = (isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle);
       textColor = (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted);
+      gradient = null;
+      boxShadow = null;
     }
 
     Widget content = widget.isLoading
@@ -165,9 +183,11 @@ class _AppButtonState extends State<AppButton> with SingleTickerProviderStateMix
           width: widget.isFullWidth ? double.infinity : null,
           padding: widget.padding ?? const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
-            color: backgroundColor,
+            color: gradient == null ? backgroundColor : null,
+            gradient: gradient,
             borderRadius: AppRadius.mdBorder,
             border: border,
+            boxShadow: boxShadow,
           ),
           alignment: Alignment.center,
           child: content,

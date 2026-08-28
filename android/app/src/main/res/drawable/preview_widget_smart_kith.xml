@@ -1,0 +1,45 @@
+﻿<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="280dp"
+    android:height="110dp"
+    android:viewportWidth="280"
+    android:viewportHeight="110">
+
+    <!-- Card Background -->
+    <path
+        android:fillColor="#1C1C21"
+        android:pathData="M 16,4 H 264 A 16,16 0 0 1 280,20 V 90 A 16,16 0 0 1 264,106 H 16 A 16,16 0 0 1 0,90 V 20 A 16,16 0 0 1 16,4 Z" />
+
+    <!-- Card Border -->
+    <path
+        android:strokeColor="#2E2E38"
+        android:strokeWidth="1.5"
+        android:pathData="M 16,4 H 264 A 16,16 0 0 1 280,20 V 90 A 16,16 0 0 1 264,106 H 16 A 16,16 0 0 1 0,90 V 20 A 16,16 0 0 1 16,4 Z" />
+
+    <!-- Sparkle Icon -->
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M 22,22 L 24,17 L 26,22 L 31,24 L 26,26 L 24,31 L 22,26 L 17,24 Z" />
+
+    <!-- Header: KITH INTELLIGENCE -->
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M 36,22 H 140 A 3,3 0 0 1 143,25 V 25 A 3,3 0 0 1 140,28 H 36 A 3,3 0 0 1 33,25 V 25 A 3,3 0 0 1 36,22 Z" />
+
+    <!-- Smart Headline: Rahul owes you ₹1,200 -->
+    <path
+        android:fillColor="#F4F4F5"
+        android:pathData="M 20,42 H 200 A 4,4 0 0 1 204,46 V 50 A 4,4 0 0 1 200,54 H 20 A 4,4 0 0 1 16,46 V 46 A 4,4 0 0 1 20,42 Z" />
+
+    <!-- Subtext: From Goa trip expenses -->
+    <path
+        android:fillColor="#71717A"
+        android:pathData="M 20,62 H 150 A 3,3 0 0 1 153,65 V 65 A 3,3 0 0 1 150,68 H 20 A 3,3 0 0 1 17,65 V 65 A 3,3 0 0 1 20,62 Z" />
+
+    <!-- Settle Up Action Pill Button -->
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M 194,72 H 254 A 8,8 0 0 1 262,80 V 88 A 8,8 0 0 1 254,96 H 194 A 8,8 0 0 1 186,88 V 80 A 8,8 0 0 1 194,72 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 202,82 H 246 A 2,2 0 0 1 248,84 V 84 A 2,2 0 0 1 246,86 H 202 A 2,2 0 0 1 200,84 V 84 A 2,2 0 0 1 202,82 Z" />
+</vector>

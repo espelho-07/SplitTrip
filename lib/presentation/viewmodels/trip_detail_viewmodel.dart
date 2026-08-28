@@ -202,8 +202,13 @@ class TripDetailViewModel extends ChangeNotifier {
     required String fromMemberId,
     required String toMemberId,
     required int amountInPaise,
+    String? settlementId,
     String? paymentReference,
+    String? recipientUpiId,
+    String? fromName,
+    String? toName,
     String? note,
+    String paymentStatus = 'paid',
     required String currentUserId,
   }) async {
     if (_trip == null) return;
@@ -213,8 +218,13 @@ class TripDetailViewModel extends ChangeNotifier {
         fromMemberId: fromMemberId,
         toMemberId: toMemberId,
         amountInPaise: amountInPaise,
+        settlementId: settlementId,
         paymentReference: paymentReference,
+        recipientUpiId: recipientUpiId,
+        fromName: fromName,
+        toName: toName,
         note: note,
+        paymentStatus: paymentStatus,
       );
       _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
       await refresh(currentUserId);

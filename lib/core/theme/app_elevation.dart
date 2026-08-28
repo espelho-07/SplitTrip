@@ -40,7 +40,7 @@ class AppElevation {
 
   static List<BoxShadow> darkSubtle = [
     BoxShadow(
-      color: const Color(0x28000000), // 16% opacity
+      color: const Color(0x33000000), // 20% deep black shadow
       blurRadius: 8,
       offset: const Offset(0, 2),
     ),
@@ -48,16 +48,16 @@ class AppElevation {
 
   static List<BoxShadow> darkCard = [
     BoxShadow(
-      color: const Color(0x3D000000), // 24% opacity
-      blurRadius: 12,
+      color: const Color(0x4D000000), // 30% crisp shadow
+      blurRadius: 14,
       offset: const Offset(0, 4),
     ),
   ];
 
   static List<BoxShadow> darkFloating = [
     BoxShadow(
-      color: const Color(0x66000000), // 40% opacity
-      blurRadius: 24,
+      color: const Color(0x80000000), // 50% deep float shadow
+      blurRadius: 28,
       offset: const Offset(0, 10),
     ),
   ];

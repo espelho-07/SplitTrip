@@ -256,11 +256,25 @@ class _TripDetailViewState extends State<TripDetailView> {
         trip: trip,
         balanceSummary: tripDetailVm.balanceSummary,
         currentUserId: authVm.currentUser?.id ?? '',
-        onRecordTransfer: (fromMemberId, toMemberId, amountInPaise) async {
+        onRecordTransfer: (
+          fromMemberId,
+          toMemberId,
+          amountInPaise, {
+          paymentReference,
+          recipientUpiId,
+          fromName,
+          toName,
+          paymentStatus,
+        }) async {
           await tripDetailVm.recordSettlement(
             fromMemberId: fromMemberId,
             toMemberId: toMemberId,
             amountInPaise: amountInPaise,
+            paymentReference: paymentReference,
+            recipientUpiId: recipientUpiId,
+            fromName: fromName,
+            toName: toName,
+            paymentStatus: paymentStatus ?? 'paid',
             currentUserId: authVm.currentUser?.id ?? '',
           );
         },

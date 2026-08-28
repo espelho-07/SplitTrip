@@ -83,6 +83,8 @@ class SettlementService {
     toMemberId,
     amountInPaise,
     paymentReference = null,
+    recipientUpiId = null,
+    status = 'paid',
     note = null,
   }, realtimeHub = null) {
     if (id) {
@@ -162,8 +164,10 @@ class SettlementService {
       toMemberId: toMember.id,
       amountInPaise,
       paymentReference: paymentReference || null,
+      recipientUpiId: recipientUpiId || null,
+      status: status || 'paid',
       note: note || null,
-      isSettled: true,
+      isSettled: status === 'paid',
       recordedByUserId: user.id,
       settledAt: now,
       createdAt: now,

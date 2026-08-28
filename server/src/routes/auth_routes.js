@@ -107,6 +107,48 @@ router.post('/logout', (req, res, next) => {
   }
 });
 
+// DELETE /api/auth/account - Permanently delete account and associated cloud data
+router.delete('/account', authMiddleware, (req, res, next) => {
+  try {
+    const result = authService.deleteAccount(req.user.id);
+    res.status(200).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// POST /api/auth/delete-account - Fallback endpoint for account deletion
+router.post('/delete-account', authMiddleware, (req, res, next) => {
+  try {
+    const result = authService.deleteAccount(req.user.id);
+    res.status(200).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// POST /api/auth/reviewer-login - Pre-authenticated Play Store Reviewer Login with seeded environment
+router.post('/reviewer-login', (req, res, next) => {
+  try {
+    const { email } = req.body || {};
+    const result = authService.loginReviewerAccount(email || 'review.nirniq@gmail.com');
+    res.status(200).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// POST /api/auth/web-delete-request - Public Web Data Deletion Request Endpoint (Email or Recovery Key)
+router.post('/web-delete-request', (req, res, next) => {
+  try {
+    const { identifier } = req.body || {};
+    const result = authService.deleteAccountByEmailOrKey(identifier);
+    res.status(200).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
 // GET /api/auth/me - Current authenticated user profile
 router.get('/me', authMiddleware, (req, res, next) => {
   try {

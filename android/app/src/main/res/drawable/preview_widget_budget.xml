@@ -1,0 +1,52 @@
+﻿<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="240dp"
+    android:height="150dp"
+    android:viewportWidth="240"
+    android:viewportHeight="150">
+
+    <!-- Card Background -->
+    <path
+        android:fillColor="#1C1C21"
+        android:pathData="M 16,4 H 224 A 16,16 0 0 1 240,20 V 130 A 16,16 0 0 1 224,146 H 16 A 16,16 0 0 1 0,130 V 20 A 16,16 0 0 1 16,4 Z" />
+
+    <!-- Card Border -->
+    <path
+        android:strokeColor="#2E2E38"
+        android:strokeWidth="1.5"
+        android:pathData="M 16,4 H 224 A 16,16 0 0 1 240,20 V 130 A 16,16 0 0 1 224,146 H 16 A 16,16 0 0 1 0,130 V 20 A 16,16 0 0 1 16,4 Z" />
+
+    <!-- Header: AUGUST BUDGET -->
+    <path
+        android:fillColor="#A1A1AA"
+        android:pathData="M 20,24 H 110 A 3,3 0 0 1 113,27 V 27 A 3,3 0 0 1 110,30 H 20 A 3,3 0 0 1 17,27 V 27 A 3,3 0 0 1 20,24 Z" />
+
+    <!-- Header Right: 71% -->
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M 190,24 H 216 A 3,3 0 0 1 219,27 V 27 A 3,3 0 0 1 216,30 H 190 A 3,3 0 0 1 187,27 V 27 A 3,3 0 0 1 190,24 Z" />
+
+    <!-- Spent vs Budget: ₹14,250 / ₹20,000 -->
+    <path
+        android:fillColor="#F4F4F5"
+        android:pathData="M 20,44 H 160 A 4,4 0 0 1 164,48 V 56 A 4,4 0 0 1 160,60 H 20 A 4,4 0 0 1 16,48 V 48 A 4,4 0 0 1 20,44 Z" />
+
+    <!-- Progress Track Background -->
+    <path
+        android:fillColor="#27272E"
+        android:pathData="M 24,78 H 216 A 5,5 0 0 1 221,83 V 83 A 5,5 0 0 1 216,88 H 24 A 5,5 0 0 1 19,83 V 83 A 5,5 0 0 1 24,78 Z" />
+
+    <!-- Progress Bar (Emerald fill ~70%) -->
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M 24,78 H 160 A 5,5 0 0 1 165,83 V 83 A 5,5 0 0 1 160,88 H 24 A 5,5 0 0 1 19,83 V 83 A 5,5 0 0 1 24,78 Z" />
+
+    <!-- Footer Left: ₹5,750 left -->
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M 20,118 H 80 A 3,3 0 0 1 83,121 V 121 A 3,3 0 0 1 80,124 H 20 A 3,3 0 0 1 17,121 V 121 A 3,3 0 0 1 20,118 Z" />
+
+    <!-- Footer Right: ₹460/day -->
+    <path
+        android:fillColor="#A1A1AA"
+        android:pathData="M 160,118 H 216 A 3,3 0 0 1 219,121 V 121 A 3,3 0 0 1 216,124 H 160 A 3,3 0 0 1 157,121 V 121 A 3,3 0 0 1 160,118 Z" />
+</vector>

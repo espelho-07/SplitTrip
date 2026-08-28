@@ -109,6 +109,50 @@ class ProfileSheet extends StatelessWidget {
     }
   }
 
+  void _showDeleteAccountDialog(BuildContext context) async {
+    final l10n = context.l10n;
+    final nav = Navigator.of(context);
+    final authVm = context.read<AuthViewModel>();
+    final homeVm = context.read<HomeViewModel>();
+    final personalVm = context.read<PersonalExpenseViewModel>();
+    final storage = context.read<LocalStorageService>();
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
+        title: Text(l10n.profileDeleteDialogTitle),
+        content: Text(l10n.profileDeleteDialogDesc),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx, false),
+            child: Text(l10n.actionCancel),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.negativeRedDark),
+            onPressed: () => Navigator.pop(dCtx, true),
+            child: Text(l10n.profileDeleteConfirmBtn),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      nav.pop();
+      AppRouter.router.go('/onboarding');
+
+      await authVm.deleteAccount();
+      await storage.clearAllUserData();
+      homeVm.clearData();
+      personalVm.clearData();
+
+      final rootCtx = AppRouter.navigatorKey.currentContext;
+      if (rootCtx != null && rootCtx.mounted) {
+        KithSuccessToast.show(rootCtx, l10n.profileDeleteSuccess);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -125,6 +169,12 @@ class ProfileSheet extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+        border: Border(
+          top: BorderSide(
+            color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+            width: 1.2,
+          ),
+        ),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: EdgeInsets.only(
@@ -144,7 +194,7 @@ class ProfileSheet extends StatelessWidget {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: isDark ? Colors.white24 : Colors.black12,
+                  color: isDark ? AppColors.darkBorderSubtle : Colors.black12,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -152,51 +202,62 @@ class ProfileSheet extends StatelessWidget {
             const SizedBox(height: AppSpacing.lg),
 
             // Profile Header Card
-            Row(
-              children: [
-                MemberAvatar(name: displayName, size: 52),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        displayName,
-                        style: AppTypography.titleLarge(isDark: isDark),
-                      ),
-                      const SizedBox(height: 2),
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: (isGoogleLinked ? AppColors.emeraldPrimary : AppColors.indigoAccent)
-                                  .withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              isGoogleLinked ? l10n.profileGoogleConnected : l10n.profileGuestAccount,
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: isGoogleLinked ? AppColors.emeraldPrimary : AppColors.indigoAccent,
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+                borderRadius: AppRadius.lgBorder,
+                border: Border.all(
+                  color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  MemberAvatar(name: displayName, size: 52),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          displayName,
+                          style: AppTypography.titleLarge(isDark: isDark),
+                        ),
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: (isGoogleLinked ? AppColors.emeraldPrimary : AppColors.indigoAccent)
+                                    .withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                isGoogleLinked ? l10n.profileGoogleConnected : l10n.profileGuestAccount,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: isGoogleLinked ? AppColors.emeraldPrimary : AppColors.indigoAccent,
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Text(
-                              isGoogleLinked ? (user?.email ?? '') : l10n.profileLocalData,
-                              style: AppTypography.bodySmall(isDark: isDark),
-                              overflow: TextOverflow.ellipsis,
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                isGoogleLinked ? (user?.email ?? '') : l10n.profileLocalData,
+                                style: AppTypography.bodySmall(isDark: isDark),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ],
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
 
             const SizedBox(height: AppSpacing.lg),
@@ -607,6 +668,26 @@ class ProfileSheet extends StatelessWidget {
                   ListTile(
                     dense: true,
                     contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.shield_outlined, size: 20, color: AppColors.emeraldPrimary),
+                    title: Text(
+                      l10n.profilePrivacyPolicy,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                      ),
+                    ),
+                    subtitle: Text(l10n.profilePrivacyPolicyDesc, style: AppTypography.bodySmall(isDark: isDark)),
+                    trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
+                    onTap: () {
+                      Navigator.pop(context);
+                      context.push('/privacy-policy');
+                    },
+                  ),
+                  Divider(height: 1, color: isDark ? Colors.white10 : Colors.black12),
+                  ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.feedback_outlined, size: 20),
                     title: Text(
                       l10n.profileFeedback,
@@ -639,20 +720,40 @@ class ProfileSheet extends StatelessWidget {
             SurfaceCard(
               backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 4),
-              child: ListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.logout_rounded, size: 20, color: Colors.redAccent),
-                title: Text(
-                  l10n.profileSignOutTitle,
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.redAccent),
-                ),
-                subtitle: Text(
-                  l10n.profileSignOutDesc,
-                  style: AppTypography.bodySmall(isDark: isDark),
-                ),
-                trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
-                onTap: () => _showSignOutDialog(context),
+              child: Column(
+                children: [
+                  ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.logout_rounded, size: 20, color: Colors.redAccent),
+                    title: Text(
+                      l10n.profileSignOutTitle,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.redAccent),
+                    ),
+                    subtitle: Text(
+                      l10n.profileSignOutDesc,
+                      style: AppTypography.bodySmall(isDark: isDark),
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
+                    onTap: () => _showSignOutDialog(context),
+                  ),
+                  Divider(height: 1, color: isDark ? Colors.white10 : Colors.black12),
+                  ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.delete_forever_rounded, size: 20, color: AppColors.negativeRedDark),
+                    title: Text(
+                      l10n.profileDeleteAccountTitle,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.negativeRedDark),
+                    ),
+                    subtitle: Text(
+                      l10n.profileDeleteAccountDesc,
+                      style: AppTypography.bodySmall(isDark: isDark),
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
+                    onTap: () => _showDeleteAccountDialog(context),
+                  ),
+                ],
               ),
             ),
 

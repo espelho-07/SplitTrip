@@ -12,6 +12,7 @@ class GuestUser {
   final String? googleId;
 
   bool get isGoogleLinked => (email != null && email!.isNotEmpty) || (googleId != null && googleId!.isNotEmpty);
+  bool get isGuest => !isLinkedToAccount && !isGoogleLinked;
 
   const GuestUser({
     required this.id,

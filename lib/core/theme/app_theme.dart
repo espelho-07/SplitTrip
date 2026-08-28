@@ -4,7 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 import 'app_radius.dart';
 
-/// Complete ThemeData setup for Light & Dark mode.
+/// Complete ThemeData setup for Light & Master Obsidian Dark mode.
 class AppTheme {
   AppTheme._();
 
@@ -68,9 +68,9 @@ class AppTheme {
       cardTheme: CardThemeData(
         color: AppColors.lightSurfaceCard,
         elevation: 0,
-        shape: RoundedRectangleBorder(
+        shape: const RoundedRectangleBorder(
           borderRadius: AppRadius.lgBorder,
-          side: const BorderSide(color: AppColors.lightBorderSubtle, width: 1),
+          side: BorderSide(color: AppColors.lightBorderSubtle, width: 1),
         ),
         margin: EdgeInsets.zero,
       ),
@@ -83,14 +83,14 @@ class AppTheme {
         showDragHandle: true,
         dragHandleColor: AppColors.lightBorderStrong,
       ),
-      dialogTheme: DialogThemeData(
+      dialogTheme: const DialogThemeData(
         backgroundColor: AppColors.lightSurfaceCard,
         shape: RoundedRectangleBorder(
           borderRadius: AppRadius.xlBorder,
         ),
         elevation: 8,
       ),
-      inputDecorationTheme: InputDecorationTheme(
+      inputDecorationTheme: const InputDecorationTheme(
         filled: true,
         fillColor: AppColors.lightSurfaceSubtle,
         border: OutlineInputBorder(
@@ -99,18 +99,18 @@ class AppTheme {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: AppRadius.mdBorder,
-          borderSide: const BorderSide(color: AppColors.lightBorderSubtle, width: 1),
+          borderSide: BorderSide(color: AppColors.lightBorderSubtle, width: 1),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: AppRadius.mdBorder,
-          borderSide: const BorderSide(color: AppColors.emeraldPrimary, width: 1.5),
+          borderSide: BorderSide(color: AppColors.emeraldPrimary, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: AppRadius.mdBorder,
-          borderSide: const BorderSide(color: AppColors.negativeRedLight, width: 1),
+          borderSide: BorderSide(color: AppColors.negativeRedLight, width: 1),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        hintStyle: const TextStyle(color: AppColors.lightTextMuted, fontSize: 14),
+        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        hintStyle: TextStyle(color: AppColors.lightTextMuted, fontSize: 14),
       ),
       dividerTheme: const DividerThemeData(
         color: AppColors.lightBorderSubtle,
@@ -150,16 +150,17 @@ class AppTheme {
         primaryContainer: AppColors.emeraldDark,
         secondary: AppColors.indigoAccent,
         surface: AppColors.darkSurfaceCard,
+        surfaceContainerHighest: AppColors.darkSurfaceElevated,
         error: AppColors.negativeRedDark,
-        onPrimary: AppColors.darkBackground,
+        onPrimary: Colors.white,
         onSecondary: Colors.white,
         onSurface: AppColors.darkTextPrimary,
-        onError: Colors.black,
+        onError: Colors.white,
       ),
       textTheme: baseTextTheme.copyWith(
         displayLarge: baseTextTheme.displayLarge?.copyWith(
           color: AppColors.darkTextPrimary,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w800,
           letterSpacing: -1.0,
         ),
         titleLarge: baseTextTheme.titleLarge?.copyWith(
@@ -194,17 +195,17 @@ class AppTheme {
           letterSpacing: -0.3,
         ),
       ),
-      cardTheme: CardThemeData(
+      cardTheme: const CardThemeData(
         color: AppColors.darkSurfaceCard,
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: AppRadius.lgBorder,
-          side: const BorderSide(color: AppColors.darkBorderSubtle, width: 1),
+          side: BorderSide(color: AppColors.darkBorderSubtle, width: 1),
         ),
         margin: EdgeInsets.zero,
       ),
       bottomSheetTheme: const BottomSheetThemeData(
-        backgroundColor: AppColors.darkSurfaceCard,
+        backgroundColor: AppColors.darkSurfaceElevated,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: AppRadius.topSheetBorder,
@@ -212,14 +213,14 @@ class AppTheme {
         showDragHandle: true,
         dragHandleColor: AppColors.darkBorderStrong,
       ),
-      dialogTheme: DialogThemeData(
-        backgroundColor: AppColors.darkSurfaceCard,
+      dialogTheme: const DialogThemeData(
+        backgroundColor: AppColors.darkSurfaceElevated,
         shape: RoundedRectangleBorder(
           borderRadius: AppRadius.xlBorder,
         ),
-        elevation: 12,
+        elevation: 16,
       ),
-      inputDecorationTheme: InputDecorationTheme(
+      inputDecorationTheme: const InputDecorationTheme(
         filled: true,
         fillColor: AppColors.darkSurfaceSubtle,
         border: OutlineInputBorder(
@@ -228,18 +229,18 @@ class AppTheme {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: AppRadius.mdBorder,
-          borderSide: const BorderSide(color: AppColors.darkBorderSubtle, width: 1),
+          borderSide: BorderSide(color: AppColors.darkBorderSubtle, width: 1),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: AppRadius.mdBorder,
-          borderSide: const BorderSide(color: AppColors.emeraldLight, width: 1.5),
+          borderSide: BorderSide(color: AppColors.emeraldLight, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: AppRadius.mdBorder,
-          borderSide: const BorderSide(color: AppColors.negativeRedDark, width: 1),
+          borderSide: BorderSide(color: AppColors.negativeRedDark, width: 1),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        hintStyle: const TextStyle(color: AppColors.darkTextMuted, fontSize: 14),
+        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        hintStyle: TextStyle(color: AppColors.darkTextMuted, fontSize: 14),
       ),
       dividerTheme: const DividerThemeData(
         color: AppColors.darkBorderSubtle,
@@ -254,6 +255,22 @@ class AppTheme {
         labelStyle: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.darkTextPrimary),
         secondaryLabelStyle: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.emeraldLight),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: Colors.transparent,
+        indicatorColor: AppColors.emeraldPrimary.withValues(alpha: 0.2),
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const IconThemeData(color: AppColors.emeraldLight, size: 22);
+          }
+          return const IconThemeData(color: AppColors.darkTextMuted, size: 22);
+        }),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return GoogleFonts.plusJakartaSans(color: AppColors.darkTextPrimary, fontSize: 12, fontWeight: FontWeight.w700);
+          }
+          return GoogleFonts.plusJakartaSans(color: AppColors.darkTextMuted, fontSize: 12, fontWeight: FontWeight.w500);
+        }),
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,

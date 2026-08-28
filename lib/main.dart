@@ -10,7 +10,9 @@ import 'core/network/api_client.dart';
 import 'core/network/realtime_client.dart' as kith_realtime;
 import 'core/localization/app_language.dart';
 import 'core/localization/app_localizations.dart';
+import 'core/payment/payment_service.dart';
 import 'core/services/kith_widget_service.dart';
+import 'core/services/security_lock_service.dart';
 import 'core/theme/app_theme.dart';
 import 'data/repositories/expense_repository.dart';
 import 'data/repositories/personal_repository.dart';
@@ -29,6 +31,7 @@ import 'presentation/viewmodels/locale_viewmodel.dart';
 import 'presentation/viewmodels/personal_expense_viewmodel.dart';
 import 'presentation/viewmodels/theme_viewmodel.dart';
 import 'presentation/viewmodels/trip_detail_viewmodel.dart';
+import 'presentation/views/security/app_lock_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -42,7 +45,6 @@ void main() async {
   );
 
   // Initialize Supabase for Google identity verification (signInWithIdToken).
-  // The anon key is public — Row Level Security controls data access.
   if (SupabaseConfig.isConfigured) {
     await Supabase.initialize(
       url: SupabaseConfig.url,
@@ -68,6 +70,9 @@ void main() async {
     apiClient: apiClient,
     realtimeClient: realtimeClient,
   );
+
+  // Initialize Production Security Lock Service
+  final securityLockService = SecurityLockService(storageService);
 
   // Trigger background offline queue flush
   unawaited(syncService.flushQueue(apiClient));
@@ -128,7 +133,9 @@ void main() async {
         Provider<TripRepository>.value(value: tripRepo),
         Provider<ExpenseRepository>.value(value: expenseRepo),
         Provider<PersonalRepository>.value(value: personalRepo),
+        ChangeNotifierProvider<SecurityLockService>.value(value: securityLockService),
         ChangeNotifierProvider<KithWidgetService>.value(value: widgetService),
+        ChangeNotifierProvider(create: (_) => PaymentService()),
         ChangeNotifierProvider(create: (_) => ThemeViewModel(storage: storageService)),
         ChangeNotifierProvider(create: (_) => LocaleViewModel(storage: storageService)),
         ChangeNotifierProvider(create: (_) => AuthViewModel(userRepo: userRepo)),
@@ -158,13 +165,39 @@ void main() async {
   );
 }
 
-class KithApp extends StatelessWidget {
+class KithApp extends StatefulWidget {
   const KithApp({super.key});
+
+  @override
+  State<KithApp> createState() => _KithAppState();
+}
+
+class _KithAppState extends State<KithApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      final security = context.read<SecurityLockService>();
+      security.lock();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final themeVm = context.watch<ThemeViewModel>();
     final localeVm = context.watch<LocaleViewModel>();
+    final security = context.watch<SecurityLockService>();
 
     return MaterialApp.router(
       title: 'Kith',
@@ -181,6 +214,15 @@ class KithApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       routerConfig: AppRouter.router,
+      builder: (context, child) {
+        return Stack(
+          children: [
+            ?child,
+            if (security.isLocked)
+              const AppLockScreen(),
+          ],
+        );
+      },
     );
   }
 }
