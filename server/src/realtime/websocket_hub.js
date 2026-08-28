@@ -1,4 +1,5 @@
 const { WebSocketServer, WebSocket } = require('ws');
+const crypto = require('crypto');
 const { db } = require('../db/database');
 
 class RealtimeHub {
@@ -6,8 +7,13 @@ class RealtimeHub {
     this.wss = null;
     // Map of tripId -> Set of WebSockets
     this.tripRooms = new Map();
-    // Map of WebSocket -> Set of subscribed tripIds
+    // Map of userId -> Set of WebSockets
+    this.userRooms = new Map();
+    // Map of WebSocket -> Set of subscribed room keys ('trip:xxx' or 'user:xxx')
     this.clientSubscriptions = new Map();
+    // In-memory sliding buffer for recent events: roomKey -> Array of events (max 100)
+    this.eventBuffer = new Map();
+    this.MAX_BUFFER_PER_ROOM = 100;
   }
 
   attach(server) {
@@ -29,6 +35,10 @@ class RealtimeHub {
       ws.user = authenticatedUser;
       ws.isAlive = true;
       this.clientSubscriptions.set(ws, new Set());
+
+      if (authenticatedUser) {
+        this._subscribeUserRoom(ws, authenticatedUser.id);
+      }
 
       ws.on('pong', () => {
         ws.isAlive = true;
@@ -69,9 +79,21 @@ class RealtimeHub {
     }, 30000);
   }
 
+  _subscribeUserRoom(ws, userId) {
+    if (!this.userRooms.has(userId)) {
+      this.userRooms.set(userId, new Set());
+    }
+    this.userRooms.get(userId).add(ws);
+
+    const clientSubs = this.clientSubscriptions.get(ws);
+    if (clientSubs) {
+      clientSubs.add(`user:${userId}`);
+    }
+  }
+
   _handleClientMessage(ws, message) {
     const action = message.action || message.type;
-    const { tripId, token } = message;
+    const { tripId, userId, token, sinceTimestamp } = message;
 
     // Handle authentication message
     if (action === 'auth') {
@@ -79,6 +101,9 @@ class RealtimeHub {
         const session = db.findOne('sessions', (s) => s.token === token);
         if (session) {
           ws.user = db.get('users', session.userId);
+          if (ws.user) {
+            this._subscribeUserRoom(ws, ws.user.id);
+          }
           ws.send(JSON.stringify({ type: 'auth_success', user: ws.user }));
           return;
         }
@@ -89,6 +114,16 @@ class RealtimeHub {
 
     // Handle room subscription
     if (action === 'subscribe') {
+      // User room subscription
+      if (userId || message.scope === 'user') {
+        const targetUserId = userId || (ws.user ? ws.user.id : null);
+        if (targetUserId) {
+          this._subscribeUserRoom(ws, targetUserId);
+          ws.send(JSON.stringify({ type: 'subscribed', scope: 'user', userId: targetUserId }));
+          return;
+        }
+      }
+
       if (!tripId) {
         ws.send(JSON.stringify({ type: 'error', message: 'tripId is required for subscribe' }));
         return;
@@ -110,10 +145,31 @@ class RealtimeHub {
 
       const clientSubs = this.clientSubscriptions.get(ws);
       if (clientSubs) {
-        clientSubs.add(tripId);
+        clientSubs.add(`trip:${tripId}`);
       }
 
       ws.send(JSON.stringify({ type: 'subscribed', tripId }));
+      return;
+    }
+
+    // Handle catchup request on reconnect
+    if (action === 'catchup') {
+      const roomKey = tripId ? `trip:${tripId}` : (userId ? `user:${userId}` : (ws.user ? `user:${ws.user.id}` : null));
+      if (!roomKey) {
+        ws.send(JSON.stringify({ type: 'error', message: 'room identifier required for catchup' }));
+        return;
+      }
+
+      const events = this.eventBuffer.get(roomKey) || [];
+      const sinceDate = sinceTimestamp ? new Date(sinceTimestamp) : new Date(0);
+      const missedEvents = events.filter((e) => new Date(e.timestamp) > sinceDate);
+
+      ws.send(JSON.stringify({
+        type: 'catchup_response',
+        roomKey,
+        events: missedEvents,
+        timestamp: new Date().toISOString(),
+      }));
       return;
     }
 
@@ -124,7 +180,7 @@ class RealtimeHub {
       }
       const clientSubs = this.clientSubscriptions.get(ws);
       if (clientSubs && tripId) {
-        clientSubs.delete(tripId);
+        clientSubs.delete(`trip:${tripId}`);
       }
       ws.send(JSON.stringify({ type: 'unsubscribed', tripId }));
       return;
@@ -134,25 +190,58 @@ class RealtimeHub {
   _cleanupClient(ws) {
     const clientSubs = this.clientSubscriptions.get(ws);
     if (clientSubs) {
-      for (const tripId of clientSubs) {
-        if (this.tripRooms.has(tripId)) {
-          this.tripRooms.get(tripId).delete(ws);
+      for (const roomKey of clientSubs) {
+        if (roomKey.startsWith('trip:')) {
+          const tripId = roomKey.replace('trip:', '');
+          if (this.tripRooms.has(tripId)) {
+            this.tripRooms.get(tripId).delete(ws);
+          }
+        } else if (roomKey.startsWith('user:')) {
+          const userId = roomKey.replace('user:', '');
+          if (this.userRooms.has(userId)) {
+            this.userRooms.get(userId).delete(ws);
+          }
         }
       }
       this.clientSubscriptions.delete(ws);
     }
   }
 
+  _pushToBuffer(roomKey, event) {
+    if (!this.eventBuffer.has(roomKey)) {
+      this.eventBuffer.set(roomKey, []);
+    }
+    const buf = this.eventBuffer.get(roomKey);
+    buf.push(event);
+    if (buf.length > this.MAX_BUFFER_PER_ROOM) {
+      buf.shift();
+    }
+  }
+
   broadcastToTrip(tripId, eventType, data, excludeWs = null) {
     const room = this.tripRooms.get(tripId);
+    const now = new Date().toISOString();
+    const eventId = `evt_${crypto.randomUUID().replace(/-/g, '').substring(0, 12)}`;
+
+    const event = {
+      eventId,
+      type: eventType,
+      eventType,
+      entityType: eventType.split('_')[0] || 'unknown',
+      entityId: data?.id || data?.expense?.id || data?.settlement?.id || data?.moment?.id || null,
+      tripId,
+      actorId: data?.actorId || null,
+      data,
+      payload: data,
+      version: 1,
+      timestamp: now,
+    };
+
+    this._pushToBuffer(`trip:${tripId}`, event);
+
     if (!room || room.size === 0) return;
 
-    const payload = JSON.stringify({
-      type: eventType,
-      tripId,
-      data,
-      timestamp: new Date().toISOString(),
-    });
+    const payload = JSON.stringify(event);
 
     for (const client of room) {
       if (client !== excludeWs && client.readyState === WebSocket.OPEN) {
@@ -160,6 +249,42 @@ class RealtimeHub {
           client.send(payload);
         } catch (e) {
           console.error(`Failed to send event to client in trip ${tripId}`, e);
+        }
+      }
+    }
+  }
+
+  broadcastToUser(userId, eventType, data, excludeWs = null) {
+    const room = this.userRooms.get(userId);
+    const now = new Date().toISOString();
+    const eventId = `evt_${crypto.randomUUID().replace(/-/g, '').substring(0, 12)}`;
+
+    const event = {
+      eventId,
+      type: eventType,
+      eventType,
+      entityType: eventType.split('_')[0] || 'personal',
+      entityId: data?.id || data?.expense?.id || data?.debt?.id || null,
+      userId,
+      actorId: userId,
+      data,
+      payload: data,
+      version: 1,
+      timestamp: now,
+    };
+
+    this._pushToBuffer(`user:${userId}`, event);
+
+    if (!room || room.size === 0) return;
+
+    const payload = JSON.stringify(event);
+
+    for (const client of room) {
+      if (client !== excludeWs && client.readyState === WebSocket.OPEN) {
+        try {
+          client.send(payload);
+        } catch (e) {
+          console.error(`Failed to send event to user ${userId}`, e);
         }
       }
     }
@@ -177,3 +302,4 @@ class RealtimeHub {
 
 const realtimeHubInstance = new RealtimeHub();
 module.exports = { RealtimeHub, realtimeHub: realtimeHubInstance };
+

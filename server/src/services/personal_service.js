@@ -44,7 +44,7 @@ class PersonalService {
     };
   }
 
-  createPersonalExpense(userId, data) {
+  createPersonalExpense(userId, data, realtimeHub = null) {
     if (data.id) {
       const existing = db.get('personal_expenses', data.id);
       if (existing && existing.userId === userId && !existing.isDeleted) {
@@ -80,10 +80,15 @@ class PersonalService {
     };
 
     db.insert('personal_expenses', expense);
+
+    if (realtimeHub) {
+      realtimeHub.broadcastToUser(userId, 'personal_expense_created', { expense });
+    }
+
     return expense;
   }
 
-  updatePersonalExpense(userId, expenseId, data) {
+  updatePersonalExpense(userId, expenseId, data, realtimeHub = null) {
     const existing = db.get('personal_expenses', expenseId);
     if (!existing || existing.isDeleted) {
       throw AppError.notFound('Personal expense not found');
@@ -113,10 +118,15 @@ class PersonalService {
     if (data.notes !== undefined) updates.notes = data.notes;
 
     const updated = db.update('personal_expenses', expenseId, updates);
+
+    if (realtimeHub) {
+      realtimeHub.broadcastToUser(userId, 'personal_expense_updated', { expense: updated });
+    }
+
     return updated;
   }
 
-  deletePersonalExpense(userId, expenseId) {
+  deletePersonalExpense(userId, expenseId, realtimeHub = null) {
     const existing = db.get('personal_expenses', expenseId);
     if (!existing || existing.isDeleted) {
       throw AppError.notFound('Personal expense not found');
@@ -130,6 +140,10 @@ class PersonalService {
       isDeleted: true,
       updatedAt: new Date().toISOString(),
     });
+
+    if (realtimeHub) {
+      realtimeHub.broadcastToUser(userId, 'personal_expense_deleted', { id: expenseId });
+    }
 
     return { success: true, id: expenseId };
   }
@@ -183,7 +197,7 @@ class PersonalService {
     };
   }
 
-  createPersonalDebt(userId, data) {
+  createPersonalDebt(userId, data, realtimeHub = null) {
     if (data.id) {
       const existing = db.get('personal_debts', data.id);
       if (existing && existing.userId === userId && !existing.isDeleted) {
@@ -225,13 +239,20 @@ class PersonalService {
     };
 
     db.insert('personal_debts', debt);
-    return {
+
+    const result = {
       ...debt,
       repayments: [],
     };
+
+    if (realtimeHub) {
+      realtimeHub.broadcastToUser(userId, 'personal_debt_created', { debt: result });
+    }
+
+    return result;
   }
 
-  recordDebtRepayment(userId, debtId, data) {
+  recordDebtRepayment(userId, debtId, data, realtimeHub = null) {
     if (data.id) {
       const existing = db.get('personal_repayments', data.id);
       if (existing && existing.userId === userId) {
@@ -298,16 +319,22 @@ class PersonalService {
       updatedAt: now,
     });
 
-    return {
+    const result = {
       debt: {
         ...updatedDebt,
         repayments: allRepayments,
       },
       repayment,
     };
+
+    if (realtimeHub) {
+      realtimeHub.broadcastToUser(userId, 'personal_repayment_recorded', result);
+    }
+
+    return result;
   }
 
-  deletePersonalDebt(userId, debtId) {
+  deletePersonalDebt(userId, debtId, realtimeHub = null) {
     const debt = db.get('personal_debts', debtId);
     if (!debt || debt.isDeleted) {
       throw AppError.notFound('Debt record not found');
@@ -321,6 +348,10 @@ class PersonalService {
       isDeleted: true,
       updatedAt: new Date().toISOString(),
     });
+
+    if (realtimeHub) {
+      realtimeHub.broadcastToUser(userId, 'personal_debt_deleted', { id: debtId });
+    }
 
     return { success: true, id: debtId };
   }
@@ -358,7 +389,7 @@ class PersonalService {
     };
   }
 
-  setBudget(userId, data) {
+  setBudget(userId, data, realtimeHub = null) {
     const targetMonth = data.monthYear || new Date().toISOString().substring(0, 7);
     const limitInPaise = parseInt(data.monthlyLimitInPaise, 10);
     if (isNaN(limitInPaise) || limitInPaise < 0) {
@@ -385,8 +416,15 @@ class PersonalService {
       db.insert('personal_budgets', budget);
     }
 
-    return this.getBudget(userId, targetMonth);
+    const result = this.getBudget(userId, targetMonth);
+
+    if (realtimeHub) {
+      realtimeHub.broadcastToUser(userId, 'personal_budget_updated', result);
+    }
+
+    return result;
   }
 }
 
 module.exports = new PersonalService();
+

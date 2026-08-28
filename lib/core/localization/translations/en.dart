@@ -740,4 +740,15 @@ const Map<String, String> enTranslations = {
   'payments_save_btn': 'Verify & Save UPI',
   'payments_bank_title': 'DIRECT PAYOUT DESTINATION',
   'payments_bank_verified': 'Verified Bank Payout ✓',
+
+  // Sync State Keys
+  'sync_state_synced': '✓ Synced',
+  'sync_state_syncing': 'Syncing…',
+  'sync_state_offline': 'Offline Ready',
+  'sync_state_pending_single': '1 change waiting',
+  'sync_state_pending_multiple': '{count} changes waiting',
+  'sync_state_live': 'Live',
+  'sync_state_reconnecting': 'Reconnecting…',
+  'sync_state_error': 'Sync paused',
 };
+

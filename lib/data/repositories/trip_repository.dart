@@ -140,20 +140,6 @@ class TripRepository {
       'tripMode': tripMode,
     };
 
-    try {
-      final res = await apiClient.post('/trips', body: payload);
-      if (res is Map<String, dynamic>) {
-        final trip = Trip.fromJson(res);
-        final currentTrips = getCachedTrips();
-        currentTrips.removeWhere((t) => t.id == trip.id);
-        currentTrips.insert(0, trip);
-        await storage.saveTrips(currentTrips.map((t) => t.toJson()).toList());
-        return trip;
-      }
-    } catch (_) {
-      // Offline fallback
-    }
-
     final members = <TripMember>[
       TripMember(
         id: 'mbr_${_uuid.v4().replaceAll('-', '').substring(0, 10)}',
@@ -193,15 +179,23 @@ class TripRepository {
       updatedAt: DateTime.now(),
     );
 
+    // 1. FAST LOCAL HYDRATION: Save to persistent local cache (< 5ms)
     final currentTrips = getCachedTrips();
     currentTrips.removeWhere((t) => t.id == newTrip.id);
     currentTrips.insert(0, newTrip);
     await storage.saveTrips(currentTrips.map((t) => t.toJson()).toList());
 
-    await syncService.enqueueMutation(MutationType.createTrip, payload);
+    // 2. Enqueue mutation with non-blocking background flush
+    await syncService.enqueueMutation(
+      MutationType.createTrip,
+      payload,
+      idempotencyKey: tripId,
+      backgroundApiClient: apiClient,
+    );
 
     return newTrip;
   }
+
 
   /// Joins a trip via 6-digit alphanumeric invite code.
   Future<Trip> joinTrip({
@@ -364,24 +358,6 @@ class TripRepository {
     required String tripId,
     required TripLifecycle newLifecycle,
   }) async {
-    try {
-      final res = await apiClient.patch('/trips/$tripId/lifecycle', body: {
-        'lifecycleState': newLifecycle.name,
-      });
-      if (res is Map<String, dynamic>) {
-        final updatedTrip = Trip.fromJson(res);
-        final trips = await getTrips();
-        final idx = trips.indexWhere((t) => t.id == tripId);
-        if (idx != -1) {
-          trips[idx] = updatedTrip;
-          await storage.saveTrips(trips.map((t) => t.toJson()).toList());
-        }
-        return updatedTrip;
-      }
-    } catch (_) {
-      // Offline fallback
-    }
-
     final trips = await getTrips();
     final index = trips.indexWhere((t) => t.id == tripId);
     if (index == -1) {
@@ -399,10 +375,13 @@ class TripRepository {
     await syncService.enqueueMutation(
       MutationType.updateTripLifecycle,
       {'tripId': tripId, 'lifecycleState': newLifecycle.name},
+      idempotencyKey: 'life_$tripId',
+      backgroundApiClient: apiClient,
     );
 
     return updatedTrip;
   }
+
 
   /// Adds an additional member to a trip.
   Future<Trip> addMember({
@@ -662,14 +641,12 @@ class TripRepository {
     list.add(moment);
     await saveJourneyMoments(tripId, list);
 
-    try {
-      await apiClient.post('/trips/$tripId/moments', body: moment.toJson());
-    } catch (_) {
-      await syncService.enqueueMutation(
-        MutationType.createJourneyMoment,
-        {'tripId': tripId, 'moment': moment.toJson()},
-      );
-    }
+    await syncService.enqueueMutation(
+      MutationType.createJourneyMoment,
+      {'tripId': tripId, 'moment': moment.toJson()},
+      idempotencyKey: moment.id,
+      backgroundApiClient: apiClient,
+    );
   }
 
   /// Deletes a journey moment with offline queueing.
@@ -678,15 +655,14 @@ class TripRepository {
     list.removeWhere((m) => m.id == momentId);
     await saveJourneyMoments(tripId, list);
 
-    try {
-      await apiClient.delete('/trips/$tripId/moments/$momentId');
-    } catch (_) {
-      await syncService.enqueueMutation(
-        MutationType.deleteJourneyMoment,
-        {'tripId': tripId, 'momentId': momentId},
-      );
-    }
+    await syncService.enqueueMutation(
+      MutationType.deleteJourneyMoment,
+      {'tripId': tripId, 'momentId': momentId},
+      idempotencyKey: 'del_mom_$momentId',
+      backgroundApiClient: apiClient,
+    );
   }
+
 
   static String _generateInviteCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';

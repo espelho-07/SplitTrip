@@ -112,18 +112,13 @@ class PersonalRepository {
     cached.insert(0, expense);
     await storage.savePersonalExpenses(cached.map((e) => e.toJson()).toList());
 
-    // 2. Push to remote or queue for offline sync
-    try {
-      final res = await apiClient.post('/personal/expenses', body: expense.toJson());
-      if (res is Map<String, dynamic> && res['expense'] != null) {
-        return PersonalExpense.fromJson(res['expense'] as Map<String, dynamic>);
-      }
-    } catch (_) {
-      await syncService.enqueueMutation(
-        MutationType.createPersonalExpense,
-        expense.toJson(),
-      );
-    }
+    // 2. Push to background sync queue
+    await syncService.enqueueMutation(
+      MutationType.createPersonalExpense,
+      expense.toJson(),
+      idempotencyKey: expense.id,
+      backgroundApiClient: apiClient,
+    );
 
     return expense;
   }
@@ -137,18 +132,14 @@ class PersonalRepository {
       await storage.savePersonalExpenses(cached.map((e) => e.toJson()).toList());
     }
 
-    // 2. Remote update
-    try {
-      final res = await apiClient.put('/personal/expenses/${expense.id}', body: expense.toJson());
-      if (res is Map<String, dynamic> && res['expense'] != null) {
-        return PersonalExpense.fromJson(res['expense'] as Map<String, dynamic>);
-      }
-    } catch (_) {
-      await syncService.enqueueMutation(
-        MutationType.updatePersonalExpense,
-        expense.toJson(),
-      );
-    }
+    // 2. Push to background sync queue
+    await syncService.enqueueMutation(
+      MutationType.updatePersonalExpense,
+      expense.toJson(),
+      idempotencyKey: expense.id,
+      backgroundApiClient: apiClient,
+    );
+
     return expense;
   }
 
@@ -158,15 +149,13 @@ class PersonalRepository {
     cached.removeWhere((e) => e.id == expenseId);
     await storage.savePersonalExpenses(cached.map((e) => e.toJson()).toList());
 
-    // 2. Remote delete
-    try {
-      await apiClient.delete('/personal/expenses/$expenseId');
-    } catch (_) {
-      await syncService.enqueueMutation(
-        MutationType.deletePersonalExpense,
-        {'id': expenseId},
-      );
-    }
+    // 2. Push to background sync queue
+    await syncService.enqueueMutation(
+      MutationType.deletePersonalExpense,
+      {'id': expenseId},
+      idempotencyKey: 'del_pexp_$expenseId',
+      backgroundApiClient: apiClient,
+    );
   }
 
   // ==========================================
@@ -249,18 +238,13 @@ class PersonalRepository {
     cached.insert(0, debt);
     await storage.savePersonalDebts(cached.map((d) => d.toJson()).toList());
 
-    // 2. Push remote
-    try {
-      final res = await apiClient.post('/personal/debts', body: debt.toJson());
-      if (res is Map<String, dynamic> && res['debt'] != null) {
-        return PersonalDebt.fromJson(res['debt'] as Map<String, dynamic>);
-      }
-    } catch (_) {
-      await syncService.enqueueMutation(
-        MutationType.createPersonalDebt,
-        debt.toJson(),
-      );
-    }
+    // 2. Push to background sync queue
+    await syncService.enqueueMutation(
+      MutationType.createPersonalDebt,
+      debt.toJson(),
+      idempotencyKey: debt.id,
+      backgroundApiClient: apiClient,
+    );
 
     return debt;
   }
@@ -305,18 +289,19 @@ class PersonalRepository {
       await storage.savePersonalDebts(cachedDebts.map((d) => d.toJson()).toList());
     }
 
-    // 2. Push remote
-    try {
-      final res = await apiClient.post('/personal/debts/$debtId/repayments', body: repayment.toJson());
-      if (res is Map<String, dynamic> && res['debt'] != null) {
-        return PersonalDebt.fromJson(res['debt'] as Map<String, dynamic>);
-      }
-    } catch (_) {
-      await syncService.enqueueMutation(
-        MutationType.recordPersonalRepayment,
-        repayment.toJson(),
-      );
-    }
+    // 2. Push to background sync queue
+    await syncService.enqueueMutation(
+      MutationType.recordPersonalRepayment,
+      {
+        'id': repaymentId,
+        'debtId': debtId,
+        'amountInPaise': amountInPaise,
+        'note': note,
+        'date': (date ?? now).toIso8601String(),
+      },
+      idempotencyKey: repaymentId,
+      backgroundApiClient: apiClient,
+    );
 
     return cachedDebts[index];
   }
@@ -327,15 +312,13 @@ class PersonalRepository {
     cached.removeWhere((d) => d.id == debtId);
     await storage.savePersonalDebts(cached.map((d) => d.toJson()).toList());
 
-    // 2. Push remote
-    try {
-      await apiClient.delete('/personal/debts/$debtId');
-    } catch (_) {
-      await syncService.enqueueMutation(
-        MutationType.deletePersonalDebt,
-        {'id': debtId},
-      );
-    }
+    // 2. Push to background sync queue
+    await syncService.enqueueMutation(
+      MutationType.deletePersonalDebt,
+      {'id': debtId},
+      idempotencyKey: 'del_pdebt_$debtId',
+      backgroundApiClient: apiClient,
+    );
   }
 
   // ==========================================
@@ -383,21 +366,14 @@ class PersonalRepository {
 
     await storage.savePersonalBudget(monthYear, budget.toJson());
 
-    try {
-      final res = await apiClient.put('/personal/budget', body: {
-        'monthYear': monthYear,
-        'monthlyLimitInPaise': limitInPaise,
-      });
-      if (res is Map<String, dynamic>) {
-        return PersonalBudget.fromJson(res);
-      }
-    } catch (_) {
-      await syncService.enqueueMutation(
-        MutationType.setPersonalBudget,
-        {'monthYear': monthYear, 'monthlyLimitInPaise': limitInPaise},
-      );
-    }
+    await syncService.enqueueMutation(
+      MutationType.setPersonalBudget,
+      {'monthYear': monthYear, 'monthlyLimitInPaise': limitInPaise},
+      idempotencyKey: 'budget_$monthYear',
+      backgroundApiClient: apiClient,
+    );
 
     return budget;
   }
 }
+

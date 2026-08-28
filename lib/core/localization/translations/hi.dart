@@ -740,4 +740,15 @@ const Map<String, String> hiTranslations = {
   'payments_save_btn': 'सत्यापित करें और सहेजें',
   'payments_bank_title': 'डायरेक्ट बैंक खाता',
   'payments_bank_verified': 'सत्यापित बैंक खाता ✓',
+
+  // Sync State Keys
+  'sync_state_synced': '✓ सिंक हो गया',
+  'sync_state_syncing': 'सिंक हो रहा है…',
+  'sync_state_offline': 'ऑफ़लाइन तैयार',
+  'sync_state_pending_single': '1 बदलाव कतार में',
+  'sync_state_pending_multiple': '{count} बदलाव कतार में',
+  'sync_state_live': 'लाइव',
+  'sync_state_reconnecting': 'पुनः कनेक्ट हो रहा है…',
+  'sync_state_error': 'सिंक रुका हुआ',
 };
+

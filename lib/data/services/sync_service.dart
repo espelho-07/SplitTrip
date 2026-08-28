@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/network/api_client.dart';
 import '../../core/network/api_exceptions.dart';
@@ -23,66 +25,116 @@ enum MutationType {
   recordTripSettlement,
 }
 
+enum SyncStatus {
+  synced,
+  syncing,
+  pending,
+  offline,
+  reconnecting,
+  error,
+}
+
 class SyncMutation {
   final String id;
+  final String idempotencyKey;
   final MutationType type;
   final Map<String, dynamic> payload;
   final DateTime createdAt;
   final int retryCount;
+  final DateTime? lastAttemptAt;
 
   SyncMutation({
     required this.id,
+    String? idempotencyKey,
     required this.type,
     required this.payload,
     required this.createdAt,
     this.retryCount = 0,
-  });
+    this.lastAttemptAt,
+  }) : idempotencyKey = idempotencyKey ?? id;
 
   Map<String, dynamic> toJson() => {
     'id': id,
+    'idempotencyKey': idempotencyKey,
     'type': type.name,
     'payload': payload,
     'createdAt': createdAt.toIso8601String(),
     'retryCount': retryCount,
+    'lastAttemptAt': lastAttemptAt?.toIso8601String(),
   };
 
   factory SyncMutation.fromJson(Map<String, dynamic> json) => SyncMutation(
     id: json['id'] as String,
-    type: MutationType.values.firstWhere((e) => e.name == json['type']),
-    payload: json['payload'] as Map<String, dynamic>,
-    createdAt: DateTime.parse(json['createdAt'] as String),
+    idempotencyKey: json['idempotencyKey'] as String? ?? json['id'] as String,
+    type: MutationType.values.firstWhere(
+      (e) => e.name == json['type'],
+      orElse: () => MutationType.addExpense,
+    ),
+    payload: json['payload'] is Map<String, dynamic> ? json['payload'] as Map<String, dynamic> : {},
+    createdAt: json['createdAt'] != null
+        ? DateTime.tryParse(json['createdAt'] as String) ?? DateTime.now()
+        : DateTime.now(),
     retryCount: json['retryCount'] as int? ?? 0,
+    lastAttemptAt: json['lastAttemptAt'] != null
+        ? DateTime.tryParse(json['lastAttemptAt'] as String)
+        : null,
   );
 
-  SyncMutation copyWith({int? retryCount}) => SyncMutation(
+  SyncMutation copyWith({int? retryCount, DateTime? lastAttemptAt}) => SyncMutation(
     id: id,
+    idempotencyKey: idempotencyKey,
     type: type,
     payload: payload,
     createdAt: createdAt,
     retryCount: retryCount ?? this.retryCount,
+    lastAttemptAt: lastAttemptAt ?? this.lastAttemptAt,
   );
 }
 
 /// Offline-first synchronization queue service.
-/// Enqueues user mutations when offline and processes them when connectivity is restored.
+/// Enqueues user mutations when offline and processes them with jittered backoff.
 class SyncService {
   final LocalStorageService _storage;
   final Uuid _uuid = const Uuid();
   bool _isProcessing = false;
+  SyncStatus _currentStatus = SyncStatus.synced;
+  final StreamController<SyncStatus> _statusController =
+      StreamController<SyncStatus>.broadcast();
 
   SyncService(this._storage);
 
   bool get isProcessing => _isProcessing;
   int get pendingCount => getPendingMutations().length;
+  int get pendingMutationCount => pendingCount;
+  List<SyncMutation> getQueue() => getPendingMutations();
+  SyncStatus get currentStatus => _currentStatus;
+  Stream<SyncStatus> get statusStream => _statusController.stream;
+
+
+  void _setStatus(SyncStatus status) {
+    if (_currentStatus != status) {
+      _currentStatus = status;
+      if (!_statusController.isClosed) {
+        _statusController.add(status);
+      }
+    }
+  }
 
   List<SyncMutation> getPendingMutations() {
     final raw = _storage.getMutationQueue();
     return raw.map((json) => SyncMutation.fromJson(json)).toList();
   }
 
-  Future<void> enqueueMutation(MutationType type, Map<String, dynamic> payload) async {
+  Future<SyncMutation> enqueueMutation(
+    MutationType type,
+    Map<String, dynamic> payload, {
+    String? idempotencyKey,
+    ApiClient? backgroundApiClient,
+  }) async {
+    final mutationId = _uuid.v4();
     final mutation = SyncMutation(
-      id: _uuid.v4(),
+      id: mutationId,
+      idempotencyKey: idempotencyKey ?? mutationId,
       type: type,
       payload: payload,
       createdAt: DateTime.now(),
@@ -91,34 +143,82 @@ class SyncService {
     final queue = getPendingMutations();
     queue.add(mutation);
     await _storage.saveMutationQueue(queue.map((m) => m.toJson()).toList());
+    _setStatus(SyncStatus.pending);
+
+    // If API client provided, trigger non-blocking immediate background flush
+    if (backgroundApiClient != null) {
+      unawaited(flushQueue(backgroundApiClient));
+    }
+
+    return mutation;
   }
 
   Future<void> removeMutation(String id) async {
     final queue = getPendingMutations();
     queue.removeWhere((m) => m.id == id);
     await _storage.saveMutationQueue(queue.map((m) => m.toJson()).toList());
+    if (queue.isEmpty) {
+      _setStatus(SyncStatus.synced);
+    }
+  }
+
+  Future<void> _updateMutationAttempt(String id, int retryCount) async {
+    final queue = getPendingMutations();
+    final idx = queue.indexWhere((m) => m.id == id);
+    if (idx != -1) {
+      queue[idx] = queue[idx].copyWith(
+        retryCount: retryCount,
+        lastAttemptAt: DateTime.now(),
+      );
+      await _storage.saveMutationQueue(queue.map((m) => m.toJson()).toList());
+    }
   }
 
   /// Processes all pending offline mutations against the remote backend.
   Future<void> flushQueue(ApiClient apiClient) async {
     if (_isProcessing) return;
     _isProcessing = true;
+    _setStatus(SyncStatus.syncing);
 
     try {
       final queue = getPendingMutations();
+      final now = DateTime.now();
+
       for (final mutation in queue) {
+        // Jittered exponential backoff check: base 1s * 2^retryCount, capped at 30s
+        if (mutation.lastAttemptAt != null && mutation.retryCount > 0) {
+          final backoffSeconds = min(30, pow(2, mutation.retryCount).toInt());
+          final nextAllowed = mutation.lastAttemptAt!.add(Duration(seconds: backoffSeconds));
+          if (now.isBefore(nextAllowed)) {
+            continue; // Skip this item until backoff period passes
+          }
+        }
+
         try {
           await _executeMutation(apiClient, mutation);
           await removeMutation(mutation.id);
         } on NetworkException catch (_) {
-          // Break loop and retry later when connection returns
-          break;
-        } on ApiException catch (_) {
-          // Remove unrecoverable client errors to prevent blocking the queue
+          // Increment retry count and back off
+          await _updateMutationAttempt(mutation.id, mutation.retryCount + 1);
+          _setStatus(SyncStatus.offline);
+          break; // Break loop and retry later when connection returns
+        } on ApiException catch (e) {
+          // If server rejects with 4xx unrecoverable client error, drop mutation to unblock queue
+          debugPrint('[SyncService] Client error ${e.statusCode} for mutation ${mutation.id}: ${e.message}');
           await removeMutation(mutation.id);
-        } catch (_) {
+        } catch (e) {
+          debugPrint('[SyncService] Unexpected error on mutation ${mutation.id}: $e');
+          await _updateMutationAttempt(mutation.id, mutation.retryCount + 1);
+          _setStatus(SyncStatus.error);
           break;
         }
+      }
+
+      final remaining = getPendingMutations();
+      if (remaining.isEmpty) {
+        _setStatus(SyncStatus.synced);
+      } else {
+        _setStatus(SyncStatus.pending);
       }
     } finally {
       _isProcessing = false;
@@ -192,4 +292,9 @@ class SyncService {
         break;
     }
   }
+
+  void dispose() {
+    _statusController.close();
+  }
 }
+

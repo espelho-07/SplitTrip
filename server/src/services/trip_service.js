@@ -32,7 +32,7 @@ class TripService {
     };
   }
 
-  createTrip(user, { id, inviteCode: customInviteCode, name, description, emoji, coverGradientIndex, currencyCode, initialFriendNames = [], tripMode = 'split_only' }) {
+  createTrip(user, { id, inviteCode: customInviteCode, name, description, emoji, coverGradientIndex, currencyCode, initialFriendNames = [], tripMode = 'split_only' } = {}, realtimeHub = null) {
     if (!name || !name.trim()) {
       throw AppError.badRequest('Trip name is required');
     }
@@ -109,7 +109,13 @@ class TripService {
       metadata: { tripId, emoji: trip.emoji },
     });
 
-    return this._enrichTrip(trip);
+    const enriched = this._enrichTrip(trip);
+
+    if (realtimeHub) {
+      realtimeHub.broadcastToUser(user.id, 'trip_created', { trip: enriched });
+    }
+
+    return enriched;
   }
 
   logActivity(tripId, { type, actorId, actorName, description, metadata = {} }) {
@@ -276,6 +282,9 @@ class TripService {
       realtimeHub.broadcastToTrip(trip.id, 'member_joined', {
         tripId: trip.id,
         member: activeMember,
+        trip: enriched,
+      });
+      realtimeHub.broadcastToUser(user.id, 'trip_joined', {
         trip: enriched,
       });
     }

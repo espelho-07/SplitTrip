@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../core/network/realtime_client.dart';
 import '../../data/repositories/expense_repository.dart';
 import '../../data/repositories/trip_repository.dart';
 import '../../domain/engine/balance_engine.dart';
@@ -8,6 +10,7 @@ import '../../domain/models/trip.dart';
 class HomeViewModel extends ChangeNotifier {
   final TripRepository tripRepo;
   final ExpenseRepository expenseRepo;
+  final RealtimeClient? realtimeClient;
 
   List<Trip> _trips = [];
   final Map<String, BalanceSummary> _tripBalances = {};
@@ -15,11 +18,16 @@ class HomeViewModel extends ChangeNotifier {
   int _totalSpentOnTripsInPaise = 0;
   bool _isLoading = false;
   String? _errorMessage;
+  String? _currentUserId;
+  StreamSubscription? _realtimeSubscription;
 
   HomeViewModel({
     required this.tripRepo,
     required this.expenseRepo,
-  });
+    this.realtimeClient,
+  }) {
+    _subscribeToRealtimeEvents();
+  }
 
   List<Trip> get trips => _trips;
   Map<String, BalanceSummary> get tripBalances => _tripBalances;
@@ -27,6 +35,43 @@ class HomeViewModel extends ChangeNotifier {
   int get totalSpentOnTripsInPaise => _totalSpentOnTripsInPaise;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+
+  void _subscribeToRealtimeEvents() {
+    if (realtimeClient == null) return;
+    _realtimeSubscription = realtimeClient!.events.listen((event) {
+      if (_currentUserId == null) return;
+
+      if (event.type == 'trip_created' || event.type == 'trip_joined') {
+        if (event.data['trip'] is Map<String, dynamic>) {
+          final trip = Trip.fromJson(event.data['trip'] as Map<String, dynamic>);
+          addTripLocally(trip, _currentUserId!);
+        }
+      } else if (event.type == 'member_joined' || event.type == 'lifecycle_updated') {
+        if (event.data['trip'] is Map<String, dynamic>) {
+          final trip = Trip.fromJson(event.data['trip'] as Map<String, dynamic>);
+          _updateTripInPlace(trip, _currentUserId!);
+        }
+      } else if (event.type == 'expense_added' ||
+          event.type == 'expense_updated' ||
+          event.type == 'expense_deleted' ||
+          event.type == 'settlement_recorded') {
+        // Recompute balances locally from updated cache
+        _computeLocalBalances(_trips, _currentUserId!);
+        notifyListeners();
+      }
+    });
+  }
+
+  void _updateTripInPlace(Trip trip, String currentUserId) {
+    final idx = _trips.indexWhere((t) => t.id == trip.id);
+    if (idx != -1) {
+      _trips[idx] = trip;
+    } else {
+      _trips.insert(0, trip);
+    }
+    _computeLocalBalances(_trips, currentUserId);
+    notifyListeners();
+  }
 
   /// Optimistically adds a newly created/joined trip into memory and updates balances instantly
   void addTripLocally(Trip trip, String currentUserId) {
@@ -78,6 +123,8 @@ class HomeViewModel extends ChangeNotifier {
   }
 
   Future<void> loadTrips(String currentUserId) async {
+    _currentUserId = currentUserId;
+
     // 1. FAST LOCAL HYDRATION: Render cached trips immediately (< 5ms)
     final cachedTrips = tripRepo.getCachedTrips();
     if (cachedTrips.isNotEmpty && _trips.isEmpty) {
@@ -124,4 +171,11 @@ class HomeViewModel extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
   }
+
+  @override
+  void dispose() {
+    _realtimeSubscription?.cancel();
+    super.dispose();
+  }
 }
+

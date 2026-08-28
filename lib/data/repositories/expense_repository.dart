@@ -51,27 +51,7 @@ class ExpenseRepository {
       throw ArgumentError('The sum of expense splits must strictly equal the total expense amount');
     }
 
-    try {
-      final res = await apiClient.post(
-        '/trips/${expense.tripId}/expenses',
-        body: expense.toJson(),
-      );
-
-      if (res is Map<String, dynamic> && res.containsKey('expense')) {
-        final savedExpense = Expense.fromJson(res['expense'] as Map<String, dynamic>);
-        final currentExpenses = getCachedExpenses(expense.tripId);
-        currentExpenses.removeWhere((e) => e.id == savedExpense.id);
-        currentExpenses.insert(0, savedExpense);
-        await storage.saveExpenses(
-          expense.tripId,
-          currentExpenses.map((e) => e.toJson()).toList(),
-        );
-        return savedExpense;
-      }
-    } catch (_) {
-      // Offline fallback: save locally and queue sync mutation
-    }
-
+    // 1. FAST LOCAL HYDRATION: Write to local persistent cache instantly (< 5ms)
     final currentExpenses = getCachedExpenses(expense.tripId);
     currentExpenses.removeWhere((e) => e.id == expense.id);
     currentExpenses.insert(0, expense);
@@ -88,9 +68,12 @@ class ExpenseRepository {
       metadata: {'expenseId': expense.id, 'amountInPaise': expense.amountInPaise},
     );
 
+    // 2. Enqueue mutation and trigger non-blocking background network synchronization
     await syncService.enqueueMutation(
       MutationType.addExpense,
       expense.toJson(),
+      idempotencyKey: expense.id,
+      backgroundApiClient: apiClient,
     );
 
     return expense;
@@ -103,44 +86,19 @@ class ExpenseRepository {
       throw ArgumentError('The sum of expense splits must strictly equal the total expense amount');
     }
 
-    try {
-      final res = await apiClient.put(
-        '/trips/${expense.tripId}/expenses/${expense.id}',
-        body: expense.toJson(),
-      );
-
-      if (res is Map<String, dynamic> && res.containsKey('expense')) {
-        final savedExpense = Expense.fromJson(res['expense'] as Map<String, dynamic>);
-        final currentExpenses = getCachedExpenses(expense.tripId);
-        final idx = currentExpenses.indexWhere((e) => e.id == savedExpense.id);
-        if (idx != -1) {
-          currentExpenses[idx] = savedExpense;
-          await storage.saveExpenses(
-            expense.tripId,
-            currentExpenses.map((e) => e.toJson()).toList(),
-          );
-        }
-        _logLocalActivity(
-          tripId: expense.tripId,
-          type: 'expense_updated',
-          description: 'Updated "${savedExpense.title}" for ₹${(savedExpense.amountInPaise / 100).toStringAsFixed(2)}',
-          metadata: {'expenseId': savedExpense.id, 'amountInPaise': savedExpense.amountInPaise},
-        );
-        return savedExpense;
-      }
-    } catch (_) {
-      // Offline fallback
-    }
-
+    // 1. Update local persistent cache instantly
     final currentExpenses = getCachedExpenses(expense.tripId);
     final idx = currentExpenses.indexWhere((e) => e.id == expense.id);
     if (idx != -1) {
       currentExpenses[idx] = expense;
-      await storage.saveExpenses(
-        expense.tripId,
-        currentExpenses.map((e) => e.toJson()).toList(),
-      );
+    } else {
+      currentExpenses.insert(0, expense);
     }
+
+    await storage.saveExpenses(
+      expense.tripId,
+      currentExpenses.map((e) => e.toJson()).toList(),
+    );
 
     _logLocalActivity(
       tripId: expense.tripId,
@@ -149,19 +107,24 @@ class ExpenseRepository {
       metadata: {'expenseId': expense.id, 'amountInPaise': expense.amountInPaise},
     );
 
+    // 2. Enqueue mutation and trigger non-blocking background network synchronization
     await syncService.enqueueMutation(
       MutationType.updateExpense,
       expense.toJson(),
+      idempotencyKey: expense.id,
+      backgroundApiClient: apiClient,
     );
 
     return expense;
   }
+
 
   /// Deletes an expense by ID and updates local cache.
   Future<void> deleteExpense({
     required String tripId,
     required String expenseId,
   }) async {
+
     final currentExpenses = getCachedExpenses(tripId);
     final index = currentExpenses.indexWhere((e) => e.id == expenseId);
     String deletedTitle = 'Expense';
@@ -181,14 +144,12 @@ class ExpenseRepository {
       metadata: {'expenseId': expenseId},
     );
 
-    try {
-      await apiClient.delete('/trips/$tripId/expenses/$expenseId');
-    } catch (_) {
-      await syncService.enqueueMutation(
-        MutationType.deleteExpense,
-        {'tripId': tripId, 'expenseId': expenseId},
-      );
-    }
+    await syncService.enqueueMutation(
+      MutationType.deleteExpense,
+      {'tripId': tripId, 'expenseId': expenseId},
+      idempotencyKey: 'del_$expenseId',
+      backgroundApiClient: apiClient,
+    );
   }
 
   /// Computes the live balance summary for a trip.
@@ -269,19 +230,14 @@ class ExpenseRepository {
       },
     );
 
-    try {
-      await apiClient.post(
-        '/trips/$tripId/settlements',
-        body: payload,
-      );
-    } catch (_) {
-      // Offline fallback: queue for sync
-      await syncService.enqueueMutation(
-        MutationType.recordTripSettlement,
-        payload,
-      );
-    }
+    await syncService.enqueueMutation(
+      MutationType.recordTripSettlement,
+      payload,
+      idempotencyKey: id,
+      backgroundApiClient: apiClient,
+    );
   }
+
 
   void _logLocalActivity({
     required String tripId,

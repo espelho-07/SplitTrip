@@ -140,8 +140,13 @@ void main() async {
         ChangeNotifierProvider(create: (_) => LocaleViewModel(storage: storageService)),
         ChangeNotifierProvider(create: (_) => AuthViewModel(userRepo: userRepo)),
         ChangeNotifierProvider(
-          create: (_) => HomeViewModel(tripRepo: tripRepo, expenseRepo: expenseRepo),
+          create: (_) => HomeViewModel(
+            tripRepo: tripRepo,
+            expenseRepo: expenseRepo,
+            realtimeClient: realtimeClient,
+          ),
         ),
+
         ChangeNotifierProvider(
           create: (_) => PersonalExpenseViewModel(
             personalRepo: personalRepo,

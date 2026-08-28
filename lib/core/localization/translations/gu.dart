@@ -740,4 +740,15 @@ const Map<String, String> guTranslations = {
   'payments_save_btn': 'ચકાસો અને સાચવો',
   'payments_bank_title': 'સીધું બેંક ખાતું',
   'payments_bank_verified': 'ચકાસાયેલ બેંક ખાતું ✓',
+
+  // Sync State Keys
+  'sync_state_synced': '✓ સિંક થઈ ગયું',
+  'sync_state_syncing': 'સિંક થઈ રહ્યું છે…',
+  'sync_state_offline': 'ઓફલાઇન તૈયાર',
+  'sync_state_pending_single': '1 ફેરફાર બાકી છે',
+  'sync_state_pending_multiple': '{count} ફેરફારો બાકી છે',
+  'sync_state_live': 'લાઇવ',
+  'sync_state_reconnecting': 'ફરીથી કનેક્ટ થઈ રહ્યું છે…',
+  'sync_state_error': 'સિંક થોભાવી દેવાયું',
 };
+

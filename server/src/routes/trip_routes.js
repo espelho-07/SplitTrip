@@ -43,7 +43,7 @@ router.post('/', (req, res, next) => {
       currencyCode,
       initialFriendNames,
       tripMode,
-    });
+    }, realtimeHub);
     res.status(201).json({ data: trip });
   } catch (e) {
     next(e);

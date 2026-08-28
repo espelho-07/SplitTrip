@@ -104,7 +104,7 @@ class TripDetailViewModel extends ChangeNotifier {
     _realtimeSubscription = realtimeClient!.events.listen((event) {
       if (_trip == null || event.tripId != _trip!.id) return;
 
-      // Check for settlement recipient notification
+      // 1. Settlement recipient notification
       if (event.type == 'settlement_recorded' && event.data['notification'] is Map<String, dynamic>) {
         final notif = event.data['notification'] as Map<String, dynamic>;
         final recipientUserId = notif['recipientUserId'] as String?;
@@ -113,12 +113,72 @@ class TripDetailViewModel extends ChangeNotifier {
         }
       }
 
+      // 2. Direct In-Memory Delta Application (< 1ms, 0 extra network calls)
+      if (event.type == 'expense_added') {
+        if (event.data['expense'] is Map<String, dynamic>) {
+          final expense = Expense.fromJson(event.data['expense'] as Map<String, dynamic>);
+          _expenses.removeWhere((e) => e.id == expense.id);
+          _expenses.insert(0, expense);
+          _recomputeLocalBalances();
+          _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
+          notifyListeners();
+          return;
+        }
+      } else if (event.type == 'expense_updated') {
+        if (event.data['expense'] is Map<String, dynamic>) {
+          final expense = Expense.fromJson(event.data['expense'] as Map<String, dynamic>);
+          final idx = _expenses.indexWhere((e) => e.id == expense.id);
+          if (idx != -1) {
+            _expenses[idx] = expense;
+          } else {
+            _expenses.insert(0, expense);
+          }
+          _recomputeLocalBalances();
+          _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
+          notifyListeners();
+          return;
+        }
+      } else if (event.type == 'expense_deleted') {
+        final expId = event.entityId ?? (event.data['expenseId'] as String?);
+        if (expId != null) {
+          _expenses.removeWhere((e) => e.id == expId);
+          _recomputeLocalBalances();
+          _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
+          notifyListeners();
+          return;
+        }
+      } else if (event.type == 'member_joined' || event.type == 'lifecycle_updated') {
+        if (event.data['trip'] is Map<String, dynamic>) {
+          _trip = Trip.fromJson(event.data['trip'] as Map<String, dynamic>);
+          _recomputeLocalBalances();
+          _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
+          notifyListeners();
+          return;
+        }
+      } else if (event.type == 'settlement_recorded') {
+        _recomputeLocalBalances();
+        _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
+        notifyListeners();
+        return;
+      }
+
       if (_currentUserId != null) {
-        // Automatically reconcile trip state on realtime push
-        refresh(_currentUserId!);
+        _recomputeLocalBalances();
+        notifyListeners();
       }
     });
   }
+
+  void _recomputeLocalBalances() {
+    if (_trip != null && _currentUserId != null) {
+      _balanceSummary = BalanceEngine.calculateBalances(
+        members: _trip!.members,
+        expenses: _expenses,
+        currentUserId: _currentUserId!,
+      );
+    }
+  }
+
 
   Future<void> loadTrip(String tripId, String currentUserId) async {
     _currentUserId = currentUserId;
