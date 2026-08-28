@@ -91,6 +91,7 @@ class AppLocalizations {
   String get onboardingWelcomeBack => translate('onboarding_welcome_back');
   String get onboardingWelcomeToast => translate('onboarding_welcome_toast');
   String get onboardingErrNameRequired => translate('onboarding_err_name_required');
+  String get onboardingErrGuestFailed => translate('onboarding_err_guest_failed');
   String get onboardingErrRecoveryRequired => translate('onboarding_err_recovery_required');
   String get onboardingErrRecoveryFailed => translate('onboarding_err_recovery_failed');
 

@@ -14,7 +14,6 @@ import '../../viewmodels/locale_viewmodel.dart';
 import '../../widgets/progress/progress.dart';
 import '../language/language_select_sheet.dart';
 import 'interactive_tutorial_sheet.dart';
-import 'widgets/guest_setup_sheet.dart';
 import 'widgets/kith_google_button.dart';
 import 'widgets/kith_hero_scene.dart';
 import 'widgets/recovery_key_sheet.dart';
@@ -31,6 +30,8 @@ class OnboardingView extends StatefulWidget {
 }
 
 class _OnboardingViewState extends State<OnboardingView> {
+  bool _isStartingGuest = false;
+
   Future<void> _handleGoogleSignIn() async {
     final localeVm = context.read<LocaleViewModel>();
     if (!localeVm.hasSelectedInitialLanguage) {
@@ -39,7 +40,7 @@ class _OnboardingViewState extends State<OnboardingView> {
     }
 
     final authVm = context.read<AuthViewModel>();
-    if (authVm.isLoading) return;
+    if (authVm.isLoading || _isStartingGuest) return;
 
     HapticHelper.medium();
     final success = await AuthProgressDialog.startGoogleSignIn(context);
@@ -48,12 +49,41 @@ class _OnboardingViewState extends State<OnboardingView> {
     }
   }
 
-  void _handleExploreAsGuest() {
+  Future<void> _handleExploreAsGuest() async {
+    if (_isStartingGuest) return;
+    final authVm = context.read<AuthViewModel>();
+    if (authVm.isLoading) return;
+
     final localeVm = context.read<LocaleViewModel>();
     if (!localeVm.hasSelectedInitialLanguage) {
-      context.push('/language-select');
-    } else {
-      GuestSetupSheet.show(context);
+      await localeVm.markInitialLanguageSelected();
+    }
+
+    setState(() => _isStartingGuest = true);
+    HapticHelper.medium();
+
+    try {
+      await authVm.createGuestSession('Traveler');
+      if (mounted) {
+        context.go('/home');
+        KithSuccessToast.show(context, context.l10n.onboardingWelcomeToast);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(context.l10n.onboardingErrGuestFailed),
+            action: SnackBarAction(
+              label: context.l10n.actionRetry,
+              onPressed: _handleExploreAsGuest,
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isStartingGuest = false);
+      }
     }
   }
 
@@ -163,6 +193,7 @@ class _OnboardingViewState extends State<OnboardingView> {
                               text: l10n.onboardingGuestBtn,
                               variant: AppButtonVariant.secondary,
                               isFullWidth: true,
+                              isLoading: _isStartingGuest,
                               onPressed: _handleExploreAsGuest,
                             ),
 

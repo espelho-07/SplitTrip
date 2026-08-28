@@ -53,6 +53,7 @@ const Map<String, String> guTranslations = {
   'onboarding_welcome_back': 'ફરી સ્વાગત છે',
   'onboarding_welcome_toast': 'કિથમાં આપનું સ્વાગત છે ✓',
   'onboarding_err_name_required': 'કૃપા કરીને આગળ વધવા તમારું નામ લખો',
+  'onboarding_err_guest_failed': 'મહેમાન મોડ શરૂ થઈ શક્યો નથી. તમારો સ્થાનિક ડેટા સુરક્ષિત છે.',
   'onboarding_err_recovery_required': 'કૃપા કરીને તમારી રિકવરી કી દાખલ કરો (દા.ત. KITH-XXXX-YYYY)',
   'onboarding_err_recovery_failed': 'આ કી વડે એકાઉન્ટ મળી શક્યું નથી. કૃપા કરીને કોડ ચકાસી ફરી પ્રયાસ કરો.',
 

@@ -13,7 +13,6 @@ import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/kith_brand.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/locale_viewmodel.dart';
-import '../onboarding/widgets/guest_setup_sheet.dart';
 
 /// Full-screen Language Selection screen presented on first-time launch.
 class LanguageSelectView extends StatefulWidget {
@@ -60,9 +59,6 @@ class _LanguageSelectViewState extends State<LanguageSelectView> {
       Navigator.of(context).pop();
     } else if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
-      if (!authVm.isAuthenticated && mounted) {
-        GuestSetupSheet.show(context);
-      }
     } else {
       if (authVm.isAuthenticated) {
         context.go('/home');

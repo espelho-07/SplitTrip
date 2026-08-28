@@ -53,6 +53,7 @@ const Map<String, String> hiTranslations = {
   'onboarding_welcome_back': 'वापसी पर स्वागत है',
   'onboarding_welcome_toast': 'किथ में आपका स्वागत है ✓',
   'onboarding_err_name_required': 'आगे बढ़ने के लिए कृपया अपना नाम दर्ज करें',
+  'onboarding_err_guest_failed': 'अतिथि मोड प्रारंभ नहीं हो सका। आपका स्थानीय डेटा सुरक्षित है।',
   'onboarding_err_recovery_required': 'कृपया अपनी रिकवरी की दर्ज करें (उदा. KITH-XXXX-YYYY)',
   'onboarding_err_recovery_failed': 'इस की से अकाउंट रीस्टोर नहीं हो सका। कृपया कोड जांचें और पुनः प्रयास करें।',
 

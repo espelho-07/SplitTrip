@@ -8,6 +8,7 @@ import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/haptic_feedback_helper.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../domain/enums/app_experience_mode.dart';
+import '../../../router/app_router.dart';
 import '../../../viewmodels/auth_viewmodel.dart';
 import '../../../widgets/progress/progress.dart';
 
@@ -44,21 +45,26 @@ class _GuestSetupSheetState extends State<GuestSetupSheet> {
     final l10n = context.l10n;
     if (authVm.isLoading) return;
 
-    final name = _nameController.text.trim();
-    if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.onboardingErrNameRequired)),
-      );
-      return;
-    }
+    final rawName = _nameController.text.trim();
+    final name = rawName.isEmpty ? 'Traveler' : rawName;
 
     HapticHelper.medium();
     Navigator.pop(context); // Close sheet
 
-    await authVm.createGuestSession(name, _selectedMode);
-    if (mounted) {
-      context.go('/home');
-      KithSuccessToast.show(context, l10n.onboardingWelcomeToast);
+    try {
+      await authVm.createGuestSession(name, _selectedMode);
+      final rootCtx = AppRouter.navigatorKey.currentContext;
+      if (rootCtx != null && rootCtx.mounted) {
+        rootCtx.go('/home');
+        KithSuccessToast.show(rootCtx, l10n.onboardingWelcomeToast);
+      }
+    } catch (_) {
+      final rootCtx = AppRouter.navigatorKey.currentContext;
+      if (rootCtx != null && rootCtx.mounted) {
+        ScaffoldMessenger.of(rootCtx).showSnackBar(
+          SnackBar(content: Text(l10n.onboardingErrGuestFailed)),
+        );
+      }
     }
   }
 

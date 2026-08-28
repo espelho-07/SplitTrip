@@ -53,6 +53,7 @@ const Map<String, String> enTranslations = {
   'onboarding_welcome_back': 'Welcome back',
   'onboarding_welcome_toast': 'Welcome to Kith ✓',
   'onboarding_err_name_required': 'Please enter your name or nickname to continue',
+  'onboarding_err_guest_failed': "Couldn't start Guest Mode. Your local data is safe.",
   'onboarding_err_recovery_required': 'Please enter your recovery key (e.g. KITH-XXXX-YYYY)',
   'onboarding_err_recovery_failed': 'Could not restore session with this key. Please check the code and try again.',
 

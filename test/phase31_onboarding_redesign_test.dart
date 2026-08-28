@@ -87,7 +87,7 @@ void main() {
       expect(find.text('Restore with Recovery Key'), findsOneWidget);
     });
 
-    testWidgets('3. Tapping Explore as Guest opens Guest Setup Sheet', (tester) async {
+    testWidgets('3. Tapping Explore as Guest starts guest session directly', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -96,12 +96,14 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 600));
 
+      expect(authVm.isAuthenticated, isFalse);
       await tester.tap(find.text('Explore as Guest'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 600));
 
-      expect(find.text('Explore Kith as Guest'), findsOneWidget);
-      expect(find.text('Start Exploring'), findsOneWidget);
+      expect(authVm.isAuthenticated, isTrue);
+      expect(authVm.currentUser, isNotNull);
+      expect(authVm.currentUser!.displayName, equals('Traveler'));
     });
   });
 }
