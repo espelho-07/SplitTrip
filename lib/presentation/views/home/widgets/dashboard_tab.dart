@@ -106,45 +106,78 @@ class DashboardTab extends StatelessWidget {
             ),
           ],
         ),
-        GestureDetector(
-          onTap: () {
-            HapticHelper.light();
-            context.push('/notifications');
-          },
-          child: Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: isDark ? const Color(0xFF161D24) : const Color(0xFFF1F5F9),
-              border: Border.all(
-                color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
-                width: 1,
-              ),
-            ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Icon(
-                  Icons.notifications_outlined,
-                  size: 22,
-                  color: isDark ? AppColors.darkTextPrimary : const Color(0xFF334155),
-                ),
-                Positioned(
-                  top: 10,
-                  right: 12,
-                  child: Container(
-                    width: 7,
-                    height: 7,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Color(0xFF14B8A6),
-                    ),
+        Row(
+          children: [
+            // QR Scanner Button
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                HapticHelper.light();
+                context.push('/qr-scanner');
+              },
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isDark ? const Color(0xFF161D24) : const Color(0xFFF1F5F9),
+                  border: Border.all(
+                    color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
+                    width: 1,
                   ),
                 ),
-              ],
+                child: Icon(
+                  Icons.qr_code_scanner_rounded,
+                  size: 21,
+                  color: isDark ? AppColors.darkTextPrimary : const Color(0xFF334155),
+                ),
+              ),
             ),
-          ),
+            const SizedBox(width: 8),
+
+            // Notifications Button
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                HapticHelper.light();
+                context.push('/notifications');
+              },
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isDark ? const Color(0xFF161D24) : const Color(0xFFF1F5F9),
+                  border: Border.all(
+                    color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
+                    width: 1,
+                  ),
+                ),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Icon(
+                      Icons.notifications_outlined,
+                      size: 22,
+                      color: isDark ? AppColors.darkTextPrimary : const Color(0xFF334155),
+                    ),
+                    Positioned(
+                      top: 10,
+                      right: 12,
+                      child: Container(
+                        width: 7,
+                        height: 7,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Color(0xFF14B8A6),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );

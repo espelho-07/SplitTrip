@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kith_app/core/localization/app_localizations.dart';
@@ -179,6 +179,25 @@ void main() {
 
       expect(badgeY, greaterThan(nameY));
       expect(emailY, greaterThan(badgeY));
+    });
+
+    test('4. Fresh Theme initialization strictly defaults to ThemeMode.light', () {
+      final freshThemeVm = ThemeViewModel(storage: storage);
+      expect(freshThemeVm.themeMode, ThemeMode.light);
+      expect(freshThemeVm.isDarkMode, isFalse);
+    });
+
+    testWidgets('5. Home Dashboard renders QR scanner button adjacent to notifications button',
+        (tester) async {
+      await tester.pumpWidget(wrapWithProviders(const HomeView()));
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.qr_code_scanner_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.notifications_outlined), findsOneWidget);
+
+      final scannerX = tester.getTopLeft(find.byIcon(Icons.qr_code_scanner_rounded)).dx;
+      final notifX = tester.getTopLeft(find.byIcon(Icons.notifications_outlined)).dx;
+      expect(notifX, greaterThan(scannerX));
     });
   });
 }

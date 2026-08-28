@@ -30,6 +30,7 @@ void main() {
     final userRepo = UserRepository(authService: authService);
     authVm = AuthViewModel(userRepo: userRepo);
     localeVm = LocaleViewModel(storage: storage);
+    await localeVm.markInitialLanguageSelected();
     widgetService = KithWidgetService(storage: storage);
   });
 

@@ -3,7 +3,7 @@ import '../../data/services/local_storage_service.dart';
 
 class ThemeViewModel extends ChangeNotifier {
   final LocalStorageService storage;
-  ThemeMode _themeMode = ThemeMode.system;
+  ThemeMode _themeMode = ThemeMode.light;
 
   ThemeViewModel({required this.storage}) {
     _loadTheme();
@@ -20,9 +20,11 @@ class ThemeViewModel extends ChangeNotifier {
       } else if (saved == 'light') {
         _themeMode = ThemeMode.light;
       } else {
-        _themeMode = ThemeMode.system;
+        _themeMode = ThemeMode.light;
       }
       notifyListeners();
+    } else {
+      _themeMode = ThemeMode.light;
     }
   }
 

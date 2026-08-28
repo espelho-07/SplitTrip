@@ -32,6 +32,12 @@ class OnboardingView extends StatefulWidget {
 
 class _OnboardingViewState extends State<OnboardingView> {
   Future<void> _handleGoogleSignIn() async {
+    final localeVm = context.read<LocaleViewModel>();
+    if (!localeVm.hasSelectedInitialLanguage) {
+      context.push('/language-select');
+      return;
+    }
+
     final authVm = context.read<AuthViewModel>();
     if (authVm.isLoading) return;
 
@@ -39,6 +45,15 @@ class _OnboardingViewState extends State<OnboardingView> {
     final success = await AuthProgressDialog.startGoogleSignIn(context);
     if (success == true && mounted) {
       context.go('/home');
+    }
+  }
+
+  void _handleExploreAsGuest() {
+    final localeVm = context.read<LocaleViewModel>();
+    if (!localeVm.hasSelectedInitialLanguage) {
+      context.push('/language-select');
+    } else {
+      GuestSetupSheet.show(context);
     }
   }
 
@@ -148,7 +163,7 @@ class _OnboardingViewState extends State<OnboardingView> {
                               text: l10n.onboardingGuestBtn,
                               variant: AppButtonVariant.secondary,
                               isFullWidth: true,
-                              onPressed: () => GuestSetupSheet.show(context),
+                              onPressed: _handleExploreAsGuest,
                             ),
 
                             const SizedBox(height: 14),

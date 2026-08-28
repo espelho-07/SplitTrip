@@ -7,7 +7,6 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/kith_brand.dart';
 import '../../viewmodels/auth_viewmodel.dart';
-import '../../viewmodels/locale_viewmodel.dart';
 
 /// Master Cinematic Splash Opening Screen.
 ///
@@ -69,12 +68,8 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
 
     if (_showStatus) setState(() => _showStatus = false);
 
-    final localeVm = context.read<LocaleViewModel>();
-
     try {
-      if (!localeVm.hasSelectedInitialLanguage) {
-        context.go('/language-select');
-      } else if (authVm.isAuthenticated) {
+      if (authVm.isAuthenticated) {
         context.go('/home');
       } else {
         context.go('/onboarding');

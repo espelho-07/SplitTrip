@@ -18,6 +18,7 @@ import '../views/personal/widgets/add_personal_expense_sheet.dart';
 import '../views/splash/splash_view.dart';
 import '../views/trip/create_trip_view.dart';
 import '../views/trip/join_trip_view.dart';
+import '../views/trip/qr_scanner_view.dart';
 import '../views/trip/trip_detail_view.dart';
 import '../views/trip/trip_members_view.dart';
 import '../views/trip/trip_memories_view.dart';
@@ -135,6 +136,10 @@ class AppRouter {
       GoRoute(
         path: '/notifications',
         builder: (context, state) => const NotificationsView(),
+      ),
+      GoRoute(
+        path: '/qr-scanner',
+        builder: (context, state) => const QrScannerView(),
       ),
       GoRoute(
         path: '/payment-methods',
