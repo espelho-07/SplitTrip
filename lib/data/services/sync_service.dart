@@ -42,6 +42,7 @@ class SyncMutation {
   final DateTime createdAt;
   final int retryCount;
   final DateTime? lastAttemptAt;
+  final List<String> dependsOn;
 
   SyncMutation({
     required this.id,
@@ -51,7 +52,19 @@ class SyncMutation {
     required this.createdAt,
     this.retryCount = 0,
     this.lastAttemptAt,
+    this.dependsOn = const [],
   }) : idempotencyKey = idempotencyKey ?? id;
+
+  /// Returns the tripId associated with this mutation, if applicable.
+  String? get tripId {
+    if (payload.containsKey('tripId') && payload['tripId'] != null) {
+      return payload['tripId'] as String;
+    }
+    if (type == MutationType.createTrip && payload.containsKey('id') && payload['id'] != null) {
+      return payload['id'] as String;
+    }
+    return null;
+  }
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -61,6 +74,7 @@ class SyncMutation {
     'createdAt': createdAt.toIso8601String(),
     'retryCount': retryCount,
     'lastAttemptAt': lastAttemptAt?.toIso8601String(),
+    'dependsOn': dependsOn,
   };
 
   factory SyncMutation.fromJson(Map<String, dynamic> json) => SyncMutation(
@@ -78,9 +92,16 @@ class SyncMutation {
     lastAttemptAt: json['lastAttemptAt'] != null
         ? DateTime.tryParse(json['lastAttemptAt'] as String)
         : null,
+    dependsOn: json['dependsOn'] is List
+        ? (json['dependsOn'] as List).map((e) => e.toString()).toList()
+        : const [],
   );
 
-  SyncMutation copyWith({int? retryCount, DateTime? lastAttemptAt}) => SyncMutation(
+  SyncMutation copyWith({
+    int? retryCount,
+    DateTime? lastAttemptAt,
+    List<String>? dependsOn,
+  }) => SyncMutation(
     id: id,
     idempotencyKey: idempotencyKey,
     type: type,
@@ -88,6 +109,7 @@ class SyncMutation {
     createdAt: createdAt,
     retryCount: retryCount ?? this.retryCount,
     lastAttemptAt: lastAttemptAt ?? this.lastAttemptAt,
+    dependsOn: dependsOn ?? this.dependsOn,
   );
 }
 
@@ -125,10 +147,26 @@ class SyncService {
     return raw.map((json) => SyncMutation.fromJson(json)).toList();
   }
 
+  /// Returns all pending mutations for a specific trip.
+  List<SyncMutation> getPendingMutationsForTrip(String tripId) {
+    return getPendingMutations().where((m) => m.tripId == tripId).toList();
+  }
+
+  /// Returns the number of pending mutations for a specific trip.
+  int getPendingCountForTrip(String tripId) {
+    return getPendingMutationsForTrip(tripId).length;
+  }
+
+  /// Returns true if there are pending un-synced operations for a trip.
+  bool hasPendingMutationsForTrip(String tripId) {
+    return getPendingCountForTrip(tripId) > 0;
+  }
+
   Future<SyncMutation> enqueueMutation(
     MutationType type,
     Map<String, dynamic> payload, {
     String? idempotencyKey,
+    List<String>? dependsOn,
     ApiClient? backgroundApiClient,
   }) async {
     final mutationId = _uuid.v4();
@@ -138,6 +176,7 @@ class SyncService {
       type: type,
       payload: payload,
       createdAt: DateTime.now(),
+      dependsOn: dependsOn ?? const [],
     );
 
     final queue = getPendingMutations();
@@ -174,8 +213,8 @@ class SyncService {
     }
   }
 
-  /// Processes all pending offline mutations against the remote backend.
-  Future<void> flushQueue(ApiClient apiClient) async {
+  /// Processes all pending offline mutations against the remote backend in dependency order.
+  Future<void> flushQueue(ApiClient apiClient, {bool force = false}) async {
     if (_isProcessing) return;
     _isProcessing = true;
     _setStatus(SyncStatus.syncing);
@@ -184,31 +223,64 @@ class SyncService {
       final queue = getPendingMutations();
       final now = DateTime.now();
 
+      // Track blocked trip IDs in this pass (if an earlier mutation for a trip failed, subsequent dependent operations must wait)
+      final blockedTripIds = <String>{};
+      final completedMutationIds = <String>{};
+
       for (final mutation in queue) {
+        final tId = mutation.tripId;
+
+        // If trip is blocked due to prior failure in this cycle, skip
+        if (tId != null && blockedTripIds.contains(tId)) {
+          continue;
+        }
+
+        // Dependency check: If any mutation in dependsOn is still pending in the queue, skip
+        final pendingIds = queue.map((m) => m.id).toSet();
+        final hasUnresolvedDependencies = mutation.dependsOn.any(
+          (depId) => pendingIds.contains(depId) && !completedMutationIds.contains(depId),
+        );
+        if (hasUnresolvedDependencies) {
+          continue;
+        }
+
         // Jittered exponential backoff check: base 1s * 2^retryCount, capped at 30s
-        if (mutation.lastAttemptAt != null && mutation.retryCount > 0) {
+        if (!force && mutation.lastAttemptAt != null && mutation.retryCount > 0) {
           final backoffSeconds = min(30, pow(2, mutation.retryCount).toInt());
           final nextAllowed = mutation.lastAttemptAt!.add(Duration(seconds: backoffSeconds));
           if (now.isBefore(nextAllowed)) {
+            if (tId != null) blockedTripIds.add(tId);
             continue; // Skip this item until backoff period passes
           }
         }
 
         try {
           await _executeMutation(apiClient, mutation);
+          completedMutationIds.add(mutation.id);
           await removeMutation(mutation.id);
+
+          // If this was a trip lifecycle update to completed, ensure local storage reflects completed state
+          if (mutation.type == MutationType.updateTripLifecycle && tId != null) {
+            final targetLifecycle = mutation.payload['lifecycleState'] as String?;
+            if (targetLifecycle == 'completed' || targetLifecycle == 'settled') {
+              _promoteLocalTripLifecycle(tId, targetLifecycle!);
+            }
+          }
         } on NetworkException catch (_) {
           // Increment retry count and back off
           await _updateMutationAttempt(mutation.id, mutation.retryCount + 1);
+          if (tId != null) blockedTripIds.add(tId);
           _setStatus(SyncStatus.offline);
           break; // Break loop and retry later when connection returns
         } on ApiException catch (e) {
           // If server rejects with 4xx unrecoverable client error, drop mutation to unblock queue
           debugPrint('[SyncService] Client error ${e.statusCode} for mutation ${mutation.id}: ${e.message}');
+          completedMutationIds.add(mutation.id);
           await removeMutation(mutation.id);
         } catch (e) {
           debugPrint('[SyncService] Unexpected error on mutation ${mutation.id}: $e');
           await _updateMutationAttempt(mutation.id, mutation.retryCount + 1);
+          if (tId != null) blockedTripIds.add(tId);
           _setStatus(SyncStatus.error);
           break;
         }
@@ -217,11 +289,25 @@ class SyncService {
       final remaining = getPendingMutations();
       if (remaining.isEmpty) {
         _setStatus(SyncStatus.synced);
-      } else {
+      } else if (_currentStatus != SyncStatus.offline && _currentStatus != SyncStatus.error) {
         _setStatus(SyncStatus.pending);
       }
     } finally {
       _isProcessing = false;
+    }
+  }
+
+  void _promoteLocalTripLifecycle(String tripId, String lifecycleState) {
+    try {
+      final trips = _storage.getSavedTrips();
+      final idx = trips.indexWhere((t) => t['id'] == tripId);
+      if (idx != -1) {
+        trips[idx]['lifecycleState'] = lifecycleState;
+        trips[idx]['updatedAt'] = DateTime.now().toIso8601String();
+        _storage.saveTrips(trips);
+      }
+    } catch (e) {
+      debugPrint('[SyncService] Notice updating local trip lifecycle: $e');
     }
   }
 

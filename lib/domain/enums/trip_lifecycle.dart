@@ -17,7 +17,7 @@ enum TripLifecycle {
       case TripLifecycle.active:
         return 'Active';
       case TripLifecycle.completing:
-        return 'Completing';
+        return 'Finishing sync';
       case TripLifecycle.completed:
         return 'Completed';
       case TripLifecycle.settling:
@@ -27,9 +27,12 @@ enum TripLifecycle {
     }
   }
 
+  bool get isActive => this == TripLifecycle.active;
+  bool get isCompleting => this == TripLifecycle.completing;
+  bool get isCompleted => this == TripLifecycle.completed;
   bool get allowsExpenses => this == TripLifecycle.active;
   bool get isLocked => this == TripLifecycle.completed || this == TripLifecycle.settling || this == TripLifecycle.settled;
-  bool get isSettlementActive => this == TripLifecycle.completed || this == TripLifecycle.settling || this == TripLifecycle.settled;
+  bool get isSettlementActive => this == TripLifecycle.completed || this == TripLifecycle.settling || this == TripLifecycle.settled || this == TripLifecycle.completing;
 
   Color getStatusColor(bool isDark) {
     switch (this) {

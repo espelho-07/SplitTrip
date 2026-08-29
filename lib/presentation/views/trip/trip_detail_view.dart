@@ -27,6 +27,7 @@ import '../../../domain/services/trip_export_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/trip_detail_viewmodel.dart';
+import '../../../data/services/sync_service.dart';
 import 'dart:async';
 import '../../../core/localization/app_localizations.dart';
 import '../add_expense/add_expense_view.dart';
@@ -173,7 +174,12 @@ class _TripDetailViewState extends State<TripDetailView> {
   void _showCompleteTripConfirmation() {
     final tripDetailVm = context.read<TripDetailViewModel>();
     final authVm = context.read<AuthViewModel>();
+    final syncService = Provider.of<SyncService?>(context, listen: false);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final trip = tripDetailVm.trip;
+    final pendingCount = (syncService != null && trip != null)
+        ? syncService.getPendingCountForTrip(trip.id)
+        : 0;
 
     showModalBottomSheet(
       context: context,
@@ -191,15 +197,20 @@ class _TripDetailViewState extends State<TripDetailView> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: AppColors.indigoAccent.withValues(alpha: 0.15),
+                      color: (pendingCount > 0 ? AppColors.amberAccent : AppColors.indigoAccent)
+                          .withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.lock_clock_outlined, color: AppColors.indigoAccent, size: 24),
+                    child: Icon(
+                      pendingCount > 0 ? Icons.sync_rounded : Icons.lock_clock_outlined,
+                      color: pendingCount > 0 ? AppColors.amberAccent : AppColors.indigoAccent,
+                      size: 24,
+                    ),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Text(
-                      'Complete Trip?',
+                      pendingCount > 0 ? 'Finish Trip & Sync?' : 'Complete Trip?',
                       style: AppTypography.titleLarge(isDark: isDark),
                     ),
                   ),
@@ -207,7 +218,9 @@ class _TripDetailViewState extends State<TripDetailView> {
               ),
               const SizedBox(height: AppSpacing.md),
               Text(
-                'Completing this trip locks expense creation and generates simplified settlement transfers for all members to settle debts.',
+                pendingCount > 0
+                    ? 'You have $pendingCount change${pendingCount == 1 ? '' : 's'} waiting to sync. Your trip will finish when it syncs with the server.'
+                    : 'Completing this trip locks expense creation and generates simplified settlement transfers for all members to settle debts.',
                 style: AppTypography.bodyMedium(isDark: isDark),
               ),
               const SizedBox(height: AppSpacing.xl),
@@ -223,7 +236,7 @@ class _TripDetailViewState extends State<TripDetailView> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: AppButton(
-                      text: 'Complete Trip',
+                      text: pendingCount > 0 ? 'Finish Trip' : 'Complete Trip',
                       onPressed: () async {
                         Navigator.pop(ctx);
                         await tripDetailVm.completeTrip(authVm.currentUser?.id ?? '');
@@ -903,6 +916,63 @@ class _TripDetailViewState extends State<TripDetailView> {
         );
       }
       return const SizedBox.shrink();
+    } else if (trip.lifecycleState == TripLifecycle.completing) {
+      final syncService = Provider.of<SyncService?>(context);
+      final pendingCount = syncService != null ? syncService.getPendingCountForTrip(trip.id) : 0;
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.amberAccent.withValues(alpha: 0.12),
+          borderRadius: AppRadius.lgBorder,
+          border: Border.all(
+            color: AppColors.amberAccent.withValues(alpha: 0.3),
+            width: 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.amberAccent),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    pendingCount > 0
+                        ? '$pendingCount change${pendingCount == 1 ? '' : 's'} waiting to sync'
+                        : 'Finishing trip sync',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white : AppColors.amberAccent,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Your trip will finish and be marked completed automatically once offline changes reach the server.',
+              style: AppTypography.bodySmall(isDark: isDark),
+            ),
+            const SizedBox(height: 12),
+            AppButton(
+              text: 'View Settlements',
+              icon: Icons.payments_outlined,
+              isFullWidth: true,
+              height: 44,
+              variant: AppButtonVariant.outline,
+              onPressed: _showSettlementSheet,
+            ),
+          ],
+        ),
+      );
     } else if (trip.lifecycleState == TripLifecycle.completed || trip.lifecycleState == TripLifecycle.settling) {
       return Container(
         padding: const EdgeInsets.all(16),

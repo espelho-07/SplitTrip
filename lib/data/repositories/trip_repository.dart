@@ -424,18 +424,45 @@ class TripRepository {
       throw StateError('Trip not found');
     }
 
+    // Determine target local lifecycle:
+    // If completing a trip and pending un-synced operations exist for this trip,
+    // transition locally to `completing` ("Finishing sync") rather than jumping to `completed`.
+    final pendingMutations = syncService.getPendingMutationsForTrip(tripId);
+    TripLifecycle targetLocalState = newLifecycle;
+    if (newLifecycle == TripLifecycle.completed && pendingMutations.isNotEmpty) {
+      targetLocalState = TripLifecycle.completing;
+    }
+
     final updatedTrip = trips[index].copyWith(
-      lifecycleState: newLifecycle,
+      lifecycleState: targetLocalState,
       updatedAt: DateTime.now(),
     );
 
     trips[index] = updatedTrip;
     await storage.saveTrips(trips.map((t) => t.toJson()).toList());
 
+    // Record local activity
+    final log = ActivityLog(
+      id: 'act_${_uuid.v4().replaceAll('-', '').substring(0, 10)}',
+      tripId: tripId,
+      type: 'lifecycle_updated',
+      actorId: trips[index].creatorId,
+      actorName: 'Creator',
+      description: targetLocalState == TripLifecycle.completing
+          ? 'Finishing sync for trip completion'
+          : 'Changed trip state to ${newLifecycle.displayName.toUpperCase()}',
+      createdAt: DateTime.now(),
+      metadata: {'lifecycleState': targetLocalState.name, 'targetLifecycle': newLifecycle.name},
+    );
+    await addLocalActivityLog(tripId, log);
+
+    // Enqueue mutation with dependency list of all pending mutations for this trip
+    final dependencyIds = pendingMutations.map((m) => m.id).toList();
     await syncService.enqueueMutation(
       MutationType.updateTripLifecycle,
       {'tripId': tripId, 'lifecycleState': newLifecycle.name},
-      idempotencyKey: 'life_$tripId',
+      idempotencyKey: 'life_${tripId}_${newLifecycle.name}',
+      dependsOn: dependencyIds,
       backgroundApiClient: apiClient,
     );
 
