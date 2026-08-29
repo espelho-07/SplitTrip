@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/localization/app_localizations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/haptic_feedback_helper.dart';
 import '../../../../domain/models/trip.dart';
@@ -10,6 +11,17 @@ enum TripStatusFilter {
 
   final String label;
   const TripStatusFilter(this.label);
+
+  String getLocalizedLabel(AppLocalizations l10n) {
+    switch (this) {
+      case TripStatusFilter.all:
+        return l10n.tripFilterStatusAll;
+      case TripStatusFilter.active:
+        return l10n.tripFilterStatusActive;
+      case TripStatusFilter.completed:
+        return l10n.tripFilterStatusCompleted;
+    }
+  }
 }
 
 enum TripDateFilter {
@@ -20,6 +32,19 @@ enum TripDateFilter {
 
   final String label;
   const TripDateFilter(this.label);
+
+  String getLocalizedLabel(AppLocalizations l10n) {
+    switch (this) {
+      case TripDateFilter.allTime:
+        return l10n.tripFilterDateAllTime;
+      case TripDateFilter.thisMonth:
+        return l10n.tripFilterDateThisMonth;
+      case TripDateFilter.last3Months:
+        return l10n.tripFilterDateLast3Months;
+      case TripDateFilter.thisYear:
+        return l10n.tripFilterDateThisYear;
+    }
+  }
 }
 
 enum TripSortFilter {
@@ -30,6 +55,19 @@ enum TripSortFilter {
 
   final String label;
   const TripSortFilter(this.label);
+
+  String getLocalizedLabel(AppLocalizations l10n) {
+    switch (this) {
+      case TripSortFilter.newestFirst:
+        return l10n.tripFilterSortNewest;
+      case TripSortFilter.oldestFirst:
+        return l10n.tripFilterSortOldest;
+      case TripSortFilter.highestExpense:
+        return l10n.tripFilterSortHighest;
+      case TripSortFilter.lowestExpense:
+        return l10n.tripFilterSortLowest;
+    }
+  }
 }
 
 /// Immutable filter criteria model for Kith Trips page
@@ -186,6 +224,7 @@ class _TripFilterSheetState extends State<TripFilterSheet> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = context.l10n;
     final currentCriteria = TripFilterCriteria(status: _status, date: _date, sort: _sort);
 
     return Container(
@@ -235,7 +274,7 @@ class _TripFilterSheetState extends State<TripFilterSheet> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Text(
-                'Filter Trips',
+                l10n.tripFilterTitle,
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w800,
@@ -254,7 +293,7 @@ class _TripFilterSheetState extends State<TripFilterSheet> {
                     });
                   },
                   child: Text(
-                    'Clear All',
+                    l10n.tripFilterClear,
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -268,12 +307,12 @@ class _TripFilterSheetState extends State<TripFilterSheet> {
           const SizedBox(height: 22),
 
           // 1. Status Section
-          _buildSectionTitle('STATUS', isDark),
+          _buildSectionTitle(l10n.tripFilterStatusHeader.toUpperCase(), isDark),
           const SizedBox(height: 10),
           _buildChoiceRow<TripStatusFilter>(
             options: TripStatusFilter.values,
             selected: _status,
-            labelOf: (val) => val.label,
+            labelOf: (val) => val.getLocalizedLabel(l10n),
             onSelected: (val) {
               HapticHelper.selection();
               setState(() => _status = val);
@@ -284,12 +323,12 @@ class _TripFilterSheetState extends State<TripFilterSheet> {
           const SizedBox(height: 20),
 
           // 2. Date Section
-          _buildSectionTitle('DATE', isDark),
+          _buildSectionTitle(l10n.tripFilterDateHeader.toUpperCase(), isDark),
           const SizedBox(height: 10),
           _buildChoiceWrap<TripDateFilter>(
             options: TripDateFilter.values,
             selected: _date,
-            labelOf: (val) => val.label,
+            labelOf: (val) => val.getLocalizedLabel(l10n),
             onSelected: (val) {
               HapticHelper.selection();
               setState(() => _date = val);
@@ -300,12 +339,12 @@ class _TripFilterSheetState extends State<TripFilterSheet> {
           const SizedBox(height: 20),
 
           // 3. Sort Section
-          _buildSectionTitle('SORT BY', isDark),
+          _buildSectionTitle(l10n.tripFilterSortHeader.toUpperCase(), isDark),
           const SizedBox(height: 10),
           _buildChoiceWrap<TripSortFilter>(
             options: TripSortFilter.values,
             selected: _sort,
-            labelOf: (val) => val.label,
+            labelOf: (val) => val.getLocalizedLabel(l10n),
             onSelected: (val) {
               HapticHelper.selection();
               setState(() => _sort = val);
@@ -334,7 +373,7 @@ class _TripFilterSheetState extends State<TripFilterSheet> {
                     ),
                   ),
                   child: Text(
-                    'Cancel',
+                    l10n.tripFilterCancelBtn,
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
@@ -367,8 +406,8 @@ class _TripFilterSheetState extends State<TripFilterSheet> {
                   ),
                   child: Text(
                     currentCriteria.isFiltered
-                        ? 'Apply (${currentCriteria.activeFilterCount})'
-                        : 'Apply Filters',
+                        ? l10n.tripFilterApplyCount(currentCriteria.activeFilterCount)
+                        : l10n.tripFilterApplyBtn,
                     style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,

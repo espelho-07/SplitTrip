@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/localization/app_localizations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/utils/date_formatter.dart';
@@ -29,6 +30,7 @@ class ActiveTripHeroCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = context.l10n;
     final gradientColors = AppColors.getGradient(trip.coverGradientIndex);
     final userNetPaise = balance?.currentUserNetBalanceInPaise ?? 0;
 
@@ -116,9 +118,9 @@ class ActiveTripHeroCard extends StatelessWidget {
                                   ),
                                 ),
                                 const SizedBox(width: 5),
-                                const Text(
-                                  'ONGOING',
-                                  style: TextStyle(
+                                Text(
+                                  l10n.tripCardOngoing.toUpperCase(),
+                                  style: const TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w800,
                                     letterSpacing: 0.6,
@@ -136,9 +138,9 @@ class ActiveTripHeroCard extends StatelessWidget {
                                 color: Colors.orange.withValues(alpha: 0.8),
                                 borderRadius: BorderRadius.circular(6),
                               ),
-                              child: const Text(
-                                'Syncing...',
-                                style: TextStyle(
+                              child: Text(
+                                l10n.tripCardSyncing,
+                                style: const TextStyle(
                                   fontSize: 9,
                                   fontWeight: FontWeight.w700,
                                   color: Colors.white,
@@ -246,7 +248,9 @@ class ActiveTripHeroCard extends StatelessWidget {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            '${trip.members.length} ${trip.members.length == 1 ? 'person' : 'people'}',
+                            trip.members.length == 1
+                                ? l10n.tripCardPersonSingle
+                                : l10n.tripCardPersonPlural(trip.members.length),
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
@@ -260,7 +264,7 @@ class ActiveTripHeroCard extends StatelessWidget {
                       Text(
                         totalExpensesCount > 0
                             ? '$totalExpensesCount exp · ${CurrencyFormatter.formatPaise(totalExpensesPaise, currencyCode: trip.currencyCode)}'
-                            : 'No expenses yet',
+                            : l10n.tripCardNoExpenses,
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
@@ -293,7 +297,7 @@ class ActiveTripHeroCard extends StatelessWidget {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              'Get back ${CurrencyFormatter.formatPaise(userNetPaise, currencyCode: trip.currencyCode)}',
+                              l10n.tripCardGetBack(CurrencyFormatter.formatPaise(userNetPaise, currencyCode: trip.currencyCode)),
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
@@ -312,7 +316,7 @@ class ActiveTripHeroCard extends StatelessWidget {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              'You owe ${CurrencyFormatter.formatPaise(userNetPaise.abs(), currencyCode: trip.currencyCode)}',
+                              l10n.tripCardYouOwe(CurrencyFormatter.formatPaise(userNetPaise.abs(), currencyCode: trip.currencyCode)),
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
@@ -331,7 +335,7 @@ class ActiveTripHeroCard extends StatelessWidget {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              'All settled up',
+                              l10n.tripCardAllSettled,
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w500,
@@ -356,7 +360,7 @@ class ActiveTripHeroCard extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              'Open Trip',
+                              l10n.tripCardOpenTrip,
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,

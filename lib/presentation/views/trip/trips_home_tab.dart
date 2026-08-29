@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/widgets/kith_components.dart';
@@ -38,6 +39,7 @@ class _TripsHomeTabState extends State<TripsHomeTab> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = context.l10n;
     final homeVm = context.watch<HomeViewModel>();
     final authVm = context.watch<AuthViewModel>();
     final expenseRepo = homeVm.expenseRepo;
@@ -98,13 +100,13 @@ class _TripsHomeTabState extends State<TripsHomeTab> {
               padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
               children: [
                 // 1. Top Bar: [ Trips ]     [ + Create ] [ Join ]
-                _buildTopBar(context, isDark),
+                _buildTopBar(context, isDark, l10n),
 
                 const SizedBox(height: 24),
 
                 // 2. Section 1: CURRENT TRIP
                 _buildSectionHeader(
-                  title: 'CURRENT TRIP',
+                  title: l10n.tripsTabCurrentTrip.toUpperCase(),
                   count: activeTrips.isNotEmpty ? activeTrips.length : null,
                   isDark: isDark,
                 ),
@@ -126,16 +128,16 @@ class _TripsHomeTabState extends State<TripsHomeTab> {
                     );
                   })
                 else
-                  _buildNoActiveTripCard(context, isDark),
+                  _buildNoActiveTripCard(context, isDark, l10n),
 
                 const SizedBox(height: 28),
 
                 // 3. Section 2: ALL TRIPS
-                _buildAllTripsHeader(context, isDark, completedTrips.length),
+                _buildAllTripsHeader(context, isDark, completedTrips.length, l10n),
 
                 if (_isSearchOpen) ...[
                   const SizedBox(height: 12),
-                  _buildSearchBar(isDark),
+                  _buildSearchBar(isDark, l10n),
                 ],
 
                 const SizedBox(height: 14),
@@ -153,9 +155,9 @@ class _TripsHomeTabState extends State<TripsHomeTab> {
                     );
                   })
                 else if (completedTrips.isNotEmpty && _filterCriteria.isFiltered)
-                  _buildFilteredEmptyState(isDark)
+                  _buildFilteredEmptyState(isDark, l10n)
                 else
-                  _buildEmptyHistoryState(isDark),
+                  _buildEmptyHistoryState(isDark, l10n),
 
                 const SizedBox(height: 90),
               ],
@@ -164,13 +166,13 @@ class _TripsHomeTabState extends State<TripsHomeTab> {
   }
 
   /// 1. Top Bar with title and quick Create/Join actions
-  Widget _buildTopBar(BuildContext context, bool isDark) {
+  Widget _buildTopBar(BuildContext context, bool isDark, AppLocalizations l10n) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(
-          'Trips',
+          l10n.tripsTitle,
           style: TextStyle(
             fontSize: 28,
             fontWeight: FontWeight.w800,
@@ -207,7 +209,7 @@ class _TripsHomeTabState extends State<TripsHomeTab> {
                     ),
                     const SizedBox(width: 5),
                     Text(
-                      'Join',
+                      l10n.navJoin,
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
@@ -239,14 +241,14 @@ class _TripsHomeTabState extends State<TripsHomeTab> {
                     ),
                   ],
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.add_rounded, size: 16, color: Colors.white),
-                    SizedBox(width: 4),
+                    const Icon(Icons.add_rounded, size: 16, color: Colors.white),
+                    const SizedBox(width: 4),
                     Text(
-                      'New Trip',
-                      style: TextStyle(
+                      l10n.tripsCreate,
+                      style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         color: Colors.white,
@@ -302,7 +304,7 @@ class _TripsHomeTabState extends State<TripsHomeTab> {
   }
 
   /// Minimal clean card when there is no active trip
-  Widget _buildNoActiveTripCard(BuildContext context, bool isDark) {
+  Widget _buildNoActiveTripCard(BuildContext context, bool isDark, AppLocalizations l10n) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20.0),
@@ -334,7 +336,7 @@ class _TripsHomeTabState extends State<TripsHomeTab> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'No active trip',
+                    l10n.tripsTabNoActiveTitle,
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
@@ -343,7 +345,7 @@ class _TripsHomeTabState extends State<TripsHomeTab> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Start or join a trip to split expenses together.',
+                    l10n.tripsTabNoActiveSub,
                     style: TextStyle(
                       fontSize: 12,
                       color: isDark ? AppColors.darkTextSecondary : const Color(0xFF64748B),
@@ -359,7 +361,7 @@ class _TripsHomeTabState extends State<TripsHomeTab> {
   }
 
   /// ALL TRIPS header with Search & Filter controls
-  Widget _buildAllTripsHeader(BuildContext context, bool isDark, int totalCount) {
+  Widget _buildAllTripsHeader(BuildContext context, bool isDark, int totalCount, AppLocalizations l10n) {
     final isFiltered = _filterCriteria.isFiltered;
     final filterCount = _filterCriteria.activeFilterCount;
 
@@ -370,7 +372,7 @@ class _TripsHomeTabState extends State<TripsHomeTab> {
         Row(
           children: [
             Text(
-              'ALL TRIPS',
+              l10n.tripsTabAllTrips.toUpperCase(),
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w800,
@@ -465,7 +467,7 @@ class _TripsHomeTabState extends State<TripsHomeTab> {
                     ),
                     const SizedBox(width: 5),
                     Text(
-                      isFiltered ? 'Filter • $filterCount' : 'Filter',
+                      isFiltered ? '${l10n.tripsTabFilter} • $filterCount' : l10n.tripsTabFilter,
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
@@ -485,7 +487,7 @@ class _TripsHomeTabState extends State<TripsHomeTab> {
   }
 
   /// Search Textfield
-  Widget _buildSearchBar(bool isDark) {
+  Widget _buildSearchBar(bool isDark, AppLocalizations l10n) {
     return Container(
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF0F1418) : Colors.white,
@@ -509,7 +511,7 @@ class _TripsHomeTabState extends State<TripsHomeTab> {
             size: 18,
             color: isDark ? AppColors.darkTextMuted : const Color(0xFF94A3B8),
           ),
-          hintText: 'Search by trip name or destination...',
+          hintText: l10n.tripsTabSearchHint,
           hintStyle: TextStyle(
             fontSize: 13,
             color: isDark ? AppColors.darkTextMuted : const Color(0xFF94A3B8),
@@ -533,7 +535,7 @@ class _TripsHomeTabState extends State<TripsHomeTab> {
   }
 
   /// Filtered Empty State
-  Widget _buildFilteredEmptyState(bool isDark) {
+  Widget _buildFilteredEmptyState(bool isDark, AppLocalizations l10n) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 36.0, horizontal: 16.0),
       alignment: Alignment.center,
@@ -546,7 +548,7 @@ class _TripsHomeTabState extends State<TripsHomeTab> {
           ),
           const SizedBox(height: 12),
           Text(
-            'No trips match your filters',
+            l10n.translate('search_empty_title'),
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w700,
@@ -555,7 +557,7 @@ class _TripsHomeTabState extends State<TripsHomeTab> {
           ),
           const SizedBox(height: 6),
           Text(
-            'Try adjusting your filter or search criteria.',
+            l10n.translate('search_empty_desc'),
             style: TextStyle(
               fontSize: 13,
               color: isDark ? AppColors.darkTextSecondary : const Color(0xFF64748B),
@@ -572,7 +574,7 @@ class _TripsHomeTabState extends State<TripsHomeTab> {
               });
             },
             child: Text(
-              'Clear Filters',
+              l10n.tripFilterClear,
               style: TextStyle(
                 fontWeight: FontWeight.w700,
                 color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
@@ -585,7 +587,7 @@ class _TripsHomeTabState extends State<TripsHomeTab> {
   }
 
   /// Empty History State
-  Widget _buildEmptyHistoryState(bool isDark) {
+  Widget _buildEmptyHistoryState(bool isDark, AppLocalizations l10n) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 32.0, horizontal: 16.0),
       alignment: Alignment.center,
@@ -603,7 +605,7 @@ class _TripsHomeTabState extends State<TripsHomeTab> {
           ),
           const SizedBox(height: 14),
           Text(
-            'No completed trips yet',
+            l10n.tripsTabNoCompletedTitle,
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w700,
@@ -612,7 +614,7 @@ class _TripsHomeTabState extends State<TripsHomeTab> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Your finished trips will appear here.',
+            l10n.tripsTabNoCompletedSub,
             style: TextStyle(
               fontSize: 13,
               color: isDark ? AppColors.darkTextSecondary : const Color(0xFF64748B),

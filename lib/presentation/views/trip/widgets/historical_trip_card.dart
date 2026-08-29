@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/localization/app_localizations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/utils/date_formatter.dart';
@@ -23,6 +24,7 @@ class HistoricalTripCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = context.l10n;
     final dateRangeText = DateFormatter.formatTripHistoricalRange(
       trip.startedAt,
       trip.completedAt,
@@ -108,8 +110,8 @@ class HistoricalTripCard extends StatelessWidget {
                         ),
                         child: Text(
                           trip.lifecycleState == TripLifecycle.completedWithPendingChanges
-                              ? 'Pending Sync'
-                              : 'Completed',
+                              ? l10n.tripCardPendingSyncBadge
+                              : l10n.tripCardCompletedBadge,
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
@@ -139,7 +141,9 @@ class HistoricalTripCard extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        '${trip.members.length} ${trip.members.length == 1 ? 'member' : 'members'}',
+                        trip.members.length == 1
+                            ? l10n.tripCardMemberSingle
+                            : l10n.tripCardMemberPlural(trip.members.length),
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w500,

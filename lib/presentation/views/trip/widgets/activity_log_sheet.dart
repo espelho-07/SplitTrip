@@ -1,14 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../../../core/localization/app_localizations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/utils/haptic_feedback_helper.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/surface_card.dart';
 import '../../../../domain/models/activity_log.dart';
 
-class ActivityLogSheet extends StatelessWidget {
+enum ActivityFilter {
+  all,
+  expenses,
+  settlements,
+  members,
+  status,
+}
+
+class ActivityLogSheet extends StatefulWidget {
   final List<ActivityLog> logs;
   final bool isLoading;
   final VoidCallback? onRefresh;
@@ -21,12 +31,62 @@ class ActivityLogSheet extends StatelessWidget {
   });
 
   @override
+  State<ActivityLogSheet> createState() => _ActivityLogSheetState();
+}
+
+class _ActivityLogSheetState extends State<ActivityLogSheet> {
+  ActivityFilter _selectedFilter = ActivityFilter.all;
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
+  bool _isSearchVisible = false;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  bool _matchesFilter(ActivityLog log, ActivityFilter filter) {
+    switch (filter) {
+      case ActivityFilter.all:
+        return true;
+      case ActivityFilter.expenses:
+        return log.type.startsWith('expense');
+      case ActivityFilter.settlements:
+        return log.type.startsWith('settlement');
+      case ActivityFilter.members:
+        return log.type.startsWith('member');
+      case ActivityFilter.status:
+        return log.type == 'trip_created' || log.type == 'lifecycle_updated';
+    }
+  }
+
+  int _countForFilter(ActivityFilter filter) {
+    if (filter == ActivityFilter.all) return widget.logs.length;
+    return widget.logs.where((l) => _matchesFilter(l, filter)).length;
+  }
+
+  List<ActivityLog> get _filteredLogs {
+    return widget.logs.where((log) {
+      if (!_matchesFilter(log, _selectedFilter)) return false;
+      if (_searchQuery.trim().isEmpty) return true;
+      final q = _searchQuery.toLowerCase();
+      final desc = log.description.toLowerCase();
+      final actor = log.actorName.toLowerCase();
+      final type = log.type.toLowerCase();
+      return desc.contains(q) || actor.contains(q) || type.contains(q);
+    }).toList();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = context.l10n;
+    final filtered = _filteredLogs;
 
     return Container(
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.8,
+        maxHeight: MediaQuery.of(context).size.height * 0.85,
       ),
       padding: AppSpacing.bottomSheetPadding,
       decoration: BoxDecoration(
@@ -57,64 +117,187 @@ class ActivityLogSheet extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Trip Activity', style: AppTypography.titleLarge(isDark: isDark)),
-                    Text('Everything that happened in this trip', style: AppTypography.bodySmall(isDark: isDark)),
+                    Text(l10n.activityLogTitle, style: AppTypography.titleLarge(isDark: isDark)),
+                    Text(l10n.activityLogSub, style: AppTypography.bodySmall(isDark: isDark)),
                   ],
                 ),
               ),
-              if (onRefresh != null)
+              IconButton(
+                icon: Icon(
+                  _isSearchVisible ? Icons.search_off_rounded : Icons.search_rounded,
+                  size: 20,
+                  color: _isSearchVisible ? AppColors.emeraldPrimary : null,
+                ),
+                tooltip: 'Search logs',
+                onPressed: () {
+                  HapticHelper.selection();
+                  setState(() {
+                    _isSearchVisible = !_isSearchVisible;
+                    if (!_isSearchVisible) {
+                      _searchQuery = '';
+                      _searchController.clear();
+                    }
+                  });
+                },
+              ),
+              if (widget.onRefresh != null)
                 IconButton(
                   icon: const Icon(Icons.refresh_rounded, size: 20),
-                  onPressed: onRefresh,
+                  onPressed: widget.onRefresh,
                 ),
             ],
           ),
 
-          const SizedBox(height: AppSpacing.md),
-          const Divider(),
+          if (_isSearchVisible) ...[
+            const SizedBox(height: AppSpacing.sm),
+            TextField(
+              controller: _searchController,
+              autofocus: true,
+              style: TextStyle(
+                fontSize: 13,
+                color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+              ),
+              decoration: InputDecoration(
+                hintText: 'Search by description or name...',
+                prefixIcon: const Icon(Icons.search_rounded, size: 18),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear_rounded, size: 16),
+                        onPressed: () {
+                          setState(() {
+                            _searchQuery = '';
+                            _searchController.clear();
+                          });
+                        },
+                      )
+                    : null,
+                isDense: true,
+                filled: true,
+                fillColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+              onChanged: (val) {
+                setState(() => _searchQuery = val);
+              },
+            ),
+          ],
+
           const SizedBox(height: AppSpacing.sm),
+
+          // Filter Pills Row
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            child: Row(
+              children: [
+                _buildFilterChip(
+                  filter: ActivityFilter.all,
+                  label: l10n.activityFilterAll,
+                  icon: Icons.view_agenda_outlined,
+                  count: _countForFilter(ActivityFilter.all),
+                  isDark: isDark,
+                ),
+                const SizedBox(width: 8),
+                _buildFilterChip(
+                  filter: ActivityFilter.expenses,
+                  label: l10n.activityFilterExpenses,
+                  icon: Icons.receipt_long_outlined,
+                  count: _countForFilter(ActivityFilter.expenses),
+                  isDark: isDark,
+                ),
+                const SizedBox(width: 8),
+                _buildFilterChip(
+                  filter: ActivityFilter.settlements,
+                  label: l10n.activityFilterSettlements,
+                  icon: Icons.handshake_outlined,
+                  count: _countForFilter(ActivityFilter.settlements),
+                  isDark: isDark,
+                ),
+                const SizedBox(width: 8),
+                _buildFilterChip(
+                  filter: ActivityFilter.members,
+                  label: l10n.activityFilterMembers,
+                  icon: Icons.group_outlined,
+                  count: _countForFilter(ActivityFilter.members),
+                  isDark: isDark,
+                ),
+                const SizedBox(width: 8),
+                _buildFilterChip(
+                  filter: ActivityFilter.status,
+                  label: l10n.activityFilterStatus,
+                  icon: Icons.flag_outlined,
+                  count: _countForFilter(ActivityFilter.status),
+                  isDark: isDark,
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: AppSpacing.sm),
+          const Divider(),
+          const SizedBox(height: AppSpacing.xs),
 
           // Content
           Expanded(
-            child: isLoading
+            child: widget.isLoading
                 ? const Center(child: CircularProgressIndicator.adaptive())
-                : logs.isEmpty
+                : filtered.isEmpty
                     ? Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
                               Icons.receipt_long_outlined,
-                              size: 48,
+                              size: 44,
                               color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
                             ),
                             const SizedBox(height: 12),
                             Text(
-                              'No activity logs yet',
+                              l10n.activityEmptyTitle,
                               style: AppTypography.titleMedium(isDark: isDark),
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Trip creation, expenses, edits, and settlements will appear here.',
+                              l10n.activityEmptySub,
                               textAlign: TextAlign.center,
                               style: AppTypography.bodySmall(isDark: isDark),
                             ),
+                            if (_selectedFilter != ActivityFilter.all || _searchQuery.isNotEmpty) ...[
+                              const SizedBox(height: 12),
+                              TextButton.icon(
+                                onPressed: () {
+                                  HapticHelper.light();
+                                  setState(() {
+                                    _selectedFilter = ActivityFilter.all;
+                                    _searchQuery = '';
+                                    _searchController.clear();
+                                  });
+                                },
+                                icon: const Icon(Icons.clear_all_rounded, size: 18),
+                                label: Text('${l10n.activityFilterAll} (Show All)'),
+                              ),
+                            ],
                           ],
                         ),
                       )
                     : ListView.separated(
-                        itemCount: logs.length,
+                        itemCount: filtered.length,
+                        physics: const BouncingScrollPhysics(),
                         separatorBuilder: (context, index) => const SizedBox(height: 10),
                         itemBuilder: (context, index) {
-                          final log = logs[index];
-                          return _buildLogItem(context, log, isDark);
+                          final log = filtered[index];
+                          return _buildLogItem(context, log, isDark, l10n);
                         },
                       ),
           ),
 
           const SizedBox(height: AppSpacing.md),
           AppButton(
-            text: 'Close',
+            text: l10n.actionCancel,
             variant: AppButtonVariant.secondary,
             isFullWidth: true,
             onPressed: () => Navigator.pop(context),
@@ -124,13 +307,92 @@ class ActivityLogSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildLogItem(BuildContext context, ActivityLog log, bool isDark) {
+  Widget _buildFilterChip({
+    required ActivityFilter filter,
+    required String label,
+    required IconData icon,
+    required int count,
+    required bool isDark,
+  }) {
+    final isSelected = _selectedFilter == filter;
+
+    return InkWell(
+      onTap: () {
+        HapticHelper.selection();
+        setState(() => _selectedFilter = filter);
+      },
+      borderRadius: BorderRadius.circular(20),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.emeraldPrimary
+              : (isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected
+                ? AppColors.emeraldPrimary
+                : (isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle),
+            width: 1.2,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: isSelected
+                  ? Colors.white
+                  : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected
+                    ? Colors.white
+                    : (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
+              ),
+            ),
+            if (count > 0) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? Colors.white.withValues(alpha: 0.25)
+                      : (isDark ? Colors.white12 : Colors.black12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  count.toString(),
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: isSelected
+                        ? Colors.white
+                        : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLogItem(BuildContext context, ActivityLog log, bool isDark, AppLocalizations l10n) {
     final iconData = _getIconForType(log.type);
     final color = _getColorForType(log.type, isDark);
     final formattedTime = _formatRelativeTime(log.createdAt);
 
     return InkWell(
-      onTap: () => _showActivityDetailSheet(context, log, isDark),
+      onTap: () => _showActivityDetailSheet(context, log, isDark, l10n),
       borderRadius: AppRadius.mdBorder,
       child: SurfaceCard(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -186,7 +448,7 @@ class ActivityLogSheet extends StatelessWidget {
                       ),
                       const Spacer(),
                       Text(
-                        'Details ›',
+                        l10n.activityDetailsBtn,
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
@@ -204,7 +466,7 @@ class ActivityLogSheet extends StatelessWidget {
     );
   }
 
-  void _showActivityDetailSheet(BuildContext context, ActivityLog log, bool isDark) {
+  void _showActivityDetailSheet(BuildContext context, ActivityLog log, bool isDark, AppLocalizations l10n) {
     final iconData = _getIconForType(log.type);
     final color = _getColorForType(log.type, isDark);
     final exactTime = DateFormat('EEEE, MMMM d, yyyy · h:mm:ss a').format(log.createdAt.toLocal());
@@ -308,7 +570,7 @@ class ActivityLogSheet extends StatelessWidget {
               // Structured Key-Value Details
               _buildDetailRow(
                 icon: Icons.person_outline_rounded,
-                label: 'Performed by',
+                label: l10n.activityPerformedBy,
                 value: log.actorName.isNotEmpty ? log.actorName : 'Trip Member',
                 isDark: isDark,
               ),
@@ -316,7 +578,7 @@ class ActivityLogSheet extends StatelessWidget {
 
               _buildDetailRow(
                 icon: Icons.access_time_rounded,
-                label: 'Timestamp',
+                label: l10n.activityTimestamp,
                 value: exactTime,
                 subtitle: relativeTime,
                 isDark: isDark,
@@ -326,7 +588,7 @@ class ActivityLogSheet extends StatelessWidget {
               if (log.metadata.containsKey('amountInPaise'))
                 _buildDetailRow(
                   icon: Icons.currency_rupee_rounded,
-                  label: 'Amount Involved',
+                  label: l10n.activityAmountInvolved,
                   value: '₹${((log.metadata['amountInPaise'] as int) / 100).toStringAsFixed(2)}',
                   isDark: isDark,
                   valueColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
@@ -345,7 +607,7 @@ class ActivityLogSheet extends StatelessWidget {
               const SizedBox(height: 24),
 
               AppButton(
-                text: 'Done',
+                text: l10n.activityDoneBtn,
                 variant: AppButtonVariant.primary,
                 isFullWidth: true,
                 onPressed: () => Navigator.pop(ctx),

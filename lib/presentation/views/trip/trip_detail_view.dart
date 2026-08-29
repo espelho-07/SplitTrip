@@ -536,7 +536,7 @@ class _TripDetailViewState extends State<TripDetailView> {
               const SizedBox(height: AppSpacing.md),
 
               // Contextual Lifecycle Action Bar
-              _buildLifecycleActionBar(trip, isCreator, isDark),
+              _buildLifecycleActionBar(trip, isCreator, isDark, l10n),
 
               const SizedBox(height: AppSpacing.lg),
 
@@ -823,7 +823,7 @@ class _TripDetailViewState extends State<TripDetailView> {
     );
   }
 
-  Widget _buildLifecycleActionBar(Trip trip, bool isCreator, bool isDark) {
+  Widget _buildLifecycleActionBar(Trip trip, bool isCreator, bool isDark, AppLocalizations l10n) {
     if (trip.lifecycleState == TripLifecycle.active) {
       if (isCreator) {
         return SurfaceCard(
@@ -834,13 +834,13 @@ class _TripDetailViewState extends State<TripDetailView> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Trip is active. You can add expenses and invite members.',
+                  l10n.tripDetailActiveBanner,
                   style: AppTypography.bodySmall(isDark: isDark),
                 ),
               ),
               const SizedBox(width: 8),
               AppButton(
-                text: 'Complete',
+                text: l10n.tripDetailCompleteBtn,
                 height: 38,
                 variant: AppButtonVariant.outline,
                 onPressed: _showCompleteTripConfirmation,
@@ -879,8 +879,8 @@ class _TripDetailViewState extends State<TripDetailView> {
                 Expanded(
                   child: Text(
                     pendingCount > 0
-                        ? '$pendingCount change${pendingCount == 1 ? '' : 's'} waiting to sync'
-                        : 'Finishing trip sync',
+                        ? l10n.tripDetailChangesSyncing(pendingCount)
+                        : l10n.tripDetailFinishingSync,
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
                       color: isDark ? Colors.white : AppColors.amberAccent,
@@ -892,12 +892,12 @@ class _TripDetailViewState extends State<TripDetailView> {
             ),
             const SizedBox(height: 6),
             Text(
-              'Your trip will finish and be marked completed automatically once offline changes reach the server.',
+              l10n.tripDetailSyncPendingDesc,
               style: AppTypography.bodySmall(isDark: isDark),
             ),
             const SizedBox(height: 12),
             AppButton(
-              text: 'View Settlements',
+              text: l10n.tripDetailViewSettlements,
               icon: Icons.payments_outlined,
               isFullWidth: true,
               height: 44,
@@ -926,7 +926,7 @@ class _TripDetailViewState extends State<TripDetailView> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Trip Completed — Settlements Ready',
+                    l10n.tripDetailCompletedTitle,
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
                       color: isDark ? Colors.white : AppColors.indigoAccent,
@@ -938,12 +938,12 @@ class _TripDetailViewState extends State<TripDetailView> {
             ),
             const SizedBox(height: 6),
             Text(
-              'Normal expense entry is locked. View simplified transactions to settle up between friends.',
+              l10n.tripDetailSettledDesc,
               style: AppTypography.bodySmall(isDark: isDark),
             ),
             const SizedBox(height: 12),
             AppButton(
-              text: 'Settle Up Now',
+              text: l10n.tripDetailSettleNowBtn,
               icon: Icons.payments_outlined,
               isFullWidth: true,
               height: 44,

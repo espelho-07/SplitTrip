@@ -1,8 +1,20 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'translations/as.dart';
+import 'translations/bn.dart';
 import 'translations/en.dart';
 import 'translations/gu.dart';
 import 'translations/hi.dart';
+import 'translations/ja.dart';
+import 'translations/kn.dart';
+import 'translations/ko.dart';
+import 'translations/ml.dart';
+import 'translations/mr.dart';
+import 'translations/or.dart';
+import 'translations/pa.dart';
+import 'translations/ta.dart';
+import 'translations/te.dart';
+import 'translations/zh.dart';
 
 /// Centralized localization service for Kith.
 class AppLocalizations {
@@ -16,6 +28,42 @@ class AppLocalizations {
         break;
       case 'gu':
         _localizedStrings = guTranslations;
+        break;
+      case 'mr':
+        _localizedStrings = mrTranslations;
+        break;
+      case 'ta':
+        _localizedStrings = taTranslations;
+        break;
+      case 'te':
+        _localizedStrings = teTranslations;
+        break;
+      case 'kn':
+        _localizedStrings = knTranslations;
+        break;
+      case 'bn':
+        _localizedStrings = bnTranslations;
+        break;
+      case 'pa':
+        _localizedStrings = paTranslations;
+        break;
+      case 'as':
+        _localizedStrings = asTranslations;
+        break;
+      case 'or':
+        _localizedStrings = orTranslations;
+        break;
+      case 'ml':
+        _localizedStrings = mlTranslations;
+        break;
+      case 'zh':
+        _localizedStrings = zhTranslations;
+        break;
+      case 'ja':
+        _localizedStrings = jaTranslations;
+        break;
+      case 'ko':
+        _localizedStrings = koTranslations;
         break;
       case 'en':
       default:
@@ -420,7 +468,6 @@ class AppLocalizations {
   String get authSignOutSuccess => translate('profile_sign_out_success');
   String get authCloudSync => translate('profile_sec_cloud');
   String get statusPending => translate('cloud_status_pending');
-  String get settingsTitle => translate('cloud_title');
   String get profileLocalData => translate('profile_device_only');
   String get profileConnectGoogle => translate('profile_google_signin');
   String get profileConnectNirniq => translate('profile_nirniq_signin');
@@ -800,6 +847,374 @@ class AppLocalizations {
   String get paymentsSaveBtn => translate('payments_save_btn');
   String get paymentsBankTitle => translate('payments_bank_title');
   String get paymentsBankVerified => translate('payments_bank_verified');
+
+  // Redesigned Trip Creation Getters
+  String get createTripAppbarTitle => translate('create_trip_appbar_title');
+  String get createTripHeroPreview => translate('create_trip_hero_preview');
+  String get createTripQuickIdeas => translate('create_trip_quick_ideas');
+  String get createTripQuickIdeasSub => translate('create_trip_quick_ideas_sub');
+  String get createTripChooseTheme => translate('create_trip_choose_theme');
+  String get createTripChooseThemeSub => translate('create_trip_choose_theme_sub');
+  String get createTripExpMode => translate('create_trip_exp_mode');
+  String get createTripExpModeSub => translate('create_trip_exp_mode_sub');
+  String get createTripModeFullTitle => translate('create_trip_mode_full_title');
+  String get createTripModeFullDesc => translate('create_trip_mode_full_desc');
+  String get createTripModeSplitTitle => translate('create_trip_mode_split_title');
+  String get createTripModeSplitDesc => translate('create_trip_mode_split_desc');
+  String get createTripBaseCurrency => translate('create_trip_base_currency');
+  String get createTripCrewTitle => translate('create_trip_crew_title');
+  String get createTripCrewCreator => translate('create_trip_crew_creator');
+  String get createTripAddFriendManual => translate('create_trip_add_friend_manual');
+  String get createTripAddFriendBtn => translate('create_trip_add_friend_btn');
+  String get createTripQrHint => translate('create_trip_qr_hint');
+  String get createTripSubmitBtn => translate('create_trip_submit_btn');
+
+  // Trips Tab, Cards & Filters Getters
+  String get tripFilterTitle => translate('trip_filter_title');
+  String get tripFilterClear => translate('trip_filter_clear');
+  String get tripFilterStatusHeader => translate('trip_filter_status_header');
+  String get tripFilterStatusAll => translate('trip_filter_status_all');
+  String get tripFilterStatusActive => translate('trip_filter_status_active');
+  String get tripFilterStatusCompleted => translate('trip_filter_status_completed');
+  String get tripFilterDateHeader => translate('trip_filter_date_header');
+  String get tripFilterDateAllTime => translate('trip_filter_date_all_time');
+  String get tripFilterDateThisMonth => translate('trip_filter_date_this_month');
+  String get tripFilterDateLast3Months => translate('trip_filter_date_last_3_months');
+  String get tripFilterDateThisYear => translate('trip_filter_date_this_year');
+  String get tripFilterSortHeader => translate('trip_filter_sort_header');
+  String get tripFilterSortNewest => translate('trip_filter_sort_newest');
+  String get tripFilterSortOldest => translate('trip_filter_sort_oldest');
+  String get tripFilterSortHighest => translate('trip_filter_sort_highest');
+  String get tripFilterSortLowest => translate('trip_filter_sort_lowest');
+  String get tripFilterCancelBtn => translate('trip_filter_cancel_btn');
+  String get tripFilterApplyBtn => translate('trip_filter_apply_btn');
+  String tripFilterApplyCount(int count) => translate('trip_filter_apply_count').replaceAll('{count}', count.toString());
+  String get tripCardOngoing => translate('trip_card_ongoing');
+  String get tripCardSyncing => translate('trip_card_syncing');
+  String get tripCardNoExpenses => translate('trip_card_no_expenses');
+  String get tripCardPersonSingle => translate('trip_card_person_single');
+  String tripCardPersonPlural(int count) => translate('trip_card_person_plural').replaceAll('{count}', count.toString());
+  String get tripCardMemberSingle => translate('trip_card_member_single');
+  String tripCardMemberPlural(int count) => translate('trip_card_member_plural').replaceAll('{count}', count.toString());
+  String tripCardGetBack(String amount) => translate('trip_card_get_back').replaceAll('{amount}', amount);
+  String tripCardYouOwe(String amount) => translate('trip_card_you_owe').replaceAll('{amount}', amount);
+  String get tripCardAllSettled => translate('trip_card_all_settled');
+  String get tripCardOpenTrip => translate('trip_card_open_trip');
+  String get tripCardCompletedBadge => translate('trip_card_completed_badge');
+  String get tripCardPendingSyncBadge => translate('trip_card_pending_sync_badge');
+  String get tripsTabCurrentTrip => translate('trips_tab_current_trip');
+  String get tripsTabAllTrips => translate('trips_tab_all_trips');
+  String get tripsTabNoActiveTitle => translate('trips_tab_no_active_title');
+  String get tripsTabNoActiveSub => translate('trips_tab_no_active_sub');
+  String get tripsTabNoCompletedTitle => translate('trips_tab_no_completed_title');
+  String get tripsTabNoCompletedSub => translate('trips_tab_no_completed_sub');
+  String get tripsTabSearchHint => translate('trips_tab_search_hint');
+  String get tripsTabFilter => translate('trips_tab_filter');
+
+  // Trip QR Sheet Getters
+  String tripQrJoinTitle(String tripName) => translate('trip_qr_join_title').replaceAll('{tripName}', tripName);
+  String get tripQrScanSub => translate('trip_qr_scan_sub');
+  String get tripQrCodeLabel => translate('trip_qr_code_label');
+  String tripQrCopiedToast(String code) => translate('trip_qr_copied_toast').replaceAll('{code}', code);
+  String get tripQrDoneBtn => translate('trip_qr_done_btn');
+
+  // Settlement & Role Getters
+  String get settlementTitle => translate('settlement_title');
+  String get settlementMarkReceivedBtn => translate('settlement_mark_received_btn');
+  String settlementPayPersonBtn(String name) => translate('settlement_pay_person_btn').replaceAll('{name}', name);
+  String get settlementRecordPaymentBtn => translate('settlement_record_payment_btn');
+  String get settlementConfirmReceivedTitle => translate('settlement_confirm_received_title');
+  String settlementConfirmReceivedBody(String amount, String name) => translate('settlement_confirm_received_body').replaceAll('{amount}', amount).replaceAll('{name}', name);
+  String get settlementAmountToClear => translate('settlement_amount_to_clear');
+  String get settlementShareMyUpi => translate('settlement_share_my_upi');
+  String get settlementYesReceived => translate('settlement_yes_received');
+  String settlementUpiCopiedToast(String upiId) => translate('settlement_upi_copied_toast').replaceAll('{upiId}', upiId);
+  String get settlementPaysLabel => translate('settlement_pays_label');
+  String get settlementReceivesLabel => translate('settlement_receives_label');
+  String get settlementRecordDialogTitle => translate('settlement_record_dialog_title');
+  String settlementRecordDialogBody(String fromName, String amount, String toName) => translate('settlement_record_dialog_body').replaceAll('{fromName}', fromName).replaceAll('{amount}', amount).replaceAll('{toName}', toName);
+  String settlementUpiReadyTag(String upiId) => translate('settlement_upi_ready_tag').replaceAll('{upiId}', upiId);
+  String get settlementSubtitle => translate('settlement_subtitle');
+  String get settlementEmptyTitle => translate('settlement_empty_title');
+  String get settlementEmptyDesc => translate('settlement_empty_desc');
+  String get settlementSettledBadge => translate('settlement_settled_badge');
+  String get settlementMarkAllDone => translate('settlement_mark_all_done');
+  String get settlementDirectMember => translate('settlement_direct_member');
+  String get settlementYouOwed => translate('settlement_you_owed');
+
+  // Nirniq Profile Getters
+  String get profileEditTitle => translate('profile_edit_title');
+  String get profileEditSubtitle => translate('profile_edit_subtitle');
+  String get profileAvatarSelector => translate('profile_avatar_selector');
+  String get profileNameLabel => translate('profile_name_label');
+  String get profileNameHint => translate('profile_name_hint');
+  String get profilePhoneLabel => translate('profile_phone_label');
+  String get profilePhoneHint => translate('profile_phone_hint');
+  String get profilePhoneSub => translate('profile_phone_sub');
+  String get profileEmailLabel => translate('profile_email_label');
+  String get profileEmailHint => translate('profile_email_hint');
+  String get profileUpiLabel => translate('profile_upi_label');
+  String get profileUpiHint => translate('profile_upi_hint');
+  String get profileUpiSub => translate('profile_upi_sub');
+  String get profileBioLabel => translate('profile_bio_label');
+  String get profileBioHint => translate('profile_bio_hint');
+  String get profileSaveBtn => translate('profile_save_btn');
+  String get profileSavedToast => translate('profile_saved_toast');
+  String get profileErrUpi => translate('profile_err_upi');
+  String get profileErrSave => translate('profile_err_save');
+  String get profileMenuNirniqIdentity => translate('profile_menu_nirniq_identity');
+  String get profileMenuNirniqIdentitySub => translate('profile_menu_nirniq_identity_sub');
+  String get profileEditAvatarTooltip => translate('profile_edit_avatar_tooltip');
+  String get profileEditPillBtn => translate('profile_edit_pill_btn');
+  String get profilePresetLabel => translate('profile_preset_label');
+  String get profileVerifiedIdentity => translate('profile_verified_identity');
+  String get profileGuestLocal => translate('profile_guest_local');
+  String get profileConnectedCloud => translate('profile_connected_cloud');
+  String get profileLocalOnlyDesc => translate('profile_local_only_desc');
+  String get profilePersonalDetails => translate('profile_personal_details');
+  String get profilePaymentSection => translate('profile_payment_section');
+
+  // Beta Feedback Getters
+  String feedbackDirectCreator(String email) => translate('feedback_direct_creator').replaceAll('{email}', email);
+  String get feedbackHint => translate('feedback_hint');
+  String get feedbackSaveDraft => translate('feedback_save_draft');
+  String get feedbackSendEmail => translate('feedback_send_email');
+  String get feedbackSentTitle => translate('feedback_sent_title');
+  String feedbackSentDesc(String email) => translate('feedback_sent_desc').replaceAll('{email}', email);
+  String get feedbackCatBug => translate('feedback_cat_bug');
+  String get feedbackCatSuggestion => translate('feedback_cat_suggestion');
+  String get feedbackCatConfusing => translate('feedback_cat_confusing');
+  String get feedbackCatPerformance => translate('feedback_cat_performance');
+  String get feedbackCatOther => translate('feedback_cat_other');
+  String get feedbackTitle => translate('feedback_title');
+  String get feedbackCatPerf => translate('feedback_cat_performance');
+  String get tripsTabNoActiveDesc => translate('trips_tab_no_active_sub');
+  String get navJoin => translate('trips_join');
+
+  // Trip Completion & Verification Getters
+  String get tripCompTitle => translate('trip_comp_title');
+  String get tripCompPreparing => translate('trip_comp_preparing');
+  String get tripCompCheckingConnectivity => translate('trip_comp_checking_connectivity');
+  String get tripCompFlushingLocal => translate('trip_comp_flushing_local');
+  String get tripCompQueryingState => translate('trip_comp_querying_state');
+  String get tripCompCheckingParticipants => translate('trip_comp_checking_participants');
+  String get tripCompReadyTitle => translate('trip_comp_ready_title');
+  String get tripCompReadyDesc => translate('trip_comp_ready_desc');
+  String get tripCompPendingTitle => translate('trip_comp_pending_title');
+  String get tripCompPendingDesc => translate('trip_comp_pending_desc');
+  String get tripCompMarkAnywayBtn => translate('trip_comp_mark_anyway_btn');
+  String get tripCompKeepOpenBtn => translate('trip_comp_keep_open_btn');
+  String get tripCompDialogTitle => translate('trip_comp_dialog_title');
+  String get tripCompDialogDesc => translate('trip_comp_dialog_desc');
+  String get tripCompDialogCancel => translate('trip_comp_dialog_cancel');
+  String get tripCompDialogConfirm => translate('trip_comp_dialog_confirm');
+  String get tripCompOfflineTitle => translate('trip_comp_offline_title');
+  String get tripCompOfflineDesc => translate('trip_comp_offline_desc');
+  String get tripCompSyncSub => translate('trip_comp_sync_sub');
+  String get tripCompParticipantHeader => translate('trip_comp_participant_header');
+  String get tripCompHostTag => translate('trip_comp_host_tag');
+  String get tripCompStatusOnline => translate('trip_comp_status_online');
+  String tripCompLastSync(String time) => translate('trip_comp_last_sync').replaceAll('{time}', time);
+  String get tripCompStatusSynced => translate('trip_comp_status_synced');
+  String get tripCompStatusSyncing => translate('trip_comp_status_syncing');
+  String get tripCompStatusOffline => translate('trip_comp_status_offline');
+  String get tripCompPleaseWait => translate('trip_comp_please_wait');
+
+  // Update System Getters
+  String get versionUpdateAvailableTitle => translate('version_update_available_title');
+  String get versionUpdateAvailableDesc => translate('version_update_available_desc');
+  String get versionUpdateBtn => translate('version_update_btn');
+  String get versionLaterBtn => translate('version_later_btn');
+  String get versionUpdateRequiredTitle => translate('version_update_required_title');
+  String get versionUpdateRequiredDesc => translate('version_update_required_desc');
+  String get versionUpdateKithBtn => translate('version_update_kith_btn');
+
+  // Expense View Getters
+  String get expenseAmountAndTitle => translate('expense_amount_and_title');
+  String get expenseCategoryHeader => translate('expense_category_header');
+  String get expensePaidByHeader => translate('expense_paid_by_header');
+  String get expenseSplitOptionHeader => translate('expense_split_option_header');
+  String get expenseUpdateBtn => translate('expense_update_btn');
+  String get expenseScanBill => translate('expense_scan_bill');
+  String get expenseVoiceAdd => translate('expense_voice_add');
+  String get expenseTabTitle => translate('expense_tab_title');
+  String get expenseSelectTripTitle => translate('expense_select_trip_title');
+  String get expenseChooseTripHint => translate('expense_choose_trip_hint');
+
+  // Navigation Getters
+  String get navHome => translate('nav_home');
+  String get navTrips => translate('nav_trips');
+  String get navPersonal => translate('nav_personal');
+
+  // Dashboard Tab Getters
+  String dashGreeting(String name) => translate('dash_greeting').replaceAll('{name}', name);
+  String get dashGreetingSub => translate('dash_greeting_sub');
+  String get dashPaymentSetupTitle => translate('dash_payment_setup_title');
+  String get dashPaymentSetupSub => translate('dash_payment_setup_sub');
+  String get dashPaymentSetupBtn => translate('dash_payment_setup_btn');
+  String get dashMyBalances => translate('dash_my_balances');
+  String get dashYouAreOwed => translate('dash_you_are_owed');
+  String get dashYouOwe => translate('dash_you_owe');
+  String get dashAllSettled => translate('dash_all_settled');
+  String get dashSettleUp => translate('dash_settle_up');
+  String get dashQuickActions => translate('dash_quick_actions');
+  String get dashActionAddExpense => translate('dash_action_add_expense');
+  String get dashActionAddTrip => translate('dash_action_add_trip');
+  String get dashActionScanReceipt => translate('dash_action_scan_receipt');
+  String get dashActionJoinScanner => translate('dash_action_join_scanner');
+  String get dashNoActiveTrips => translate('dash_no_active_trips');
+  String get dashCreateTripPrompt => translate('dash_create_trip_prompt');
+  String get dashCreateBtn => translate('dash_create_btn');
+  String get dashSelectActiveTrip => translate('dash_select_active_trip');
+  String get dashSelectTripSub => translate('dash_select_trip_sub');
+  String get dashLogPersonalExpense => translate('dash_log_personal_expense');
+
+  // Trip Detail Lifecycle Getters
+  String get tripDetailActiveBanner => translate('trip_detail_active_banner');
+  String get tripDetailCompleteBtn => translate('trip_detail_complete_btn');
+  String get tripDetailFinishingSync => translate('trip_detail_finishing_sync');
+  String tripDetailChangesSyncing(int count) => translate('trip_detail_changes_syncing').replaceAll('{count}', count.toString());
+  String get tripDetailSyncPendingDesc => translate('trip_detail_sync_pending_desc');
+  String get tripDetailViewSettlements => translate('trip_detail_view_settlements');
+  String get tripDetailCompletedTitle => translate('trip_detail_completed_title');
+  String get tripDetailSettledDesc => translate('trip_detail_settled_desc');
+  String get tripDetailSettleNowBtn => translate('trip_detail_settle_now_btn');
+
+  // Settings View Getters
+  String get settingsTitle => translate('settings_title');
+  String get settingsSecGeneral => translate('settings_sec_general');
+  String get settingsAppExpMode => translate('settings_app_exp_mode');
+  String get settingsAppExpModeSub => translate('settings_app_exp_mode_sub');
+  String get settingsExpTripsOnly => translate('settings_exp_trips_only');
+  String get settingsExpFull => translate('settings_exp_full');
+  String get settingsPaymentMethods => translate('settings_payment_methods');
+  String get settingsPaymentMethodsSub => translate('settings_payment_methods_sub');
+  String get settingsNotifications => translate('settings_notifications');
+  String get settingsNotificationsSub => translate('settings_notifications_sub');
+  String get settingsBaseCurrency => translate('settings_base_currency');
+  String settingsBaseCurrencySub(String code) => translate('settings_base_currency_sub').replaceAll('{code}', code);
+  String get settingsLanguage => translate('settings_language');
+  String get settingsDateFormat => translate('settings_date_format');
+  String settingsDateFormatSub(String format) => translate('settings_date_format_sub').replaceAll('{format}', format);
+  String get settingsSecSecurity => translate('settings_sec_security');
+  String get settingsRecoveryKey => translate('settings_recovery_key');
+  String get settingsRecoveryKeySub => translate('settings_recovery_key_sub');
+  String get settingsAppLock => translate('settings_app_lock');
+  String get settingsAppLockOn => translate('settings_app_lock_on');
+  String get settingsAppLockOff => translate('settings_app_lock_off');
+  String get settingsBiometrics => translate('settings_biometrics');
+  String get settingsBiometricsOn => translate('settings_biometrics_on');
+  String get settingsBiometricsOff => translate('settings_biometrics_off');
+  String get settingsChangePin => translate('settings_change_pin');
+  String get settingsChangePinSub => translate('settings_change_pin_sub');
+  String get settingsSecData => translate('settings_sec_data');
+  String get settingsExportData => translate('settings_export_data');
+  String get settingsExportDataSub => translate('settings_export_data_sub');
+  String get settingsClearCache => translate('settings_clear_cache');
+  String get settingsAppVersion => translate('settings_app_version');
+  String get settingsAppVersionSub => translate('settings_app_version_sub');
+  String get settingsDisableLockTitle => translate('settings_disable_lock_title');
+  String get settingsDisableLockBody => translate('settings_disable_lock_body');
+  String get settingsSelectCurrencyTitle => translate('settings_select_currency_title');
+  String get settingsSelectDateTitle => translate('settings_select_date_title');
+  String get settingsExpModeTitle => translate('settings_exp_mode_title');
+  String get settingsExpModeSub => translate('settings_exp_mode_sub');
+  String get settingsExpTripsTitle => translate('settings_exp_trips_title');
+  String get settingsExpTripsDesc => translate('settings_exp_trips_desc');
+  String get settingsExpTripsOnlyTitle => translate('settings_exp_trips_only_title');
+  String get settingsExpTripsOnlyDesc => translate('settings_exp_trips_only_desc');
+
+  // Widget Gallery Getters
+  String get widgetsCardSnapshotTitle => translate('widgets_card_snapshot_title');
+  String get widgetsCardSnapshotDesc => translate('widgets_card_snapshot_desc');
+  String get widgetsCardQuickAddTitle => translate('widgets_card_quick_add_title');
+  String get widgetsCardQuickAddDesc => translate('widgets_card_quick_add_desc');
+  String get widgetsCardBudgetTitle => translate('widgets_card_budget_title');
+  String get widgetsCardBudgetDesc => translate('widgets_card_budget_desc');
+  String get widgetsCardDebtsTitle => translate('widgets_card_debts_title');
+  String get widgetsCardDebtsDesc => translate('widgets_card_debts_desc');
+  String get widgetsCardTripTitle => translate('widgets_card_trip_title');
+  String get widgetsCardTripDesc => translate('widgets_card_trip_desc');
+  String get widgetsCardSmartTitle => translate('widgets_card_smart_title');
+  String get widgetsCardSmartDesc => translate('widgets_card_smart_desc');
+
+  // Profile Home Tab Getters
+  String get profileEditProfileBtn => translate('profile_edit_profile_btn');
+  String get profileStatsTrips => translate('profile_stats_trips');
+  String get profileStatsExpenses => translate('profile_stats_expenses');
+  String get profileStatsSpent => translate('profile_stats_spent');
+  String get profileSecCloudTitle => translate('profile_sec_cloud_title');
+  String get profileIdentityTitle => translate('profile_identity_title');
+  String get profileIdentitySub => translate('profile_identity_sub');
+  String get profileCloudStorage => translate('profile_cloud_storage');
+  String get profileCloudStorageSub => translate('profile_cloud_storage_sub');
+  String get profilePaymentMethods => translate('profile_payment_methods');
+  String get profilePaymentMethodsNotSet => translate('profile_payment_methods_not_set');
+  String profilePaymentMethodsPrimary(String id) => translate('profile_payment_methods_primary').replaceAll('{id}', id);
+  String get profileSecPreferencesTitle => translate('profile_sec_preferences_title');
+  String get profileExpMode => translate('profile_exp_mode');
+  String get profileExpTripsOnly => translate('profile_exp_trips_only');
+  String get profileExpAll => translate('profile_exp_all');
+  String get profileNotifsTitle => translate('profile_notifs_title');
+  String get profileNotifsSub => translate('profile_notifs_sub');
+  String get profileWidgetsTitle => translate('profile_widgets_title');
+  String get profileWidgetsSub => translate('profile_widgets_sub');
+  String get profileAdvancedSettings => translate('profile_advanced_settings');
+  String get profileAdvancedSettingsSub => translate('profile_advanced_settings_sub');
+  String get profileDarkMode => translate('profile_dark_mode');
+  String get profileDarkModeSubDark => translate('profile_dark_mode_sub_dark');
+  String get profileDarkModeSubLight => translate('profile_dark_mode_sub_light');
+  String get profileSecHelpTitle => translate('profile_sec_help_title');
+  String get profileHelpFaqSub => translate('profile_help_faq_sub');
+  String get profilePrivacySub => translate('profile_privacy_sub');
+  String get profileFeedbackSub => translate('profile_feedback_sub');
+  String get profileSecDangerTitle => translate('profile_sec_danger_title');
+  String get profileLogoutBtn => translate('profile_logout_btn');
+  String get profileDeleteAccountBtn => translate('profile_delete_account_btn');
+
+  // Cloud Settings View Getters
+  String get cloudSecAccount => translate('cloud_sec_account');
+  String get cloudSecSync => translate('cloud_sec_sync');
+  String get cloudSecSchedule => translate('cloud_sec_schedule');
+  String get cloudSecRetention => translate('cloud_sec_retention');
+  String get cloudSyncNever => translate('cloud_sync_never');
+  String get cloudSyncJustNow => translate('cloud_sync_just_now');
+  String cloudSyncMinsAgo(int count) => translate('cloud_sync_mins_ago').replaceAll('{count}', count.toString());
+  String cloudSyncHoursAgo(int count) => translate('cloud_sync_hours_ago').replaceAll('{count}', count.toString());
+
+  // Payment Methods View Getters
+  String get paymentMethodsTitle => translate('payment_methods_title');
+  String get paymentReceivingQr => translate('payment_receiving_qr');
+  String get paymentReceivingQrSub => translate('payment_receiving_qr_sub');
+  String get paymentSavedMethods => translate('payment_saved_methods');
+  String get paymentAddBtn => translate('payment_add_btn');
+  String get paymentPrimaryBadge => translate('payment_primary_badge');
+  String get paymentSetPrimary => translate('payment_set_primary');
+  String get paymentDeleteTitle => translate('payment_delete_title');
+  String get paymentDeleteBody => translate('payment_delete_body');
+  String get paymentCopyId => translate('payment_copy_id');
+  String get paymentShareLink => translate('payment_share_link');
+
+  // Activity Log Sheet Getters
+  String get activityLogTitle => translate('activity_log_title');
+  String get activityLogSub => translate('activity_log_sub');
+  String get activityFilterAll => translate('activity_filter_all');
+  String get activityFilterExpenses => translate('activity_filter_expenses');
+  String get activityFilterSettlements => translate('activity_filter_settlements');
+  String get activityFilterMembers => translate('activity_filter_members');
+  String get activityFilterStatus => translate('activity_filter_status');
+  String get activityEmptyTitle => translate('activity_empty_title');
+  String get activityEmptySub => translate('activity_empty_sub');
+  String get activityDetailsBtn => translate('activity_details_btn');
+  String get activityPerformedBy => translate('activity_performed_by');
+  String get activityTimestamp => translate('activity_timestamp');
+  String get activityAmountInvolved => translate('activity_amount_involved');
+  String get activityDoneBtn => translate('activity_done_btn');
+
+  // Language Grouping & Search Getters
+  String get langCategoryIndic => translate('lang_category_indic');
+  String get langCategoryEastAsian => translate('lang_category_east_asian');
+  String get langSearchHint => translate('lang_search_hint');
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

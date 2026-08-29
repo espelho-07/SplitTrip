@@ -372,7 +372,7 @@ class ProfileSheet extends StatelessWidget {
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.dns_outlined, size: 20),
                     title: Text(
-                      l10n.settingsTitle,
+                      l10n.cloudTitle,
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
@@ -518,7 +518,7 @@ class ProfileSheet extends StatelessWidget {
                       ),
                     ),
                     subtitle: Text(
-                      '${localeVm.currentLanguage.flagEmoji} ${localeVm.currentLanguage.nativeName} (${localeVm.currentLanguage.englishName})',
+                      '${localeVm.currentLanguage.nativeName} (${localeVm.currentLanguage.englishName})',
                       style: AppTypography.bodySmall(isDark: isDark),
                     ),
                     trailing: const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),

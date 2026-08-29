@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
@@ -190,14 +191,15 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
 
   void _deleteUpi(SavedUpiItem item) {
     HapticHelper.light();
+    final l10n = context.l10n;
     showDialog(
       context: context,
       builder: (dCtx) => AlertDialog(
         shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
-        title: const Text('Delete UPI ID?'),
-        content: Text('Are you sure you want to delete "${item.vpa}"?'),
+        title: Text(l10n.paymentDeleteTitle),
+        content: Text(l10n.paymentDeleteBody),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(dCtx), child: Text(l10n.actionCancel)),
           FilledButton(
             onPressed: () {
               Navigator.pop(dCtx);
@@ -214,7 +216,7 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
               );
             },
             style: FilledButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
-            child: const Text('Delete'),
+            child: Text(l10n.translate('action_delete')),
           ),
         ],
       ),
@@ -222,6 +224,7 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
   }
 
   void _showAddUpiSheet(BuildContext context, bool isDark) {
+    final l10n = context.l10n;
     final vpaController = TextEditingController();
     final nameController = TextEditingController(text: 'Darpan Parmar');
     bool isDefault = _savedUpis.isEmpty;
@@ -258,7 +261,7 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Add Receiving UPI ID',
+                  l10n.paymentAddBtn,
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
@@ -267,7 +270,7 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Friends can scan or send payments directly to this UPI address.',
+                  l10n.paymentReceivingQrSub,
                   style: TextStyle(
                     fontSize: 12,
                     color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
@@ -402,11 +405,12 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = context.l10n;
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF080C0E) : const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Payment Methods', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+        title: Text(l10n.paymentMethodsTitle, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => Navigator.pop(context),
@@ -414,7 +418,7 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
         actions: [
           IconButton(
             icon: const Icon(Icons.add_rounded, color: AppColors.emeraldPrimary),
-            tooltip: 'Add UPI ID',
+            tooltip: l10n.paymentAddBtn,
             onPressed: () => _showAddUpiSheet(context, isDark),
           ),
         ],
@@ -564,7 +568,7 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('Instant Receiving QR', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                              Text(l10n.paymentReceivingQr, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
                               Text(_primaryUpi!.appName, style: TextStyle(fontSize: 12, color: isDark ? Colors.white60 : Colors.black54)),
                             ],
                           ),
@@ -685,9 +689,9 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
                     children: [
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: () => _copyToClipboard(_primaryUpi!.vpa, 'UPI ID copied to clipboard ✓'),
+                          onPressed: () => _copyToClipboard(_primaryUpi!.vpa, '${l10n.paymentCopyId} ✓'),
                           icon: const Icon(Icons.copy_rounded, size: 16),
-                          label: const Text('Copy ID'),
+                          label: Text(l10n.paymentCopyId),
                           style: OutlinedButton.styleFrom(
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
@@ -696,9 +700,9 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: FilledButton.icon(
-                          onPressed: () => _copyToClipboard(_dynamicUpiUri, 'Dynamic Payment Link copied ✓'),
+                          onPressed: () => _copyToClipboard(_dynamicUpiUri, '${l10n.paymentShareLink} ✓'),
                           icon: const Icon(Icons.share_rounded, size: 16),
-                          label: const Text('Share Link'),
+                          label: Text(l10n.paymentShareLink),
                           style: FilledButton.styleFrom(
                             backgroundColor: AppColors.emeraldPrimary,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -717,7 +721,7 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
             Padding(
               padding: const EdgeInsets.only(bottom: 8.0, left: 4.0),
               child: Text(
-                'SAVED RECEIVING VPAS',
+                l10n.paymentSavedMethods,
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
@@ -765,7 +769,7 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
                               color: AppColors.emeraldPrimary.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(6),
                             ),
-                            child: const Text('DEFAULT', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: AppColors.emeraldPrimary)),
+                            child: Text(l10n.paymentPrimaryBadge, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: AppColors.emeraldPrimary)),
                           ),
                         ],
                       ],
@@ -777,12 +781,12 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
                         if (!upi.isDefault)
                           IconButton(
                             icon: const Icon(Icons.star_outline_rounded, size: 20),
-                            tooltip: 'Set as Default',
+                            tooltip: l10n.paymentSetPrimary,
                             onPressed: () => _setDefaultUpi(upi.id),
                           ),
                         IconButton(
                           icon: const Icon(Icons.delete_outline_rounded, size: 20, color: Color(0xFFEF4444)),
-                          tooltip: 'Delete UPI',
+                          tooltip: l10n.paymentDeleteTitle,
                           onPressed: () => _deleteUpi(upi),
                         ),
                       ],

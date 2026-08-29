@@ -369,14 +369,14 @@ class ProfileHomeTab extends StatelessWidget {
                       color: const Color(0xFF14B8A6).withValues(alpha: 0.4),
                     ),
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.edit_outlined, size: 14, color: Color(0xFF14B8A6)),
-                      SizedBox(width: 6),
+                      const Icon(Icons.edit_outlined, size: 14, color: Color(0xFF14B8A6)),
+                      const SizedBox(width: 6),
                       Text(
-                        'Edit Nirniq Profile',
-                        style: TextStyle(
+                        l10n.profileEditProfileBtn,
+                        style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                           color: Color(0xFF14B8A6),
@@ -413,13 +413,13 @@ class ProfileHomeTab extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildStatItem('$tripsCount', 'Trips', isDark),
+              _buildStatItem('$tripsCount', l10n.profileStatsTrips, isDark),
               _buildStatDivider(isDark),
-              _buildStatItem('$expensesCount', 'Expenses', isDark),
+              _buildStatItem('$expensesCount', l10n.profileStatsExpenses, isDark),
               _buildStatDivider(isDark),
               _buildStatItem(
                 CurrencyFormatter.formatPaise(totalSpentPaise, currencyCode: 'INR'),
-                'Total Spent',
+                l10n.profileStatsSpent,
                 isDark,
               ),
             ],
@@ -429,14 +429,14 @@ class ProfileHomeTab extends StatelessWidget {
         const SizedBox(height: 24),
 
         // ─── 3. SECTION: Account & Cloud ──────────────────────────────
-        _buildSectionHeader('Nirniq Account & Cloud Sync', isDark),
+        _buildSectionHeader(l10n.profileSecCloudTitle, isDark),
         _buildMenuSection(
           isDark: isDark,
           children: [
             _buildMenuItem(
               icon: Icons.person_rounded,
-              title: 'Nirniq Profile & Identity',
-              subtitle: 'Edit name, phone number, avatar & bio',
+              title: l10n.profileIdentityTitle,
+              subtitle: l10n.profileIdentitySub,
               iconColor: const Color(0xFF14B8A6),
               isDark: isDark,
               onTap: () => context.push('/profile/edit'),
@@ -491,23 +491,23 @@ class ProfileHomeTab extends StatelessWidget {
             _buildMenuItem(
               icon: Icons.cloud_sync_rounded,
               title: l10n.authCloudSync,
-              subtitle: pendingCount > 0 ? '$pendingCount pending updates' : '✓ Synced in realtime',
+              subtitle: pendingCount > 0 ? '$pendingCount ${l10n.statusPending}' : l10n.cloudStatusSynced,
               isDark: isDark,
               onTap: () => CloudSyncSheet.show(context),
             ),
             _buildMenuItem(
               icon: Icons.dns_outlined,
-              title: 'Cloud Storage & Backups',
-              subtitle: 'Configure offline auto-sync interval',
+              title: l10n.profileCloudStorage,
+              subtitle: l10n.profileCloudStorageSub,
               isDark: isDark,
               onTap: () => context.push('/cloud-settings'),
             ),
             _buildMenuItem(
               icon: Icons.payment_rounded,
-              title: 'Payment Methods',
+              title: l10n.profilePaymentMethods,
               subtitle: storage.hasPaymentMethodConfigured()
-                  ? '✓ Primary: ${storage.getPrimaryUpiId()}'
-                  : 'UPI ID & QR code (Not set)',
+                  ? l10n.profilePaymentMethodsPrimary(storage.getPrimaryUpiId() ?? '')
+                  : l10n.profilePaymentMethodsNotSet,
               isDark: isDark,
               onTap: () => context.push('/payment-methods'),
             ),
@@ -517,7 +517,7 @@ class ProfileHomeTab extends StatelessWidget {
         const SizedBox(height: 24),
 
         // ─── 4. SECTION: Preferences & Appearance ──────────────────────
-        _buildSectionHeader('Preferences & Appearance', isDark),
+        _buildSectionHeader(l10n.profileSecPreferencesTitle, isDark),
         _buildMenuSection(
           isDark: isDark,
           children: [
@@ -525,38 +525,38 @@ class ProfileHomeTab extends StatelessWidget {
               icon: Icons.translate_rounded,
               title: l10n.profileLanguage,
               subtitle: localeVm != null
-                  ? '${localeVm.currentLanguage.flagEmoji} ${localeVm.currentLanguage.nativeName}'
-                  : '🇮🇳 English',
+                  ? localeVm.currentLanguage.nativeName
+                  : 'English',
               isDark: isDark,
               onTap: () => LanguageSelectSheet.show(context),
             ),
             _buildMenuItem(
               icon: Icons.auto_awesome_mosaic_rounded,
-              title: 'App Experience Mode',
+              title: l10n.profileExpMode,
               subtitle: authVm.appExperienceMode == AppExperienceMode.tripsOnly
-                  ? 'Trips Only (Focused)'
-                  : 'Trips & Expenses (Full)',
+                  ? l10n.profileExpTripsOnly
+                  : l10n.profileExpAll,
               isDark: isDark,
               onTap: () => _showExperienceModeSheet(context, authVm, isDark),
             ),
             _buildMenuItem(
               icon: Icons.notifications_none_rounded,
-              title: 'Notifications',
-              subtitle: 'Live trip alerts & settlements',
+              title: l10n.profileNotifsTitle,
+              subtitle: l10n.profileNotifsSub,
               isDark: isDark,
               onTap: () => context.push('/notifications'),
             ),
             _buildMenuItem(
               icon: Icons.widgets_outlined,
-              title: 'Android Widget Studio',
-              subtitle: 'Homescreen quick glance cards',
+              title: l10n.profileWidgetsTitle,
+              subtitle: l10n.profileWidgetsSub,
               isDark: isDark,
               onTap: () => context.push('/widgets'),
             ),
             _buildMenuItem(
               icon: Icons.settings_outlined,
-              title: 'Advanced Settings',
-              subtitle: 'Security, biometrics & data export',
+              title: l10n.profileAdvancedSettings,
+              subtitle: l10n.profileAdvancedSettingsSub,
               isDark: isDark,
               onTap: () => context.push('/settings'),
             ),
@@ -576,7 +576,7 @@ class ProfileHomeTab extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Dark Mode',
+                          l10n.profileDarkMode,
                           style: TextStyle(
                             fontSize: 14.5,
                             fontWeight: FontWeight.w600,
@@ -584,7 +584,7 @@ class ProfileHomeTab extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          isDark ? 'OLED Obsidian Black Theme' : 'Crisp Pure White Theme',
+                          isDark ? l10n.profileDarkModeSubDark : l10n.profileDarkModeSubLight,
                           style: TextStyle(
                             fontSize: 12,
                             color: isDark ? AppColors.darkTextMuted : const Color(0xFF94A3B8),
@@ -610,7 +610,7 @@ class ProfileHomeTab extends StatelessWidget {
         const SizedBox(height: 24),
 
         // ─── 5. SECTION: Help & Support ─────────────────────────────────
-        _buildSectionHeader('Help & Community', isDark),
+        _buildSectionHeader(l10n.profileSecHelpTitle, isDark),
         _buildMenuSection(
           isDark: isDark,
           children: [
@@ -623,8 +623,8 @@ class ProfileHomeTab extends StatelessWidget {
             ),
             _buildMenuItem(
               icon: Icons.help_outline_rounded,
-              title: 'Help & FAQs',
-              subtitle: 'Frequently asked questions & math guide',
+              title: l10n.profileHelpFaq,
+              subtitle: l10n.profileHelpFaqSub,
               isDark: isDark,
               onTap: () => context.push('/help'),
             ),
@@ -638,14 +638,14 @@ class ProfileHomeTab extends StatelessWidget {
             _buildMenuItem(
               icon: Icons.shield_outlined,
               title: l10n.profilePrivacyPolicy,
-              subtitle: 'Local-first zero telemetry guarantee',
+              subtitle: l10n.profilePrivacySub,
               isDark: isDark,
               onTap: () => context.push('/privacy-policy'),
             ),
             _buildMenuItem(
               icon: Icons.feedback_outlined,
               title: l10n.profileFeedback,
-              subtitle: 'Send feedback directly to creator',
+              subtitle: l10n.profileFeedbackSub,
               isDark: isDark,
               onTap: () {
                 showModalBottomSheet(
@@ -662,13 +662,13 @@ class ProfileHomeTab extends StatelessWidget {
         const SizedBox(height: 24),
 
         // ─── 6. SECTION: Danger Zone ────────────────────────────────────
-        _buildSectionHeader('Account Actions', isDark),
+        _buildSectionHeader(l10n.profileSecDangerTitle, isDark),
         _buildMenuSection(
           isDark: isDark,
           children: [
             _buildMenuItem(
               icon: Icons.logout_rounded,
-              title: 'Logout',
+              title: l10n.profileLogoutBtn,
               titleColor: const Color(0xFFEF4444),
               isDark: isDark,
               showArrow: false,
@@ -676,7 +676,7 @@ class ProfileHomeTab extends StatelessWidget {
             ),
             _buildMenuItem(
               icon: Icons.delete_forever_rounded,
-              title: 'Delete Account & Data',
+              title: l10n.profileDeleteAccountBtn,
               titleColor: AppColors.negativeRedDark,
               isDark: isDark,
               showArrow: false,

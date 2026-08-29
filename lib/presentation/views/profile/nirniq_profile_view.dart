@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../../core/localization/app_localizations.dart';
 import '../../../core/payment/upi_validator.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
@@ -68,6 +69,7 @@ class _NirniqProfileViewState extends State<NirniqProfileView> {
   }
 
   Future<void> _handleSave() async {
+    final l10n = context.l10n;
     if (!_formKey.currentState!.validate()) {
       HapticHelper.error();
       return;
@@ -82,8 +84,8 @@ class _NirniqProfileViewState extends State<NirniqProfileView> {
     if (upi.isNotEmpty && !UpiValidator.isValidUpiId(upi)) {
       HapticHelper.error();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter a valid UPI ID (e.g. name@bank)'),
+        SnackBar(
+          content: Text(l10n.profileErrUpi),
           backgroundColor: AppColors.negativeRedDark,
           behavior: SnackBarBehavior.floating,
         ),
@@ -108,13 +110,13 @@ class _NirniqProfileViewState extends State<NirniqProfileView> {
       setState(() => _isSaving = false);
       if (updated != null) {
         HapticHelper.success();
-        KithSuccessToast.show(context, 'Nirniq Profile Updated ✓');
+        KithSuccessToast.show(context, l10n.profileSavedToast);
         context.pop();
       } else {
         HapticHelper.error();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not update profile. Please try again.'),
+          SnackBar(
+            content: Text(l10n.profileErrSave),
             backgroundColor: AppColors.negativeRedDark,
             behavior: SnackBarBehavior.floating,
           ),
@@ -126,6 +128,7 @@ class _NirniqProfileViewState extends State<NirniqProfileView> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = context.l10n;
     final authVm = context.watch<AuthViewModel>();
     final user = authVm.currentUser;
     final isNirniqLinked = user?.isNirniqLinked ?? false;
@@ -139,9 +142,9 @@ class _NirniqProfileViewState extends State<NirniqProfileView> {
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => context.pop(),
         ),
-        title: const Text(
-          'Nirniq Profile',
-          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+        title: Text(
+          l10n.profileEditTitle,
+          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
         ),
         actions: [
           Padding(
@@ -160,7 +163,7 @@ class _NirniqProfileViewState extends State<NirniqProfileView> {
                       foregroundColor: const Color(0xFF14B8A6),
                       textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
                     ),
-                    child: const Text('Save'),
+                    child: Text(l10n.actionSave),
                   ),
           ),
         ],
@@ -210,7 +213,7 @@ class _NirniqProfileViewState extends State<NirniqProfileView> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          'Preset:',
+                          l10n.profilePresetLabel,
                           style: TextStyle(
                             fontSize: 11.5,
                             fontWeight: FontWeight.w600,
@@ -275,7 +278,7 @@ class _NirniqProfileViewState extends State<NirniqProfileView> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          isNirniqLinked ? 'Nirniq Verified Identity' : 'Guest Local Profile',
+                          isNirniqLinked ? l10n.profileVerifiedIdentity : l10n.profileGuestLocal,
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
@@ -284,8 +287,8 @@ class _NirniqProfileViewState extends State<NirniqProfileView> {
                         ),
                         Text(
                           isNirniqLinked
-                              ? 'Connected to Nirniq Cloud Ecosystem'
-                              : 'Local-only. Connect Nirniq account in Profile tab to sync across devices.',
+                              ? l10n.profileConnectedCloud
+                              : l10n.profileLocalOnlyDesc,
                           style: TextStyle(
                             fontSize: 11.5,
                             color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
@@ -302,42 +305,42 @@ class _NirniqProfileViewState extends State<NirniqProfileView> {
 
             // ─── 3. FORM FIELDS SECTION ──────────────────────────────────
             _buildSectionCard(
-              title: 'PERSONAL DETAILS',
+              title: l10n.profilePersonalDetails.toUpperCase(),
               isDark: isDark,
               children: [
                 _buildFormField(
-                  label: 'Display Name',
+                  label: l10n.profileNameLabel,
                   controller: _nameController,
                   icon: Icons.person_outline_rounded,
-                  hint: 'e.g. Darpan Parmar',
+                  hint: l10n.profileNameHint,
                   isDark: isDark,
-                  validator: (v) => v == null || v.trim().isEmpty ? 'Name is required' : null,
+                  validator: (v) => v == null || v.trim().isEmpty ? l10n.profileNameHint : null,
                 ),
                 const SizedBox(height: 14),
                 _buildFormField(
-                  label: 'Phone Number',
+                  label: l10n.profilePhoneLabel,
                   controller: _phoneController,
                   icon: Icons.phone_android_rounded,
-                  hint: 'e.g. +91 98765 43210',
+                  hint: l10n.profilePhoneHint,
                   keyboardType: TextInputType.phone,
                   isDark: isDark,
-                  helperText: 'Used for direct trip invite resolution and contact matching',
+                  helperText: l10n.profilePhoneSub,
                 ),
                 const SizedBox(height: 14),
                 _buildFormField(
-                  label: 'Email Address',
+                  label: l10n.profileEmailLabel,
                   controller: _emailController,
                   icon: Icons.alternate_email_rounded,
-                  hint: 'e.g. user@nirniq.com',
+                  hint: l10n.profileEmailHint,
                   keyboardType: TextInputType.emailAddress,
                   isDark: isDark,
                 ),
                 const SizedBox(height: 14),
                 _buildFormField(
-                  label: 'About / Tagline',
+                  label: l10n.profileBioLabel,
                   controller: _bioController,
                   icon: Icons.chat_bubble_outline_rounded,
-                  hint: 'Share a quick bio...',
+                  hint: l10n.profileBioHint,
                   maxLines: 2,
                   isDark: isDark,
                 ),
@@ -348,16 +351,16 @@ class _NirniqProfileViewState extends State<NirniqProfileView> {
 
             // ─── 4. PAYMENT & UPI CONFIG ────────────────────────────────
             _buildSectionCard(
-              title: 'SETTLEMENT & PAYMENT DETAILS',
+              title: l10n.profilePaymentSection.toUpperCase(),
               isDark: isDark,
               children: [
                 _buildFormField(
-                  label: 'Primary Receiving UPI ID',
+                  label: l10n.profileUpiLabel,
                   controller: _upiController,
                   icon: Icons.account_balance_wallet_outlined,
-                  hint: 'e.g. name@okhdfcbank or 9876543210@paytm',
+                  hint: l10n.profileUpiHint,
                   isDark: isDark,
-                  helperText: 'Friends in your trips will settle payments directly to this UPI ID.',
+                  helperText: l10n.profileUpiSub,
                 ),
               ],
             ),
@@ -382,14 +385,14 @@ class _NirniqProfileViewState extends State<NirniqProfileView> {
                         height: 22,
                         child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
                       )
-                    : const Row(
+                    : Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.save_rounded, size: 20),
-                          SizedBox(width: 8),
+                          const Icon(Icons.save_rounded, size: 20),
+                          const SizedBox(width: 8),
                           Text(
-                            'Save Profile Changes',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                            l10n.profileSaveBtn,
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
                           ),
                         ],
                       ),

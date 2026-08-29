@@ -26,14 +26,14 @@ class _CreateTripViewState extends State<CreateTripView> {
   bool _showManualFriends = false;
   bool _showEmojiTray = false;
 
-  static const List<Map<String, String>> _tripIdeas = [
-    {'name': 'Goa Beach Trip', 'emoji': '🏖️', 'gradient': '0'},
-    {'name': 'Manali Trek', 'emoji': '🏔️', 'gradient': '1'},
-    {'name': 'Weekend Hangout', 'emoji': '🍕', 'gradient': '2'},
-    {'name': 'Road Trip', 'emoji': '🚗', 'gradient': '3'},
-    {'name': 'Birthday Bash', 'emoji': '🎉', 'gradient': '4'},
-    {'name': 'Camping & Bonfire', 'emoji': '🏕️', 'gradient': '5'},
-    {'name': 'Euro Summer', 'emoji': '✈️', 'gradient': '0'},
+  List<Map<String, String>> _getTripIdeas(AppLocalizations l10n) => [
+    {'name': l10n.translate('trip_idea_goa'), 'emoji': '🏖️', 'gradient': '0'},
+    {'name': l10n.translate('trip_idea_manali'), 'emoji': '🏔️', 'gradient': '1'},
+    {'name': l10n.translate('trip_idea_weekend'), 'emoji': '🍕', 'gradient': '2'},
+    {'name': l10n.translate('trip_idea_roadtrip'), 'emoji': '🚗', 'gradient': '3'},
+    {'name': l10n.translate('trip_idea_birthday'), 'emoji': '🎉', 'gradient': '4'},
+    {'name': l10n.translate('trip_idea_camping'), 'emoji': '🏕️', 'gradient': '5'},
+    {'name': l10n.translate('trip_idea_euro'), 'emoji': '✈️', 'gradient': '0'},
   ];
 
   static const List<String> _emojis = [
@@ -246,13 +246,13 @@ class _CreateTripViewState extends State<CreateTripView> {
                   physics: const BouncingScrollPhysics(),
                   padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
                   children: [
-                    // LIVE HERO PREVIEW CARD
-                    _buildHeroTripPreviewCard(createVm, isDark),
+                    // 1. LIVE HERO TRIP PREVIEW CARD (Interactive)
+                    _buildHeroTripPreviewCard(createVm, isDark, l10n),
 
                     const SizedBox(height: 16),
 
                     // QUICK INSPIRATION CHIPS
-                    _buildInspirationChips(isDark),
+                    _buildInspirationChips(isDark, l10n),
 
                     const SizedBox(height: 20),
 
@@ -325,7 +325,7 @@ class _CreateTripViewState extends State<CreateTripView> {
           ),
 
           Text(
-            'Create New Trip',
+            l10n.createTripAppbarTitle,
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w800,
@@ -341,9 +341,9 @@ class _CreateTripViewState extends State<CreateTripView> {
   }
 
   /// Interactive Live Preview Card rendering real-time trip aesthetics.
-  Widget _buildHeroTripPreviewCard(CreateTripViewModel createVm, bool isDark) {
+  Widget _buildHeroTripPreviewCard(CreateTripViewModel createVm, bool isDark, AppLocalizations l10n) {
     final gradient = AppColors.getGradient(createVm.coverGradientIndex);
-    final tripName = createVm.name.trim().isEmpty ? 'Your Epic Journey' : createVm.name.trim();
+    final tripName = createVm.name.trim().isEmpty ? l10n.translate('create_trip_hero_preview') : createVm.name.trim();
     final isJourney = createVm.tripMode == 'split_and_journey';
 
     return Container(
@@ -403,7 +403,7 @@ class _CreateTripViewState extends State<CreateTripView> {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            isJourney ? 'Split + Journey' : 'Split Only',
+                            isJourney ? l10n.createTripModeFullTitle : l10n.createTripModeSplitTitle,
                             style: const TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
@@ -471,14 +471,15 @@ class _CreateTripViewState extends State<CreateTripView> {
   }
 
   /// Quick 1-tap inspiration chips for fast naming.
-  Widget _buildInspirationChips(bool isDark) {
+  Widget _buildInspirationChips(bool isDark, AppLocalizations l10n) {
+    final ideas = _getTripIdeas(l10n);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.only(left: 2, bottom: 8),
           child: Text(
-            'QUICK IDEAS',
+            l10n.createTripQuickIdeas.toUpperCase(),
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w800,
@@ -492,10 +493,10 @@ class _CreateTripViewState extends State<CreateTripView> {
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
-            itemCount: _tripIdeas.length,
+            itemCount: ideas.length,
             separatorBuilder: (_, _) => const SizedBox(width: 8),
             itemBuilder: (context, index) {
-              final idea = _tripIdeas[index];
+              final idea = ideas[index];
               return GestureDetector(
                 onTap: () => _applyTripIdea(idea),
                 child: Container(
@@ -771,7 +772,7 @@ class _CreateTripViewState extends State<CreateTripView> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'EXPERIENCE MODE',
+            l10n.createTripExpMode.toUpperCase(),
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w800,
@@ -814,7 +815,7 @@ class _CreateTripViewState extends State<CreateTripView> {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Split + Journey',
+                          l10n.createTripModeFullTitle,
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: isJourney ? FontWeight.w800 : FontWeight.w600,
@@ -825,7 +826,7 @@ class _CreateTripViewState extends State<CreateTripView> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'Splits + Photos & Timeline',
+                          l10n.createTripModeFullDesc,
                           style: TextStyle(
                             fontSize: 10,
                             color: isDark ? AppColors.darkTextMuted : const Color(0xFF94A3B8),
@@ -870,7 +871,7 @@ class _CreateTripViewState extends State<CreateTripView> {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Split Only',
+                          l10n.createTripModeSplitTitle,
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: !isJourney ? FontWeight.w800 : FontWeight.w600,
@@ -881,7 +882,7 @@ class _CreateTripViewState extends State<CreateTripView> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'Just Expense Math',
+                          l10n.createTripModeSplitDesc,
                           style: TextStyle(
                             fontSize: 10,
                             color: isDark ? AppColors.darkTextMuted : const Color(0xFF94A3B8),
@@ -923,7 +924,7 @@ class _CreateTripViewState extends State<CreateTripView> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'BASE CURRENCY',
+            l10n.createTripBaseCurrency.toUpperCase(),
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w800,
@@ -1012,7 +1013,7 @@ class _CreateTripViewState extends State<CreateTripView> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'CO-TRAVELERS & FRIENDS',
+                l10n.createTripCrewTitle.toUpperCase(),
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
@@ -1028,7 +1029,7 @@ class _CreateTripViewState extends State<CreateTripView> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    '+${createVm.friendNames.length} friends',
+                    '+${createVm.friendNames.length} ${l10n.tripCardMemberPlural(createVm.friendNames.length)}',
                     style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
@@ -1057,7 +1058,7 @@ class _CreateTripViewState extends State<CreateTripView> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Friends can scan your trip QR code right after creation to join instantly.',
+                    l10n.createTripQrHint,
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
@@ -1092,7 +1093,7 @@ class _CreateTripViewState extends State<CreateTripView> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'Add friend manually (offline/non-app member)',
+                    l10n.createTripAddFriendManual,
                     style: TextStyle(
                       fontSize: 12.5,
                       fontWeight: FontWeight.w600,
@@ -1135,7 +1136,7 @@ class _CreateTripViewState extends State<CreateTripView> {
                         color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
                       ),
                       decoration: KithInputDecoration.borderless(
-                        hintText: 'e.g. Rahul, Priya, Vikram...',
+                        hintText: l10n.createTripFriendHint,
                         hintStyle: TextStyle(
                           fontSize: 13,
                           color: isDark ? AppColors.darkTextMuted : const Color(0xFF94A3B8),
@@ -1250,7 +1251,7 @@ class _CreateTripViewState extends State<CreateTripView> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        l10n.tripsCreate,
+                        l10n.createTripSubmitBtn,
                         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
                       ),
                       const SizedBox(width: 8),

@@ -145,78 +145,78 @@ class _WidgetGalleryViewState extends State<WidgetGalleryView> {
                       // 1. Kith Snapshot (4×2 Hero)
                       _buildWidgetCard(
                         context: context,
-                        title: 'Kith Snapshot',
+                        title: l10n.widgetsCardSnapshotTitle,
                         badge: 'HERO',
                         badgeColor: AppColors.emeraldLight,
                         sizeLabel: '4 × 2 · Medium',
-                        description: 'Glanceable overview of your monthly spending, budget runway progress, and 1-tap quick expense logging.',
+                        description: l10n.widgetsCardSnapshotDesc,
                         previewContent: _buildSnapshotPreview(isDark, widgetService.isPrivacyMode, personalVm),
-                        onPin: () => _handlePinWidget('snapshot', 'Kith Snapshot'),
+                        onPin: () => _handlePinWidget('snapshot', l10n.widgetsCardSnapshotTitle),
                       ),
                       const SizedBox(height: AppSpacing.lg),
 
                       // 2. Quick Add Bar (4×1 VIP)
                       _buildWidgetCard(
                         context: context,
-                        title: 'Quick Add Capsule',
+                        title: l10n.widgetsCardQuickAddTitle,
                         badge: 'FASTEST',
                         badgeColor: AppColors.indigoAccent,
                         sizeLabel: '4 × 1 · Compact',
-                        description: 'One-tap entry for new expenses, hands-free voice logging, and camera receipt scanning.',
+                        description: l10n.widgetsCardQuickAddDesc,
                         previewContent: _buildQuickAddPreview(isDark),
-                        onPin: () => _handlePinWidget('quick_add', 'Quick Add Capsule'),
+                        onPin: () => _handlePinWidget('quick_add', l10n.widgetsCardQuickAddTitle),
                       ),
                       const SizedBox(height: AppSpacing.lg),
 
                       // 3. Budget Health Runway (3×2)
                       _buildWidgetCard(
                         context: context,
-                        title: 'Budget Health Runway',
+                        title: l10n.widgetsCardBudgetTitle,
                         badge: 'ESSENTIAL',
                         badgeColor: AppColors.amberAccent,
                         sizeLabel: '3 × 2 · Medium',
-                        description: 'Live monthly budget health bar with automatic daily runway calculations to prevent overspending.',
+                        description: l10n.widgetsCardBudgetDesc,
                         previewContent: _buildBudgetPreview(isDark, widgetService.isPrivacyMode, personalVm),
-                        onPin: () => _handlePinWidget('budget', 'Budget Health Runway'),
+                        onPin: () => _handlePinWidget('budget', l10n.widgetsCardBudgetTitle),
                       ),
                       const SizedBox(height: AppSpacing.lg),
 
                       // 4. Debts & Lending Matrix (3×2)
                       _buildWidgetCard(
                         context: context,
-                        title: 'Debts & Lending Matrix',
+                        title: l10n.widgetsCardDebtsTitle,
                         badge: 'BALANCE',
                         badgeColor: AppColors.positiveGreenLight,
                         sizeLabel: '3 × 2 · Medium',
-                        description: 'Keep track of friends who owe you money and balances you need to repay at a single glance.',
+                        description: l10n.widgetsCardDebtsDesc,
                         previewContent: _buildDebtsPreview(isDark, widgetService.isPrivacyMode, personalVm),
-                        onPin: () => _handlePinWidget('debts', 'Debts & Lending'),
+                        onPin: () => _handlePinWidget('debts', l10n.widgetsCardDebtsTitle),
                       ),
                       const SizedBox(height: AppSpacing.lg),
 
                       // 5. Active Trip Card (4×2)
                       _buildWidgetCard(
                         context: context,
-                        title: 'Active Trip Companion',
+                        title: l10n.widgetsCardTripTitle,
                         badge: 'TRAVEL',
                         badgeColor: AppColors.indigoAccent,
                         sizeLabel: '4 × 2 · Medium',
-                        description: 'Live spending, member count and personal net balance for your ongoing trip.',
+                        description: l10n.widgetsCardTripDesc,
                         previewContent: _buildTripPreview(isDark, widgetService.isPrivacyMode, homeVm),
-                        onPin: () => _handlePinWidget('trip', 'Active Trip Companion'),
+                        onPin: () => _handlePinWidget('trip', l10n.widgetsCardTripTitle),
                       ),
                       const SizedBox(height: AppSpacing.lg),
 
                       // 6. Smart Kith Adaptive AI (4×2)
                       _buildWidgetCard(
                         context: context,
-                        title: 'Smart Kith Adaptive AI',
+                        title: l10n.widgetsCardSmartTitle,
                         badge: 'SIGNATURE',
                         badgeColor: AppColors.emeraldLight,
                         sizeLabel: '4 × 2 · Medium',
-                        description: 'Intelligent card dynamically ranking the single most critical financial action based on live state.',
+                        description: l10n.widgetsCardSmartDesc,
                         previewContent: _buildSmartPreview(isDark),
-                        onPin: () => _handlePinWidget('smart', 'Smart Kith Adaptive AI'),
+                        onPin: () => _handlePinWidget('smart', l10n.widgetsCardSmartTitle),
                       ),
                       const SizedBox(height: AppSpacing.xxl),
 

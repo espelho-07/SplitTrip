@@ -62,10 +62,10 @@ class DashboardTab extends StatelessWidget {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
         children: [
-          _buildHeaderRow(context, user?.displayName ?? 'Traveler', isDark),
+          _buildHeaderRow(context, user?.displayName ?? 'Traveler', isDark, l10n),
           if (!hasConfiguredPayment && !isPromptDismissed) ...[
             const SizedBox(height: 16),
-            _buildPaymentSetupPromptCard(context, isDark, storage),
+            _buildPaymentSetupPromptCard(context, isDark, storage, l10n),
           ],
           const SizedBox(height: 20),
           if (activeTrip != null)
@@ -82,7 +82,7 @@ class DashboardTab extends StatelessWidget {
     );
   }
 
-  Widget _buildPaymentSetupPromptCard(BuildContext context, bool isDark, LocalStorageService storage) {
+  Widget _buildPaymentSetupPromptCard(BuildContext context, bool isDark, LocalStorageService storage, AppLocalizations l10n) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
@@ -129,7 +129,7 @@ class DashboardTab extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Add Receiving UPI & QR ⚡',
+                      l10n.dashPaymentSetupTitle,
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w800,
@@ -139,7 +139,7 @@ class DashboardTab extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Let friends settle balances directly to your account in 1 tap.',
+                      l10n.dashPaymentSetupSub,
                       style: TextStyle(
                         fontSize: 11.5,
                         height: 1.3,
@@ -178,14 +178,14 @@ class DashboardTab extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
               alignment: Alignment.center,
-              child: const Row(
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.add_card_rounded, color: Colors.white, size: 16),
-                  SizedBox(width: 8),
+                  const Icon(Icons.add_card_rounded, color: Colors.white, size: 16),
+                  const SizedBox(width: 8),
                   Text(
-                    'Set Up Payment Details →',
-                    style: TextStyle(
+                    l10n.dashPaymentSetupBtn,
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 13,
                       fontWeight: FontWeight.w800,
@@ -200,7 +200,7 @@ class DashboardTab extends StatelessWidget {
     );
   }
 
-  Widget _buildHeaderRow(BuildContext context, String displayName, bool isDark) {
+  Widget _buildHeaderRow(BuildContext context, String displayName, bool isDark, AppLocalizations l10n) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -211,7 +211,7 @@ class DashboardTab extends StatelessWidget {
             Row(
               children: [
                 Text(
-                  'Hi, $displayName',
+                  l10n.dashGreeting(displayName),
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w800,
@@ -225,7 +225,7 @@ class DashboardTab extends StatelessWidget {
             ),
             const SizedBox(height: 2),
             Text(
-              "What's the plan today?",
+              l10n.dashGreetingSub,
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
@@ -352,7 +352,7 @@ class DashboardTab extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${DateFormatter.formatTripDateRange(trip.createdAt, trip.updatedAt)} • ${trip.members.length} members',
+                    '${DateFormatter.formatTripDateRange(trip.createdAt, trip.updatedAt)} • ${trip.members.length == 1 ? l10n.tripCardMemberSingle : l10n.tripCardMemberPlural(trip.members.length)}',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
@@ -362,8 +362,8 @@ class DashboardTab extends StatelessWidget {
                   const SizedBox(height: 16),
                   Text(
                     userNetPaise > 0
-                        ? 'You are owed'
-                        : (userNetPaise < 0 ? 'You owe' : 'All balances settled'),
+                        ? l10n.dashYouAreOwed
+                        : (userNetPaise < 0 ? l10n.dashYouOwe : l10n.dashAllSettled),
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -391,19 +391,19 @@ class DashboardTab extends StatelessWidget {
                           color: const Color(0xFF14B8A6),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: const Row(
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              'Settle Up',
-                              style: TextStyle(
+                              l10n.dashSettleUp,
+                              style: const TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w700,
                                 color: Colors.white,
                               ),
                             ),
-                            SizedBox(width: 6),
-                            Icon(Icons.handshake_outlined, size: 14, color: Colors.white),
+                            const SizedBox(width: 6),
+                            const Icon(Icons.handshake_outlined, size: 14, color: Colors.white),
                           ],
                         ),
                       ),
@@ -462,7 +462,7 @@ class DashboardTab extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'No Active Trips',
+                  l10n.dashNoActiveTrips,
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
@@ -471,7 +471,7 @@ class DashboardTab extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Create a trip to split expenses with friends',
+                  l10n.dashCreateTripPrompt,
                   style: TextStyle(
                     fontSize: 12,
                     color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
@@ -491,9 +491,9 @@ class DashboardTab extends StatelessWidget {
                 color: const Color(0xFF14B8A6),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Text(
-                'Create',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white),
+              child: Text(
+                l10n.dashCreateBtn,
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white),
               ),
             ),
           ),
@@ -513,7 +513,7 @@ class DashboardTab extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'My Balances',
+          l10n.dashMyBalances,
           style: TextStyle(
             fontSize: 17,
             fontWeight: FontWeight.w800,
@@ -546,7 +546,7 @@ class DashboardTab extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'You are owed',
+                      l10n.dashYouAreOwed,
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -590,7 +590,7 @@ class DashboardTab extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'You owe',
+                      l10n.dashYouOwe,
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -624,7 +624,7 @@ class DashboardTab extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Quick Actions',
+          l10n.dashQuickActions,
           style: TextStyle(
             fontSize: 17,
             fontWeight: FontWeight.w800,
@@ -639,14 +639,14 @@ class DashboardTab extends StatelessWidget {
             _buildActionItem(
               context: context,
               icon: Icons.add_rounded,
-              label: 'Add\nExpense',
+              label: l10n.dashActionAddExpense,
               isDark: isDark,
               onTap: () => _handleSmartAddExpense(context, homeVm),
             ),
             _buildActionItem(
               context: context,
               icon: Icons.flight_takeoff_rounded,
-              label: 'Add Trip',
+              label: l10n.dashActionAddTrip,
               isDark: isDark,
               onTap: () {
                 HapticHelper.medium();
@@ -656,14 +656,14 @@ class DashboardTab extends StatelessWidget {
             _buildActionItem(
               context: context,
               icon: Icons.document_scanner_rounded,
-              label: 'Scan\nReceipt',
+              label: l10n.dashActionScanReceipt,
               isDark: isDark,
               onTap: () => _handleSmartAddExpense(context, homeVm, tab: 1),
             ),
             _buildActionItem(
               context: context,
               icon: Icons.qr_code_scanner_rounded,
-              label: 'Join\nScanner',
+              label: l10n.dashActionJoinScanner,
               isDark: isDark,
               onTap: () async {
                 HapticHelper.medium();
@@ -681,32 +681,24 @@ class DashboardTab extends StatelessWidget {
 
   void _handleSmartAddExpense(BuildContext context, HomeViewModel homeVm, {int tab = 0}) {
     HapticHelper.medium();
-    final activeTrips = homeVm.trips
-        .where((t) => t.lifecycleState.isActive || t.lifecycleState.isCompleting)
-        .toList();
+    final trips = homeVm.trips;
 
-    if (activeTrips.length == 1) {
-      // If exactly 1 trip is active -> Go directly to that trip's Add Expense view
-      context.push('/trip/${activeTrips.first.id}/add-expense?tab=$tab');
-    } else if (activeTrips.length > 1) {
-      // If more than 1 trip is active -> Ask which trip to add the expense to
-      _showActiveTripPickerSheet(context, activeTrips, tab: tab);
+    if (trips.isEmpty) {
+      AddPersonalExpenseSheet.show(context);
+    } else if (trips.length == 1) {
+      context.push('/trip/${trips.first.id}/add-expense?tab=$tab');
     } else {
-      // If 0 active trips exist
-      if (homeVm.trips.isNotEmpty) {
-        _showActiveTripPickerSheet(context, homeVm.trips, tab: tab);
-      } else {
-        context.push('/add-expense?tab=$tab');
-      }
+      _showActiveTripPickerSheet(context, trips, tab);
     }
   }
 
   void _showActiveTripPickerSheet(
     BuildContext context,
-    List<Trip> trips, {
-    int tab = 0,
-  }) {
+    List<Trip> trips,
+    int tab,
+  ) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = context.l10n;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -743,7 +735,7 @@ class DashboardTab extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Select Active Trip',
+                        l10n.dashSelectActiveTrip,
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w800,
@@ -752,7 +744,7 @@ class DashboardTab extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Choose which trip to add this expense to',
+                        l10n.dashSelectTripSub,
                         style: TextStyle(
                           fontSize: 12,
                           color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
@@ -816,7 +808,7 @@ class DashboardTab extends StatelessWidget {
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    '${trip.members.length} members • ${trip.currencyCode}',
+                                    '${trip.members.length == 1 ? l10n.tripCardMemberSingle : l10n.tripCardMemberPlural(trip.members.length)} • ${trip.currencyCode}',
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
@@ -853,14 +845,14 @@ class DashboardTab extends StatelessWidget {
                       color: AppColors.emeraldPrimary.withValues(alpha: 0.3),
                     ),
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.person_outline_rounded, size: 18, color: AppColors.emeraldPrimary),
-                      SizedBox(width: 8),
+                      const Icon(Icons.person_outline_rounded, size: 18, color: AppColors.emeraldPrimary),
+                      const SizedBox(width: 8),
                       Text(
-                        'Log as Personal Expense instead',
-                        style: TextStyle(
+                        l10n.dashLogPersonalExpense,
+                        style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                           color: AppColors.emeraldPrimary,

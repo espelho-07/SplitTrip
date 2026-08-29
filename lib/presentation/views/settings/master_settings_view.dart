@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../../core/localization/app_localizations.dart';
 import '../../../core/services/security_lock_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
@@ -69,6 +70,7 @@ class _MasterSettingsViewState extends State<MasterSettingsView> {
 
   Future<void> _handleAppLockToggle(bool value) async {
     final security = context.read<SecurityLockService>();
+    final l10n = context.l10n;
     if (value) {
       if (!security.hasPin) {
         final success = await SetPinSheet.show(context);
@@ -82,14 +84,14 @@ class _MasterSettingsViewState extends State<MasterSettingsView> {
         context: context,
         builder: (dCtx) => AlertDialog(
           shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
-          title: const Text('Disable App Lock?'),
-          content: const Text('Anyone with access to your device will be able to open Kith without entering a PIN or biometric authentication.'),
+          title: Text(l10n.settingsDisableLockTitle),
+          content: Text(l10n.settingsDisableLockBody),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dCtx, false), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.pop(dCtx, false), child: Text(l10n.actionCancel)),
             FilledButton(
               onPressed: () => Navigator.pop(dCtx, true),
               style: FilledButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
-              child: const Text('Disable'),
+              child: Text(l10n.translate('action_disable')),
             ),
           ],
         ),
@@ -130,7 +132,7 @@ class _MasterSettingsViewState extends State<MasterSettingsView> {
     }
   }
 
-  void _showCurrencySelector(bool isDark) {
+  void _showCurrencySelector(bool isDark, AppLocalizations l10n) {
     HapticHelper.light();
     final currencies = [
       {'code': 'INR', 'symbol': '₹', 'name': 'Indian Rupee'},
@@ -161,7 +163,7 @@ class _MasterSettingsViewState extends State<MasterSettingsView> {
               ),
               const SizedBox(height: 16),
               Text(
-                'Select Base Currency',
+                l10n.settingsSelectCurrencyTitle,
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: isDark ? Colors.white : Colors.black87),
               ),
               const SizedBox(height: 12),
@@ -194,7 +196,7 @@ class _MasterSettingsViewState extends State<MasterSettingsView> {
     );
   }
 
-  void _showDateFormatSelector(bool isDark) {
+  void _showDateFormatSelector(bool isDark, AppLocalizations l10n) {
     HapticHelper.light();
     final formats = [
       {'format': 'DD/MM/YYYY', 'example': '28/08/2026'},
@@ -223,7 +225,7 @@ class _MasterSettingsViewState extends State<MasterSettingsView> {
               ),
               const SizedBox(height: 16),
               Text(
-                'Select Date Format',
+                l10n.settingsSelectDateTitle,
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: isDark ? Colors.white : Colors.black87),
               ),
               const SizedBox(height: 12),
@@ -526,89 +528,86 @@ class _MasterSettingsViewState extends State<MasterSettingsView> {
     );
   }
 
-  void _showExperienceModeSelector(BuildContext context, AuthViewModel authVm, bool isDark) {
+  void _showExperienceModeSelector(BuildContext context, AuthViewModel authVm, bool isDark, AppLocalizations l10n) {
+    HapticHelper.light();
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (bCtx) => Container(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF0F1418) : Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          border: Border.all(
-            color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
-            width: 1,
-          ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.white24 : Colors.black12,
-                  borderRadius: BorderRadius.circular(2),
+      backgroundColor: isDark ? const Color(0xFF0F1418) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (bCtx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white24 : Colors.black12,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              'App Experience Mode',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
+              const SizedBox(height: 18),
+              Text(
+                l10n.settingsExpModeTitle,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Choose your preferred application focus and visible modules',
-              style: TextStyle(
-                fontSize: 13,
-                color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
+              const SizedBox(height: 4),
+              Text(
+                l10n.settingsExpModeSub,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
+                ),
               ),
-            ),
-            const SizedBox(height: 20),
-            _buildExperienceOption(
-              title: 'Trips & Expenses',
-              subtitle: 'Full experience with personal expense ledger, analytics, and group trip splits',
-              icon: Icons.pie_chart_outline_rounded,
-              isSelected: authVm.appExperienceMode == AppExperienceMode.all,
-              isDark: isDark,
-              onTap: () async {
-                HapticHelper.selection();
-                await authVm.setAppExperienceMode(AppExperienceMode.all);
-                if (bCtx.mounted) Navigator.pop(bCtx);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Switched to Trips & Expenses mode'), behavior: SnackBarBehavior.floating),
-                  );
-                }
-              },
-            ),
-            const SizedBox(height: 10),
-            _buildExperienceOption(
-              title: 'Trips Only',
-              subtitle: 'Streamlined UI focused purely on group trips, splits, and instant settlements',
-              icon: Icons.flight_takeoff_rounded,
-              isSelected: authVm.appExperienceMode == AppExperienceMode.tripsOnly,
-              isDark: isDark,
-              onTap: () async {
-                HapticHelper.selection();
-                await authVm.setAppExperienceMode(AppExperienceMode.tripsOnly);
-                if (bCtx.mounted) Navigator.pop(bCtx);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Switched to Trips Only mode'), behavior: SnackBarBehavior.floating),
-                  );
-                }
-              },
-            ),
-          ],
+              const SizedBox(height: 20),
+              _buildExperienceOption(
+                title: l10n.settingsExpTripsTitle,
+                subtitle: l10n.settingsExpTripsDesc,
+                icon: Icons.pie_chart_outline_rounded,
+                isSelected: authVm.appExperienceMode == AppExperienceMode.all,
+                isDark: isDark,
+                onTap: () async {
+                  HapticHelper.selection();
+                  await authVm.setAppExperienceMode(AppExperienceMode.all);
+                  if (bCtx.mounted) Navigator.pop(bCtx);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('${l10n.settingsExpTripsTitle} ✓'), behavior: SnackBarBehavior.floating),
+                    );
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+              _buildExperienceOption(
+                title: l10n.settingsExpTripsOnlyTitle,
+                subtitle: l10n.settingsExpTripsOnlyDesc,
+                icon: Icons.flight_takeoff_rounded,
+                isSelected: authVm.appExperienceMode == AppExperienceMode.tripsOnly,
+                isDark: isDark,
+                onTap: () async {
+                  HapticHelper.selection();
+                  await authVm.setAppExperienceMode(AppExperienceMode.tripsOnly);
+                  if (bCtx.mounted) Navigator.pop(bCtx);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('${l10n.settingsExpTripsOnlyTitle} ✓'), behavior: SnackBarBehavior.floating),
+                    );
+                  }
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -710,19 +709,20 @@ class _MasterSettingsViewState extends State<MasterSettingsView> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final security = context.watch<SecurityLockService>();
     final authVm = context.watch<AuthViewModel>();
+    final l10n = context.l10n;
     LocaleViewModel? localeVm;
     try {
       localeVm = context.watch<LocaleViewModel>();
     } catch (_) {}
 
     final currentLangLabel = localeVm != null
-        ? '${localeVm.currentLanguage.flagEmoji} ${localeVm.currentLanguage.nativeName}'
-        : '🇮🇳 English';
+        ? localeVm.currentLanguage.nativeName
+        : 'English';
     
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF080C0E) : const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Settings', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+        title: Text(l10n.settingsTitle, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => Navigator.pop(context),
@@ -732,48 +732,48 @@ class _MasterSettingsViewState extends State<MasterSettingsView> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
         children: [
-          _buildSectionHeader('General Preferences', isDark),
+          _buildSectionHeader(l10n.settingsSecGeneral, isDark),
           _buildSettingsGroup(isDark, [
-            _buildSettingTile('App Experience Mode', authVm.appExperienceMode == AppExperienceMode.tripsOnly ? 'Trips Only (Focused)' : 'Trips & Expenses (Full)', Icons.auto_awesome_mosaic_rounded, isDark, () => _showExperienceModeSelector(context, authVm, isDark)),
-            _buildSettingTile('Payment Methods', 'UPI IDs & Receiving QR', Icons.payment_rounded, isDark, () => context.push('/payment-methods')),
-            _buildSettingTile('Notifications', 'Alerts & Live trip settlements', Icons.notifications_none_rounded, isDark, () => context.push('/notifications')),
-            _buildSettingTile('Base Currency', '$_selectedCurrency - Active default currency', Icons.currency_rupee_rounded, isDark, () => _showCurrencySelector(isDark)),
-            _buildSettingTile('Language', currentLangLabel, Icons.language_rounded, isDark, () => LanguageSelectSheet.show(context)),
-            _buildSettingTile('Date Format', '$_selectedDateFormat (tap to change)', Icons.calendar_today_rounded, isDark, () => _showDateFormatSelector(isDark)),
+            _buildSettingTile(l10n.settingsAppExpMode, authVm.appExperienceMode == AppExperienceMode.tripsOnly ? l10n.settingsExpTripsOnly : l10n.settingsExpFull, Icons.auto_awesome_mosaic_rounded, isDark, () => _showExperienceModeSelector(context, authVm, isDark, l10n)),
+            _buildSettingTile(l10n.settingsPaymentMethods, l10n.settingsPaymentMethodsSub, Icons.payment_rounded, isDark, () => context.push('/payment-methods')),
+            _buildSettingTile(l10n.settingsNotifications, l10n.settingsNotificationsSub, Icons.notifications_none_rounded, isDark, () => context.push('/notifications')),
+            _buildSettingTile(l10n.settingsBaseCurrency, l10n.settingsBaseCurrencySub(_selectedCurrency), Icons.currency_rupee_rounded, isDark, () => _showCurrencySelector(isDark, l10n)),
+            _buildSettingTile(l10n.settingsLanguage, currentLangLabel, Icons.language_rounded, isDark, () => LanguageSelectSheet.show(context)),
+            _buildSettingTile(l10n.settingsDateFormat, l10n.settingsDateFormatSub(_selectedDateFormat), Icons.calendar_today_rounded, isDark, () => _showDateFormatSelector(isDark, l10n)),
           ]),
 
           const SizedBox(height: 24),
 
-          _buildSectionHeader('Security & Vault', isDark),
+          _buildSectionHeader(l10n.settingsSecSecurity, isDark),
           _buildSettingsGroup(isDark, [
-            _buildSettingTile('Secret Recovery Key', 'View & copy offline private key', Icons.lock_outline_rounded, isDark, () => _showRecoveryKeySheet(isDark)),
+            _buildSettingTile(l10n.settingsRecoveryKey, l10n.settingsRecoveryKeySub, Icons.lock_outline_rounded, isDark, () => _showRecoveryKeySheet(isDark)),
             _buildToggleTile(
-              'App Lock',
-              security.hasPin ? 'PIN protection active on open' : 'Require PIN or biometric on open',
+              l10n.settingsAppLock,
+              security.hasPin ? l10n.settingsAppLockOn : l10n.settingsAppLockOff,
               Icons.security_rounded,
               security.isAppLockEnabled,
               isDark,
               _handleAppLockToggle,
             ),
             _buildToggleTile(
-              'Biometric Login',
-              security.isBiometricsSupported ? 'Fingerprint & Face unlock' : 'Not supported on this device',
+              l10n.settingsBiometrics,
+              security.isBiometricsSupported ? l10n.settingsBiometricsOn : l10n.settingsBiometricsOff,
               Icons.fingerprint_rounded,
               security.isBiometricsEnabled,
               isDark,
               _handleBiometricsToggle,
             ),
             if (security.hasPin)
-              _buildSettingTile('Change Security PIN', 'Update 4-digit passcode', Icons.pin_outlined, isDark, () => SetPinSheet.show(context)),
+              _buildSettingTile(l10n.settingsChangePin, l10n.settingsChangePinSub, Icons.pin_outlined, isDark, () => SetPinSheet.show(context)),
           ]),
 
           const SizedBox(height: 24),
 
-          _buildSectionHeader('Data & Diagnostics', isDark),
+          _buildSectionHeader(l10n.settingsSecData, isDark),
           _buildSettingsGroup(isDark, [
-            _buildSettingTile('Export Data', 'Download complete JSON / CSV archive', Icons.file_download_outlined, isDark, () => _showExportDataSheet(isDark)),
-            _buildSettingTile('Clear Cache', _cacheSizeMb > 0 ? '${_cacheSizeMb.toStringAsFixed(1)} MB temporary cache' : '0.0 KB (Clean)', Icons.cleaning_services_outlined, isDark, () => _showClearCacheDialog(isDark)),
-            _buildSettingTile('App Version & Diagnostics', 'v2.2.0 (Build 42) · Local-First Engine', Icons.info_outline_rounded, isDark, () => _showAboutSheet(isDark)),
+            _buildSettingTile(l10n.settingsExportData, l10n.settingsExportDataSub, Icons.file_download_outlined, isDark, () => _showExportDataSheet(isDark)),
+            _buildSettingTile(l10n.settingsClearCache, _cacheSizeMb > 0 ? '${_cacheSizeMb.toStringAsFixed(1)} MB temporary cache' : '0.0 KB (Clean)', Icons.cleaning_services_outlined, isDark, () => _showClearCacheDialog(isDark)),
+            _buildSettingTile(l10n.settingsAppVersion, l10n.settingsAppVersionSub, Icons.info_outline_rounded, isDark, () => _showAboutSheet(isDark)),
           ]),
 
           const SizedBox(height: 40),

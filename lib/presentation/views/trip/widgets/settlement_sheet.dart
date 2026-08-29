@@ -190,17 +190,17 @@ class _SettlementSheetState extends State<SettlementSheet> {
         context: context,
         builder: (dCtx) => AlertDialog(
           shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
-          title: const Text('Record Settlement'),
-          content: Text('Confirm that $fromName has paid ${CurrencyFormatter.formatPaise(amountInPaise, currencyCode: widget.trip.currencyCode)} to $toName?'),
+          title: Text(l10n.settlementRecordDialogTitle),
+          content: Text(l10n.settlementRecordDialogBody(fromName, CurrencyFormatter.formatPaise(amountInPaise, currencyCode: widget.trip.currencyCode), toName)),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dCtx, false),
-              child: const Text('Cancel'),
+              child: Text(l10n.actionCancel),
             ),
             FilledButton(
               style: FilledButton.styleFrom(backgroundColor: AppColors.emeraldPrimary),
               onPressed: () => Navigator.pop(dCtx, true),
-              child: const Text('Confirm'),
+              child: Text(l10n.actionConfirm),
             ),
           ],
         ),
@@ -221,7 +221,7 @@ class _SettlementSheetState extends State<SettlementSheet> {
           if (mounted) {
             setState(() => _paidTransferKeys.add(transferKey));
             HapticHelper.success();
-            KithSuccessToast.show(context, 'Settlement recorded ✓');
+            KithSuccessToast.show(context, l10n.settlementPaidSuccess);
           }
         } finally {
           if (mounted) {
@@ -239,6 +239,7 @@ class _SettlementSheetState extends State<SettlementSheet> {
     final storage = context.read<LocalStorageService>();
     final myUpiId = storage.getPrimaryUpiId();
     final formattedAmt = CurrencyFormatter.formatPaise(amountInPaise, currencyCode: widget.trip.currencyCode);
+    final l10n = context.l10n;
 
     return showModalBottomSheet<bool>(
       context: context,
@@ -290,7 +291,7 @@ class _SettlementSheetState extends State<SettlementSheet> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Payment Received?',
+                          l10n.settlementConfirmReceivedTitle,
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w800,
@@ -298,7 +299,7 @@ class _SettlementSheetState extends State<SettlementSheet> {
                           ),
                         ),
                         Text(
-                          '$fromName owes you $formattedAmt',
+                          l10n.settlementConfirmReceivedBody(formattedAmt, fromName),
                           style: TextStyle(
                             fontSize: 13,
                             color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
@@ -322,7 +323,7 @@ class _SettlementSheetState extends State<SettlementSheet> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Amount to Clear:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    Text(l10n.settlementAmountToClear, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                     Text(
                       formattedAmt,
                       style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Color(0xFF14B8A6)),
@@ -342,13 +343,13 @@ class _SettlementSheetState extends State<SettlementSheet> {
                           Navigator.pop(ctx, false);
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Your UPI ID ($myUpiId) copied to share!'),
+                              content: Text(l10n.settlementUpiCopiedToast(myUpiId)),
                               behavior: SnackBarBehavior.floating,
                             ),
                           );
                         },
                         icon: const Icon(Icons.copy_rounded, size: 16),
-                        label: const Text('Share My UPI'),
+                        label: Text(l10n.settlementShareMyUpi),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 13),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -367,7 +368,7 @@ class _SettlementSheetState extends State<SettlementSheet> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         elevation: 0,
                       ),
-                      child: const Text('Yes, Received ✓', style: TextStyle(fontWeight: FontWeight.w700)),
+                      child: Text(l10n.settlementYesReceived, style: const TextStyle(fontWeight: FontWeight.w700)),
                     ),
                   ),
                 ],
@@ -382,6 +383,7 @@ class _SettlementSheetState extends State<SettlementSheet> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = context.l10n;
     final tripDetailVm = Provider.of<TripDetailViewModel?>(context);
     final effectiveBalanceSummary = tripDetailVm?.balanceSummary ?? widget.balanceSummary;
     final settlements = effectiveBalanceSummary.simplifiedSettlements;
@@ -403,12 +405,12 @@ class _SettlementSheetState extends State<SettlementSheet> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Settle Up',
+                    l10n.settlementTitle,
                     style: AppTypography.titleLarge(isDark: isDark),
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Fewest payments needed to balance everyone out',
+                    l10n.settlementSubtitle,
                     style: AppTypography.bodySmall(isDark: isDark),
                   ),
                 ],
@@ -435,12 +437,12 @@ class _SettlementSheetState extends State<SettlementSheet> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'All Settled Up!',
+                      l10n.settlementEmptyTitle,
                       style: AppTypography.titleSmall(isDark: isDark),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Everyone is paid up. No transfers needed.',
+                      l10n.settlementEmptyDesc,
                       style: AppTypography.bodySmall(isDark: isDark),
                     ),
                   ],
@@ -472,13 +474,13 @@ class _SettlementSheetState extends State<SettlementSheet> {
                   String actionButtonLabel;
                   IconData actionButtonIcon;
                   if (isReceiverCurrentUser) {
-                    actionButtonLabel = 'Mark Received';
+                    actionButtonLabel = l10n.settlementMarkReceivedBtn;
                     actionButtonIcon = Icons.check_circle_outline_rounded;
                   } else if (isPayerCurrentUser) {
-                    actionButtonLabel = 'Pay $toName';
+                    actionButtonLabel = l10n.settlementPayPersonBtn(toName);
                     actionButtonIcon = Icons.bolt_rounded;
                   } else {
-                    actionButtonLabel = 'Record Payment';
+                    actionButtonLabel = l10n.settlementRecordPaymentBtn;
                     actionButtonIcon = Icons.edit_note_rounded;
                   }
 
@@ -502,7 +504,7 @@ class _SettlementSheetState extends State<SettlementSheet> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          isPayerCurrentUser ? 'You' : fromName,
+                                          isPayerCurrentUser ? l10n.translate('balance_you') : fromName,
                                           style: TextStyle(
                                             fontWeight: FontWeight.w600,
                                             fontSize: 14,
@@ -511,7 +513,7 @@ class _SettlementSheetState extends State<SettlementSheet> {
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                         ),
-                                        const Text('Pays', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                                        Text(l10n.settlementPaysLabel, style: const TextStyle(fontSize: 11, color: Colors.grey)),
                                       ],
                                     ),
                                   ),
@@ -546,7 +548,7 @@ class _SettlementSheetState extends State<SettlementSheet> {
                                       crossAxisAlignment: CrossAxisAlignment.end,
                                       children: [
                                         Text(
-                                          isReceiverCurrentUser ? 'You' : toName,
+                                          isReceiverCurrentUser ? l10n.translate('balance_you') : toName,
                                           style: TextStyle(
                                             fontWeight: FontWeight.w600,
                                             fontSize: 14,
@@ -555,7 +557,7 @@ class _SettlementSheetState extends State<SettlementSheet> {
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                         ),
-                                        const Text('Receives', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                                        Text(l10n.settlementReceivesLabel, style: const TextStyle(fontSize: 11, color: Colors.grey)),
                                       ],
                                     ),
                                   ),
@@ -573,7 +575,7 @@ class _SettlementSheetState extends State<SettlementSheet> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              toMember?.upiId != null ? 'UPI: ${toMember!.upiId}' : (isReceiverCurrentUser ? 'You are owed' : 'Direct member payment'),
+                              toMember?.upiId != null ? l10n.settlementUpiReadyTag(toMember!.upiId!) : (isReceiverCurrentUser ? l10n.settlementYouOwed : l10n.settlementDirectMember),
                               style: TextStyle(
                                 fontSize: 11.5,
                                 color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
@@ -601,7 +603,7 @@ class _SettlementSheetState extends State<SettlementSheet> {
                                       ),
                                       const SizedBox(width: 4),
                                       Text(
-                                        'Settled',
+                                        l10n.settlementSettledBadge,
                                         style: TextStyle(
                                           fontSize: 12,
                                           fontWeight: FontWeight.w700,
@@ -660,7 +662,7 @@ class _SettlementSheetState extends State<SettlementSheet> {
 
           if (widget.onMarkSettled != null)
             AppButton(
-              text: 'Mark Entire Trip as Settled',
+              text: l10n.settlementMarkAllDone,
               icon: Icons.check_circle_rounded,
               isFullWidth: true,
               onPressed: () {

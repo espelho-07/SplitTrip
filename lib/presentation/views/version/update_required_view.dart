@@ -1,5 +1,6 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -15,6 +16,7 @@ class UpdateRequiredView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = context.l10n;
     final versionVm = context.watch<VersionViewModel>();
 
     return PopScope(
@@ -66,7 +68,7 @@ class UpdateRequiredView extends StatelessWidget {
                       ),
                     ),
                     child: Text(
-                      'UPDATE REQUIRED',
+                      l10n.versionUpdateRequiredTitle.toUpperCase(),
                       style: AppTypography.badgeText(color: isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight).copyWith(
                         fontWeight: FontWeight.w800,
                         fontSize: 11,
@@ -78,7 +80,7 @@ class UpdateRequiredView extends StatelessWidget {
 
                   // Title
                   Text(
-                    'Update Kith to Continue',
+                    l10n.versionUpdateKithBtn,
                     textAlign: TextAlign.center,
                     style: AppTypography.titleLarge(isDark: isDark).copyWith(
                       fontSize: 24,
@@ -89,7 +91,7 @@ class UpdateRequiredView extends StatelessWidget {
 
                   // Subtitle
                   Text(
-                    'This version of Kith is no longer supported. Please update to continue using trips, expenses, and multiplayer sync safely.',
+                    l10n.versionUpdateRequiredDesc,
                     textAlign: TextAlign.center,
                     style: AppTypography.bodyMedium(isDark: isDark).copyWith(
                       color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
@@ -311,7 +313,7 @@ class UpdateRequiredView extends StatelessWidget {
                           ),
                           const SizedBox(width: AppSpacing.sm),
                           Text(
-                            'Update Kith Now',
+                            l10n.versionUpdateKithBtn,
                             style: AppTypography.buttonText(color: Colors.black).copyWith(
                               fontWeight: FontWeight.w800,
                               fontSize: 16,

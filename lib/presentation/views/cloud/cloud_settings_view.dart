@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -19,14 +20,14 @@ import 'cloud_sync_sheet.dart';
 class CloudSettingsView extends StatelessWidget {
   const CloudSettingsView({super.key});
 
-  String _formatLastSync(DateTime? time) {
-    if (time == null) return 'Never synced';
+  String _formatLastSync(DateTime? time, AppLocalizations l10n) {
+    if (time == null) return l10n.cloudSyncNever;
     final now = DateTime.now();
     final diff = now.difference(time);
 
-    if (diff.inSeconds < 60) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inSeconds < 60) return l10n.cloudSyncJustNow;
+    if (diff.inMinutes < 60) return l10n.cloudSyncMinsAgo(diff.inMinutes);
+    if (diff.inHours < 24) return l10n.cloudSyncHoursAgo(diff.inHours);
     return DateFormat('dd MMM, hh:mm a').format(time);
   }
 
@@ -34,24 +35,23 @@ class CloudSettingsView extends StatelessWidget {
     final authVm = context.read<AuthViewModel>();
     final homeVm = context.read<HomeViewModel>();
     final personalVm = context.read<PersonalExpenseViewModel>();
+    final l10n = context.l10n;
 
     final confirm = await showDialog<bool>(
       context: context,
       builder: (dCtx) => AlertDialog(
         shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
-        title: const Text('Sign Out of Kith?'),
-        content: const Text(
-          'Your active cloud session will be closed on this device. You can restore your data anytime using Google or your Recovery Key.',
-        ),
+        title: Text(l10n.profileSignOutTitle),
+        content: Text(l10n.profileSignOutDesc),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dCtx, false),
-            child: const Text('Cancel'),
+            child: Text(l10n.actionCancel),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () => Navigator.pop(dCtx, true),
-            child: const Text('Sign Out'),
+            child: Text(l10n.profileSignOutConfirm),
           ),
         ],
       ),
@@ -65,7 +65,7 @@ class CloudSettingsView extends StatelessWidget {
 
       final rootCtx = AppRouter.navigatorKey.currentContext;
       if (rootCtx != null && rootCtx.mounted) {
-        KithSuccessToast.show(rootCtx, 'Signed out successfully ✓');
+        KithSuccessToast.show(rootCtx, l10n.profileSignOutSuccess);
       }
     }
   }
@@ -75,6 +75,7 @@ class CloudSettingsView extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final authVm = context.watch<AuthViewModel>();
     final syncService = context.watch<SyncService>();
+    final l10n = context.l10n;
     final user = authVm.currentUser;
     final pendingCount = syncService.pendingCount;
     final lastSync = authVm.lastSyncTime;
@@ -82,7 +83,7 @@ class CloudSettingsView extends StatelessWidget {
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: AppBar(
-        title: const Text('Cloud & Account Settings'),
+        title: Text(l10n.cloudTitle),
         elevation: 0,
         backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
       ),
@@ -90,7 +91,7 @@ class CloudSettingsView extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
         children: [
           // SECTION 1: ACCOUNT
-          _buildSectionHeader('ACCOUNT IDENTITY', isDark),
+          _buildSectionHeader(l10n.cloudSecAccount, isDark),
           const SizedBox(height: AppSpacing.xs),
           SurfaceCard(
             backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
@@ -163,7 +164,7 @@ class CloudSettingsView extends StatelessWidget {
           const SizedBox(height: AppSpacing.lg),
 
           // SECTION 2: SYNC
-          _buildSectionHeader('CLOUD SYNCHRONIZATION', isDark),
+          _buildSectionHeader(l10n.cloudSecSync, isDark),
           const SizedBox(height: AppSpacing.xs),
           SurfaceCard(
             backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
@@ -175,7 +176,7 @@ class CloudSettingsView extends StatelessWidget {
                   dense: true,
                   leading: const Icon(Icons.cloud_done_rounded, size: 22, color: AppColors.emeraldPrimary),
                   title: Text(
-                    'Cloud Sync Status',
+                    l10n.authCloudSync,
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -184,13 +185,13 @@ class CloudSettingsView extends StatelessWidget {
                   ),
                   subtitle: Text(
                     pendingCount > 0
-                        ? '$pendingCount changes waiting to sync'
-                        : 'Up to date (Last: ${_formatLastSync(lastSync)})',
+                        ? '$pendingCount ${l10n.statusPending}'
+                        : 'Up to date (Last: ${_formatLastSync(lastSync, l10n)})',
                     style: AppTypography.bodySmall(isDark: isDark),
                   ),
                   trailing: TextButton(
                     onPressed: () => CloudSyncSheet.show(context),
-                    child: const Text('View Status'),
+                    child: Text(l10n.cloudFlushQueue),
                   ),
                 ),
                 Divider(height: 1, color: isDark ? Colors.white10 : Colors.black12),
@@ -200,7 +201,7 @@ class CloudSettingsView extends StatelessWidget {
                   activeThumbColor: AppColors.emeraldPrimary,
                   activeTrackColor: AppColors.emeraldPrimary.withValues(alpha: 0.5),
                   title: Text(
-                    'Auto-sync',
+                    l10n.cloudAutoSync,
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -208,7 +209,7 @@ class CloudSettingsView extends StatelessWidget {
                     ),
                   ),
                   subtitle: Text(
-                    "Kith syncs changes automatically whenever you're online.",
+                    l10n.cloudAutoSyncDesc,
                     style: AppTypography.bodySmall(isDark: isDark),
                   ),
                   value: authVm.isAutoSyncEnabled,
@@ -224,7 +225,7 @@ class CloudSettingsView extends StatelessWidget {
           const SizedBox(height: AppSpacing.lg),
 
           // SECTION 3: RECOVERY
-          _buildSectionHeader('EMERGENCY RECOVERY', isDark),
+          _buildSectionHeader(l10n.authRecoveryKey, isDark),
           const SizedBox(height: AppSpacing.xs),
           SurfaceCard(
             backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
@@ -241,7 +242,7 @@ class CloudSettingsView extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Recovery Key',
+                            l10n.authRecoveryKey,
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
@@ -262,14 +263,14 @@ class CloudSettingsView extends StatelessWidget {
                     ),
                     IconButton(
                       icon: const Icon(Icons.copy_rounded, size: 18),
-                      tooltip: 'Copy key',
+                      tooltip: l10n.cloudCopyKey,
                       onPressed: () {
                         if (user != null) {
                           Clipboard.setData(ClipboardData(text: user.recoveryKey));
                           HapticHelper.success();
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Recovery key copied! Save it in a safe place.'),
+                            SnackBar(
+                              content: Text(l10n.profileRecoveryCopied),
                               behavior: SnackBarBehavior.floating,
                             ),
                           );
@@ -280,7 +281,7 @@ class CloudSettingsView extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Your backup way to recover your Kith account and all data if you switch devices or lose access to Google.',
+                  l10n.cloudRecoveryCardDesc,
                   style: TextStyle(
                     fontSize: 11,
                     color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
@@ -293,7 +294,7 @@ class CloudSettingsView extends StatelessWidget {
           const SizedBox(height: AppSpacing.lg),
 
           // SECTION 4: PRIVACY & DATA BOUNDARIES
-          _buildSectionHeader('DATA PRIVACY & STORAGE', isDark),
+          _buildSectionHeader(l10n.settingsSecData, isDark),
           const SizedBox(height: AppSpacing.xs),
           SurfaceCard(
             backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
@@ -306,7 +307,7 @@ class CloudSettingsView extends StatelessWidget {
                     const Icon(Icons.lock_outline_rounded, size: 20, color: AppColors.emeraldPrimary),
                     const SizedBox(width: 10),
                     Text(
-                      'What is synced vs private',
+                      l10n.profilePrivacyPolicy,
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
@@ -317,9 +318,7 @@ class CloudSettingsView extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  '• Personal Expenses & Budgets: 100% private to your account.\n'
-                  '• Trip Ledgers & Receipts: Shared only with invited members of that trip.\n'
-                  '• Offline Cache: Safely encrypted on your device and synced upon reconnection.',
+                  l10n.profilePrivacySub,
                   style: TextStyle(
                     fontSize: 12,
                     height: 1.5,
@@ -333,7 +332,7 @@ class CloudSettingsView extends StatelessWidget {
           const SizedBox(height: AppSpacing.xl),
 
           // DANGER ZONE: SIGN OUT
-          _buildSectionHeader('DANGER ZONE', isDark),
+          _buildSectionHeader(l10n.profileSecDangerTitle, isDark),
           const SizedBox(height: AppSpacing.xs),
           SurfaceCard(
             backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
@@ -342,12 +341,12 @@ class CloudSettingsView extends StatelessWidget {
               contentPadding: EdgeInsets.zero,
               dense: true,
               leading: const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 22),
-              title: const Text(
-                'Sign Out',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.redAccent),
+              title: Text(
+                l10n.profileLogoutBtn,
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.redAccent),
               ),
               subtitle: Text(
-                'Invalidates active session and clears cached user credentials from this device.',
+                l10n.profileSignOutDesc,
                 style: AppTypography.bodySmall(isDark: isDark),
               ),
               trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey, size: 20),

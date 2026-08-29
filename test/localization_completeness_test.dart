@@ -1,7 +1,19 @@
-﻿import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:kith_app/core/localization/translations/as.dart';
+import 'package:kith_app/core/localization/translations/bn.dart';
 import 'package:kith_app/core/localization/translations/en.dart';
 import 'package:kith_app/core/localization/translations/gu.dart';
 import 'package:kith_app/core/localization/translations/hi.dart';
+import 'package:kith_app/core/localization/translations/ja.dart';
+import 'package:kith_app/core/localization/translations/kn.dart';
+import 'package:kith_app/core/localization/translations/ko.dart';
+import 'package:kith_app/core/localization/translations/ml.dart';
+import 'package:kith_app/core/localization/translations/mr.dart';
+import 'package:kith_app/core/localization/translations/or.dart';
+import 'package:kith_app/core/localization/translations/pa.dart';
+import 'package:kith_app/core/localization/translations/ta.dart';
+import 'package:kith_app/core/localization/translations/te.dart';
+import 'package:kith_app/core/localization/translations/zh.dart';
 
 void main() {
   group('Localization Completeness Tests', () {
@@ -10,36 +22,39 @@ void main() {
       expect(enTranslations.length, greaterThanOrEqualTo(100));
     });
 
-    test('guTranslations must contain ALL keys from enTranslations with non-empty values', () {
-      final missingKeys = <String>[];
-      final emptyKeys = <String>[];
+    final languages = <String, Map<String, String>>{
+      'Hindi (hi.dart)': hiTranslations,
+      'Gujarati (gu.dart)': guTranslations,
+      'Marathi (mr.dart)': mrTranslations,
+      'Tamil (ta.dart)': taTranslations,
+      'Telugu (te.dart)': teTranslations,
+      'Kannada (kn.dart)': knTranslations,
+      'Bengali (bn.dart)': bnTranslations,
+      'Punjabi (pa.dart)': paTranslations,
+      'Assamese (as.dart)': asTranslations,
+      'Odia (or.dart)': orTranslations,
+      'Malayalam (ml.dart)': mlTranslations,
+      'Chinese (zh.dart)': zhTranslations,
+      'Japanese (ja.dart)': jaTranslations,
+      'Korean (ko.dart)': koTranslations,
+    };
 
-      for (final key in enTranslations.keys) {
-        if (!guTranslations.containsKey(key)) {
-          missingKeys.add(key);
-        } else if (guTranslations[key] == null || guTranslations[key]!.trim().isEmpty) {
-          emptyKeys.add(key);
+    for (final entry in languages.entries) {
+      test('${entry.key} must contain ALL keys from enTranslations with non-empty values', () {
+        final missingKeys = <String>[];
+        final emptyKeys = <String>[];
+
+        for (final key in enTranslations.keys) {
+          if (!entry.value.containsKey(key)) {
+            missingKeys.add(key);
+          } else if (entry.value[key] == null || entry.value[key]!.trim().isEmpty) {
+            emptyKeys.add(key);
+          }
         }
-      }
 
-      expect(missingKeys, isEmpty, reason: 'Missing keys in Gujarati (gu.dart): $missingKeys');
-      expect(emptyKeys, isEmpty, reason: 'Empty values in Gujarati (gu.dart): $emptyKeys');
-    });
-
-    test('hiTranslations must contain ALL keys from enTranslations with non-empty values', () {
-      final missingKeys = <String>[];
-      final emptyKeys = <String>[];
-
-      for (final key in enTranslations.keys) {
-        if (!hiTranslations.containsKey(key)) {
-          missingKeys.add(key);
-        } else if (hiTranslations[key] == null || hiTranslations[key]!.trim().isEmpty) {
-          emptyKeys.add(key);
-        }
-      }
-
-      expect(missingKeys, isEmpty, reason: 'Missing keys in Hindi (hi.dart): $missingKeys');
-      expect(emptyKeys, isEmpty, reason: 'Empty values in Hindi (hi.dart): $emptyKeys');
-    });
+        expect(missingKeys, isEmpty, reason: 'Missing keys in ${entry.key}: $missingKeys');
+        expect(emptyKeys, isEmpty, reason: 'Empty values in ${entry.key}: $emptyKeys');
+      });
+    }
   });
 }

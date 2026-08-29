@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../../core/localization/app_localizations.dart';
 import '../../../../core/network/api_exceptions.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
@@ -65,7 +66,7 @@ class _TripCompletionVerificationSheetState
     extends State<TripCompletionVerificationSheet> {
   VerificationStage _stage = VerificationStage.idle;
   double _progress = 0.0;
-  String _statusMessage = 'Preparing your trip...';
+  String _statusMessage = '';
   TripSyncStatus? _syncStatus;
   String? _errorMessage;
   bool _isOffline = false;
@@ -73,15 +74,18 @@ class _TripCompletionVerificationSheetState
   @override
   void initState() {
     super.initState();
-    _startVerification();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startVerification();
+    });
   }
 
   Future<void> _startVerification() async {
     if (!mounted) return;
+    final l10n = context.l10n;
     setState(() {
       _stage = VerificationStage.checkingConnectivity;
       _progress = 0.10;
-      _statusMessage = 'Checking server connectivity...';
+      _statusMessage = l10n.tripCompCheckingConnectivity;
       _errorMessage = null;
       _isOffline = false;
     });
@@ -98,7 +102,7 @@ class _TripCompletionVerificationSheetState
         setState(() {
           _stage = VerificationStage.flushingLocal;
           _progress = 0.25;
-          _statusMessage = 'Flushing local pending changes...';
+          _statusMessage = l10n.tripCompFlushingLocal;
         });
       }
 
@@ -111,7 +115,7 @@ class _TripCompletionVerificationSheetState
         setState(() {
           _stage = VerificationStage.queryingTripState;
           _progress = 0.50;
-          _statusMessage = 'Checking latest trip state on server...';
+          _statusMessage = l10n.tripCompQueryingState;
         });
       }
 
@@ -123,7 +127,7 @@ class _TripCompletionVerificationSheetState
           setState(() {
             _stage = VerificationStage.requestingSync;
             _progress = 0.75;
-            _statusMessage = 'Requesting sync from active devices...';
+            _statusMessage = l10n.tripCompCheckingParticipants;
           });
         }
 
@@ -140,7 +144,7 @@ class _TripCompletionVerificationSheetState
         setState(() {
           _stage = VerificationStage.verifying;
           _progress = 0.90;
-          _statusMessage = 'Verifying synchronization acknowledgments...';
+          _statusMessage = l10n.tripCompCheckingParticipants;
         });
       }
 
@@ -152,10 +156,10 @@ class _TripCompletionVerificationSheetState
           _progress = 1.0;
           if (status.canCompleteNormally) {
             _stage = VerificationStage.readyToComplete;
-            _statusMessage = 'Trip is fully synchronized and ready to complete.';
+            _statusMessage = l10n.tripCompReadyDesc;
           } else {
             _stage = VerificationStage.syncBlocked;
-            _statusMessage = 'Unconfirmed changes detected on one or more devices.';
+            _statusMessage = l10n.tripCompPendingDesc;
           }
         });
         HapticHelper.selection();
@@ -229,6 +233,7 @@ class _TripCompletionVerificationSheetState
 
   void _promptForcedCompletionConfirmation() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = context.l10n;
     showDialog(
       context: context,
       builder: (dialogCtx) => AlertDialog(
@@ -238,7 +243,7 @@ class _TripCompletionVerificationSheetState
           children: [
             const Icon(Icons.warning_amber_rounded, color: AppColors.amberAccent, size: 24),
             const SizedBox(width: 10),
-            Text('Complete Anyway?', style: AppTypography.titleMedium(isDark: isDark)),
+            Text(l10n.tripCompDialogTitle, style: AppTypography.titleMedium(isDark: isDark)),
           ],
         ),
         content: Column(
@@ -246,9 +251,7 @@ class _TripCompletionVerificationSheetState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'One or more devices still have changes that haven\'t reached the server.\n\n'
-              'Marking the trip as completed now means those changes may not be included in the final settlement.\n\n'
-              'Note: Pre-existing offline changes will NOT be deleted or discarded.',
+              l10n.tripCompDialogDesc,
               style: AppTypography.bodySmall(isDark: isDark),
             ),
           ],
@@ -256,7 +259,7 @@ class _TripCompletionVerificationSheetState
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogCtx),
-            child: Text('Keep Open', style: TextStyle(color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted)),
+            child: Text(l10n.tripCompDialogCancel, style: TextStyle(color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -268,7 +271,7 @@ class _TripCompletionVerificationSheetState
               Navigator.pop(dialogCtx);
               _executeCompletion(forced: true);
             },
-            child: const Text('Complete Anyway'),
+            child: Text(l10n.tripCompDialogConfirm),
           ),
         ],
       ),
@@ -278,6 +281,7 @@ class _TripCompletionVerificationSheetState
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = context.l10n;
     final isVerifying = _stage == VerificationStage.checkingConnectivity ||
         _stage == VerificationStage.flushingLocal ||
         _stage == VerificationStage.queryingTripState ||
@@ -315,11 +319,11 @@ class _TripCompletionVerificationSheetState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _getHeaderTitle(),
+                      _getHeaderTitle(l10n),
                       style: AppTypography.titleLarge(isDark: isDark),
                     ),
                     Text(
-                      'Multi-Participant Final Sync Verification',
+                      l10n.tripCompSyncSub,
                       style: AppTypography.bodySmall(isDark: isDark),
                     ),
                   ],
@@ -377,7 +381,7 @@ class _TripCompletionVerificationSheetState
           // Participant Sync Status Breakdown Card
           if (_syncStatus != null && _syncStatus!.participants.isNotEmpty) ...[
             Text(
-              'Participant Sync State',
+              l10n.tripCompParticipantHeader,
               style: AppTypography.bodySmall(isDark: isDark).copyWith(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
@@ -400,7 +404,7 @@ class _TripCompletionVerificationSheetState
                   ),
                   itemBuilder: (ctx, idx) {
                     final p = _syncStatus!.participants[idx];
-                    return _buildParticipantRow(p, isDark);
+                    return _buildParticipantRow(p, isDark, l10n);
                   },
                 ),
               ),
@@ -414,8 +418,8 @@ class _TripCompletionVerificationSheetState
               isDark: isDark,
               color: AppColors.emeraldPrimary,
               icon: Icons.check_circle_outline,
-              title: 'Trip is Ready to Complete',
-              description: 'All participant devices have acknowledged the latest revisions. Completing now finalizes settlement amounts cleanly.',
+              title: l10n.tripCompReadyTitle,
+              description: l10n.tripCompReadyDesc,
             ),
             const SizedBox(height: AppSpacing.md),
           ] else if (_stage == VerificationStage.syncBlocked) ...[
@@ -423,8 +427,8 @@ class _TripCompletionVerificationSheetState
               isDark: isDark,
               color: AppColors.amberAccent,
               icon: Icons.warning_amber_rounded,
-              title: 'Unconfirmed Changes Detected',
-              description: 'One or more members are offline or haven\'t synced yet. You can keep the trip open or finalize now with pending changes.',
+              title: l10n.tripCompPendingTitle,
+              description: l10n.tripCompPendingDesc,
             ),
             const SizedBox(height: AppSpacing.md),
           ] else if (_stage == VerificationStage.error) ...[
@@ -432,20 +436,20 @@ class _TripCompletionVerificationSheetState
               isDark: isDark,
               color: isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight,
               icon: Icons.error_outline,
-              title: _isOffline ? 'Server Unreachable' : 'Verification Error',
-              description: _errorMessage ?? 'Failed to verify synchronization with server.',
+              title: _isOffline ? l10n.tripCompOfflineTitle : l10n.tripCompOfflineDesc,
+              description: _errorMessage ?? l10n.tripCompOfflineDesc,
             ),
             const SizedBox(height: AppSpacing.md),
           ],
 
           // Action Buttons
-          _buildActionButtons(isDark),
+          _buildActionButtons(isDark, l10n),
         ],
       ),
     );
   }
 
-  Widget _buildParticipantRow(ParticipantSyncInfo p, bool isDark) {
+  Widget _buildParticipantRow(ParticipantSyncInfo p, bool isDark, AppLocalizations l10n) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
@@ -484,7 +488,7 @@ class _TripCompletionVerificationSheetState
                   children: [
                     Flexible(
                       child: Text(
-                        p.isCurrentUser ? '${p.displayName} (You)' : p.displayName,
+                        p.isCurrentUser ? '${p.displayName} (${l10n.translate('balance_you')})' : p.displayName,
                         style: AppTypography.bodyMedium(isDark: isDark).copyWith(
                           fontWeight: p.isCurrentUser ? FontWeight.bold : FontWeight.w500,
                         ),
@@ -500,7 +504,7 @@ class _TripCompletionVerificationSheetState
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          'Host',
+                          l10n.tripCompHostTag,
                           style: AppTypography.bodySmall(isDark: isDark).copyWith(
                             fontSize: 10,
                             color: AppColors.indigoAccent,
@@ -511,19 +515,19 @@ class _TripCompletionVerificationSheetState
                   ],
                 ),
                 Text(
-                  p.isOnline ? 'Online' : 'Last sync: ${p.lastSyncFormatted}',
+                  p.isOnline ? l10n.tripCompStatusOnline : l10n.tripCompLastSync(p.lastSyncFormatted),
                   style: AppTypography.bodySmall(isDark: isDark),
                 ),
               ],
             ),
           ),
-          _buildSyncBadge(p, isDark),
+          _buildSyncBadge(p, isDark, l10n),
         ],
       ),
     );
   }
 
-  Widget _buildSyncBadge(ParticipantSyncInfo p, bool isDark) {
+  Widget _buildSyncBadge(ParticipantSyncInfo p, bool isDark, AppLocalizations l10n) {
     switch (p.syncStatus) {
       case ParticipantSyncState.synced:
         return Container(
@@ -538,7 +542,7 @@ class _TripCompletionVerificationSheetState
               const Icon(Icons.check, size: 14, color: AppColors.positiveGreenLight),
               const SizedBox(width: 4),
               Text(
-                'Synced',
+                l10n.tripCompStatusSynced,
                 style: AppTypography.bodySmall(isDark: isDark).copyWith(
                   color: AppColors.positiveGreenLight,
                   fontWeight: FontWeight.w600,
@@ -564,7 +568,7 @@ class _TripCompletionVerificationSheetState
               ),
               const SizedBox(width: 5),
               Text(
-                'Syncing',
+                l10n.tripCompStatusSyncing,
                 style: AppTypography.bodySmall(isDark: isDark).copyWith(
                   color: AppColors.amberAccent,
                   fontWeight: FontWeight.w600,
@@ -587,7 +591,7 @@ class _TripCompletionVerificationSheetState
               Icon(Icons.cloud_off_outlined, size: 14, color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
               const SizedBox(width: 4),
               Text(
-                'Offline',
+                l10n.tripCompStatusOffline,
                 style: AppTypography.bodySmall(isDark: isDark).copyWith(
                   color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
                   fontWeight: FontWeight.w600,
@@ -642,14 +646,14 @@ class _TripCompletionVerificationSheetState
     );
   }
 
-  Widget _buildActionButtons(bool isDark) {
+  Widget _buildActionButtons(bool isDark, AppLocalizations l10n) {
     switch (_stage) {
       case VerificationStage.readyToComplete:
         return Row(
           children: [
             Expanded(
               child: AppButton(
-                text: 'Keep Active',
+                text: l10n.tripCompKeepOpenBtn,
                 variant: AppButtonVariant.outline,
                 onPressed: () => Navigator.pop(context),
               ),
@@ -657,7 +661,7 @@ class _TripCompletionVerificationSheetState
             const SizedBox(width: 12),
             Expanded(
               child: AppButton(
-                text: 'Complete Trip',
+                text: l10n.tripCompTitle,
                 onPressed: () => _executeCompletion(forced: false),
               ),
             ),
@@ -668,14 +672,14 @@ class _TripCompletionVerificationSheetState
           children: [
             Expanded(
               child: AppButton(
-                text: 'Keep Trip Open',
+                text: l10n.tripCompKeepOpenBtn,
                 onPressed: () => Navigator.pop(context),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: AppButton(
-                text: 'Complete Anyway',
+                text: l10n.tripCompMarkAnywayBtn,
                 variant: AppButtonVariant.outline,
                 onPressed: _promptForcedCompletionConfirmation,
               ),
@@ -687,7 +691,7 @@ class _TripCompletionVerificationSheetState
           children: [
             Expanded(
               child: AppButton(
-                text: 'Cancel',
+                text: l10n.actionCancel,
                 variant: AppButtonVariant.outline,
                 onPressed: () => Navigator.pop(context),
               ),
@@ -695,7 +699,7 @@ class _TripCompletionVerificationSheetState
             const SizedBox(width: 12),
             Expanded(
               child: AppButton(
-                text: 'Retry Sync',
+                text: l10n.actionRetry,
                 onPressed: _startVerification,
               ),
             ),
@@ -712,7 +716,7 @@ class _TripCompletionVerificationSheetState
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Text(
-              'Please wait while sync verification finishes...',
+              l10n.tripCompPleaseWait,
               style: AppTypography.bodySmall(isDark: isDark),
             ),
           ),
@@ -746,18 +750,18 @@ class _TripCompletionVerificationSheetState
     }
   }
 
-  String _getHeaderTitle() {
+  String _getHeaderTitle(AppLocalizations l10n) {
     switch (_stage) {
       case VerificationStage.readyToComplete:
-        return 'Ready to Complete';
+        return l10n.tripCompReadyTitle;
       case VerificationStage.syncBlocked:
-        return 'Sync Incomplete';
+        return l10n.tripCompPendingTitle;
       case VerificationStage.error:
-        return 'Sync Check Failed';
+        return l10n.tripCompOfflineTitle;
       case VerificationStage.completing:
-        return 'Completing Trip...';
+        return l10n.tripCompTitle;
       default:
-        return 'Preparing Your Trip...';
+        return l10n.tripCompPreparing;
     }
   }
 }

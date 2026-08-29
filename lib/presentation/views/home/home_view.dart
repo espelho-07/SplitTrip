@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/localization/app_localizations.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/realtime_client.dart';
 import '../../../core/services/kith_widget_service.dart';
@@ -166,6 +167,7 @@ class _HomeViewState extends State<HomeView> {
     final authVm = context.watch<AuthViewModel>();
     final versionVm = Provider.of<VersionViewModel?>(context);
     final user = authVm.currentUser;
+    final l10n = context.l10n;
 
     if (versionVm?.shouldBlockApp == true) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -202,43 +204,43 @@ class _HomeViewState extends State<HomeView> {
           ];
 
     final destinations = isTripsOnly
-        ? const [
+        ? [
             NavigationDestination(
-              icon: Icon(Icons.home_outlined, size: 22),
-              selectedIcon: Icon(Icons.home_rounded, size: 22, color: Color(0xFF14B8A6)),
-              label: 'Home',
+              icon: const Icon(Icons.home_outlined, size: 22),
+              selectedIcon: const Icon(Icons.home_rounded, size: 22, color: Color(0xFF14B8A6)),
+              label: l10n.navHome,
             ),
             NavigationDestination(
-              icon: Icon(Icons.flight_takeoff_outlined, size: 22),
-              selectedIcon: Icon(Icons.flight_takeoff_rounded, size: 22, color: Color(0xFF14B8A6)),
-              label: 'Trips',
+              icon: const Icon(Icons.flight_takeoff_outlined, size: 22),
+              selectedIcon: const Icon(Icons.flight_takeoff_rounded, size: 22, color: Color(0xFF14B8A6)),
+              label: l10n.navTrips,
             ),
             NavigationDestination(
-              icon: Icon(Icons.person_outline_rounded, size: 22),
-              selectedIcon: Icon(Icons.person_rounded, size: 22, color: Color(0xFF14B8A6)),
-              label: 'Profile',
+              icon: const Icon(Icons.person_outline_rounded, size: 22),
+              selectedIcon: const Icon(Icons.person_rounded, size: 22, color: Color(0xFF14B8A6)),
+              label: l10n.navProfile,
             ),
           ]
-        : const [
+        : [
             NavigationDestination(
-              icon: Icon(Icons.home_outlined, size: 22),
-              selectedIcon: Icon(Icons.home_rounded, size: 22, color: Color(0xFF14B8A6)),
-              label: 'Home',
+              icon: const Icon(Icons.home_outlined, size: 22),
+              selectedIcon: const Icon(Icons.home_rounded, size: 22, color: Color(0xFF14B8A6)),
+              label: l10n.navHome,
             ),
             NavigationDestination(
-              icon: Icon(Icons.flight_takeoff_outlined, size: 22),
-              selectedIcon: Icon(Icons.flight_takeoff_rounded, size: 22, color: Color(0xFF14B8A6)),
-              label: 'Trips',
+              icon: const Icon(Icons.flight_takeoff_outlined, size: 22),
+              selectedIcon: const Icon(Icons.flight_takeoff_rounded, size: 22, color: Color(0xFF14B8A6)),
+              label: l10n.navTrips,
             ),
             NavigationDestination(
-              icon: Icon(Icons.receipt_long_outlined, size: 22),
-              selectedIcon: Icon(Icons.receipt_long_rounded, size: 22, color: Color(0xFF14B8A6)),
-              label: 'Expenses',
+              icon: const Icon(Icons.receipt_long_outlined, size: 22),
+              selectedIcon: const Icon(Icons.receipt_long_rounded, size: 22, color: Color(0xFF14B8A6)),
+              label: l10n.navPersonal,
             ),
             NavigationDestination(
-              icon: Icon(Icons.person_outline_rounded, size: 22),
-              selectedIcon: Icon(Icons.person_rounded, size: 22, color: Color(0xFF14B8A6)),
-              label: 'Profile',
+              icon: const Icon(Icons.person_outline_rounded, size: 22),
+              selectedIcon: const Icon(Icons.person_rounded, size: 22, color: Color(0xFF14B8A6)),
+              label: l10n.navProfile,
             ),
           ];
 

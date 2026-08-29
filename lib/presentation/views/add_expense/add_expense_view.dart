@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_typography.dart';
@@ -111,6 +112,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
   Future<void> _handleSave() async {
     final addVm = context.read<AddExpenseViewModel>();
     final tripDetailVm = context.read<TripDetailViewModel>();
+    final l10n = context.l10n;
     final trip = tripDetailVm.trip;
     if (trip == null || addVm.isSaving) return;
 
@@ -120,10 +122,10 @@ class _AddExpenseViewState extends State<AddExpenseView> {
         SnackBar(
           content: Text(
             addVm.amountInPaise <= 0
-                ? 'Please enter an expense amount'
+                ? l10n.translate('add_expense_err_amount')
                 : (addVm.title.trim().isEmpty
-                    ? 'Please specify what this expense was for'
-                    : 'Please select at least one participant'),
+                    ? l10n.translate('add_expense_err_title')
+                    : l10n.translate('add_expense_err_person')),
           ),
           backgroundColor: AppColors.negativeRedDark,
           duration: const Duration(seconds: 2),
@@ -136,16 +138,16 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     final expense = await addVm.saveExpense(trip.id);
     if (expense != null && mounted) {
       context.pop(true);
-      KithSuccessToast.show(context, widget.existingExpense != null ? 'Expense updated ✓' : 'Expense added ✓');
+      KithSuccessToast.show(context, widget.existingExpense != null ? '${l10n.expenseUpdateBtn} ✓' : l10n.translate('add_expense_success'));
     } else if (mounted) {
       HapticHelper.error();
-      final err = addVm.errorMessage ?? 'Could not save the expense. Please try again.';
+      final err = addVm.errorMessage ?? l10n.translate('error_generic');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(err),
           backgroundColor: AppColors.negativeRedDark,
           action: SnackBarAction(
-            label: 'Retry',
+            label: l10n.actionRetry,
             textColor: Colors.white,
             onPressed: _handleSave,
           ),
@@ -156,6 +158,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
 
   void _showSplitMethodsHelp() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = context.l10n;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -181,23 +184,23 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Split Methods Explained',
+                        l10n.expenseSplitOptionHeader,
                         style: AppTypography.titleLarge(isDark: isDark),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 16),
-                _buildHelpRow('🟰 Split Equally', 'Evenly divides the bill across all checked participants.', isDark),
+                _buildHelpRow('🟰 ${l10n.expenseSplitEqually}', l10n.translate('expense_split_equally_desc'), isDark),
                 const SizedBox(height: 12),
-                _buildHelpRow('📊 Exact Amounts', 'Assign custom ₹ amounts per person. Kith ensures the exact sum matches.', isDark),
+                _buildHelpRow('📊 ${l10n.expenseSplitExact}', l10n.translate('expense_split_exact_desc'), isDark),
                 const SizedBox(height: 12),
-                _buildHelpRow('💯 Percentages', 'Assign percentage shares (e.g. 50%, 25%, 25%). Must equal 100%.', isDark),
+                _buildHelpRow('💯 ${l10n.expenseSplitPercentages}', l10n.translate('expense_split_percentages_desc'), isDark),
                 const SizedBox(height: 12),
-                _buildHelpRow('⚖️ By Shares', 'Split by ratios (e.g. 2 shares for couples, 1 share for singles).', isDark),
+                _buildHelpRow('⚖️ ${l10n.expenseSplitShares}', l10n.translate('expense_split_shares_desc'), isDark),
                 const SizedBox(height: 24),
                 AppButton(
-                  text: 'Got it',
+                  text: l10n.actionDone,
                   isFullWidth: true,
                   onPressed: () => Navigator.pop(ctx),
                 ),
@@ -227,11 +230,13 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     final addVm = context.watch<AddExpenseViewModel>();
     final trip = tripDetailVm.trip;
 
+    final l10n = context.l10n;
+
     if (_isLoadingTrip || (tripDetailVm.isLoading && trip == null)) {
       return Scaffold(
         backgroundColor: isDark ? const Color(0xFF080C0E) : const Color(0xFFF8FAFC),
         appBar: AppBar(
-          title: const Text('Add Expense'),
+          title: Text(l10n.expenseAddTitle),
           backgroundColor: isDark ? const Color(0xFF080C0E) : const Color(0xFFF8FAFC),
           elevation: 0,
         ),
@@ -243,7 +248,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
       return Scaffold(
         backgroundColor: isDark ? const Color(0xFF080C0E) : const Color(0xFFF8FAFC),
         appBar: AppBar(
-          title: const Text('Add Expense'),
+          title: Text(l10n.expenseAddTitle),
           backgroundColor: isDark ? const Color(0xFF080C0E) : const Color(0xFFF8FAFC),
           elevation: 0,
           leading: const BackButton(),
@@ -264,7 +269,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                 ),
                 const SizedBox(height: 18),
                 Text(
-                  'No Active Trip Found',
+                  l10n.tripsTabNoActiveTitle,
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
@@ -273,7 +278,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Please select or create a trip first to start splitting expenses with friends.',
+                  l10n.tripsTabNoActiveDesc,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 13,
@@ -282,7 +287,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                 ),
                 const SizedBox(height: 24),
                 AppButton(
-                  text: 'Create a Trip',
+                  text: l10n.tripsCreate,
                   icon: Icons.add_rounded,
                   onPressed: () {
                     context.pop();
@@ -300,11 +305,11 @@ class _AddExpenseViewState extends State<AddExpenseView> {
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF080C0E) : const Color(0xFFF8FAFC),
-      appBar: _buildTopAppBar(context, isDark, addVm),
+      appBar: _buildTopAppBar(context, isDark, addVm, l10n),
       body: Column(
         children: [
           // Mode Tabs (Manual | Voice AI | Scan Receipt)
-          _buildModeTabs(context, isDark, addVm),
+          _buildModeTabs(context, isDark, addVm, l10n),
 
           // Main Content
           Expanded(
@@ -318,18 +323,18 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                         type: FeatureCraftingType.receipt,
                         onSwitchToManual: () => addVm.setTab(2),
                       )
-                    : _buildManualExpenseForm(context, isDark, addVm, trip, currency)),
+                    : _buildManualExpenseForm(context, isDark, addVm, trip, currency, l10n)),
           ),
 
           // Bottom Action Dock
           if (addVm.currentTab == 2)
-            _buildBottomActionDock(context, isDark, addVm, trip),
+            _buildBottomActionDock(context, isDark, addVm, trip, l10n),
         ],
       ),
     );
   }
 
-  PreferredSizeWidget _buildTopAppBar(BuildContext context, bool isDark, AddExpenseViewModel addVm) {
+  PreferredSizeWidget _buildTopAppBar(BuildContext context, bool isDark, AddExpenseViewModel addVm, AppLocalizations l10n) {
     return AppBar(
       backgroundColor: isDark ? const Color(0xFF080C0E) : const Color(0xFFF8FAFC),
       elevation: 0,
@@ -340,7 +345,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
         onPressed: () => context.pop(),
       ),
       title: Text(
-        widget.existingExpense != null ? 'Edit Expense' : 'Add Expense',
+        widget.existingExpense != null ? l10n.expenseEditTitle : l10n.expenseAddTitle,
         style: TextStyle(
           fontSize: 17,
           fontWeight: FontWeight.w800,
@@ -351,14 +356,14 @@ class _AddExpenseViewState extends State<AddExpenseView> {
       actions: [
         IconButton(
           icon: const Icon(Icons.help_outline_rounded, size: 20),
-          tooltip: 'Split Help',
+          tooltip: l10n.expenseSplitOptionHeader,
           onPressed: _showSplitMethodsHelp,
         ),
       ],
     );
   }
 
-  Widget _buildModeTabs(BuildContext context, bool isDark, AddExpenseViewModel addVm) {
+  Widget _buildModeTabs(BuildContext context, bool isDark, AddExpenseViewModel addVm, AppLocalizations l10n) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 4.0),
       child: Container(
@@ -369,9 +374,9 @@ class _AddExpenseViewState extends State<AddExpenseView> {
         ),
         child: Row(
           children: [
-            _buildTabButton(title: 'Manual', icon: Icons.edit_rounded, index: 2, isDark: isDark, activeIndex: addVm.currentTab, onTap: () => addVm.setTab(2)),
-            _buildTabButton(title: 'Voice AI', icon: Icons.mic_rounded, index: 0, isDark: isDark, activeIndex: addVm.currentTab, onTap: () => addVm.setTab(0)),
-            _buildTabButton(title: 'Receipt Scan', icon: Icons.document_scanner_rounded, index: 1, isDark: isDark, activeIndex: addVm.currentTab, onTap: () => addVm.setTab(1)),
+            _buildTabButton(title: l10n.expenseManualTab, icon: Icons.edit_rounded, index: 2, isDark: isDark, activeIndex: addVm.currentTab, onTap: () => addVm.setTab(2)),
+            _buildTabButton(title: l10n.expenseVoiceTab, icon: Icons.mic_rounded, index: 0, isDark: isDark, activeIndex: addVm.currentTab, onTap: () => addVm.setTab(0)),
+            _buildTabButton(title: l10n.expenseReceiptTab, icon: Icons.document_scanner_rounded, index: 1, isDark: isDark, activeIndex: addVm.currentTab, onTap: () => addVm.setTab(1)),
           ],
         ),
       ),
@@ -445,33 +450,34 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     AddExpenseViewModel addVm,
     Trip trip,
     String currency,
+    AppLocalizations l10n,
   ) {
     return ListView(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
       children: [
         // 1. Unified Amount & Description Card
-        _buildAmountAndTitleCard(context, isDark, addVm, currency),
+        _buildAmountAndTitleCard(context, isDark, addVm, currency, l10n),
 
         const SizedBox(height: 16),
 
         // 2. Category Selector (Horizontal Chips)
-        _buildCategorySection(isDark, addVm),
+        _buildCategorySection(isDark, addVm, l10n),
 
         const SizedBox(height: 16),
 
         // 3. Paid By (Who Paid?)
-        _buildPayerSection(isDark, addVm, trip),
+        _buildPayerSection(isDark, addVm, trip, l10n),
 
         const SizedBox(height: 16),
 
         // 4. Split Type & Participants Matrix
-        _buildSplitAndParticipantsSection(isDark, addVm, trip, currency),
+        _buildSplitAndParticipantsSection(isDark, addVm, trip, currency, l10n),
 
         const SizedBox(height: 16),
 
         // 5. Date Selector Pill
-        _buildDateSelectorPill(isDark),
+        _buildDateSelectorPill(isDark, l10n),
 
         const SizedBox(height: 32),
       ],
@@ -484,6 +490,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     bool isDark,
     AddExpenseViewModel addVm,
     String currency,
+    AppLocalizations l10n,
   ) {
     final curSymbol = currency == 'INR' ? '₹' : currency;
 
@@ -585,7 +592,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                       color: isDark ? Colors.white : const Color(0xFF0F172A),
                     ),
                     decoration: KithInputDecoration.borderless(
-                      hintText: 'What was this expense for?',
+                      hintText: l10n.translate('add_expense_title_hint'),
                       hintStyle: TextStyle(
                         color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
                         fontSize: 14,
@@ -612,7 +619,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
   }
 
   /// Compact Horizontal Category Chips.
-  Widget _buildCategorySection(bool isDark, AddExpenseViewModel addVm) {
+  Widget _buildCategorySection(bool isDark, AddExpenseViewModel addVm, AppLocalizations l10n) {
     const categories = ExpenseCategory.values;
     final activeColor = isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary;
 
@@ -620,7 +627,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'CATEGORY',
+          l10n.expenseCategoryHeader,
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w800,
@@ -688,14 +695,14 @@ class _AddExpenseViewState extends State<AddExpenseView> {
   }
 
   /// Compact Payer Selector.
-  Widget _buildPayerSection(bool isDark, AddExpenseViewModel addVm, Trip trip) {
+  Widget _buildPayerSection(bool isDark, AddExpenseViewModel addVm, Trip trip, AppLocalizations l10n) {
     final activeColor = isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'PAID BY',
+          l10n.expensePaidByHeader,
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w800,
@@ -768,6 +775,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     AddExpenseViewModel addVm,
     Trip trip,
     String currency,
+    AppLocalizations l10n,
   ) {
     final count = addVm.selectedParticipantMemberIds.length;
     final allSelected = count == trip.members.length;
@@ -795,10 +803,10 @@ class _AddExpenseViewState extends State<AddExpenseView> {
             ),
             child: Row(
               children: [
-                _buildSplitTypeTab('🟰 Equally', SplitType.equal, addVm.splitType, isDark, () => addVm.setSplitType(SplitType.equal)),
-                _buildSplitTypeTab('📊 Exact', SplitType.exact, addVm.splitType, isDark, () => addVm.setSplitType(SplitType.exact)),
-                _buildSplitTypeTab('💯 %', SplitType.percentage, addVm.splitType, isDark, () => addVm.setSplitType(SplitType.percentage)),
-                _buildSplitTypeTab('⚖️ Shares', SplitType.shares, addVm.splitType, isDark, () => addVm.setSplitType(SplitType.shares)),
+                _buildSplitTypeTab('🟰 ${l10n.expenseSplitEqually}', SplitType.equal, addVm.splitType, isDark, () => addVm.setSplitType(SplitType.equal)),
+                _buildSplitTypeTab('📊 ${l10n.expenseSplitExact}', SplitType.exact, addVm.splitType, isDark, () => addVm.setSplitType(SplitType.exact)),
+                _buildSplitTypeTab('💯 ${l10n.expenseSplitPercentages}', SplitType.percentage, addVm.splitType, isDark, () => addVm.setSplitType(SplitType.percentage)),
+                _buildSplitTypeTab('⚖️ ${l10n.expenseSplitShares}', SplitType.shares, addVm.splitType, isDark, () => addVm.setSplitType(SplitType.shares)),
               ],
             ),
           ),
@@ -810,7 +818,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'SPLIT BETWEEN ($count / ${trip.members.length})',
+                '${l10n.expenseSplitOptionHeader} ($count / ${trip.members.length})',
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
@@ -836,7 +844,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                   }
                 },
                 child: Text(
-                  allSelected ? 'Clear Others' : 'Select All',
+                  allSelected ? l10n.translate('settlement_clear_all') : l10n.translate('settlement_select_all'),
                   style: TextStyle(
                     fontSize: 11.5,
                     fontWeight: FontWeight.w700,
@@ -1170,7 +1178,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     );
   }
 
-  Widget _buildDateSelectorPill(bool isDark) {
+  Widget _buildDateSelectorPill(bool isDark, AppLocalizations l10n) {
     final dateStr = DateFormat('EEE, dd MMM yyyy').format(_selectedDate);
     return InkWell(
       onTap: () async {
@@ -1204,7 +1212,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
             ),
             const SizedBox(width: 8),
             Text(
-              'Date: $dateStr',
+              '${l10n.translate('add_expense_date_label')}: $dateStr',
               style: TextStyle(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w600,
@@ -1228,6 +1236,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     bool isDark,
     AddExpenseViewModel addVm,
     Trip trip,
+    AppLocalizations l10n,
   ) {
     return Container(
       padding: EdgeInsets.only(
@@ -1271,7 +1280,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      widget.existingExpense != null ? 'Update Expense' : 'Save Expense',
+                      widget.existingExpense != null ? l10n.expenseUpdateBtn : l10n.expenseSaveBtn,
                       style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
                     ),
                   ],

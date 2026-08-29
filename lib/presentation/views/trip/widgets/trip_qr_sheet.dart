@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../../../core/config/app_config.dart';
+import '../../../../core/localization/app_localizations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
@@ -19,6 +20,7 @@ class TripQrSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = context.l10n;
     final inviteLink = AppConfig.buildInviteLink(trip.inviteCode);
 
     return Container(
@@ -50,7 +52,7 @@ class TripQrSheet extends StatelessWidget {
                 const Icon(Icons.qr_code_2_rounded, size: 24, color: AppColors.emeraldPrimary),
                 const SizedBox(width: 8),
                 Text(
-                  'Join ${trip.name}',
+                  l10n.tripQrJoinTitle(trip.name),
                   textAlign: TextAlign.center,
                   style: AppTypography.titleLarge(isDark: isDark),
                 ),
@@ -58,7 +60,7 @@ class TripQrSheet extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'Scan this QR code with another phone, or enter the 6-character code.',
+              l10n.tripQrScanSub,
               textAlign: TextAlign.center,
               style: AppTypography.bodySmall(isDark: isDark),
             ),
@@ -106,7 +108,7 @@ class TripQrSheet extends StatelessWidget {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('6-LETTER INVITE CODE', style: AppTypography.bodySmall(isDark: isDark).copyWith(fontSize: 11, fontWeight: FontWeight.w700)),
+                      Text(l10n.tripQrCodeLabel.toUpperCase(), style: AppTypography.bodySmall(isDark: isDark).copyWith(fontSize: 11, fontWeight: FontWeight.w700)),
                       const SizedBox(height: 4),
                       Text(
                         trip.inviteCode,
@@ -126,7 +128,7 @@ class TripQrSheet extends StatelessWidget {
                       Clipboard.setData(ClipboardData(text: trip.inviteCode));
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('Trip code ${trip.inviteCode} copied to clipboard!'),
+                          content: Text(l10n.tripQrCopiedToast(trip.inviteCode)),
                           duration: const Duration(seconds: 2),
                         ),
                       );
@@ -139,7 +141,7 @@ class TripQrSheet extends StatelessWidget {
 
             // Done button
             AppButton(
-              text: 'Done',
+              text: l10n.tripQrDoneBtn,
               variant: AppButtonVariant.secondary,
               isFullWidth: true,
               onPressed: () => Navigator.of(context).pop(),

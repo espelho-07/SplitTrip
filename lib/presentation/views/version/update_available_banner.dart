@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -19,6 +20,7 @@ class UpdateAvailableBanner extends StatelessWidget {
     }
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = context.l10n;
 
     return SafeArea(
       top: false,
@@ -67,7 +69,7 @@ class UpdateAvailableBanner extends StatelessWidget {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              'UPDATE AVAILABLE',
+                              l10n.versionUpdateAvailableTitle.toUpperCase(),
                               style: AppTypography.badgeText(color: AppColors.emeraldLight).copyWith(
                                 fontSize: 10.5,
                                 fontWeight: FontWeight.w700,
@@ -91,7 +93,7 @@ class UpdateAvailableBanner extends StatelessWidget {
 
                   // Headline
                   Text(
-                    'A newer version of Kith is ready',
+                    l10n.versionUpdateAvailableDesc,
                     style: AppTypography.titleSmall(isDark: isDark).copyWith(
                       fontWeight: FontWeight.w700,
                       fontSize: 14.5,
@@ -172,7 +174,7 @@ class UpdateAvailableBanner extends StatelessWidget {
                           visualDensity: VisualDensity.compact,
                         ),
                         child: Text(
-                          'Later',
+                          l10n.versionLaterBtn,
                           style: AppTypography.bodyMedium(isDark: isDark).copyWith(
                             color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                             fontSize: 13,
@@ -196,7 +198,7 @@ class UpdateAvailableBanner extends StatelessWidget {
                           visualDensity: VisualDensity.compact,
                         ),
                         child: Text(
-                          'Update',
+                          l10n.versionUpdateBtn,
                           style: AppTypography.buttonText(color: Colors.black).copyWith(
                             fontWeight: FontWeight.w700,
                             fontSize: 13,
