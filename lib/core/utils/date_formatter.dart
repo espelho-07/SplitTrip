@@ -36,6 +36,11 @@ class DateFormatter {
     return date.year == now.year && date.month == now.month && date.day == now.day;
   }
 
+  static bool isYesterday(DateTime date) {
+    final yesterday = DateTime.now().subtract(const Duration(days: 1));
+    return date.year == yesterday.year && date.month == yesterday.month && date.day == yesterday.day;
+  }
+
   static String formatTripDateRange(DateTime start, [DateTime? end]) {
     if (end == null || start.isAtSameMomentAs(end)) {
       return DateFormat('MMM d, yyyy').format(start);

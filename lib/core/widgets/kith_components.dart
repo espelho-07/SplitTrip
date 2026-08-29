@@ -522,6 +522,8 @@ class KithInputDecoration {
   static InputDecoration borderless({
     String? hintText,
     TextStyle? hintStyle,
+    String? labelText,
+    TextStyle? labelStyle,
     Widget? prefixIcon,
     Widget? suffixIcon,
     Widget? icon,
@@ -533,10 +535,13 @@ class KithInputDecoration {
     bool isDense = true,
     Color? fillColor,
     bool filled = false,
+    bool? isDark,
   }) {
     return InputDecoration(
       hintText: hintText,
       hintStyle: hintStyle,
+      labelText: labelText,
+      labelStyle: labelStyle,
       prefixIcon: prefixIcon,
       suffixIcon: suffixIcon,
       icon: icon,
@@ -547,7 +552,7 @@ class KithInputDecoration {
       contentPadding: contentPadding,
       isDense: isDense,
       fillColor: fillColor,
-      filled: filled,
+      filled: filled || fillColor != null,
       border: InputBorder.none,
       enabledBorder: InputBorder.none,
       focusedBorder: InputBorder.none,

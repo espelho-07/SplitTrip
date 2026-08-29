@@ -530,7 +530,8 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
                   fontWeight: FontWeight.w800,
                   color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                 ),
-                decoration: InputDecoration(
+                decoration: KithInputDecoration.borderless(
+                  isDark: isDark,
                   prefixText: '₹ ',
                   prefixStyle: TextStyle(
                     fontSize: 34,
@@ -543,12 +544,7 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
                     fontWeight: FontWeight.w400,
                     color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
                   ),
-                  filled: true,
                   fillColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
-                  border: const OutlineInputBorder(
-                    borderRadius: AppRadius.mdBorder,
-                    borderSide: BorderSide.none,
-                  ),
                 ),
               ),
 
@@ -560,16 +556,12 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
                   controller: _personController,
                   textCapitalization: TextCapitalization.words,
                   style: AppTypography.bodyLarge(isDark: isDark),
-                  decoration: InputDecoration(
+                  decoration: KithInputDecoration.borderless(
+                    isDark: isDark,
                     labelText: _mode == PersonalEntryMode.lent ? 'Who owes you?' : 'Who did you borrow from?',
                     hintText: 'Enter name (e.g. Rahul)',
                     prefixIcon: const Icon(Icons.person_outline_rounded, size: 20),
-                    filled: true,
                     fillColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
-                    border: const OutlineInputBorder(
-                      borderRadius: AppRadius.mdBorder,
-                      borderSide: BorderSide.none,
-                    ),
                   ),
                 ),
                 const SizedBox(height: AppSpacing.md),
@@ -580,16 +572,12 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
                 controller: _titleController,
                 textCapitalization: TextCapitalization.sentences,
                 style: AppTypography.bodyLarge(isDark: isDark),
-                decoration: InputDecoration(
+                decoration: KithInputDecoration.borderless(
+                  isDark: isDark,
                   labelText: _mode == PersonalEntryMode.expense ? 'What was this for?' : 'Note (optional)',
                   hintText: _mode == PersonalEntryMode.expense ? 'e.g. Lunch with team' : 'e.g. Dinner share',
                   prefixIcon: const Icon(Icons.edit_note_rounded, size: 20),
-                  filled: true,
                   fillColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
-                  border: const OutlineInputBorder(
-                    borderRadius: AppRadius.mdBorder,
-                    borderSide: BorderSide.none,
-                  ),
                 ),
               ),
 

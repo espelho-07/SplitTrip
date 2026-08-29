@@ -11,6 +11,7 @@ import '../../../../domain/models/trip.dart';
 import '../../../viewmodels/auth_viewmodel.dart';
 import '../../../viewmodels/home_viewmodel.dart';
 import '../../../viewmodels/personal_expense_viewmodel.dart';
+import '../../personal/widgets/add_personal_expense_sheet.dart';
 
 class DashboardTab extends StatelessWidget {
   const DashboardTab({super.key});
@@ -651,8 +652,7 @@ class DashboardTab extends StatelessWidget {
   }
 
   Widget _buildQuickActionsSection(BuildContext context, bool isDark, AppLocalizations l10n) {
-    final homeVm = context.read<HomeViewModel>();
-    final activeTrip = homeVm.trips.isNotEmpty ? homeVm.trips.first : null;
+    final homeVm = context.watch<HomeViewModel>();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -675,14 +675,7 @@ class DashboardTab extends StatelessWidget {
               icon: Icons.add_rounded,
               label: 'Add\nExpense',
               isDark: isDark,
-              onTap: () {
-                HapticHelper.medium();
-                if (activeTrip != null) {
-                  context.push('/trip/${activeTrip.id}/add-expense');
-                } else {
-                  context.push('/add-expense');
-                }
-              },
+              onTap: () => _handleSmartAddExpense(context, homeVm),
             ),
             _buildActionItem(
               context: context,
@@ -699,32 +692,222 @@ class DashboardTab extends StatelessWidget {
               icon: Icons.document_scanner_rounded,
               label: 'Scan\nReceipt',
               isDark: isDark,
-              onTap: () {
-                HapticHelper.medium();
-                if (activeTrip != null) {
-                  context.push('/trip/${activeTrip.id}/add-expense?tab=1');
-                } else {
-                  context.push('/add-expense?tab=1');
-                }
-              },
+              onTap: () => _handleSmartAddExpense(context, homeVm, tab: 1),
             ),
             _buildActionItem(
               context: context,
-              icon: Icons.mic_rounded,
-              label: 'Voice AI',
+              icon: Icons.qr_code_scanner_rounded,
+              label: 'Join\nScanner',
               isDark: isDark,
-              onTap: () {
+              onTap: () async {
                 HapticHelper.medium();
-                if (activeTrip != null) {
-                  context.push('/trip/${activeTrip.id}/add-expense?tab=0');
-                } else {
-                  context.push('/add-expense?tab=0');
+                final scannedCode = await context.push<String>('/qr-scanner');
+                if (scannedCode != null && scannedCode.isNotEmpty && context.mounted) {
+                  context.push('/join-trip?code=$scannedCode');
                 }
               },
             ),
           ],
         ),
       ],
+    );
+  }
+
+  void _handleSmartAddExpense(BuildContext context, HomeViewModel homeVm, {int tab = 0}) {
+    HapticHelper.medium();
+    final activeTrips = homeVm.trips
+        .where((t) => t.lifecycleState.isActive || t.lifecycleState.isCompleting)
+        .toList();
+
+    if (activeTrips.length == 1) {
+      // If exactly 1 trip is active -> Go directly to that trip's Add Expense view
+      context.push('/trip/${activeTrips.first.id}/add-expense?tab=$tab');
+    } else if (activeTrips.length > 1) {
+      // If more than 1 trip is active -> Ask which trip to add the expense to
+      _showActiveTripPickerSheet(context, activeTrips, tab: tab);
+    } else {
+      // If 0 active trips exist
+      if (homeVm.trips.isNotEmpty) {
+        _showActiveTripPickerSheet(context, homeVm.trips, tab: tab);
+      } else {
+        context.push('/add-expense?tab=$tab');
+      }
+    }
+  }
+
+  void _showActiveTripPickerSheet(
+    BuildContext context,
+    List<Trip> trips, {
+    int tab = 0,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF0F1418) : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          border: Border.all(
+            color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white24 : Colors.black12,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Select Active Trip',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Choose which trip to add this expense to',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 20),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: trips.length,
+                  separatorBuilder: (c, i) => const SizedBox(height: 10),
+                  itemBuilder: (context, index) {
+                    final trip = trips[index];
+                    return InkWell(
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        context.push('/trip/${trip.id}/add-expense?tab=$tab');
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF161D24) : const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: isDark ? const Color(0xFF1F2937) : Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(trip.emoji, style: const TextStyle(fontSize: 22)),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    trip.name,
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '${trip.members.length} members • ${trip.currencyCode}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Icon(
+                              Icons.arrow_forward_ios_rounded,
+                              size: 14,
+                              color: isDark ? AppColors.darkTextMuted : const Color(0xFF94A3B8),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 14),
+              InkWell(
+                onTap: () {
+                  Navigator.pop(ctx);
+                  AddPersonalExpenseSheet.show(context);
+                },
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: AppColors.emeraldPrimary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: AppColors.emeraldPrimary.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.person_outline_rounded, size: 18, color: AppColors.emeraldPrimary),
+                      SizedBox(width: 8),
+                      Text(
+                        'Log as Personal Expense instead',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.emeraldPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

@@ -192,10 +192,10 @@ void main() {
       await tester.pumpWidget(wrapWithProviders(const HomeView()));
       await tester.pumpAndSettle();
 
-      expect(find.byIcon(Icons.qr_code_scanner_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.qr_code_scanner_rounded), findsAtLeastNWidgets(1));
       expect(find.byIcon(Icons.notifications_outlined), findsOneWidget);
 
-      final scannerX = tester.getTopLeft(find.byIcon(Icons.qr_code_scanner_rounded)).dx;
+      final scannerX = tester.getTopLeft(find.byIcon(Icons.qr_code_scanner_rounded).first).dx;
       final notifX = tester.getTopLeft(find.byIcon(Icons.notifications_outlined)).dx;
       expect(notifX, greaterThan(scannerX));
     });
