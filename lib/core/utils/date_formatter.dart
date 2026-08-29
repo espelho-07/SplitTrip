@@ -48,4 +48,30 @@ class DateFormatter {
     }
     return '${DateFormat('MMM d, yyyy').format(start)} – ${DateFormat('MMM d, yyyy').format(end)}';
   }
+
+  /// Formats active trip started date: 'Started 24 Aug' or 'Started 24 Aug 2026'
+  static String formatTripActiveDate(DateTime startedAt) {
+    final now = DateTime.now();
+    if (startedAt.year == now.year) {
+      return 'Started ${DateFormat('d MMM').format(startedAt)}';
+    }
+    return 'Started ${DateFormat('d MMM yyyy').format(startedAt)}';
+  }
+
+  /// Formats completed trip historical range: '24 Aug → 27 Aug 2026' or '24 Aug 2026' if same day
+  static String formatTripHistoricalRange(DateTime startedAt, DateTime? completedAt) {
+    if (completedAt == null) {
+      return formatTripActiveDate(startedAt);
+    }
+    final isSameDay = startedAt.year == completedAt.year &&
+        startedAt.month == completedAt.month &&
+        startedAt.day == completedAt.day;
+    if (isSameDay) {
+      return DateFormat('d MMM yyyy').format(startedAt);
+    }
+    if (startedAt.year == completedAt.year) {
+      return '${DateFormat('d MMM').format(startedAt)} → ${DateFormat('d MMM yyyy').format(completedAt)}';
+    }
+    return '${DateFormat('d MMM yyyy').format(startedAt)} → ${DateFormat('d MMM yyyy').format(completedAt)}';
+  }
 }

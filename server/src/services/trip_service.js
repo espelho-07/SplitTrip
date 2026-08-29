@@ -23,6 +23,7 @@ class TripService {
       ...trip,
       revision: trip.revision || 1,
       completionMode: trip.completionMode || null,
+      startedAt: trip.startedAt || trip.createdAt,
       completedAt: trip.completedAt || null,
       completedBy: trip.completedBy || null,
       members: members.map((m) => {
@@ -78,6 +79,7 @@ class TripService {
       lifecycleState: 'active',
       revision: 1,
       completionMode: null,
+      startedAt: now,
       completedAt: null,
       completedBy: null,
       createdAt: now,

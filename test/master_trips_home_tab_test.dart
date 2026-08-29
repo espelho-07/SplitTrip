@@ -12,6 +12,7 @@ import 'package:kith_app/data/repositories/user_repository.dart';
 import 'package:kith_app/data/services/auth_service.dart';
 import 'package:kith_app/data/services/local_storage_service.dart';
 import 'package:kith_app/data/services/sync_service.dart';
+import 'package:kith_app/domain/enums/trip_lifecycle.dart';
 import 'package:kith_app/domain/models/guest_user.dart';
 import 'package:kith_app/domain/models/trip.dart';
 import 'package:kith_app/domain/models/trip_member.dart';
@@ -128,36 +129,37 @@ void main() {
   }
 
   group('Master Trips Home Tab Suite (Specification Match)', () {
-    testWidgets('1. Renders Hero Financial Card with TOTAL SPENT ON TRIPS, 0 Trips counter, ₹0 amount, and settled status', (tester) async {
+    testWidgets('1. Renders Top Bar with "Trips", "Join", and "New Trip" actions', (tester) async {
       await tester.pumpWidget(createTripsHomeScreen());
       await tester.pumpAndSettle();
 
-      expect(find.text('TOTAL SPENT ON TRIPS'), findsOneWidget);
-      expect(find.text('0 Trips'), findsOneWidget);
-      expect(find.text('₹0'), findsOneWidget);
-      expect(find.text('All trip balances settled up'), findsOneWidget);
-    });
-
-    testWidgets('2. Renders Section Header with "Your Group Trips" and "+ Join Trip"', (tester) async {
-      await tester.pumpWidget(createTripsHomeScreen());
-      await tester.pumpAndSettle();
-
-      expect(find.text('Your Group Trips'), findsOneWidget);
-      expect(find.text('Join Trip'), findsOneWidget);
+      expect(find.text('Trips'), findsOneWidget);
+      expect(find.text('Join'), findsOneWidget);
+      expect(find.text('New Trip'), findsOneWidget);
       expect(find.byIcon(Icons.person_add_alt_1_outlined), findsOneWidget);
     });
 
-    testWidgets('3. Renders Empty State with circular map badge, "No trips yet", subtitle, and "+ New Trip" button', (tester) async {
+    testWidgets('2. Renders Section Headers: "CURRENT TRIP" and "ALL TRIPS" with Filter button', (tester) async {
       await tester.pumpWidget(createTripsHomeScreen());
       await tester.pumpAndSettle();
 
-      expect(find.text('🗺️'), findsOneWidget);
-      expect(find.text('No trips yet'), findsOneWidget);
-      expect(find.text('Create a trip when you\'re ready to split group expenses with friends.'), findsOneWidget);
-      expect(find.text('New Trip'), findsOneWidget);
+      expect(find.text('CURRENT TRIP'), findsOneWidget);
+      expect(find.text('ALL TRIPS'), findsOneWidget);
+      expect(find.text('Filter'), findsOneWidget);
+      expect(find.byIcon(Icons.tune_rounded), findsOneWidget);
     });
 
-    testWidgets('4. Populated trips state renders trip card with gradient cover, members, and balance', (tester) async {
+    testWidgets('3. Renders No active trip card and Empty completed trips history state', (tester) async {
+      await tester.pumpWidget(createTripsHomeScreen());
+      await tester.pumpAndSettle();
+
+      expect(find.text('No active trip'), findsOneWidget);
+      expect(find.text('Start or join a trip to split expenses together.'), findsOneWidget);
+      expect(find.text('No completed trips yet'), findsOneWidget);
+      expect(find.text('Your finished trips will appear here.'), findsOneWidget);
+    });
+
+    testWidgets('4. Populated active trip renders ActiveTripHeroCard with ONGOING, Started date, and Open Trip CTA', (tester) async {
       final now = DateTime.now();
       final sampleTrip = Trip(
         id: 'trip_goa_01',
@@ -167,6 +169,8 @@ void main() {
         coverGradientIndex: 1,
         currencyCode: 'INR',
         inviteCode: 'GOA123',
+        lifecycleState: TripLifecycle.active,
+        startedAt: now,
         members: [
           TripMember(id: 'm1', userId: 'usr_darpan_01', displayName: 'Darpan', joinedAt: now),
           TripMember(id: 'm2', userId: 'usr_rahul_02', displayName: 'Rahul', joinedAt: now),
@@ -182,11 +186,12 @@ void main() {
       await tester.pumpWidget(createTripsHomeScreen());
       await tester.pumpAndSettle();
 
-      expect(find.text('TOTAL SPENT ON TRIPS'), findsOneWidget);
-      expect(find.text('1 Trip'), findsOneWidget);
+      expect(find.text('CURRENT TRIP'), findsOneWidget);
       expect(find.text('Goa Trip 2026'), findsOneWidget);
       expect(find.text('🏖️'), findsOneWidget);
-      expect(find.text('3 members'), findsOneWidget);
+      expect(find.text('3 people'), findsOneWidget);
+      expect(find.text('ONGOING'), findsOneWidget);
+      expect(find.text('Open Trip'), findsOneWidget);
     });
 
     testWidgets('5. HomeView renders user greeting, notification bell, and 4 navigation destinations', (tester) async {

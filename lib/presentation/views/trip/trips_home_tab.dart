@@ -1,52 +1,88 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_spacing.dart';
-import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
-import '../../../core/widgets/member_avatar.dart';
-import '../../../core/widgets/pill_badge.dart';
 import '../../../core/widgets/shimmer_skeleton.dart';
-import '../../../core/widgets/surface_card.dart';
-import '../../../domain/models/trip.dart';
+import '../../../data/repositories/expense_repository.dart';
+import '../../../data/services/sync_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
+import 'widgets/active_trip_hero_card.dart';
+import 'widgets/historical_trip_card.dart';
+import 'widgets/trip_filter_sheet.dart';
 
-/// Master Group Trips Home Tab.
-/// Features a prominent financial hero overview card, quick "+ Join Trip" action,
-/// polished empty state matching user design specification, and rich trip journey cards.
-class TripsHomeTab extends StatelessWidget {
+/// Redesigned Master Kith Trips Page.
+/// Focused strictly on 2 primary sections:
+/// 1. CURRENT TRIP (Active & Ongoing)
+/// 2. ALL TRIPS (Historical & Completed with Smart Filters & Search)
+class TripsHomeTab extends StatefulWidget {
   const TripsHomeTab({super.key});
+
+  @override
+  State<TripsHomeTab> createState() => _TripsHomeTabState();
+}
+
+class _TripsHomeTabState extends State<TripsHomeTab> {
+  TripFilterCriteria _filterCriteria = const TripFilterCriteria();
+  String _searchQuery = '';
+  bool _isSearchOpen = false;
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final homeVm = context.watch<HomeViewModel>();
     final authVm = context.watch<AuthViewModel>();
-    final l10n = context.l10n;
+    final expenseRepo = homeVm.expenseRepo;
+    final syncService = Provider.of<SyncService?>(context);
     final user = authVm.currentUser;
 
-    final totalSpentPaise = homeVm.totalSpentOnTripsInPaise;
-    final net = homeVm.overallNetBalanceInPaise;
+    // Separate active vs completed trips
+    final allTrips = homeVm.trips;
+    final activeTrips = allTrips
+        .where((t) => t.lifecycleState.isActive || t.lifecycleState.isCompleting)
+        .toList();
+    final completedTrips = allTrips
+        .where((t) => t.lifecycleState.isCompleted)
+        .toList();
 
-    String insightText = l10n.tripsHomeAllSettledMsg;
-    IconData insightIcon = Icons.check_circle_outline_rounded;
-    Color? insightColor;
+    // Compute expense stats per trip
+    final tripTotalsPaise = <String, int>{};
+    final tripExpenseCounts = <String, int>{};
+    for (final trip in allTrips) {
+      final cachedExpenses = expenseRepo.getCachedExpenses(trip.id);
+      int sum = 0;
+      int count = 0;
+      for (final exp in cachedExpenses) {
+        if (!exp.isDeleted) {
+          sum += exp.amountInPaise;
+          count++;
+        }
+      }
+      tripTotalsPaise[trip.id] = sum;
+      tripExpenseCounts[trip.id] = count;
+    }
 
-    if (net > 0) {
-      insightText = l10n.tripsHomeGetBackOverall(CurrencyFormatter.formatPaise(net, currencyCode: 'INR'));
-      insightIcon = Icons.arrow_downward_rounded;
-      insightColor = isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight;
-    } else if (net < 0) {
-      insightText = l10n.tripsHomeOweOverall(CurrencyFormatter.formatPaise(net.abs(), currencyCode: 'INR'));
-      insightIcon = Icons.arrow_upward_rounded;
-      insightColor = isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight;
-    } else {
-      insightText = l10n.tripsHomeAllSettledMsg;
-      insightIcon = Icons.check_circle_outline_rounded;
-      insightColor = isDark ? AppColors.darkTextSecondary : const Color(0xFF64748B);
+    // Apply smart filters & search to ALL TRIPS section
+    var displayedCompletedTrips = _filterCriteria.filterAndSort(
+      completedTrips,
+      tripTotalsPaise: tripTotalsPaise,
+    );
+
+    if (_searchQuery.trim().isNotEmpty) {
+      final q = _searchQuery.trim().toLowerCase();
+      displayedCompletedTrips = displayedCompletedTrips.where((t) {
+        final matchName = t.name.toLowerCase().contains(q);
+        final matchDesc = t.description?.toLowerCase().contains(q) ?? false;
+        return matchName || matchDesc;
+      }).toList();
     }
 
     return RefreshIndicator(
@@ -55,41 +91,71 @@ class TripsHomeTab extends StatelessWidget {
           await homeVm.refresh(user.id);
         }
       },
-      child: homeVm.isLoading && homeVm.trips.isEmpty
+      child: homeVm.isLoading && allTrips.isEmpty
           ? _buildLoadingSkeleton(isDark)
           : ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
               children: [
-                // 1. Hero Financial Overview Card
-                _buildHeroFinancialCard(
-                  totalSpentPaise: totalSpentPaise,
-                  tripsCount: homeVm.trips.length,
-                  insightText: insightText,
-                  insightIcon: insightIcon,
-                  insightColor: insightColor,
+                // 1. Top Bar: [ Trips ]     [ + Create ] [ Join ]
+                _buildTopBar(context, isDark),
+
+                const SizedBox(height: 24),
+
+                // 2. Section 1: CURRENT TRIP
+                _buildSectionHeader(
+                  title: 'CURRENT TRIP',
+                  count: activeTrips.isNotEmpty ? activeTrips.length : null,
                   isDark: isDark,
-                  l10n: l10n,
                 ),
+                const SizedBox(height: 12),
+
+                if (activeTrips.isNotEmpty)
+                  ...activeTrips.map((trip) {
+                    final balance = homeVm.tripBalances[trip.id];
+                    final hasPending = syncService?.hasPendingMutationsForTrip(trip.id) ?? false;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16.0),
+                      child: ActiveTripHeroCard(
+                        trip: trip,
+                        balance: balance,
+                        totalExpensesCount: tripExpenseCounts[trip.id] ?? 0,
+                        totalExpensesPaise: tripTotalsPaise[trip.id] ?? 0,
+                        hasPendingSync: hasPending,
+                      ),
+                    );
+                  })
+                else
+                  _buildNoActiveTripCard(context, isDark),
 
                 const SizedBox(height: 28),
 
-                // 2. Section Header: [ Your Group Trips ]     [ + Join Trip ]
-                _buildSectionHeader(context, isDark, l10n),
+                // 3. Section 2: ALL TRIPS
+                _buildAllTripsHeader(context, isDark, completedTrips.length),
 
-                const SizedBox(height: 16),
+                if (_isSearchOpen) ...[
+                  const SizedBox(height: 12),
+                  _buildSearchBar(isDark),
+                ],
 
-                // 3. Trips List or Specification Empty State
-                if (homeVm.trips.isEmpty)
-                  _buildEmptyState(context, isDark, l10n)
-                else
-                  ...homeVm.trips.map((trip) {
-                    final balance = homeVm.tripBalances[trip.id];
+                const SizedBox(height: 14),
+
+                // Historical List or Filter Empty State
+                if (displayedCompletedTrips.isNotEmpty)
+                  ...displayedCompletedTrips.map((trip) {
                     return Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                      child: _buildTripCard(context, trip, balance, isDark, user?.id ?? '', l10n),
+                      padding: const EdgeInsets.only(bottom: 12.0),
+                      child: HistoricalTripCard(
+                        trip: trip,
+                        totalExpensesPaise: tripTotalsPaise[trip.id] ?? 0,
+                        totalExpensesCount: tripExpenseCounts[trip.id] ?? 0,
+                      ),
                     );
-                  }),
+                  })
+                else if (completedTrips.isNotEmpty && _filterCriteria.isFiltered)
+                  _buildFilteredEmptyState(isDark)
+                else
+                  _buildEmptyHistoryState(isDark),
 
                 const SizedBox(height: 90),
               ],
@@ -97,53 +163,32 @@ class TripsHomeTab extends StatelessWidget {
     );
   }
 
-  /// 1. Hero Financial Overview Card matching the screenshot specification
-  Widget _buildHeroFinancialCard({
-    required int totalSpentPaise,
-    required int tripsCount,
-    required String insightText,
-    required IconData insightIcon,
-    Color? insightColor,
-    required bool isDark,
-    required AppLocalizations l10n,
-  }) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 20.0),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF0F1418) : Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: isDark ? AppColors.darkBorderSubtle : const Color(0xFFE2E8F0),
-          width: 1.2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
+  /// 1. Top Bar with title and quick Create/Join actions
+  Widget _buildTopBar(BuildContext context, bool isDark) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          'Trips',
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.8,
+            color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header Row: [ TOTAL SPENT ON TRIPS ]   [ 0 Trips ]
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Text(
-                l10n.tripsHomeTotalSpent,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.8,
-                  color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Join Trip Pill
+            GestureDetector(
+              onTap: () {
+                HapticHelper.light();
+                context.push('/join-trip');
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                 decoration: BoxDecoration(
                   color: isDark ? const Color(0xFF161D24) : const Color(0xFFF1F5F9),
                   borderRadius: BorderRadius.circular(12),
@@ -152,200 +197,387 @@ class TripsHomeTab extends StatelessWidget {
                     width: 1,
                   ),
                 ),
-                child: Text(
-                  '$tripsCount ${tripsCount == 1 ? 'Trip' : 'Trips'}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? AppColors.darkTextSecondary : const Color(0xFF475569),
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.person_add_alt_1_outlined,
+                      size: 15,
+                      color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      'Join',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
-
-          const SizedBox(height: 12),
-
-          // Main Hero Number: ₹0 or ₹12,450
-          Text(
-            CurrencyFormatter.formatPaise(totalSpentPaise, currencyCode: 'INR'),
-            style: TextStyle(
-              fontSize: 38,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -1.0,
-              fontFeatures: const [FontFeature.tabularFigures()],
-              color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
             ),
-          ),
+            const SizedBox(width: 8),
 
-          const SizedBox(height: 14),
-
-          // Status Row: (icon) + All trip balances settled up / You get back ₹X / You owe ₹Y
-          Row(
-            children: [
-              Icon(
-                insightIcon,
-                size: 17,
-                color: insightColor ?? (isDark ? AppColors.darkTextMuted : const Color(0xFF64748B)),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  insightText,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: insightColor ?? (isDark ? AppColors.darkTextSecondary : const Color(0xFF64748B)),
-                  ),
-                  overflow: TextOverflow.ellipsis,
+            // Create Trip Button
+            GestureDetector(
+              onTap: () {
+                HapticHelper.medium();
+                context.push('/create-trip');
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                decoration: BoxDecoration(
+                  color: AppColors.emeraldPrimary,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.emeraldPrimary.withValues(alpha: isDark ? 0.35 : 0.25),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add_rounded, size: 16, color: Colors.white),
+                    SizedBox(width: 4),
+                    Text(
+                      'New Trip',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// 2. Section Header: [ Your Group Trips ]     [ + Join Trip ]
-  Widget _buildSectionHeader(BuildContext context, bool isDark, AppLocalizations l10n) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Text(
-          l10n.tripsHomeGroupTrips,
-          style: TextStyle(
-            fontSize: 19,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.4,
-            color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
-          ),
-        ),
-        GestureDetector(
-          onTap: () {
-            HapticHelper.light();
-            context.push('/join-trip');
-          },
-          behavior: HitTestBehavior.opaque,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 2.0),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.person_add_alt_1_outlined,
-                  size: 17,
-                  color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-                ),
-                const SizedBox(width: 5),
-                Text(
-                  l10n.tripsJoin,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-                  ),
-                ),
-              ],
             ),
-          ),
+          ],
         ),
       ],
     );
   }
 
-  /// 3. Specification Empty State matching the exact screenshot design
-  Widget _buildEmptyState(BuildContext context, bool isDark, AppLocalizations l10n) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 40.0, horizontal: 16.0),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // Circular badge with map illustration
+  /// Section Header with title and optional count badge
+  Widget _buildSectionHeader({
+    required String title,
+    int? count,
+    required bool isDark,
+  }) {
+    return Row(
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.8,
+            color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
+          ),
+        ),
+        if (count != null && count > 0) ...[
+          const SizedBox(width: 8),
           Container(
-            width: 84,
-            height: 84,
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
             decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: isDark ? const Color(0xFF161D24) : const Color(0xFFF1F5F9),
-              border: Border.all(
-                color: isDark ? AppColors.darkBorderSubtle : const Color(0xFFE2E8F0),
-                width: 1.2,
-              ),
+              color: isDark ? const Color(0xFF161D24) : const Color(0xFFE2E8F0),
+              borderRadius: BorderRadius.circular(8),
             ),
-            alignment: Alignment.center,
-            child: const Text(
-              '🗺️',
-              style: TextStyle(fontSize: 38),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            l10n.tripsNoTrips,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.4,
-              color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
-            ),
-          ),
-          const SizedBox(height: 8),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 290),
             child: Text(
-              l10n.tripsHomeNoTripsDesc,
-              textAlign: TextAlign.center,
+              '$count',
               style: TextStyle(
-                fontSize: 14,
-                height: 1.4,
-                color: isDark ? AppColors.darkTextSecondary : const Color(0xFF64748B),
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: isDark ? AppColors.darkTextSecondary : const Color(0xFF475569),
               ),
             ),
           ),
-          const SizedBox(height: 24),
-          GestureDetector(
-            onTap: () {
-              HapticHelper.light();
-              context.push('/create-trip');
-            },
-            child: Container(
-              height: 48,
-              padding: const EdgeInsets.symmetric(horizontal: 28),
-              decoration: BoxDecoration(
-                gradient: isDark
-                    ? const LinearGradient(
-                        colors: [Color(0xFF14B8A6), Color(0xFF0F766E)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      )
-                    : null,
-                color: isDark ? null : AppColors.emeraldPrimary,
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.emeraldPrimary.withValues(alpha: isDark ? 0.35 : 0.25),
-                    blurRadius: 14,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+        ],
+      ],
+    );
+  }
+
+  /// Minimal clean card when there is no active trip
+  Widget _buildNoActiveTripCard(BuildContext context, bool isDark) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20.0),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0F1418) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorderSubtle : const Color(0xFFE2E8F0),
+          width: 1.1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF161D24) : const Color(0xFFF1F5F9),
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: const Text('🏖️', style: TextStyle(fontSize: 18)),
               ),
-              alignment: Alignment.center,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.add_rounded, size: 18, color: Colors.white),
-                  const SizedBox(width: 6),
                   Text(
-                    l10n.tripsHomeNewTripBtn,
-                    style: const TextStyle(
-                      fontSize: 14,
+                    'No active trip',
+                    style: TextStyle(
+                      fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: Colors.white,
+                      color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Start or join a trip to split expenses together.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? AppColors.darkTextSecondary : const Color(0xFF64748B),
                     ),
                   ),
                 ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// ALL TRIPS header with Search & Filter controls
+  Widget _buildAllTripsHeader(BuildContext context, bool isDark, int totalCount) {
+    final isFiltered = _filterCriteria.isFiltered;
+    final filterCount = _filterCriteria.activeFilterCount;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Row(
+          children: [
+            Text(
+              'ALL TRIPS',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.8,
+                color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
+              ),
+            ),
+            if (totalCount > 0) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF161D24) : const Color(0xFFE2E8F0),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '$totalCount',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? AppColors.darkTextSecondary : const Color(0xFF475569),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Search toggle icon
+            IconButton(
+              icon: Icon(
+                _isSearchOpen ? Icons.close_rounded : Icons.search_rounded,
+                size: 20,
+                color: _isSearchOpen
+                    ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
+                    : (isDark ? AppColors.darkTextSecondary : const Color(0xFF64748B)),
+              ),
+              onPressed: () {
+                HapticHelper.light();
+                setState(() {
+                  _isSearchOpen = !_isSearchOpen;
+                  if (!_isSearchOpen) {
+                    _searchQuery = '';
+                    _searchController.clear();
+                  }
+                });
+              },
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            ),
+            const SizedBox(width: 6),
+
+            // Filter button
+            GestureDetector(
+              onTap: () {
+                HapticHelper.light();
+                TripFilterSheet.show(
+                  context,
+                  initialCriteria: _filterCriteria,
+                  onApply: (criteria) {
+                    setState(() => _filterCriteria = criteria);
+                  },
+                );
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+                decoration: BoxDecoration(
+                  color: isFiltered
+                      ? (isDark ? AppColors.emeraldPrimary.withValues(alpha: 0.2) : const Color(0xFFECFDF5))
+                      : (isDark ? const Color(0xFF161D24) : const Color(0xFFF1F5F9)),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: isFiltered
+                        ? AppColors.emeraldPrimary
+                        : (isDark ? AppColors.darkBorderSubtle : const Color(0xFFE2E8F0)),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.tune_rounded,
+                      size: 14,
+                      color: isFiltered
+                          ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
+                          : (isDark ? AppColors.darkTextSecondary : const Color(0xFF64748B)),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      isFiltered ? 'Filter • $filterCount' : 'Filter',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: isFiltered
+                            ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
+                            : (isDark ? AppColors.darkTextSecondary : const Color(0xFF475569)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// Search Textfield
+  Widget _buildSearchBar(bool isDark) {
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0F1418) : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorderSubtle : const Color(0xFFCBD5E1),
+          width: 1,
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: TextField(
+        controller: _searchController,
+        autofocus: true,
+        style: TextStyle(
+          fontSize: 14,
+          color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
+        ),
+        decoration: InputDecoration(
+          icon: Icon(
+            Icons.search_rounded,
+            size: 18,
+            color: isDark ? AppColors.darkTextMuted : const Color(0xFF94A3B8),
+          ),
+          hintText: 'Search by trip name or destination...',
+          hintStyle: TextStyle(
+            fontSize: 13,
+            color: isDark ? AppColors.darkTextMuted : const Color(0xFF94A3B8),
+          ),
+          border: InputBorder.none,
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+          suffixIcon: _searchQuery.isNotEmpty
+              ? GestureDetector(
+                  onTap: () {
+                    _searchController.clear();
+                    setState(() => _searchQuery = '');
+                  },
+                  child: const Icon(Icons.clear_rounded, size: 16),
+                )
+              : null,
+        ),
+        onChanged: (val) {
+          setState(() => _searchQuery = val);
+        },
+      ),
+    );
+  }
+
+  /// Filtered Empty State
+  Widget _buildFilteredEmptyState(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 36.0, horizontal: 16.0),
+      alignment: Alignment.center,
+      child: Column(
+        children: [
+          Icon(
+            Icons.filter_list_off_rounded,
+            size: 40,
+            color: isDark ? AppColors.darkTextMuted : const Color(0xFF94A3B8),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'No trips match your filters',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Try adjusting your filter or search criteria.',
+            style: TextStyle(
+              fontSize: 13,
+              color: isDark ? AppColors.darkTextSecondary : const Color(0xFF64748B),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextButton(
+            onPressed: () {
+              HapticHelper.light();
+              setState(() {
+                _filterCriteria = const TripFilterCriteria();
+                _searchQuery = '';
+                _searchController.clear();
+              });
+            },
+            child: Text(
+              'Clear Filters',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
               ),
             ),
           ),
@@ -354,159 +586,38 @@ class TripsHomeTab extends StatelessWidget {
     );
   }
 
-  /// 4. Populated Trip Card
-  Widget _buildTripCard(
-    BuildContext context,
-    Trip trip,
-    dynamic balance,
-    bool isDark,
-    String currentUserId,
-    AppLocalizations l10n,
-  ) {
-    final gradientColors = AppColors.getGradient(trip.coverGradientIndex);
-    final userNetPaise = balance?.currentUserNetBalanceInPaise ?? 0;
-
-    return SurfaceCard(
-      onTap: () {
-        HapticHelper.light();
-        context.push('/trip/${trip.id}');
-      },
-      padding: EdgeInsets.zero,
+  /// Empty History State
+  Widget _buildEmptyHistoryState(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 32.0, horizontal: 16.0),
+      alignment: Alignment.center,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Trip Cover Gradient Banner
           Container(
-            height: 72,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            width: 54,
+            height: 54,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: gradientColors,
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              shape: BoxShape.circle,
+              color: isDark ? const Color(0xFF161D24) : const Color(0xFFF1F5F9),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        shape: BoxShape.circle,
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        trip.emoji,
-                        style: const TextStyle(fontSize: 22),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          trip.name,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.3,
-                          ),
-                        ),
-                        Text(
-                          l10n.tripsHomeMembersCount(trip.members.length),
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.85),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                PillBadge(
-                  label: trip.lifecycleState.displayName,
-                  color: Colors.white,
-                  backgroundColor: Colors.black.withValues(alpha: 0.25),
-                ),
-              ],
+            alignment: Alignment.center,
+            child: const Text('✨', style: TextStyle(fontSize: 24)),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'No completed trips yet',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
             ),
           ),
-
-          // Card Body Info
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // Member Avatars Row
-                SizedBox(
-                  height: 32,
-                  child: Row(
-                    children: [
-                      for (int i = 0; i < trip.members.length && i < 4; i++)
-                        Align(
-                          widthFactor: 0.7,
-                          child: MemberAvatar(
-                            name: trip.members[i].displayName,
-                            size: 28,
-                            showBorder: true,
-                          ),
-                        ),
-                      if (trip.members.length > 4)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 6),
-                          child: Text(
-                            '+${trip.members.length - 4}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-
-                // User Balance in Trip
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      userNetPaise > 0
-                          ? l10n.tripDetailYouGetBack
-                          : (userNetPaise < 0 ? l10n.tripDetailYouOwe : l10n.tripsHomeCardSettled),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      CurrencyFormatter.formatPaise(userNetPaise.abs(), currencyCode: trip.currencyCode),
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                        color: userNetPaise > 0
-                            ? (isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight)
-                            : (userNetPaise < 0
-                                ? (isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight)
-                                : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary)),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+          const SizedBox(height: 4),
+          Text(
+            'Your finished trips will appear here.',
+            style: TextStyle(
+              fontSize: 13,
+              color: isDark ? AppColors.darkTextSecondary : const Color(0xFF64748B),
             ),
           ),
         ],
@@ -515,17 +626,34 @@ class TripsHomeTab extends StatelessWidget {
   }
 
   Widget _buildLoadingSkeleton(bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: Column(
-        children: [
-          ShimmerSkeleton(height: 140, borderRadius: BorderRadius.circular(24)),
-          const SizedBox(height: 24),
-          const ShimmerSkeleton(height: 24, width: 140),
-          const SizedBox(height: 16),
-          ShimmerSkeleton(height: 160, borderRadius: BorderRadius.circular(20)),
-        ],
-      ),
+    return ListView(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+      children: [
+        ShimmerSkeleton(
+          width: double.infinity,
+          height: 180,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        const SizedBox(height: 28),
+        ShimmerSkeleton(
+          width: 140,
+          height: 20,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        const SizedBox(height: 16),
+        ShimmerSkeleton(
+          width: double.infinity,
+          height: 80,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        const SizedBox(height: 12),
+        ShimmerSkeleton(
+          width: double.infinity,
+          height: 80,
+          borderRadius: BorderRadius.circular(20),
+        ),
+      ],
     );
   }
 }
