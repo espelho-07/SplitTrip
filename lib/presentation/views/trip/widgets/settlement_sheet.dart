@@ -18,6 +18,7 @@ import '../../../../domain/models/trip.dart';
 import '../../../../domain/models/trip_member.dart';
 import '../../../widgets/progress/progress.dart';
 import '../../payment/upi_payment_dialog.dart';
+import '../../../viewmodels/trip_detail_viewmodel.dart';
 
 typedef RecordSettlementCallback = Future<void> Function(
   String fromMemberId,
@@ -149,7 +150,9 @@ class _SettlementSheetState extends State<SettlementSheet> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final settlements = widget.balanceSummary.simplifiedSettlements;
+    final tripDetailVm = Provider.of<TripDetailViewModel?>(context);
+    final effectiveBalanceSummary = tripDetailVm?.balanceSummary ?? widget.balanceSummary;
+    final settlements = effectiveBalanceSummary.simplifiedSettlements;
 
     return Container(
       decoration: BoxDecoration(

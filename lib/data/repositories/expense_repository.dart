@@ -157,10 +157,14 @@ class ExpenseRepository {
     required Trip trip,
     required String currentUserId,
   }) async {
+    final savedSettlements = storage.getSavedTripSettlements(trip.id);
     try {
       final res = await apiClient.get('/trips/${trip.id}/expenses/balance/summary');
       if (res is Map<String, dynamic>) {
-        return BalanceSummary.fromJson(res);
+        final serverSummary = BalanceSummary.fromJson(res);
+        if (savedSettlements.isEmpty) {
+          return serverSummary;
+        }
       }
     } catch (_) {
       // Offline fallback
@@ -170,8 +174,14 @@ class ExpenseRepository {
     return BalanceEngine.calculateBalances(
       members: trip.members,
       expenses: expenses,
+      settlements: savedSettlements,
       currentUserId: currentUserId,
     );
+  }
+
+  /// Returns cached settlements for a trip.
+  List<Map<String, dynamic>> getCachedSettlements(String tripId) {
+    return storage.getSavedTripSettlements(tripId);
   }
 
   /// Records a direct settlement payment between two members.

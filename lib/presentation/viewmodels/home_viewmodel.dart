@@ -89,9 +89,11 @@ class HomeViewModel extends ChangeNotifier {
 
     for (final trip in tripsList) {
       final cachedExpenses = expenseRepo.getCachedExpenses(trip.id);
+      final cachedSettlements = expenseRepo.getCachedSettlements(trip.id);
       final summary = BalanceEngine.calculateBalances(
         members: trip.members,
         expenses: cachedExpenses,
+        settlements: cachedSettlements,
         currentUserId: currentUserId,
       );
       _tripBalances[trip.id] = summary;

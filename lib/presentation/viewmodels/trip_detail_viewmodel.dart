@@ -172,9 +172,11 @@ class TripDetailViewModel extends ChangeNotifier {
 
   void _recomputeLocalBalances() {
     if (_trip != null && _currentUserId != null) {
+      final cachedSettlements = expenseRepo.getCachedSettlements(_trip!.id);
       _balanceSummary = BalanceEngine.calculateBalances(
         members: _trip!.members,
         expenses: _expenses,
+        settlements: cachedSettlements,
         currentUserId: _currentUserId!,
       );
     }
@@ -193,9 +195,11 @@ class TripDetailViewModel extends ChangeNotifier {
       _journeyStops = tripRepo.getCachedJourneyStops(tripId);
       _tripMemories = tripRepo.getCachedTripMemories(tripId);
       _journeyMoments = tripRepo.getCachedJourneyMoments(tripId);
+      final cachedSettlements = expenseRepo.getCachedSettlements(tripId);
       _balanceSummary = BalanceEngine.calculateBalances(
         members: cachedTrip.members,
         expenses: _expenses,
+        settlements: cachedSettlements,
         currentUserId: currentUserId,
       );
       notifyListeners();
