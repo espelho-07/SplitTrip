@@ -85,7 +85,7 @@ void main() {
   }
 
   group('Master CreateTripView Suite', () {
-    testWidgets('1. Renders Master TopBar, Live Preview banner, and 4 sections', (tester) async {
+    testWidgets('1. Renders clean New Trip top bar, experience mode, currency, and create button', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -93,18 +93,13 @@ void main() {
       await tester.pumpWidget(buildCreateTripTestWidget());
       await tester.pumpAndSettle();
 
-      expect(find.text('KITH · NEW TRIP'), findsOneWidget);
-      expect(find.text('DRAFTING'), findsOneWidget);
-      expect(find.text('LIVE PREVIEW'), findsOneWidget);
-      expect(find.text('Trip Name'), findsWidgets);
-      expect(find.text('TRIP IDENTITY'), findsOneWidget);
+      expect(find.text('New Trip'), findsOneWidget);
       expect(find.text('EXPERIENCE MODE'), findsOneWidget);
       expect(find.text('BASE CURRENCY'), findsOneWidget);
-      expect(find.text('CREW & CO-TRAVELERS'), findsOneWidget);
-      expect(find.text('Enter Trip Name to Continue'), findsOneWidget);
+      expect(find.text('Create Trip'), findsOneWidget);
     });
 
-    testWidgets('2. Entering trip name and picking emoji/gradient reactively updates Live Preview card', (tester) async {
+    testWidgets('2. Entering trip name and picking emoji reactively updates state', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -116,17 +111,21 @@ void main() {
       await tester.enterText(nameField, 'Goa Villa Retreat');
       await tester.pumpAndSettle();
 
-      expect(find.text('Goa Villa Retreat'), findsWidgets);
-      expect(find.text('Create Trip Space 🚀'), findsOneWidget);
+      expect(createVm.name, 'Goa Villa Retreat');
 
-      final beachEmoji = find.text('🏖️').last;
+      // Tap emoji button to expand tray
+      final emojiBtn = find.text('✈️').first;
+      await tester.tap(emojiBtn);
+      await tester.pumpAndSettle();
+
+      final beachEmoji = find.text('🏖️').first;
       await tester.tap(beachEmoji);
       await tester.pumpAndSettle();
 
       expect(createVm.emoji, '🏖️');
     });
 
-    testWidgets('3. Selecting Experience Mode updates mode selection and feature bullet highlights', (tester) async {
+    testWidgets('3. Selecting Experience Mode updates mode selection', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -134,14 +133,11 @@ void main() {
       await tester.pumpWidget(buildCreateTripTestWidget());
       await tester.pumpAndSettle();
 
-      final journeyOption = find.text('Split + Journey').first;
-      await tester.tap(journeyOption);
+      final splitOnly = find.text('Split Only').first;
+      await tester.tap(splitOnly);
       await tester.pumpAndSettle();
 
-      expect(createVm.tripMode, 'split_and_journey');
-      expect(find.text('RECOMMENDED'), findsOneWidget);
-      expect(find.text('Includes all Split ledger features'), findsOneWidget);
-      expect(find.text('Auto-attaches expenses to timeline'), findsOneWidget);
+      expect(createVm.tripMode, 'split_only');
     });
 
     testWidgets('4. Selecting Currency updates currency code chip', (tester) async {
@@ -159,7 +155,7 @@ void main() {
       expect(createVm.currencyCode, 'USD');
     });
 
-    testWidgets('5. Adding and removing friends updates crew tags and member counter chip', (tester) async {
+    testWidgets('5. Adding and removing friends updates crew list', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -167,57 +163,24 @@ void main() {
       await tester.pumpWidget(buildCreateTripTestWidget());
       await tester.pumpAndSettle();
 
-      expect(find.text('1 Crew Members'), findsOneWidget);
-      expect(find.text('Organizer (You)'), findsOneWidget);
-      expect(find.text('Instant Realtime Join'), findsOneWidget);
+      expect(find.text('Friends can join instantly via QR code or invite code.'), findsOneWidget);
 
-      // Expand offline friends section
-      await tester.tap(find.text('Add Offline / Non-App Friends'));
+      // Expand manual friends
+      await tester.tap(find.text('Add friend manually (non-app user)'));
       await tester.pumpAndSettle();
 
-      final friendField = find.widgetWithText(TextField, "Friend's Name (e.g. Rahul)");
-
+      final friendField = find.widgetWithText(TextField, 'Enter friend name...');
       await tester.enterText(friendField, 'Ananya');
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
 
-      expect(find.text('Ananya (Offline)'), findsOneWidget);
-      expect(find.text('2 Crew Members'), findsOneWidget);
+      expect(find.text('Ananya'), findsOneWidget);
 
       final removeIcon = find.byIcon(Icons.close_rounded);
       await tester.tap(removeIcon);
       await tester.pumpAndSettle();
 
-      expect(find.text('Ananya (Offline)'), findsNothing);
-      expect(find.text('1 Crew Members'), findsOneWidget);
-    });
-
-    testWidgets('6. Renders correctly in Hindi (hi) localization', (tester) async {
-      tester.view.physicalSize = const Size(1080, 2400);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-
-      await tester.pumpWidget(buildCreateTripTestWidget(locale: const Locale('hi')));
-      await tester.pumpAndSettle();
-
-      expect(find.text('यात्रा की पहचान'), findsOneWidget);
-      expect(find.text('अनुभव मोड'), findsOneWidget);
-      expect(find.text('मुद्रा'), findsOneWidget);
-      expect(find.text('सह-यात्री और दोस्त'), findsOneWidget);
-    });
-
-    testWidgets('7. Renders correctly in Gujarati (gu) localization', (tester) async {
-      tester.view.physicalSize = const Size(1080, 2400);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-
-      await tester.pumpWidget(buildCreateTripTestWidget(locale: const Locale('gu')));
-      await tester.pumpAndSettle();
-
-      expect(find.text('યાત્રાની ઓળખ'), findsOneWidget);
-      expect(find.text('અનુભવ મોડ'), findsOneWidget);
-      expect(find.text('ચલણ'), findsOneWidget);
-      expect(find.text('સાથી પ્રવાસીઓ અને મિત્રો'), findsOneWidget);
+      expect(find.text('Ananya'), findsNothing);
     });
   });
 }

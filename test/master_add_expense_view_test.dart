@@ -91,7 +91,7 @@ void main() {
   }
 
   group('Master Redesigned AddExpenseView Suite', () {
-    testWidgets('1. Renders redesigned Add Expense view with hero amount, quick presets, payer, and save button', (tester) async {
+    testWidgets('1. Renders redesigned Add Expense view with unified amount card, payer, category, and save button', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -103,11 +103,9 @@ void main() {
       expect(find.text('Add Expense'), findsOneWidget);
       expect(find.text('Manual'), findsOneWidget);
       expect(find.text('Voice AI'), findsOneWidget);
-      expect(find.text('Scan Receipt'), findsOneWidget);
-      expect(find.text('AMOUNT'), findsOneWidget);
-      expect(find.text('QUICK SUGGESTIONS'), findsOneWidget);
+      expect(find.text('Receipt Scan'), findsOneWidget);
+      expect(find.text('CATEGORY'), findsOneWidget);
       expect(find.text('PAID BY'), findsOneWidget);
-      expect(find.text('SPLIT TYPE'), findsOneWidget);
       expect(find.text('Save Expense'), findsOneWidget);
     });
 
@@ -127,21 +125,6 @@ void main() {
 
       expect(addVm.amountInPaise, 125000);
       expect(addVm.title, 'Seafood Dinner');
-    });
-
-    testWidgets('3. Tapping quick preset populates title and sets category', (tester) async {
-      tester.view.physicalSize = const Size(1080, 2400);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-
-      await tripDetailVm.loadTrip('trip_add_expense_orig_test', 'user_darpan');
-      await tester.pumpWidget(createAddExpenseScreen());
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Dinner'));
-      await tester.pumpAndSettle();
-
-      expect(addVm.title, 'Dinner');
     });
   });
 }

@@ -513,3 +513,48 @@ class KithEmptyState extends StatelessWidget {
     );
   }
 }
+
+/// Helper for completely borderless, un-boxed input decorations.
+/// Prevents harsh 4-sided black/colored outline boxes when inputs are focused.
+class KithInputDecoration {
+  KithInputDecoration._();
+
+  static InputDecoration borderless({
+    String? hintText,
+    TextStyle? hintStyle,
+    Widget? prefixIcon,
+    Widget? suffixIcon,
+    Widget? icon,
+    String? prefixText,
+    TextStyle? prefixStyle,
+    String? suffixText,
+    TextStyle? suffixStyle,
+    EdgeInsetsGeometry? contentPadding = EdgeInsets.zero,
+    bool isDense = true,
+    Color? fillColor,
+    bool filled = false,
+  }) {
+    return InputDecoration(
+      hintText: hintText,
+      hintStyle: hintStyle,
+      prefixIcon: prefixIcon,
+      suffixIcon: suffixIcon,
+      icon: icon,
+      prefixText: prefixText,
+      prefixStyle: prefixStyle,
+      suffixText: suffixText,
+      suffixStyle: suffixStyle,
+      contentPadding: contentPadding,
+      isDense: isDense,
+      fillColor: fillColor,
+      filled: filled,
+      border: InputBorder.none,
+      enabledBorder: InputBorder.none,
+      focusedBorder: InputBorder.none,
+      disabledBorder: InputBorder.none,
+      errorBorder: InputBorder.none,
+      focusedErrorBorder: InputBorder.none,
+    );
+  }
+}
+

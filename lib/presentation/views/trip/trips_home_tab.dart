@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
+import '../../../core/widgets/kith_components.dart';
 import '../../../core/widgets/shimmer_skeleton.dart';
 import '../../../data/services/sync_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
@@ -502,7 +503,7 @@ class _TripsHomeTabState extends State<TripsHomeTab> {
           fontSize: 14,
           color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
         ),
-        decoration: InputDecoration(
+        decoration: KithInputDecoration.borderless(
           icon: Icon(
             Icons.search_rounded,
             size: 18,
@@ -513,8 +514,6 @@ class _TripsHomeTabState extends State<TripsHomeTab> {
             fontSize: 13,
             color: isDark ? AppColors.darkTextMuted : const Color(0xFF94A3B8),
           ),
-          border: InputBorder.none,
-          isDense: true,
           contentPadding: const EdgeInsets.symmetric(vertical: 12),
           suffixIcon: _searchQuery.isNotEmpty
               ? GestureDetector(

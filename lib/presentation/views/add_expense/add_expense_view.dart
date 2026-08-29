@@ -8,6 +8,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/widgets/app_button.dart';
+import '../../../core/widgets/kith_components.dart';
 import '../../../core/widgets/member_avatar.dart';
 import '../../../domain/enums/expense_category.dart';
 import '../../../domain/enums/split_type.dart';
@@ -21,11 +22,10 @@ import '../../viewmodels/trip_detail_viewmodel.dart';
 import '../../widgets/progress/kith_success_toast.dart';
 import 'widgets/feature_crafting_hero.dart';
 
-/// Master Redesigned Add & Edit Expense Experience for Kith.
+/// Clean, sleek, and intuitive Add/Edit Expense Experience for Kith.
 ///
-/// Features a hero amount card, quick preset chips, 8-category carousel,
-/// 1-tap payer switcher, 4 precision split engines (Equal, Exact, %, Shares),
-/// and seamless Voice & Receipt scanning workflows.
+/// Streamlined with a unified Amount + Title card, clean category chips,
+/// tactile payer switcher, precision split matrix, and zero bulky/congested clutter.
 class AddExpenseView extends StatefulWidget {
   final String tripId;
   final Expense? existingExpense;
@@ -47,18 +47,6 @@ class _AddExpenseViewState extends State<AddExpenseView> {
   final TextEditingController _titleController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
   bool _isLoadingTrip = true;
-
-  static const List<Map<String, dynamic>> _quickPresets = [
-    {'title': 'Dinner', 'icon': '🍔', 'category': ExpenseCategory.food},
-    {'title': 'Cab / Taxi', 'icon': '🚕', 'category': ExpenseCategory.transport},
-    {'title': 'Fuel', 'icon': '⛽', 'category': ExpenseCategory.transport},
-    {'title': 'Groceries', 'icon': '🛒', 'category': ExpenseCategory.groceries},
-    {'title': 'Hotel / Stay', 'icon': '🏨', 'category': ExpenseCategory.stay},
-    {'title': 'Coffee & Cafe', 'icon': '☕', 'category': ExpenseCategory.drinks},
-    {'title': 'Drinks & Bar', 'icon': '🍹', 'category': ExpenseCategory.drinks},
-    {'title': 'Tickets & Entry', 'icon': '🎟️', 'category': ExpenseCategory.activities},
-    {'title': 'Shopping', 'icon': '🛍️', 'category': ExpenseCategory.shopping},
-  ];
 
   @override
   void initState() {
@@ -318,7 +306,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
           // Mode Tabs (Manual | Voice AI | Scan Receipt)
           _buildModeTabs(context, isDark, addVm),
 
-          // Main Scrollable Content
+          // Main Content
           Expanded(
             child: addVm.currentTab == 0
                 ? FeatureCraftingHero(
@@ -348,21 +336,21 @@ class _AddExpenseViewState extends State<AddExpenseView> {
       scrolledUnderElevation: 0,
       centerTitle: true,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back_rounded),
+        icon: const Icon(Icons.arrow_back_rounded, size: 20),
         onPressed: () => context.pop(),
       ),
       title: Text(
         widget.existingExpense != null ? 'Edit Expense' : 'Add Expense',
         style: TextStyle(
-          fontSize: 18,
+          fontSize: 17,
           fontWeight: FontWeight.w800,
-          letterSpacing: -0.4,
+          letterSpacing: -0.3,
           color: isDark ? Colors.white : const Color(0xFF0F172A),
         ),
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.help_outline_rounded, size: 22),
+          icon: const Icon(Icons.help_outline_rounded, size: 20),
           tooltip: 'Split Help',
           onPressed: _showSplitMethodsHelp,
         ),
@@ -372,21 +360,18 @@ class _AddExpenseViewState extends State<AddExpenseView> {
 
   Widget _buildModeTabs(BuildContext context, bool isDark, AddExpenseViewModel addVm) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 6.0),
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 4.0),
       child: Container(
-        padding: const EdgeInsets.all(4),
+        padding: const EdgeInsets.all(3),
         decoration: BoxDecoration(
           color: isDark ? const Color(0xFF141A21) : const Color(0xFFEDF2F7),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.black.withValues(alpha: 0.04),
-          ),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
           children: [
             _buildTabButton(title: 'Manual', icon: Icons.edit_rounded, index: 2, isDark: isDark, activeIndex: addVm.currentTab, onTap: () => addVm.setTab(2)),
             _buildTabButton(title: 'Voice AI', icon: Icons.mic_rounded, index: 0, isDark: isDark, activeIndex: addVm.currentTab, onTap: () => addVm.setTab(0)),
-            _buildTabButton(title: 'Scan Receipt', icon: Icons.document_scanner_rounded, index: 1, isDark: isDark, activeIndex: addVm.currentTab, onTap: () => addVm.setTab(1)),
+            _buildTabButton(title: 'Receipt Scan', icon: Icons.document_scanner_rounded, index: 1, isDark: isDark, activeIndex: addVm.currentTab, onTap: () => addVm.setTab(1)),
           ],
         ),
       ),
@@ -409,19 +394,19 @@ class _AddExpenseViewState extends State<AddExpenseView> {
           onTap();
         },
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          height: 36,
+          duration: const Duration(milliseconds: 180),
+          height: 34,
           decoration: BoxDecoration(
             color: isSelected
                 ? (isDark ? const Color(0xFF222B35) : Colors.white)
                 : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(9),
             boxShadow: isSelected
                 ? [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.06),
+                      color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.05),
                       blurRadius: 4,
-                      offset: const Offset(0, 2),
+                      offset: const Offset(0, 1),
                     ),
                   ]
                 : null,
@@ -431,17 +416,17 @@ class _AddExpenseViewState extends State<AddExpenseView> {
             children: [
               Icon(
                 icon,
-                size: 15,
+                size: 14,
                 color: isSelected
                     ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
                     : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 5),
               Text(
                 title,
                 style: TextStyle(
                   fontSize: 12,
-                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                   color: isSelected
                       ? (isDark ? Colors.white : const Color(0xFF0F172A))
                       : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
@@ -463,283 +448,174 @@ class _AddExpenseViewState extends State<AddExpenseView> {
   ) {
     return ListView(
       physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
       children: [
-        // 1. Hero Amount Card
-        _buildHeroAmountCard(context, isDark, addVm, currency),
-
-        const SizedBox(height: 14),
-
-        // 2. Quick Merchant Presets
-        _buildQuickPresetsRow(isDark, addVm),
-
-        const SizedBox(height: 18),
-
-        // 3. Expense Description Field
-        _buildDescriptionField(isDark, addVm),
-
-        const SizedBox(height: 18),
-
-        // 4. Category Selector Carousel
-        _buildCategoryCarousel(isDark, addVm),
-
-        const SizedBox(height: 20),
-
-        // 5. Payer Selector Deck
-        _buildPayerSelector(isDark, addVm, trip),
-
-        const SizedBox(height: 20),
-
-        // 6. Split Type Selector (Equal, Exact, %, Shares)
-        _buildSplitTypeSelector(isDark, addVm),
+        // 1. Unified Amount & Description Card
+        _buildAmountAndTitleCard(context, isDark, addVm, currency),
 
         const SizedBox(height: 16),
 
-        // 7. Participants Matrix
-        _buildParticipantsSection(isDark, addVm, trip, currency),
+        // 2. Category Selector (Horizontal Chips)
+        _buildCategorySection(isDark, addVm),
 
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
 
-        // 8. Date Selector Pill
+        // 3. Paid By (Who Paid?)
+        _buildPayerSection(isDark, addVm, trip),
+
+        const SizedBox(height: 16),
+
+        // 4. Split Type & Participants Matrix
+        _buildSplitAndParticipantsSection(isDark, addVm, trip, currency),
+
+        const SizedBox(height: 16),
+
+        // 5. Date Selector Pill
         _buildDateSelectorPill(isDark),
 
-        const SizedBox(height: 40),
+        const SizedBox(height: 32),
       ],
     );
   }
 
-  Widget _buildHeroAmountCard(
+  /// Single, sleek unified card for Amount & Expense Title.
+  Widget _buildAmountAndTitleCard(
     BuildContext context,
     bool isDark,
     AddExpenseViewModel addVm,
     String currency,
   ) {
+    final curSymbol = currency == 'INR' ? '₹' : currency;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF11161B) : Colors.white,
-        borderRadius: BorderRadius.circular(22),
+        color: isDark ? AppColors.darkSurfaceCard : Colors.white,
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: isDark ? 0.25 : 0.2),
-          width: 1.2,
+          color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+          width: 0.8,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: isDark ? 0.06 : 0.05),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'AMOUNT',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.0,
-                  color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                ),
-              ),
-              // Category tag inside hero
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(addVm.category.emoji, style: const TextStyle(fontSize: 12)),
-                    const SizedBox(width: 4),
-                    Text(
-                      addVm.category.displayName,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Text(
-                currency == 'INR' ? '₹' : currency,
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.w900,
-                  color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TextField(
-                  controller: _amountController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          // Amount Section
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  curSymbol,
                   style: TextStyle(
-                    fontSize: 36,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.8,
-                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    fontSize: 26,
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
                   ),
-                  decoration: const InputDecoration(
-                    hintText: '0.00',
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.zero,
-                    isDense: true,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _amountController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.5,
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    ),
+                    decoration: KithInputDecoration.borderless(
+                      hintText: '0.00',
+                      hintStyle: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                      ),
+                    ),
+                    onChanged: (val) {
+                      final doubleVal = double.tryParse(val) ?? 0.0;
+                      addVm.setAmountInPaise((doubleVal * 100).round());
+                    },
                   ),
-                  onChanged: (val) {
-                    final doubleVal = double.tryParse(val) ?? 0.0;
-                    addVm.setAmountInPaise((doubleVal * 100).round());
-                  },
                 ),
-              ),
-              if (_amountController.text.isNotEmpty)
-                IconButton(
-                  icon: const Icon(Icons.clear_rounded, size: 20),
-                  onPressed: () {
-                    _amountController.clear();
-                    addVm.setAmountInPaise(0);
-                  },
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildQuickPresetsRow(bool isDark, AddExpenseViewModel addVm) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'QUICK SUGGESTIONS',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.8,
-            color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-          ),
-        ),
-        const SizedBox(height: 8),
-        SizedBox(
-          height: 36,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            itemCount: _quickPresets.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 8),
-            itemBuilder: (context, index) {
-              final preset = _quickPresets[index];
-              return InkWell(
-                onTap: () {
-                  HapticHelper.selection();
-                  _titleController.text = preset['title'];
-                  addVm.setTitle(preset['title']);
-                  addVm.setCategory(preset['category']);
-                },
-                borderRadius: BorderRadius.circular(18),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF141A21) : const Color(0xFFEDF2F7),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                      color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.black.withValues(alpha: 0.04),
+                if (_amountController.text.isNotEmpty)
+                  GestureDetector(
+                    onTap: () {
+                      HapticHelper.light();
+                      _amountController.clear();
+                      addVm.setAmountInPaise(0);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.close_rounded, size: 16),
                     ),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(preset['icon'], style: const TextStyle(fontSize: 13)),
-                      const SizedBox(width: 6),
-                      Text(
-                        preset['title'],
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: isDark ? AppColors.darkTextPrimary : const Color(0xFF334155),
-                        ),
+              ],
+            ),
+          ),
+
+          Divider(
+            height: 1,
+            thickness: 0.8,
+            color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+          ),
+
+          // Description / Title Field
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.edit_note_rounded,
+                  color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                  size: 20,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: _titleController,
+                    textCapitalization: TextCapitalization.sentences,
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    ),
+                    decoration: KithInputDecoration.borderless(
+                      hintText: 'What was this expense for?',
+                      hintStyle: TextStyle(
+                        color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                        fontSize: 14,
                       ),
-                    ],
+                    ),
+                    onChanged: (val) => addVm.setTitle(val),
                   ),
                 ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDescriptionField(bool isDark, AddExpenseViewModel addVm) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF11161B) : Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06),
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.edit_note_rounded,
-            color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-            size: 22,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: TextField(
-              controller: _titleController,
-              textCapitalization: TextCapitalization.sentences,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: isDark ? Colors.white : const Color(0xFF0F172A),
-              ),
-              decoration: InputDecoration(
-                hintText: 'What was this expense for?',
-                hintStyle: TextStyle(
-                  color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                  fontSize: 14,
-                ),
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.zero,
-                isDense: true,
-              ),
-              onChanged: (val) => addVm.setTitle(val),
+                if (_titleController.text.isNotEmpty)
+                  GestureDetector(
+                    onTap: () {
+                      HapticHelper.light();
+                      _titleController.clear();
+                      addVm.setTitle('');
+                    },
+                    child: Icon(Icons.close_rounded, size: 16, color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                  ),
+              ],
             ),
           ),
-          if (_titleController.text.isNotEmpty)
-            GestureDetector(
-              onTap: () {
-                _titleController.clear();
-                addVm.setTitle('');
-              },
-              child: Icon(Icons.close_rounded, size: 18, color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
-            ),
         ],
       ),
     );
   }
 
-  Widget _buildCategoryCarousel(bool isDark, AddExpenseViewModel addVm) {
+  /// Compact Horizontal Category Chips.
+  Widget _buildCategorySection(bool isDark, AddExpenseViewModel addVm) {
     const categories = ExpenseCategory.values;
+    final activeColor = isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -754,48 +630,49 @@ class _AddExpenseViewState extends State<AddExpenseView> {
         ),
         const SizedBox(height: 8),
         SizedBox(
-          height: 40,
+          height: 36,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
             itemCount: categories.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            separatorBuilder: (_, _) => const SizedBox(width: 6),
             itemBuilder: (context, index) {
               final cat = categories[index];
               final isSelected = addVm.category == cat;
+
               return InkWell(
                 onTap: () {
                   HapticHelper.selection();
                   addVm.setCategory(cat);
                 },
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  duration: const Duration(milliseconds: 180),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: isSelected
-                        ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.18)
-                        : (isDark ? const Color(0xFF141A21) : const Color(0xFFEDF2F7)),
-                    borderRadius: BorderRadius.circular(12),
+                        ? activeColor.withValues(alpha: isDark ? 0.2 : 0.12)
+                        : (isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard),
+                    borderRadius: BorderRadius.circular(10),
                     border: Border.all(
                       color: isSelected
-                          ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
-                          : (isDark ? Colors.white.withValues(alpha: 0.06) : Colors.black.withValues(alpha: 0.04)),
-                      width: isSelected ? 1.5 : 1.0,
+                          ? activeColor
+                          : (isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle),
+                      width: isSelected ? 1.4 : 0.8,
                     ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(cat.emoji, style: const TextStyle(fontSize: 14)),
-                      const SizedBox(width: 6),
+                      Text(cat.emoji, style: const TextStyle(fontSize: 13)),
+                      const SizedBox(width: 5),
                       Text(
                         cat.displayName,
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
                           color: isSelected
-                              ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
+                              ? (isDark ? Colors.white : activeColor)
                               : (isDark ? AppColors.darkTextSecondary : const Color(0xFF475569)),
                         ),
                       ),
@@ -810,113 +687,15 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     );
   }
 
-  Widget _buildPayerSelector(bool isDark, AddExpenseViewModel addVm, Trip trip) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF11161B) : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'PAID BY',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.8,
-                  color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '1 Payer',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          // Horizontal Member Selector Chips
-          SizedBox(
-            height: 42,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              itemCount: trip.members.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 8),
-              itemBuilder: (context, index) {
-                final member = trip.members[index];
-                final isSelected = addVm.paidById == member.id;
-                return InkWell(
-                  onTap: () {
-                    HapticHelper.selection();
-                    addVm.setPayer(member.id);
-                  },
-                  borderRadius: BorderRadius.circular(20),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.2)
-                          : (isDark ? const Color(0xFF182028) : const Color(0xFFF1F5F9)),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: isSelected
-                            ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
-                            : Colors.transparent,
-                        width: 1.5,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        MemberAvatar(name: member.displayName, size: 22),
-                        const SizedBox(width: 6),
-                        Text(
-                          member.displayName,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                            color: isSelected
-                                ? (isDark ? Colors.white : AppColors.emeraldPrimary)
-                                : (isDark ? AppColors.darkTextSecondary : const Color(0xFF475569)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  /// Compact Payer Selector.
+  Widget _buildPayerSection(bool isDark, AddExpenseViewModel addVm, Trip trip) {
+    final activeColor = isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary;
 
-  Widget _buildSplitTypeSelector(bool isDark, AddExpenseViewModel addVm) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'SPLIT TYPE',
+          'PAID BY',
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w800,
@@ -925,22 +704,176 @@ class _AddExpenseViewState extends State<AddExpenseView> {
           ),
         ),
         const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF141A21) : const Color(0xFFEDF2F7),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Row(
-            children: [
-              _buildSplitTypeTab('🟰 Equally', SplitType.equal, addVm.splitType, isDark, () => addVm.setSplitType(SplitType.equal)),
-              _buildSplitTypeTab('📊 Exact', SplitType.exact, addVm.splitType, isDark, () => addVm.setSplitType(SplitType.exact)),
-              _buildSplitTypeTab('💯 %', SplitType.percentage, addVm.splitType, isDark, () => addVm.setSplitType(SplitType.percentage)),
-              _buildSplitTypeTab('⚖️ Shares', SplitType.shares, addVm.splitType, isDark, () => addVm.setSplitType(SplitType.shares)),
-            ],
+        SizedBox(
+          height: 38,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            itemCount: trip.members.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemBuilder: (context, index) {
+              final member = trip.members[index];
+              final isSelected = addVm.paidById == member.id;
+
+              return InkWell(
+                onTap: () {
+                  HapticHelper.selection();
+                  addVm.setPayer(member.id);
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? activeColor.withValues(alpha: isDark ? 0.2 : 0.12)
+                        : (isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isSelected
+                          ? activeColor
+                          : (isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle),
+                      width: isSelected ? 1.4 : 0.8,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      MemberAvatar(name: member.displayName, size: 20),
+                      const SizedBox(width: 6),
+                      Text(
+                        member.displayName,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                          color: isSelected
+                              ? (isDark ? Colors.white : activeColor)
+                              : (isDark ? AppColors.darkTextSecondary : const Color(0xFF475569)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ],
+    );
+  }
+
+  /// Clean Split Type and Participants section.
+  Widget _buildSplitAndParticipantsSection(
+    bool isDark,
+    AddExpenseViewModel addVm,
+    Trip trip,
+    String currency,
+  ) {
+    final count = addVm.selectedParticipantMemberIds.length;
+    final allSelected = count == trip.members.length;
+    final activeColor = isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurfaceCard : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+          width: 0.8,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Split Type Selector Bar
+          Container(
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF141A21) : const Color(0xFFEDF2F7),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                _buildSplitTypeTab('🟰 Equally', SplitType.equal, addVm.splitType, isDark, () => addVm.setSplitType(SplitType.equal)),
+                _buildSplitTypeTab('📊 Exact', SplitType.exact, addVm.splitType, isDark, () => addVm.setSplitType(SplitType.exact)),
+                _buildSplitTypeTab('💯 %', SplitType.percentage, addVm.splitType, isDark, () => addVm.setSplitType(SplitType.percentage)),
+                _buildSplitTypeTab('⚖️ Shares', SplitType.shares, addVm.splitType, isDark, () => addVm.setSplitType(SplitType.shares)),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // Header Row: Count + Toggle All
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'SPLIT BETWEEN ($count / ${trip.members.length})',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.8,
+                  color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                ),
+              ),
+              GestureDetector(
+                onTap: () {
+                  HapticHelper.light();
+                  if (allSelected) {
+                    for (final m in trip.members.skip(1)) {
+                      if (addVm.selectedParticipantMemberIds.contains(m.id)) {
+                        addVm.toggleParticipant(m.id);
+                      }
+                    }
+                  } else {
+                    for (final m in trip.members) {
+                      if (!addVm.selectedParticipantMemberIds.contains(m.id)) {
+                        addVm.toggleParticipant(m.id);
+                      }
+                    }
+                  }
+                },
+                child: Text(
+                  allSelected ? 'Clear Others' : 'Select All',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: activeColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 8),
+
+          // Validation indicator for Exact or % splits
+          if (addVm.splitType == SplitType.exact)
+            _buildExactValidationBar(isDark, addVm, currency),
+          if (addVm.splitType == SplitType.percentage)
+            _buildPercentValidationBar(isDark, addVm),
+
+          // Member item list
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: trip.members.length,
+            separatorBuilder: (_, _) => Divider(
+              height: 12,
+              thickness: 0.5,
+              color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.04),
+            ),
+            itemBuilder: (context, index) {
+              final member = trip.members[index];
+              final isChecked = addVm.selectedParticipantMemberIds.contains(member.id);
+
+              return _buildMemberSplitRow(isDark, addVm, member, isChecked, currency, count);
+            },
+          ),
+        ],
+      ),
     );
   }
 
@@ -959,19 +892,19 @@ class _AddExpenseViewState extends State<AddExpenseView> {
           onTap();
         },
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          height: 36,
+          duration: const Duration(milliseconds: 180),
+          height: 32,
           decoration: BoxDecoration(
             color: isSelected
                 ? (isDark ? const Color(0xFF222B35) : Colors.white)
                 : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(8),
             boxShadow: isSelected
                 ? [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.06),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
+                      color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.05),
+                      blurRadius: 3,
+                      offset: const Offset(0, 1),
                     ),
                   ]
                 : null,
@@ -980,7 +913,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
           child: Text(
             label,
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 11.5,
               fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
               color: isSelected
                   ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
@@ -992,125 +925,34 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     );
   }
 
-  Widget _buildParticipantsSection(
-    bool isDark,
-    AddExpenseViewModel addVm,
-    Trip trip,
-    String currency,
-  ) {
-    final count = addVm.selectedParticipantMemberIds.length;
-    final allSelected = count == trip.members.length;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF11161B) : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'SPLIT BETWEEN ($count / ${trip.members.length})',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.8,
-                  color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                ),
-              ),
-              GestureDetector(
-                onTap: () {
-                  HapticHelper.light();
-                  if (allSelected) {
-                    // Deselect down to first member
-                    for (final m in trip.members.skip(1)) {
-                      if (addVm.selectedParticipantMemberIds.contains(m.id)) {
-                        addVm.toggleParticipant(m.id);
-                      }
-                    }
-                  } else {
-                    for (final m in trip.members) {
-                      if (!addVm.selectedParticipantMemberIds.contains(m.id)) {
-                        addVm.toggleParticipant(m.id);
-                      }
-                    }
-                  }
-                },
-                child: Text(
-                  allSelected ? 'Clear Others' : 'Select All',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          // Validation indicator for Exact or % splits
-          if (addVm.splitType == SplitType.exact)
-            _buildExactValidationBar(isDark, addVm, currency),
-          if (addVm.splitType == SplitType.percentage)
-            _buildPercentValidationBar(isDark, addVm),
-
-          // Member item list
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: trip.members.length,
-            separatorBuilder: (_, _) => Divider(
-              height: 16,
-              color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.04),
-            ),
-            itemBuilder: (context, index) {
-              final member = trip.members[index];
-              final isChecked = addVm.selectedParticipantMemberIds.contains(member.id);
-
-              return _buildMemberSplitRow(isDark, addVm, member, isChecked, currency, count);
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildExactValidationBar(bool isDark, AddExpenseViewModel addVm, String currency) {
     final remaining = addVm.exactRemainingPaise;
     final isBalanced = remaining == 0;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: isBalanced
             ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.12)
             : Colors.amber.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         children: [
           Icon(
             isBalanced ? Icons.check_circle_rounded : Icons.info_outline_rounded,
-            size: 16,
+            size: 14,
             color: isBalanced
                 ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
                 : Colors.amber,
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           Expanded(
             child: Text(
               isBalanced
-                  ? 'Exact amounts match total bill perfectly ✓'
-                  : 'Remaining to assign: ${CurrencyFormatter.formatPaise(remaining.abs(), currencyCode: currency)} ${remaining > 0 ? "left" : "over"}',
+                  ? 'Exact amounts match total bill ✓'
+                  : 'Remaining: ${CurrencyFormatter.formatPaise(remaining.abs(), currencyCode: currency)} ${remaining > 0 ? "left" : "over"}',
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
@@ -1130,29 +972,29 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     final is100 = (total - 100.0).abs() < 0.01;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: is100
             ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.12)
             : Colors.amber.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         children: [
           Icon(
             is100 ? Icons.check_circle_rounded : Icons.info_outline_rounded,
-            size: 16,
+            size: 14,
             color: is100
                 ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
                 : Colors.amber,
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           Expanded(
             child: Text(
               is100
                   ? 'Percentages total 100% ✓'
-                  : 'Current total: ${total.toStringAsFixed(1)}% (Must be 100%)',
+                  : 'Total: ${total.toStringAsFixed(1)}% (Must be 100%)',
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
@@ -1182,22 +1024,27 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     return Row(
       children: [
         // Checkbox
-        Checkbox(
-          value: isChecked,
-          activeColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-          onChanged: (_) {
-            HapticHelper.selection();
-            addVm.toggleParticipant(member.id);
-          },
+        SizedBox(
+          width: 28,
+          height: 28,
+          child: Checkbox(
+            value: isChecked,
+            activeColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+            onChanged: (_) {
+              HapticHelper.selection();
+              addVm.toggleParticipant(member.id);
+            },
+          ),
         ),
-        MemberAvatar(name: member.displayName, size: 28),
-        const SizedBox(width: 10),
+        const SizedBox(width: 6),
+        MemberAvatar(name: member.displayName, size: 24),
+        const SizedBox(width: 8),
         Expanded(
           child: Text(
             member.displayName,
             style: TextStyle(
-              fontSize: 13,
+              fontSize: 12.5,
               fontWeight: isChecked ? FontWeight.w700 : FontWeight.w500,
               color: isChecked
                   ? (isDark ? Colors.white : const Color(0xFF0F172A))
@@ -1209,12 +1056,12 @@ class _AddExpenseViewState extends State<AddExpenseView> {
         // Split Input depending on mode
         if (addVm.splitType == SplitType.equal)
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
               color: isChecked
                   ? (isDark ? const Color(0xFF1A232C) : const Color(0xFFF1F5F9))
                   : Colors.transparent,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
               isChecked ? CurrencyFormatter.formatPaise(perPersonPaise, currencyCode: currency) : '₹0',
@@ -1228,30 +1075,29 @@ class _AddExpenseViewState extends State<AddExpenseView> {
             ),
           )
         else if (addVm.splitType == SplitType.exact)
-          SizedBox(
-            width: 85,
-            height: 32,
+          Container(
+            width: 80,
+            height: 30,
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF182028) : const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            alignment: Alignment.center,
             child: TextField(
               enabled: isChecked,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               textAlign: TextAlign.right,
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 12.5,
                 fontWeight: FontWeight.w700,
                 color: isDark ? Colors.white : const Color(0xFF0F172A),
               ),
-              decoration: InputDecoration(
+              decoration: KithInputDecoration.borderless(
                 prefixText: '₹ ',
                 prefixStyle: TextStyle(
-                  fontSize: 12,
+                  fontSize: 11,
                   color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-                ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                filled: true,
-                fillColor: isDark ? const Color(0xFF182028) : const Color(0xFFF1F5F9),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide.none,
                 ),
               ),
               onChanged: (val) {
@@ -1261,30 +1107,29 @@ class _AddExpenseViewState extends State<AddExpenseView> {
             ),
           )
         else if (addVm.splitType == SplitType.percentage)
-          SizedBox(
-            width: 75,
-            height: 32,
+          Container(
+            width: 70,
+            height: 30,
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF182028) : const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            alignment: Alignment.center,
             child: TextField(
               enabled: isChecked,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               textAlign: TextAlign.right,
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 12.5,
                 fontWeight: FontWeight.w700,
                 color: isDark ? Colors.white : const Color(0xFF0F172A),
               ),
-              decoration: InputDecoration(
+              decoration: KithInputDecoration.borderless(
                 suffixText: ' %',
                 suffixStyle: TextStyle(
-                  fontSize: 12,
+                  fontSize: 11,
                   color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-                ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                filled: true,
-                fillColor: isDark ? const Color(0xFF182028) : const Color(0xFFF1F5F9),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide.none,
                 ),
               ),
               onChanged: (val) {
@@ -1298,17 +1143,23 @@ class _AddExpenseViewState extends State<AddExpenseView> {
             mainAxisSize: MainAxisSize.min,
             children: [
               IconButton(
-                icon: const Icon(Icons.remove_circle_outline_rounded, size: 18),
+                icon: const Icon(Icons.remove_circle_outline_rounded, size: 16),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
                 onPressed: isChecked && (addVm.shares[member.id] ?? 1) > 1
                     ? () => addVm.setMemberShare(member.id, (addVm.shares[member.id] ?? 1) - 1)
                     : null,
               ),
+              const SizedBox(width: 4),
               Text(
                 '${addVm.shares[member.id] ?? 1}x',
-                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
               ),
+              const SizedBox(width: 4),
               IconButton(
-                icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
+                icon: const Icon(Icons.add_circle_outline_rounded, size: 16),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
                 onPressed: isChecked
                     ? () => addVm.setMemberShare(member.id, (addVm.shares[member.id] ?? 1) + 1)
                     : null,
@@ -1333,36 +1184,37 @@ class _AddExpenseViewState extends State<AddExpenseView> {
           setState(() => _selectedDate = picked);
         }
       },
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(12),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF11161B) : Colors.white,
-          borderRadius: BorderRadius.circular(14),
+          color: isDark ? AppColors.darkSurfaceCard : Colors.white,
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06),
+            color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+            width: 0.8,
           ),
         ),
         child: Row(
           children: [
             Icon(
               Icons.calendar_today_rounded,
-              size: 16,
+              size: 15,
               color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
             Text(
               'Date: $dateStr',
               style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
                 color: isDark ? AppColors.darkTextPrimary : const Color(0xFF334155),
               ),
             ),
             const Spacer(),
             Icon(
               Icons.arrow_forward_ios_rounded,
-              size: 12,
+              size: 11,
               color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
             ),
           ],
@@ -1381,23 +1233,50 @@ class _AddExpenseViewState extends State<AddExpenseView> {
       padding: EdgeInsets.only(
         left: 20,
         right: 20,
-        top: 12,
-        bottom: MediaQuery.of(context).padding.bottom + 12,
+        top: 10,
+        bottom: MediaQuery.of(context).padding.bottom + 10,
       ),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF0D1217) : Colors.white,
+        color: isDark ? const Color(0xFF080C0E) : const Color(0xFFF8FAFC),
         border: Border(
           top: BorderSide(
-            color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06),
+            color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+            width: 0.8,
           ),
         ),
       ),
-      child: AppButton(
-        text: widget.existingExpense != null ? 'Update Expense' : 'Save Expense',
-        icon: Icons.check_circle_rounded,
-        isLoading: addVm.isSaving,
-        isFullWidth: true,
-        onPressed: _handleSave,
+      child: SizedBox(
+        width: double.infinity,
+        height: 48,
+        child: ElevatedButton(
+          onPressed: addVm.isSaving ? null : _handleSave,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.emeraldPrimary,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            elevation: 0,
+          ),
+          child: addVm.isSaving
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      widget.existingExpense != null ? Icons.save_rounded : Icons.check_circle_rounded,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      widget.existingExpense != null ? 'Update Expense' : 'Save Expense',
+                      style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
+        ),
       ),
     );
   }

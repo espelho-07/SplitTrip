@@ -6,6 +6,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
+import '../../../core/widgets/kith_components.dart';
 import '../../../data/services/local_storage_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 
@@ -635,10 +636,8 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
                             controller: _amountController,
                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
                             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-                            decoration: const InputDecoration(
+                            decoration: KithInputDecoration.borderless(
                               hintText: 'Add request amount (Optional)',
-                              border: InputBorder.none,
-                              isDense: true,
                             ),
                             onChanged: (val) {
                               setState(() {

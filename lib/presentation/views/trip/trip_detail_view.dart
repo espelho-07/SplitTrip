@@ -14,6 +14,7 @@ import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/currency_display.dart';
 import '../../../core/widgets/empty_state_view.dart';
+import '../../../core/widgets/kith_components.dart';
 import '../../../core/widgets/member_avatar.dart';
 import '../../../core/widgets/pill_badge.dart';
 import '../../../core/widgets/shimmer_skeleton.dart';
@@ -1880,15 +1881,12 @@ class _TripDetailViewState extends State<TripDetailView> {
                     fontSize: 13,
                     color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                   ),
-                  decoration: InputDecoration(
+                  decoration: KithInputDecoration.borderless(
                     hintText: l10n.tripDetailSearchExpenses,
                     hintStyle: TextStyle(
                       fontSize: 13,
                       color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
                     ),
-                    border: InputBorder.none,
-                    isDense: true,
-                    contentPadding: EdgeInsets.zero,
                   ),
                 ),
               ),

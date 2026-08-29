@@ -8,6 +8,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/widgets/app_button.dart';
+import '../../../core/widgets/kith_components.dart';
 import '../../../core/widgets/member_avatar.dart';
 
 /// Modal bottom sheet providing the Pay via UPI + Mark Paid settlement experience.
@@ -341,11 +342,9 @@ class _UpiPaymentSheetState extends State<UpiPaymentSheet> {
                         fontWeight: FontWeight.w600,
                         color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                       ),
-                      decoration: InputDecoration(
+                      decoration: KithInputDecoration.borderless(
                         hintText: 'e.g. ${widget.recipientName.toLowerCase().replaceAll(' ', '')}@upi',
-                        isDense: true,
                         contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                        border: InputBorder.none,
                       ),
                     )
                   else
