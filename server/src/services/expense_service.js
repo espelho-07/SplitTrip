@@ -36,11 +36,14 @@ class ExpenseService {
 
     const authMember = db.findOne('trip_members', (m) => m.tripId === tripId && m.userId === user.id);
     if (!authMember) throw AppError.forbidden('You are not a member of this trip');
+    const now = new Date().toISOString();
 
     // Lifecycle check & late expense handling
-    if (trip.lifecycleState === 'completed' || trip.lifecycleState === 'settled') {
-      // Reopen trip to active state to incorporate late offline-added expense and preserve financial integrity
-      db.update('trips', tripId, { lifecycleState: 'active', updatedAt: new Date().toISOString() });
+    let isLateReconciled = false;
+    if (trip.lifecycleState === 'completed' || trip.lifecycleState === 'completed_with_pending_changes' || trip.lifecycleState === 'settled') {
+      // Reopen trip to active state to incorporate late added expense and preserve financial integrity
+      db.update('trips', tripId, { lifecycleState: 'active', updatedAt: now });
+      isLateReconciled = true;
     }
 
     // Verify payer member exists in trip
@@ -86,7 +89,7 @@ class ExpenseService {
       );
     }
 
-    const now = new Date().toISOString();
+    const newRevision = (trip.revision || 1) + 1;
     const expense = {
       id: id || `exp_${crypto.randomUUID().replace(/-/g, '').substring(0, 12)}`,
       tripId,
@@ -99,13 +102,16 @@ class ExpenseService {
       voiceTranscript: voiceTranscript || null,
       receiptUrl: receiptUrl || null,
       isDeleted: false,
+      isLateReconciled,
       createdByUserId: user.id,
       createdAt: now,
       updatedAt: now,
     };
 
     db.insert('expenses', expense);
-    db.update('trips', tripId, { updatedAt: now });
+    db.update('trips', tripId, { updatedAt: now, revision: newRevision });
+    // Update user's member lastSyncedRevision and lastSeenAt
+    db.update('trip_members', authMember.id, { lastSyncedRevision: newRevision, lastSeenAt: now, pendingMutationsCount: 0 });
 
     // Automatic Journey / Memory Enrichment for Split + Journey trips
     if (trip.tripMode === 'split_and_journey') {
@@ -247,7 +253,8 @@ class ExpenseService {
     };
 
     db.update('expenses', expenseId, updated);
-    db.update('trips', tripId, { updatedAt: now });
+    db.update('trips', tripId, { updatedAt: now, revision: (trip.revision || 1) + 1 });
+    db.update('trip_members', authMember.id, { lastSyncedRevision: (trip.revision || 1) + 1, lastSeenAt: now, pendingMutationsCount: 0 });
 
     const tripService = require('./trip_service');
     tripService.logActivity(tripId, {
@@ -309,7 +316,8 @@ class ExpenseService {
 
     const now = new Date().toISOString();
     db.update('expenses', expenseId, { isDeleted: true, updatedAt: now });
-    db.update('trips', tripId, { updatedAt: now });
+    db.update('trips', tripId, { updatedAt: now, revision: (trip.revision || 1) + 1 });
+    db.update('trip_members', authMember.id, { lastSyncedRevision: (trip.revision || 1) + 1, lastSeenAt: now, pendingMutationsCount: 0 });
 
     const tripService = require('./trip_service');
     tripService.logActivity(tripId, {

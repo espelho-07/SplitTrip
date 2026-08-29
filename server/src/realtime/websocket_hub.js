@@ -290,6 +290,29 @@ class RealtimeHub {
     }
   }
 
+  isUserOnline(userId) {
+    if (!userId) return false;
+    const room = this.userRooms.get(userId);
+    if (!room || room.size === 0) return false;
+    for (const ws of room) {
+      if (ws.readyState === WebSocket.OPEN) return true;
+    }
+    return false;
+  }
+
+  isTripMemberConnected(tripId, userId) {
+    if (!tripId || !userId) return false;
+    const tripRoom = this.tripRooms.get(tripId);
+    if (tripRoom && tripRoom.size > 0) {
+      for (const ws of tripRoom) {
+        if (ws.user && ws.user.id === userId && ws.readyState === WebSocket.OPEN) {
+          return true;
+        }
+      }
+    }
+    return this.isUserOnline(userId);
+  }
+
   close() {
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);

@@ -6,6 +6,9 @@ class TripMember {
   final String? avatarUrl;
   final String role; // 'creator' or 'member'
   final DateTime joinedAt;
+  final DateTime? lastSeenAt;
+  final int lastSyncedRevision;
+  final int pendingMutationsCount;
   final String? upiId;
 
   const TripMember({
@@ -15,6 +18,9 @@ class TripMember {
     this.avatarUrl,
     this.role = 'member',
     required this.joinedAt,
+    this.lastSeenAt,
+    this.lastSyncedRevision = 1,
+    this.pendingMutationsCount = 0,
     this.upiId,
   });
 
@@ -27,6 +33,9 @@ class TripMember {
     String? avatarUrl,
     String? role,
     DateTime? joinedAt,
+    DateTime? lastSeenAt,
+    int? lastSyncedRevision,
+    int? pendingMutationsCount,
     String? upiId,
   }) {
     return TripMember(
@@ -36,6 +45,9 @@ class TripMember {
       avatarUrl: avatarUrl ?? this.avatarUrl,
       role: role ?? this.role,
       joinedAt: joinedAt ?? this.joinedAt,
+      lastSeenAt: lastSeenAt ?? this.lastSeenAt,
+      lastSyncedRevision: lastSyncedRevision ?? this.lastSyncedRevision,
+      pendingMutationsCount: pendingMutationsCount ?? this.pendingMutationsCount,
       upiId: upiId ?? this.upiId,
     );
   }
@@ -47,6 +59,9 @@ class TripMember {
     'avatarUrl': avatarUrl,
     'role': role,
     'joinedAt': joinedAt.toIso8601String(),
+    'lastSeenAt': lastSeenAt?.toIso8601String(),
+    'lastSyncedRevision': lastSyncedRevision,
+    'pendingMutationsCount': pendingMutationsCount,
     'upiId': upiId,
   };
 
@@ -57,8 +72,13 @@ class TripMember {
     avatarUrl: json['avatarUrl'] as String?,
     role: json['role'] as String? ?? 'member',
     joinedAt: json['joinedAt'] != null
-        ? DateTime.parse(json['joinedAt'] as String)
+        ? DateTime.tryParse(json['joinedAt'] as String) ?? DateTime.now()
         : DateTime.now(),
+    lastSeenAt: json['lastSeenAt'] != null
+        ? DateTime.tryParse(json['lastSeenAt'] as String)
+        : null,
+    lastSyncedRevision: json['lastSyncedRevision'] as int? ?? 1,
+    pendingMutationsCount: json['pendingMutationsCount'] as int? ?? 0,
     upiId: json['upiId'] as String?,
   );
 }

@@ -36,6 +36,7 @@ import 'widgets/add_journey_moment_sheet.dart';
 import 'widgets/expense_detail_sheet.dart';
 import 'widgets/member_spend_breakdown_sheet.dart';
 import 'widgets/settlement_sheet.dart';
+import 'widgets/trip_completion_verification_sheet.dart';
 import 'widgets/trip_qr_sheet.dart';
 
 class TripDetailView extends StatefulWidget {
@@ -173,84 +174,16 @@ class _TripDetailViewState extends State<TripDetailView> {
 
   void _showCompleteTripConfirmation() {
     final tripDetailVm = context.read<TripDetailViewModel>();
-    final authVm = context.read<AuthViewModel>();
-    final syncService = Provider.of<SyncService?>(context, listen: false);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final trip = tripDetailVm.trip;
-    final pendingCount = (syncService != null && trip != null)
-        ? syncService.getPendingCountForTrip(trip.id)
-        : 0;
+    if (trip == null) return;
 
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
-      shape: RoundedRectangleBorder(borderRadius: AppRadius.topSheetBorder),
-      builder: (ctx) {
-        return Padding(
-          padding: AppSpacing.bottomSheetPadding,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: (pendingCount > 0 ? AppColors.amberAccent : AppColors.indigoAccent)
-                          .withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      pendingCount > 0 ? Icons.sync_rounded : Icons.lock_clock_outlined,
-                      color: pendingCount > 0 ? AppColors.amberAccent : AppColors.indigoAccent,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Text(
-                      pendingCount > 0 ? 'Finish Trip & Sync?' : 'Complete Trip?',
-                      style: AppTypography.titleLarge(isDark: isDark),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                pendingCount > 0
-                    ? 'You have $pendingCount change${pendingCount == 1 ? '' : 's'} waiting to sync. Your trip will finish when it syncs with the server.'
-                    : 'Completing this trip locks expense creation and generates simplified settlement transfers for all members to settle debts.',
-                style: AppTypography.bodyMedium(isDark: isDark),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              Row(
-                children: [
-                  Expanded(
-                    child: AppButton(
-                      text: 'Keep Active',
-                      variant: AppButtonVariant.outline,
-                      onPressed: () => Navigator.pop(ctx),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: AppButton(
-                      text: pendingCount > 0 ? 'Finish Trip' : 'Complete Trip',
-                      onPressed: () async {
-                        Navigator.pop(ctx);
-                        await tripDetailVm.completeTrip(authVm.currentUser?.id ?? '');
-                        if (mounted) {
-                          _showSettlementSheet();
-                        }
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
+    TripCompletionVerificationSheet.show(
+      context,
+      tripId: trip.id,
+      onTripCompleted: () {
+        if (mounted) {
+          _showSettlementSheet();
+        }
       },
     );
   }

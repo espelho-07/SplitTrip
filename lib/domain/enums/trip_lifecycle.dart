@@ -7,6 +7,7 @@ enum TripLifecycle {
   active,
   completing,
   completed,
+  completedWithPendingChanges,
   settling,
   settled;
 
@@ -20,6 +21,8 @@ enum TripLifecycle {
         return 'Finishing sync';
       case TripLifecycle.completed:
         return 'Completed';
+      case TripLifecycle.completedWithPendingChanges:
+        return 'Completed (Pending Sync)';
       case TripLifecycle.settling:
         return 'Settling';
       case TripLifecycle.settled:
@@ -29,10 +32,10 @@ enum TripLifecycle {
 
   bool get isActive => this == TripLifecycle.active;
   bool get isCompleting => this == TripLifecycle.completing;
-  bool get isCompleted => this == TripLifecycle.completed;
+  bool get isCompleted => this == TripLifecycle.completed || this == TripLifecycle.completedWithPendingChanges;
   bool get allowsExpenses => this == TripLifecycle.active;
-  bool get isLocked => this == TripLifecycle.completed || this == TripLifecycle.settling || this == TripLifecycle.settled;
-  bool get isSettlementActive => this == TripLifecycle.completed || this == TripLifecycle.settling || this == TripLifecycle.settled || this == TripLifecycle.completing;
+  bool get isLocked => this == TripLifecycle.completed || this == TripLifecycle.completedWithPendingChanges || this == TripLifecycle.settling || this == TripLifecycle.settled;
+  bool get isSettlementActive => this == TripLifecycle.completed || this == TripLifecycle.completedWithPendingChanges || this == TripLifecycle.settling || this == TripLifecycle.settled || this == TripLifecycle.completing;
 
   Color getStatusColor(bool isDark) {
     switch (this) {
@@ -44,6 +47,8 @@ enum TripLifecycle {
         return AppColors.amberAccent;
       case TripLifecycle.completed:
         return AppColors.indigoAccent;
+      case TripLifecycle.completedWithPendingChanges:
+        return AppColors.amberAccent;
       case TripLifecycle.settling:
         return AppColors.amberAccent;
       case TripLifecycle.settled:
@@ -52,8 +57,9 @@ enum TripLifecycle {
   }
 
   static TripLifecycle fromString(String value) {
+    final clean = value.toLowerCase().replaceAll('_', '');
     return TripLifecycle.values.firstWhere(
-      (e) => e.name.toLowerCase() == value.toLowerCase(),
+      (e) => e.name.toLowerCase().replaceAll('_', '') == clean,
       orElse: () => TripLifecycle.active,
     );
   }

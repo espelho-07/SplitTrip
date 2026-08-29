@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/network/api_client.dart';
 import '../../core/network/api_exceptions.dart';
+import '../../core/network/realtime_client.dart';
 import 'local_storage_service.dart';
 
 enum MutationType {
@@ -379,7 +380,22 @@ class SyncService {
     }
   }
 
+  StreamSubscription? _realtimeSubscription;
+
+  /// Attaches a realtime client to automatically trigger local queue flush when sync is requested.
+  void attachRealtimeClient(RealtimeClient realtimeClient, {ApiClient? apiClient}) {
+    _realtimeSubscription?.cancel();
+    _realtimeSubscription = realtimeClient.events.listen((event) {
+      if (event.type == 'trip_sync_requested') {
+        if (apiClient != null) {
+          flushQueue(apiClient, force: true);
+        }
+      }
+    });
+  }
+
   void dispose() {
+    _realtimeSubscription?.cancel();
     _statusController.close();
   }
 }

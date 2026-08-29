@@ -174,7 +174,7 @@ class SettlementService {
     };
 
     db.insert('settlements', settlement);
-    db.update('trips', tripId, { updatedAt: now });
+    db.update('trips', tripId, { updatedAt: now, revision: (trip.revision || 1) + 1 });
 
     // 1. Log Trip Activity for settlement event
     const tripService = require('./trip_service');

@@ -14,6 +14,10 @@ class Trip {
   final TripLifecycle lifecycleState;
   final String inviteCode;
   final String tripMode; // 'split_only' or 'split_and_journey'
+  final int revision;
+  final String? completionMode;
+  final DateTime? completedAt;
+  final String? completedBy;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -31,6 +35,10 @@ class Trip {
     this.lifecycleState = TripLifecycle.active,
     required this.inviteCode,
     this.tripMode = 'split_only',
+    this.revision = 1,
+    this.completionMode,
+    this.completedAt,
+    this.completedBy,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -47,6 +55,10 @@ class Trip {
     TripLifecycle? lifecycleState,
     String? inviteCode,
     String? tripMode,
+    int? revision,
+    String? completionMode,
+    DateTime? completedAt,
+    String? completedBy,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -62,6 +74,10 @@ class Trip {
       lifecycleState: lifecycleState ?? this.lifecycleState,
       inviteCode: inviteCode ?? this.inviteCode,
       tripMode: tripMode ?? this.tripMode,
+      revision: revision ?? this.revision,
+      completionMode: completionMode ?? this.completionMode,
+      completedAt: completedAt ?? this.completedAt,
+      completedBy: completedBy ?? this.completedBy,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -79,6 +95,10 @@ class Trip {
     'lifecycleState': lifecycleState.name,
     'inviteCode': inviteCode,
     'tripMode': tripMode,
+    'revision': revision,
+    'completionMode': completionMode,
+    'completedAt': completedAt?.toIso8601String(),
+    'completedBy': completedBy,
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
   };
@@ -98,11 +118,17 @@ class Trip {
     lifecycleState: TripLifecycle.fromString(json['lifecycleState'] as String? ?? 'active'),
     inviteCode: json['inviteCode'] as String? ?? 'KITH00',
     tripMode: json['tripMode'] as String? ?? json['trip_mode'] as String? ?? 'split_only',
+    revision: json['revision'] as int? ?? 1,
+    completionMode: json['completionMode'] as String?,
+    completedAt: json['completedAt'] != null
+        ? DateTime.tryParse(json['completedAt'] as String)
+        : null,
+    completedBy: json['completedBy'] as String?,
     createdAt: json['createdAt'] != null
-        ? DateTime.parse(json['createdAt'] as String)
+        ? DateTime.tryParse(json['createdAt'] as String) ?? DateTime.now()
         : DateTime.now(),
     updatedAt: json['updatedAt'] != null
-        ? DateTime.parse(json['updatedAt'] as String)
+        ? DateTime.tryParse(json['updatedAt'] as String) ?? DateTime.now()
         : DateTime.now(),
   );
 }

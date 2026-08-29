@@ -71,10 +71,66 @@ router.get('/:id', (req, res, next) => {
   }
 });
 
+// GET /api/trips/:id/sync-status - Authoritative sync status for trip and participants
+router.get('/:id/sync-status', (req, res, next) => {
+  try {
+    const syncStatus = tripService.getTripSyncStatus(req.params.id, req.user.id, realtimeHub);
+    res.status(200).json({ data: syncStatus });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// POST /api/trips/:id/request-sync - Trigger realtime sync request to trip participants
+router.post('/:id/request-sync', (req, res, next) => {
+  try {
+    const result = tripService.requestTripSync(req.params.id, req.user.id, realtimeHub);
+    res.status(200).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// POST /api/trips/:id/ack-sync - Participant acknowledges sync up to revision
+router.post('/:id/ack-sync', (req, res, next) => {
+  try {
+    const { revision, pendingCount } = req.body;
+    const result = tripService.acknowledgeSync(req.params.id, req.user.id, { revision, pendingCount });
+    res.status(200).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// POST /api/trips/:id/complete - Complete trip with sync verification & optional force mode
+router.post('/:id/complete', (req, res, next) => {
+  try {
+    const { completionMode, expectedRevision } = req.body;
+    const trip = tripService.completeTrip(
+      req.params.id,
+      req.user.id,
+      { completionMode, expectedRevision },
+      realtimeHub
+    );
+    res.status(200).json({ data: trip });
+  } catch (e) {
+    next(e);
+  }
+});
+
 // PATCH /api/trips/:id/lifecycle - Update trip lifecycle (e.g. complete trip)
 router.patch('/:id/lifecycle', (req, res, next) => {
   try {
-    const { lifecycleState } = req.body;
+    const { lifecycleState, completionMode, expectedRevision } = req.body;
+    if (lifecycleState === 'completed' || lifecycleState === 'completed_with_pending_changes') {
+      const trip = tripService.completeTrip(
+        req.params.id,
+        req.user.id,
+        { completionMode: completionMode || (lifecycleState === 'completed_with_pending_changes' ? 'FORCED_WITH_PENDING_SYNC' : 'NORMAL'), expectedRevision },
+        realtimeHub
+      );
+      return res.status(200).json({ data: trip });
+    }
     const trip = tripService.updateLifecycle(req.params.id, req.user.id, lifecycleState, realtimeHub);
     res.status(200).json({ data: trip });
   } catch (e) {

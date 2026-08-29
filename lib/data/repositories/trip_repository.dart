@@ -12,6 +12,7 @@ import '../../domain/models/trip.dart';
 import '../../domain/models/trip_member.dart';
 import '../../domain/models/trip_memory.dart';
 import '../../domain/models/trip_preview.dart';
+import '../../domain/models/trip_sync_status.dart';
 import '../services/local_storage_service.dart';
 import '../services/sync_service.dart';
 
@@ -467,6 +468,61 @@ class TripRepository {
     );
 
     return updatedTrip;
+  }
+
+  /// Fetches authoritative multi-participant synchronization status for a trip.
+  Future<TripSyncStatus> getTripSyncStatus(String tripId) async {
+    final res = await apiClient.get('/trips/$tripId/sync-status');
+    if (res is Map<String, dynamic>) {
+      return TripSyncStatus.fromJson(res);
+    }
+    throw const NetworkException(message: 'Invalid response from sync status endpoint');
+  }
+
+  /// Broadcasts a real-time sync request to all online participants in the trip.
+  Future<void> requestTripSync(String tripId) async {
+    try {
+      await apiClient.post('/trips/$tripId/request-sync');
+    } catch (_) {
+      // Best-effort realtime trigger
+    }
+  }
+
+  /// Reports current device synchronization acknowledgment up to [revision].
+  Future<void> acknowledgeSync(String tripId, {required int revision, int pendingCount = 0}) async {
+    try {
+      await apiClient.post('/trips/$tripId/ack-sync', body: {
+        'revision': revision,
+        'pendingCount': pendingCount,
+      });
+    } catch (_) {
+      // Best-effort acknowledgment
+    }
+  }
+
+  /// Atomically completes a trip with server-side sync verification and concurrency protection.
+  Future<Trip> completeTrip({
+    required String tripId,
+    required String completionMode, // 'NORMAL' or 'FORCED_WITH_PENDING_SYNC'
+    int? expectedRevision,
+  }) async {
+    final res = await apiClient.post('/trips/$tripId/complete', body: {
+      'completionMode': completionMode,
+      'expectedRevision': ?expectedRevision,
+    });
+
+    if (res is Map<String, dynamic>) {
+      final completedTrip = Trip.fromJson(res);
+      final trips = await getTrips();
+      final idx = trips.indexWhere((t) => t.id == tripId);
+      if (idx != -1) {
+        trips[idx] = completedTrip;
+        await storage.saveTrips(trips.map((t) => t.toJson()).toList());
+      }
+      return completedTrip;
+    }
+
+    throw const NetworkException(message: 'Failed to complete trip on server');
   }
 
 
