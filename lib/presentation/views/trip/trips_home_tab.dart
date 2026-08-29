@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/widgets/shimmer_skeleton.dart';
-import '../../../data/repositories/expense_repository.dart';
 import '../../../data/services/sync_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';

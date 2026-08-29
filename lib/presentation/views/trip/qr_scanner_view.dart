@@ -18,18 +18,23 @@ class QrScannerView extends StatefulWidget {
   State<QrScannerView> createState() => _QrScannerViewState();
 }
 
-class _QrScannerViewState extends State<QrScannerView> with SingleTickerProviderStateMixin {
+class _QrScannerViewState extends State<QrScannerView>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late MobileScannerController _scannerController;
   late AnimationController _sweepAnimController;
   final TextEditingController _manualInputController = TextEditingController();
 
+  Key _scannerWidgetKey = UniqueKey();
   bool _isTorchOn = false;
-  bool _hasCameraPermission = true;
+  bool _hasCameraPermission = false;
+  bool _isCheckingPermission = true;
   bool _isProcessingCode = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+
     _sweepAnimController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 2000),
@@ -39,22 +44,70 @@ class _QrScannerViewState extends State<QrScannerView> with SingleTickerProvider
       detectionSpeed: DetectionSpeed.normal,
       facing: CameraFacing.back,
       torchEnabled: false,
+      autoStart: false,
     );
 
-    _initCameraPermission();
+    _initCameraPermission(requestIfDenied: true);
   }
 
-  Future<void> _initCameraPermission() async {
-    final status = await Permission.camera.request();
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Re-check permission when resuming (e.g. from system dialog or Settings app)
+      _initCameraPermission(requestIfDenied: false);
+    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      try {
+        _scannerController.stop();
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _initCameraPermission({bool requestIfDenied = true}) async {
+    if (!mounted) return;
+
+    PermissionStatus status = await Permission.camera.status;
+    if (!status.isGranted && requestIfDenied) {
+      status = await Permission.camera.request();
+    }
+
+    if (!mounted) return;
+
+    if (status.isGranted) {
+      await _startOrRestartCamera();
+    } else {
+      setState(() {
+        _hasCameraPermission = false;
+        _isCheckingPermission = false;
+      });
+    }
+  }
+
+  Future<void> _startOrRestartCamera() async {
+    if (!mounted) return;
+
+    try {
+      await _scannerController.dispose();
+    } catch (_) {}
+
+    _scannerController = MobileScannerController(
+      detectionSpeed: DetectionSpeed.normal,
+      facing: CameraFacing.back,
+      torchEnabled: false,
+      autoStart: true,
+    );
+
     if (mounted) {
       setState(() {
-        _hasCameraPermission = status.isGranted;
+        _hasCameraPermission = true;
+        _isCheckingPermission = false;
+        _scannerWidgetKey = UniqueKey();
       });
     }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _sweepAnimController.dispose();
     _manualInputController.dispose();
     _scannerController.dispose();
@@ -219,10 +272,34 @@ class _QrScannerViewState extends State<QrScannerView> with SingleTickerProvider
       body: SafeArea(
         child: Stack(
           children: [
-            // Live Camera Feed or Permission Fallback
-            if (_hasCameraPermission)
+            // 1. Live Camera Feed, Loading State, or Permission Request
+            if (_isCheckingPermission)
+              Container(
+                color: Colors.black,
+                alignment: Alignment.center,
+                child: const Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 32,
+                      height: 32,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        valueColor: AlwaysStoppedAnimation(AppColors.emeraldLight),
+                      ),
+                    ),
+                    SizedBox(height: 16),
+                    Text(
+                      'Opening camera...',
+                      style: TextStyle(color: Colors.white70, fontSize: 13),
+                    ),
+                  ],
+                ),
+              )
+            else if (_hasCameraPermission)
               Positioned.fill(
                 child: MobileScanner(
+                  key: _scannerWidgetKey,
                   controller: _scannerController,
                   onDetect: _onDetect,
                   errorBuilder: (context, error) {
@@ -245,10 +322,21 @@ class _QrScannerViewState extends State<QrScannerView> with SingleTickerProvider
                               style: const TextStyle(color: Colors.white70, fontSize: 13),
                             ),
                             const SizedBox(height: 20),
-                            AppButton(
-                              text: 'Enter Code Instead',
-                              variant: AppButtonVariant.primary,
-                              onPressed: _showManualEntryDialog,
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                AppButton(
+                                  text: 'Retry Camera',
+                                  variant: AppButtonVariant.primary,
+                                  onPressed: () => _initCameraPermission(requestIfDenied: true),
+                                ),
+                                const SizedBox(width: 12),
+                                AppButton(
+                                  text: 'Enter Code',
+                                  variant: AppButtonVariant.secondary,
+                                  onPressed: _showManualEntryDialog,
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -281,8 +369,15 @@ class _QrScannerViewState extends State<QrScannerView> with SingleTickerProvider
                         text: 'Allow Camera Access',
                         variant: AppButtonVariant.primary,
                         onPressed: () async {
-                          await openAppSettings();
-                          _initCameraPermission();
+                          HapticHelper.medium();
+                          final status = await Permission.camera.request();
+                          if (status.isGranted) {
+                            await _startOrRestartCamera();
+                          } else if (status.isPermanentlyDenied || status.isRestricted) {
+                            await openAppSettings();
+                          } else {
+                            await _initCameraPermission(requestIfDenied: false);
+                          }
                         },
                       ),
                       const SizedBox(height: 12),
@@ -296,8 +391,8 @@ class _QrScannerViewState extends State<QrScannerView> with SingleTickerProvider
                 ),
               ),
 
-            // Camera Overlay & Viewfinder Framing
-            if (_hasCameraPermission)
+            // 2. Camera Overlay & Viewfinder Framing
+            if (_hasCameraPermission && !_isCheckingPermission)
               Column(
                 children: [
                   const Spacer(),
@@ -401,4 +496,3 @@ class _QrScannerViewState extends State<QrScannerView> with SingleTickerProvider
     );
   }
 }
-
