@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/services/voice_speech_service.dart';
+import '../../core/utils/error_formatter.dart';
 import '../../data/repositories/expense_repository.dart';
 import '../../domain/engine/money_engine.dart';
 import '../../domain/engine/receipt_parser_engine.dart';
@@ -417,7 +418,7 @@ class AddExpenseViewModel extends ChangeNotifier {
         return saved;
       }
     } catch (e) {
-      _errorMessage = e.toString();
+      _errorMessage = KithErrorFormatter.format(e);
       return null;
     } finally {
       _isSaving = false;

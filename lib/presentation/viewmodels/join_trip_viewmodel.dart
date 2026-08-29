@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/utils/error_formatter.dart';
 import '../../data/repositories/trip_repository.dart';
 import '../../domain/models/guest_user.dart';
 import '../../domain/models/trip.dart';
@@ -33,22 +34,10 @@ class JoinTripViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  String _formatError(dynamic e) {
-    final str = e.toString();
-    if (str.startsWith('Exception: ')) return str.substring(11);
-    if (str.contains('message: ')) {
-      final match = RegExp(r'message:\s*([^,\)]+)').firstMatch(str);
-      if (match != null && match.group(1) != null) {
-        return match.group(1)!.trim();
-      }
-    }
-    return str;
-  }
-
   Future<TripPreview?> fetchPreview([String? directCode]) async {
     final targetCode = (directCode ?? _code).trim().toUpperCase().replaceAll(RegExp(r'[\s\-]'), '');
     if (targetCode.length < 4) {
-      _errorMessage = 'Please enter a valid trip code';
+      _errorMessage = 'Please enter a valid 6-character trip code';
       notifyListeners();
       return null;
     }
@@ -65,7 +54,7 @@ class JoinTripViewModel extends ChangeNotifier {
       _preview = p;
       return p;
     } catch (e) {
-      _errorMessage = _formatError(e);
+      _errorMessage = KithErrorFormatter.format(e);
       return null;
     } finally {
       _isLoadingPreview = false;
@@ -95,7 +84,7 @@ class JoinTripViewModel extends ChangeNotifier {
 
       return trip;
     } catch (e) {
-      _errorMessage = _formatError(e);
+      _errorMessage = KithErrorFormatter.format(e);
       return null;
     } finally {
       _isJoining = false;

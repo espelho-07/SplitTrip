@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/network/realtime_client.dart';
+import '../../core/utils/error_formatter.dart';
 import '../../data/repositories/expense_repository.dart';
 import '../../data/repositories/trip_repository.dart';
 import '../../domain/engine/balance_engine.dart';
@@ -289,7 +290,7 @@ class TripDetailViewModel extends ChangeNotifier {
       _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
       await refresh(currentUserId);
     } catch (e) {
-      _errorMessage = e.toString();
+      _errorMessage = KithErrorFormatter.format(e);
       notifyListeners();
     }
   }
@@ -308,7 +309,7 @@ class TripDetailViewModel extends ChangeNotifier {
       _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
       notifyListeners();
     } catch (e) {
-      _errorMessage = e.toString();
+      _errorMessage = KithErrorFormatter.format(e);
       notifyListeners();
     }
   }
@@ -327,7 +328,7 @@ class TripDetailViewModel extends ChangeNotifier {
       _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
       notifyListeners();
     } catch (e) {
-      _errorMessage = e.toString();
+      _errorMessage = KithErrorFormatter.format(e);
       notifyListeners();
     }
   }
@@ -346,7 +347,7 @@ class TripDetailViewModel extends ChangeNotifier {
       _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
       notifyListeners();
     } catch (e) {
-      _errorMessage = e.toString();
+      _errorMessage = KithErrorFormatter.format(e);
       notifyListeners();
     }
   }
@@ -361,7 +362,7 @@ class TripDetailViewModel extends ChangeNotifier {
       _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
       notifyListeners();
     } catch (e) {
-      _errorMessage = e.toString();
+      _errorMessage = KithErrorFormatter.format(e);
       notifyListeners();
     }
   }
@@ -373,7 +374,7 @@ class TripDetailViewModel extends ChangeNotifier {
       _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
       await refresh(currentUserId);
     } catch (e) {
-      _errorMessage = e.toString();
+      _errorMessage = KithErrorFormatter.format(e);
       notifyListeners();
     }
   }
@@ -443,7 +444,7 @@ class TripDetailViewModel extends ChangeNotifier {
     try {
       _activityLogs = await tripRepo.getActivityLogs(_trip!.id);
     } catch (e) {
-      _errorMessage = e.toString();
+      _errorMessage = KithErrorFormatter.format(e);
     } finally {
       if (!_isDisposed) {
         _isLoadingActivity = false;

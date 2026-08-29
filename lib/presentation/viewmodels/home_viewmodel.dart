@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/network/realtime_client.dart';
+import '../../core/utils/error_formatter.dart';
 import '../../data/repositories/expense_repository.dart';
 import '../../data/repositories/trip_repository.dart';
 import '../../domain/engine/balance_engine.dart';
@@ -151,7 +152,7 @@ class HomeViewModel extends ChangeNotifier {
 
       _computeLocalBalances(_trips, currentUserId);
     } catch (e) {
-      _errorMessage = e.toString();
+      _errorMessage = KithErrorFormatter.format(e);
     } finally {
       _isLoading = false;
       notifyListeners();

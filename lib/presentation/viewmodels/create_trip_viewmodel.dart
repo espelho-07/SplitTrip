@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/utils/error_formatter.dart';
 import '../../data/repositories/trip_repository.dart';
 import '../../domain/models/guest_user.dart';
 import '../../domain/models/trip.dart';
@@ -107,7 +108,7 @@ class CreateTripViewModel extends ChangeNotifier {
       resetForm();
       return trip;
     } catch (e) {
-      _errorMessage = e.toString();
+      _errorMessage = KithErrorFormatter.format(e);
       return null;
     } finally {
       _isCreating = false;

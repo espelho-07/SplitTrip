@@ -11,8 +11,32 @@ class ApiException implements Exception {
     this.details,
   });
 
+  String get userFriendlyMessage {
+    if (message.isNotEmpty &&
+        !message.startsWith('ApiException') &&
+        !message.startsWith('Exception:')) {
+      return message;
+    }
+    switch (code) {
+      case 'NOT_FOUND':
+        return 'No trip or item found. Please verify and try again.';
+      case 'NETWORK_ERROR':
+        return 'Unable to connect to the server. Please check your internet connection.';
+      case 'UNAUTHORIZED':
+        return 'Session expired or invalid. Please sign in again.';
+      case 'FORBIDDEN':
+        return 'You do not have permission to perform this action.';
+      case 'CONFLICT':
+        return 'This action has already been performed or has conflicts.';
+      case 'VALIDATION_ERROR':
+        return 'Invalid input provided. Please verify and try again.';
+      default:
+        return 'An error occurred. Please try again.';
+    }
+  }
+
   @override
-  String toString() => 'ApiException [$code] ($statusCode): $message';
+  String toString() => message.isNotEmpty ? message : 'ApiException [$code] ($statusCode)';
 }
 
 class NetworkException extends ApiException {
@@ -31,7 +55,7 @@ class ForbiddenException extends ApiException {
 }
 
 class NotFoundException extends ApiException {
-  const NotFoundException({super.message = 'The requested resource was not found.'})
+  const NotFoundException({super.message = 'No trip found with this code. Please check and try again.'})
       : super(code: 'NOT_FOUND', statusCode: 404);
 }
 
@@ -41,6 +65,6 @@ class ConflictException extends ApiException {
 }
 
 class ValidationException extends ApiException {
-  const ValidationException({super.message = 'Validation error occurred.', super.details})
+  const ValidationException({super.message = 'Validation error occurred. Please check your input.', super.details})
       : super(code: 'VALIDATION_ERROR', statusCode: 400);
 }
