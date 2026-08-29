@@ -28,6 +28,7 @@ import '../views/settings/master_settings_view.dart';
 import '../views/notifications/notifications_view.dart';
 import '../views/payment/payment_methods_view.dart';
 import '../views/trip/trip_preview_view.dart';
+import '../views/version/update_required_view.dart';
 
 class AppRouter {
   AppRouter._();
@@ -118,6 +119,10 @@ class AppRouter {
       GoRoute(
         path: '/splash',
         builder: (context, state) => const SplashView(),
+      ),
+      GoRoute(
+        path: '/update-required',
+        builder: (context, state) => const UpdateRequiredView(),
       ),
       GoRoute(
         path: '/language-select',

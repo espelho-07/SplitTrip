@@ -11,9 +11,11 @@ import '../../router/app_router.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/personal_expense_viewmodel.dart';
+import '../../viewmodels/version_viewmodel.dart';
 import '../personal/personal_home_tab.dart';
 import '../profile/profile_home_tab.dart';
 import '../trip/trips_home_tab.dart';
+import '../version/update_available_banner.dart';
 import 'widgets/dashboard_tab.dart';
 
 class HomeView extends StatefulWidget {
@@ -81,6 +83,11 @@ class _HomeViewState extends State<HomeView> {
             trips: homeVm.trips,
             tripBalances: homeVm.tripBalances,
           );
+          if (!mounted) return;
+          final versionVm = Provider.of<VersionViewModel?>(context, listen: false);
+          if (versionVm != null) {
+            await versionVm.checkForUpdates();
+          }
         }
       }
     } catch (e) {
@@ -96,7 +103,18 @@ class _HomeViewState extends State<HomeView> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final authVm = context.watch<AuthViewModel>();
+    final versionVm = Provider.of<VersionViewModel?>(context);
     final user = authVm.currentUser;
+
+    if (versionVm?.shouldBlockApp == true) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        AppRouter.router.go('/update-required');
+      });
+      return Scaffold(
+        backgroundColor: isDark ? const Color(0xFF080C0E) : const Color(0xFFF8FAFC),
+        body: const SizedBox.shrink(),
+      );
+    }
 
     if (!authVm.isAuthenticated || user == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -168,9 +186,19 @@ class _HomeViewState extends State<HomeView> {
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF080C0E) : const Color(0xFFF8FAFC),
       body: SafeArea(
-        child: IndexedStack(
-          index: activeIndex,
-          children: pages,
+        child: Stack(
+          children: [
+            IndexedStack(
+              index: activeIndex,
+              children: pages,
+            ),
+            const Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: UpdateAvailableBanner(),
+            ),
+          ],
         ),
       ),
       bottomNavigationBar: Container(

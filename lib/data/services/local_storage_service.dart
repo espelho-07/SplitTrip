@@ -486,6 +486,52 @@ class LocalStorageService {
     return current.where((n) => n['isRead'] != true).length;
   }
 
+  // --- Version & Update Management Keys ---
+  static const String _versionConfigCacheKey = 'kith_version_config_cache';
+  static const String _versionLastDismissedKey = 'kith_version_last_dismissed';
+  static const String _versionDismissedAtKey = 'kith_version_dismissed_at';
+  static const String _localSchemaVersionKey = 'kith_local_schema_version';
+
+  // --- Version & Update Management Methods ---
+  Map<String, dynamic>? getCachedVersionConfig() {
+    final raw = _prefs.getString(_versionConfigCacheKey);
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      return jsonDecode(raw) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> saveCachedVersionConfig(Map<String, dynamic> configJson) async {
+    await _prefs.setString(_versionConfigCacheKey, jsonEncode(configJson));
+  }
+
+  String? getLastDismissedVersion() => _prefs.getString(_versionLastDismissedKey);
+
+  DateTime? getLastDismissedTimestamp() {
+    final raw = _prefs.getString(_versionDismissedAtKey);
+    if (raw == null || raw.isEmpty) return null;
+    return DateTime.tryParse(raw);
+  }
+
+  Future<void> saveDismissedVersion(String version) async {
+    await _prefs.setString(_versionLastDismissedKey, version);
+    await _prefs.setString(_versionDismissedAtKey, DateTime.now().toIso8601String());
+  }
+
+  Future<void> clearDismissedVersion() async {
+    await _prefs.remove(_versionLastDismissedKey);
+    await _prefs.remove(_versionDismissedAtKey);
+  }
+
+  // --- Local Database & Storage Schema Migration ---
+  int getLocalSchemaVersion() => _prefs.getInt(_localSchemaVersionKey) ?? 0;
+
+  Future<void> setLocalSchemaVersion(int version) async {
+    await _prefs.setInt(_localSchemaVersionKey, version);
+  }
+
   /// Wipes all user-specific data on logout while preserving app settings (language, theme, hints)
   Future<void> clearAllUserData() async {
     await clearUser();

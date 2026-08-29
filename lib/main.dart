@@ -11,6 +11,7 @@ import 'core/network/realtime_client.dart' as kith_realtime;
 import 'core/localization/app_language.dart';
 import 'core/localization/app_localizations.dart';
 import 'core/payment/payment_service.dart';
+import 'core/services/app_version_service.dart';
 import 'core/services/kith_widget_service.dart';
 import 'core/services/security_lock_service.dart';
 import 'core/theme/app_theme.dart';
@@ -19,6 +20,7 @@ import 'data/repositories/personal_repository.dart';
 import 'data/repositories/trip_repository.dart';
 import 'data/repositories/user_repository.dart';
 import 'data/services/auth_service.dart';
+import 'data/services/local_migration_runner.dart';
 import 'data/services/local_storage_service.dart';
 import 'data/services/sync_service.dart';
 import 'domain/services/notification_service.dart';
@@ -32,6 +34,7 @@ import 'presentation/viewmodels/locale_viewmodel.dart';
 import 'presentation/viewmodels/personal_expense_viewmodel.dart';
 import 'presentation/viewmodels/theme_viewmodel.dart';
 import 'presentation/viewmodels/trip_detail_viewmodel.dart';
+import 'presentation/viewmodels/version_viewmodel.dart';
 import 'presentation/views/security/app_lock_screen.dart';
 
 void main() async {
@@ -55,6 +58,9 @@ void main() async {
 
   // Initialize Local-First Persistent Storage & Services
   final storageService = await LocalStorageService.init();
+  final migrationRunner = LocalMigrationRunner(storageService);
+  await migrationRunner.runPendingMigrations();
+
   final savedServerUrl = storageService.getSavedServerUrl();
   if (savedServerUrl != null && savedServerUrl.isNotEmpty) {
     AppConfig.setCustomServerUrl(savedServerUrl);
@@ -72,11 +78,19 @@ void main() async {
     realtimeClient: realtimeClient,
   );
 
+  // Initialize App Version Service & Version Management
+  final appVersionService = AppVersionService(
+    apiClient: apiClient,
+    storage: storageService,
+    syncService: syncService,
+  );
+
   // Initialize Production Security Lock Service
   final securityLockService = SecurityLockService(storageService);
 
-  // Trigger background offline queue flush
+  // Trigger background offline queue flush and non-blocking version check
   unawaited(syncService.flushQueue(apiClient));
+  unawaited(appVersionService.checkVersion());
 
   // Repositories
   final userRepo = UserRepository(authService: authService);
@@ -135,6 +149,8 @@ void main() async {
         Provider<NotificationService>.value(value: notificationService),
         Provider<ApiClient>.value(value: apiClient),
         Provider<SyncService>.value(value: syncService),
+        Provider<LocalMigrationRunner>.value(value: migrationRunner),
+        Provider<AppVersionService>.value(value: appVersionService),
         Provider<UserRepository>.value(value: userRepo),
         Provider<TripRepository>.value(value: tripRepo),
         Provider<ExpenseRepository>.value(value: expenseRepo),
@@ -145,6 +161,9 @@ void main() async {
         ChangeNotifierProvider(create: (_) => ThemeViewModel(storage: storageService)),
         ChangeNotifierProvider(create: (_) => LocaleViewModel(storage: storageService)),
         ChangeNotifierProvider(create: (_) => AuthViewModel(userRepo: userRepo)),
+        ChangeNotifierProvider(
+          create: (_) => VersionViewModel(versionService: appVersionService)..checkForUpdates(),
+        ),
         ChangeNotifierProvider(
           create: (_) => HomeViewModel(
             tripRepo: tripRepo,
@@ -201,6 +220,9 @@ class _KithAppState extends State<KithApp> with WidgetsBindingObserver {
     if (state == AppLifecycleState.paused) {
       final security = context.read<SecurityLockService>();
       security.lock();
+    } else if (state == AppLifecycleState.resumed) {
+      final versionVm = context.read<VersionViewModel>();
+      versionVm.checkForUpdates();
     }
   }
 
