@@ -93,7 +93,7 @@ void main() {
       await tester.pumpWidget(buildCreateTripTestWidget());
       await tester.pumpAndSettle();
 
-      expect(find.text('New Trip'), findsOneWidget);
+      expect(find.text('Create New Trip'), findsOneWidget);
       expect(find.text('EXPERIENCE MODE'), findsOneWidget);
       expect(find.text('BASE CURRENCY'), findsOneWidget);
       expect(find.text('Create Trip'), findsOneWidget);
@@ -163,13 +163,13 @@ void main() {
       await tester.pumpWidget(buildCreateTripTestWidget());
       await tester.pumpAndSettle();
 
-      expect(find.text('Friends can join instantly via QR code or invite code.'), findsOneWidget);
+      expect(find.text('Friends can scan your trip QR code right after creation to join instantly.'), findsOneWidget);
 
       // Expand manual friends
-      await tester.tap(find.text('Add friend manually (non-app user)'));
+      await tester.tap(find.text('Add friend manually (offline/non-app member)'));
       await tester.pumpAndSettle();
 
-      final friendField = find.widgetWithText(TextField, 'Enter friend name...');
+      final friendField = find.widgetWithText(TextField, 'e.g. Rahul, Priya, Vikram...');
       await tester.enterText(friendField, 'Ananya');
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();

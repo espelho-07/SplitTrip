@@ -96,6 +96,24 @@ class UserRepository {
     return authService.updatePaymentInfo(upiId, upiQr: upiQr);
   }
 
+  Future<GuestUser> updateUserProfile({
+    required String displayName,
+    String? phoneNumber,
+    String? avatarUrl,
+    String? email,
+    String? upiId,
+    String? bio,
+  }) {
+    return authService.updateUserProfile(
+      displayName: displayName,
+      phoneNumber: phoneNumber,
+      avatarUrl: avatarUrl,
+      email: email,
+      upiId: upiId,
+      bio: bio,
+    );
+  }
+
   Future<String?> getUserUpi(String userId) {
     return authService.getUserUpi(userId);
   }

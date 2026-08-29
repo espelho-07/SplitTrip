@@ -374,8 +374,8 @@ void main() {
       expect(find.text('Settle Up'), findsOneWidget);
       expect(find.text('You'), findsOneWidget); // Payer is current user
       expect(find.text('Rohan Sharma'), findsOneWidget);
-      expect(find.text('Pay / Settle'), findsOneWidget);
-      expect(find.text('UPI Ready • rohan@okhdfcbank'), findsOneWidget);
+      expect(find.text('Pay Rohan Sharma'), findsOneWidget);
+      expect(find.text('UPI: rohan@okhdfcbank'), findsOneWidget);
     });
 
     test('ExpenseRepository saves idempotent settlement and logs local activity', () async {

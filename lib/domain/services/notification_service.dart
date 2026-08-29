@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/services.dart';
 import '../../data/services/local_storage_service.dart';
 
 enum NotificationCategory {
@@ -201,6 +202,23 @@ class NotificationService {
 
     await _storage?.addNotification(item.toJson());
     _notificationStreamController.add(item);
+
+    // Push to Android System Status Bar
+    final pushEnabled = _storage?.getBool('notif_pref_push') ?? true;
+    if (pushEnabled) {
+      try {
+        const platform = MethodChannel('com.nirniq.kith/notifications');
+        final notifId = (DateTime.now().millisecondsSinceEpoch % 100000);
+        await platform.invokeMethod('showNotification', {
+          'id': notifId,
+          'title': title,
+          'body': description,
+          'route': route,
+        });
+      } catch (_) {
+        // Fallback or non-Android platform
+      }
+    }
   }
 
   Future<void> markAllAsRead() async {

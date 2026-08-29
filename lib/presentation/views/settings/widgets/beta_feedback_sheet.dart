@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
@@ -34,13 +35,45 @@ class _BetaFeedbackSheetState extends State<BetaFeedbackSheet> {
   bool _isSubmitted = false;
   bool _isSubmitting = false;
 
+  static const String _creatorEmail = 'darpanparmar1707@gmail.com';
+
   @override
   void dispose() {
     _feedbackController.dispose();
     super.dispose();
   }
 
-  void _handleSubmit() {
+  Future<void> _handleSendEmail() async {
+    final text = _feedbackController.text.trim();
+    if (text.isEmpty || _isSubmitting) return;
+
+    HapticHelper.medium();
+    final subject = Uri.encodeComponent('[Kith App Feedback] ${_selectedCategory.label} - v${AppConfig.appVersion}');
+    final body = Uri.encodeComponent(
+      'Feedback Details:\n\n$text\n\n---\nDevice/App Info:\nApp: Kith v${AppConfig.appVersion} (${AppConfig.environment})\nContext: ${widget.currentScreenContext ?? 'App'}\nTimestamp: ${DateTime.now().toIso8601String()}',
+    );
+
+    final emailUri = Uri.parse('mailto:$_creatorEmail?subject=$subject&body=$body');
+
+    try {
+      if (await canLaunchUrl(emailUri)) {
+        await launchUrl(emailUri);
+      }
+    } catch (_) {}
+
+    setState(() {
+      _isSubmitting = true;
+      _isSubmitted = true;
+    });
+
+    Future.delayed(const Duration(milliseconds: 1600), () {
+      if (mounted) {
+        Navigator.of(context).pop(true);
+      }
+    });
+  }
+
+  void _handleSaveDraft() {
     if (_feedbackController.text.trim().isEmpty || _isSubmitting) return;
 
     HapticHelper.success();
@@ -78,12 +111,12 @@ class _BetaFeedbackSheetState extends State<BetaFeedbackSheet> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Feedback Draft Saved',
+                  'Feedback Sent ✓',
                   style: AppTypography.titleMedium(isDark: isDark),
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Thank you! Your feedback draft has been logged locally on this device for the alpha development team.',
+                  'Thank you! Your feedback has been routed to the creator at $_creatorEmail.',
                   textAlign: TextAlign.center,
                   style: AppTypography.bodySmall(isDark: isDark),
                 ),
@@ -101,12 +134,12 @@ class _BetaFeedbackSheetState extends State<BetaFeedbackSheet> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Alpha Feedback',
+                          'Send Feedback',
                           style: AppTypography.titleLarge(isDark: isDark),
                         ),
                         Text(
-                          '${AppConfig.appName} v${AppConfig.appVersion} (${AppConfig.environment})',
-                          style: AppTypography.bodySmall(isDark: isDark),
+                          'Direct to creator: $_creatorEmail',
+                          style: AppTypography.bodySmall(isDark: isDark).copyWith(color: const Color(0xFF14B8A6)),
                         ),
                       ],
                     ),
@@ -153,18 +186,36 @@ class _BetaFeedbackSheetState extends State<BetaFeedbackSheet> {
                   maxLines: 4,
                   textCapitalization: TextCapitalization.sentences,
                   decoration: const InputDecoration(
-                    hintText: 'Describe what happened or how we can improve...',
+                    hintText: 'Describe what happened or what features you would love to see...',
                     border: OutlineInputBorder(),
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xl),
 
-                // Submit Button
-                AppButton(
-                  text: 'Save Feedback Draft',
-                  icon: Icons.send_rounded,
-                  isLoading: _isSubmitting,
-                  onPressed: _feedbackController.text.trim().isNotEmpty ? _handleSubmit : null,
+                // Action Buttons
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _feedbackController.text.trim().isNotEmpty ? _handleSaveDraft : null,
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        child: const Text('Save Local Draft'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      flex: 2,
+                      child: AppButton(
+                        text: 'Send to Creator Email',
+                        icon: Icons.send_rounded,
+                        isLoading: _isSubmitting,
+                        onPressed: _feedbackController.text.trim().isNotEmpty ? _handleSendEmail : null,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 12),
               ],

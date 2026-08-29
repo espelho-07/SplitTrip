@@ -12,10 +12,7 @@ import '../../viewmodels/create_trip_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../widgets/progress/progress.dart';
 
-/// Clean, sleek, and intuitive Create Trip Experience for Kith.
-///
-/// Designed to be lightweight, simple, and un-congested with zero bulky cards,
-/// borderless input fields, tactile segment controls, and live gradient accents.
+/// Redesigned, visually stunning & energetic Create Trip Experience.
 class CreateTripView extends StatefulWidget {
   const CreateTripView({super.key});
 
@@ -29,10 +26,21 @@ class _CreateTripViewState extends State<CreateTripView> {
   bool _showManualFriends = false;
   bool _showEmojiTray = false;
 
+  static const List<Map<String, String>> _tripIdeas = [
+    {'name': 'Goa Beach Trip', 'emoji': '🏖️', 'gradient': '0'},
+    {'name': 'Manali Trek', 'emoji': '🏔️', 'gradient': '1'},
+    {'name': 'Weekend Hangout', 'emoji': '🍕', 'gradient': '2'},
+    {'name': 'Road Trip', 'emoji': '🚗', 'gradient': '3'},
+    {'name': 'Birthday Bash', 'emoji': '🎉', 'gradient': '4'},
+    {'name': 'Camping & Bonfire', 'emoji': '🏕️', 'gradient': '5'},
+    {'name': 'Euro Summer', 'emoji': '✈️', 'gradient': '0'},
+  ];
+
   static const List<String> _emojis = [
     '✈️', '🏖️', '🏔️', '🍕', '🚗', '🌴',
     '🏕️', '🎿', '🎉', '🏠', '☕', '🛳️',
-    '🌲', '🧳', '🛵', '🎸'
+    '🌲', '🧳', '🛵', '🎸', '🍹', '🏰',
+    '🌊', '🚴', '⛺', '🎳', '🍔', '🗼'
   ];
 
   static const List<Map<String, String>> _currencies = [
@@ -49,6 +57,19 @@ class _CreateTripViewState extends State<CreateTripView> {
     _nameController.dispose();
     _friendController.dispose();
     super.dispose();
+  }
+
+  void _applyTripIdea(Map<String, String> idea) {
+    HapticHelper.light();
+    final name = idea['name']!;
+    final emoji = idea['emoji']!;
+    final gradIndex = int.tryParse(idea['gradient'] ?? '0') ?? 0;
+
+    _nameController.text = name;
+    final createVm = context.read<CreateTripViewModel>();
+    createVm.setName(name);
+    createVm.setEmoji(emoji);
+    createVm.setCoverGradientIndex(gradIndex);
   }
 
   void _addFriend() {
@@ -201,8 +222,6 @@ class _CreateTripViewState extends State<CreateTripView> {
     final l10n = context.l10n;
     final hasUnsavedData = createVm.name.trim().isNotEmpty || createVm.friendNames.isNotEmpty;
 
-    final bgColor = isDark ? const Color(0xFF080C0E) : const Color(0xFFFAFBFB);
-
     return PopScope(
       canPop: !hasUnsavedData,
       onPopInvokedWithResult: (didPop, result) async {
@@ -213,76 +232,57 @@ class _CreateTripViewState extends State<CreateTripView> {
         }
       },
       child: Scaffold(
-        backgroundColor: bgColor,
+        backgroundColor: isDark ? const Color(0xFF080C0E) : const Color(0xFFF8FAFC),
         resizeToAvoidBottomInset: true,
-        body: Stack(
-          children: [
-            // Ambient Subtle Emerald Background Glow
-            Positioned(
-              top: -80,
-              right: -50,
-              child: RepaintBoundary(
-                child: Container(
-                  width: 260,
-                  height: 260,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(
-                      colors: [
-                        (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
-                            .withValues(alpha: isDark ? 0.08 : 0.05),
-                        Colors.transparent,
-                      ],
-                    ),
-                  ),
+        body: SafeArea(
+          child: Column(
+            children: [
+              // 1. TOP APP BAR
+              _buildTopBar(context, isDark, hasUnsavedData, l10n),
+
+              // 2. SCROLLABLE FORM CONTENT
+              Expanded(
+                child: ListView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
+                  children: [
+                    // LIVE HERO PREVIEW CARD
+                    _buildHeroTripPreviewCard(createVm, isDark),
+
+                    const SizedBox(height: 16),
+
+                    // QUICK INSPIRATION CHIPS
+                    _buildInspirationChips(isDark),
+
+                    const SizedBox(height: 20),
+
+                    // SECTION 1: TRIP IDENTITY (Name Input + Emoji Selector + Color Palette)
+                    _buildTripIdentitySection(createVm, isDark, l10n),
+
+                    const SizedBox(height: 20),
+
+                    // SECTION 2: EXPERIENCE MODE (Split+Journey vs Split Only)
+                    _buildExperienceModeSection(createVm, isDark, l10n),
+
+                    const SizedBox(height: 20),
+
+                    // SECTION 3: BASE CURRENCY (Horizontal Pills)
+                    _buildCurrencySection(createVm, isDark, l10n),
+
+                    const SizedBox(height: 20),
+
+                    // SECTION 4: CREW & CO-TRAVELERS
+                    _buildCrewSection(createVm, isDark, l10n),
+
+                    const SizedBox(height: 30),
+                  ],
                 ),
               ),
-            ),
 
-            SafeArea(
-              child: Column(
-                children: [
-                  // 1. TOP APP BAR
-                  _buildTopBar(context, isDark, hasUnsavedData, l10n),
-
-                  // 2. SCROLLABLE FORM CONTENT
-                  Expanded(
-                    child: SingleChildScrollView(
-                      physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // SECTION 1: TRIP IDENTITY (Emoji + Name + Color Swatches)
-                          _buildTripIdentitySection(createVm, isDark, l10n),
-
-                          const SizedBox(height: 20),
-
-                          // SECTION 2: EXPERIENCE MODE (Clean 2-Segment Pill)
-                          _buildExperienceModeSection(createVm, isDark, l10n),
-
-                          const SizedBox(height: 20),
-
-                          // SECTION 3: BASE CURRENCY (Horizontal Pills)
-                          _buildCurrencySection(createVm, isDark, l10n),
-
-                          const SizedBox(height: 20),
-
-                          // SECTION 4: CREW & CO-TRAVELERS (Simple & Clean)
-                          _buildCrewSection(createVm, isDark, l10n),
-
-                          const SizedBox(height: 24),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // 3. STICKY ACTION BUTTON
-                  _buildStickyBottomDeck(context, createVm, isDark, l10n),
-                ],
-              ),
-            ),
-          ],
+              // 3. STICKY BOTTOM ACTION DECK
+              _buildStickyBottomDeck(context, createVm, isDark, l10n),
+            ],
+          ),
         ),
       ),
     );
@@ -310,246 +310,155 @@ class _CreateTripViewState extends State<CreateTripView> {
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+                color: isDark ? const Color(0xFF161D24) : const Color(0xFFF1F5F9),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+                  color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
                 ),
               ),
               child: Icon(
                 Icons.arrow_back_ios_new_rounded,
                 size: 16,
-                color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
               ),
             ),
           ),
 
           Text(
-            'New Trip',
+            'Create New Trip',
             style: TextStyle(
-              fontSize: 17,
+              fontSize: 18,
               fontWeight: FontWeight.w800,
               letterSpacing: -0.3,
-              color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+              color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
             ),
           ),
 
-          // Balance space for symmetry
           const SizedBox(width: 32),
         ],
       ),
     );
   }
 
-  /// Single, sleek Trip Identity card with Emoji picker, Trip Name, and Color Swatches.
-  Widget _buildTripIdentitySection(CreateTripViewModel createVm, bool isDark, AppLocalizations l10n) {
+  /// Interactive Live Preview Card rendering real-time trip aesthetics.
+  Widget _buildHeroTripPreviewCard(CreateTripViewModel createVm, bool isDark) {
     final gradient = AppColors.getGradient(createVm.coverGradientIndex);
+    final tripName = createVm.name.trim().isEmpty ? 'Your Epic Journey' : createVm.name.trim();
+    final isJourney = createVm.tripMode == 'split_and_journey';
 
     return Container(
+      width: double.infinity,
+      height: 130,
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
-          width: 0.8,
+        gradient: LinearGradient(
+          colors: gradient,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: gradient[0].withValues(alpha: isDark ? 0.35 : 0.25),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Stack(
         children: [
-          // Gradient Accent Strip at Top
-          Container(
-            height: 4,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(colors: gradient),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(18),
-                topRight: Radius.circular(18),
+          // Subtle Pattern Overlay
+          Positioned(
+            right: -20,
+            bottom: -20,
+            child: Opacity(
+              opacity: 0.18,
+              child: Text(
+                createVm.emoji,
+                style: const TextStyle(fontSize: 120),
               ),
             ),
           ),
 
           Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(18.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Top Row: Emoji Picker + Trip Name Input
+                // Top Tag Badges
                 Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // Emoji Picker Button
-                    GestureDetector(
-                      onTap: () {
-                        HapticHelper.selection();
-                        setState(() => _showEmojiTray = !_showEmojiTray);
-                      },
-                      child: Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: gradient[0].withValues(alpha: isDark ? 0.25 : 0.15),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: gradient[0].withValues(alpha: isDark ? 0.5 : 0.35),
-                            width: 1.2,
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            isJourney ? Icons.auto_awesome_rounded : Icons.pie_chart_outline_rounded,
+                            size: 12,
+                            color: Colors.white,
                           ),
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          createVm.emoji,
-                          style: const TextStyle(fontSize: 22),
-                        ),
+                          const SizedBox(width: 4),
+                          Text(
+                            isJourney ? 'Split + Journey' : 'Split Only',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 12),
-
-                    // Trip Name Input Field (Completely borderless inside styled container)
-                    Expanded(
-                      child: Container(
-                        height: 48,
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF0F1418) : const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: createVm.name.trim().isNotEmpty
-                                ? AppColors.emeraldPrimary.withValues(alpha: 0.4)
-                                : (isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle),
-                            width: 0.8,
-                          ),
-                        ),
-                        alignment: Alignment.center,
-                        child: TextField(
-                          controller: _nameController,
-                          textCapitalization: TextCapitalization.words,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                          ),
-                          decoration: KithInputDecoration.borderless(
-                            hintText: l10n.createTripNameHint,
-                            hintStyle: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w400,
-                              color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                            ),
-                            suffixIcon: createVm.name.isNotEmpty
-                                ? GestureDetector(
-                                    onTap: () {
-                                      HapticHelper.light();
-                                      _nameController.clear();
-                                      createVm.setName('');
-                                    },
-                                    child: const Icon(Icons.clear_rounded, size: 16),
-                                  )
-                                : null,
-                          ),
-                          onChanged: createVm.setName,
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.25),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        createVm.currencyCode,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
                         ),
                       ),
                     ),
                   ],
                 ),
 
-                // Expandable Emoji Tray
-                if (_showEmojiTray) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF0F1418) : const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: SizedBox(
-                      height: 40,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        physics: const BouncingScrollPhysics(),
-                        itemCount: _emojis.length,
-                        separatorBuilder: (_, _) => const SizedBox(width: 6),
-                        itemBuilder: (context, index) {
-                          final em = _emojis[index];
-                          final isSelected = createVm.emoji == em;
-                          return InkWell(
-                            onTap: () {
-                              HapticHelper.selection();
-                              createVm.setEmoji(em);
-                              setState(() => _showEmojiTray = false);
-                            },
-                            borderRadius: BorderRadius.circular(8),
-                            child: Container(
-                              width: 38,
-                              height: 38,
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? AppColors.emeraldPrimary.withValues(alpha: 0.25)
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(8),
-                                border: isSelected
-                                    ? Border.all(color: AppColors.emeraldPrimary, width: 1.5)
-                                    : null,
-                              ),
-                              alignment: Alignment.center,
-                              child: Text(em, style: const TextStyle(fontSize: 18)),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                ],
-
-                const SizedBox(height: 14),
-
-                // Color Theme Palette (Horizontal Swatches)
+                // Trip Title & Emoji
                 Row(
                   children: [
                     Text(
-                      'Theme Color',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                      ),
+                      createVm.emoji,
+                      style: const TextStyle(fontSize: 28),
                     ),
-                    const Spacer(),
-                    Row(
-                      children: List.generate(AppColors.tripGradients.length, (index) {
-                        final isSelected = createVm.coverGradientIndex == index;
-                        final g = AppColors.getGradient(index);
-                        return GestureDetector(
-                          onTap: () {
-                            HapticHelper.selection();
-                            createVm.setCoverGradientIndex(index);
-                          },
-                          child: Container(
-                            margin: const EdgeInsets.only(left: 6),
-                            width: 26,
-                            height: 26,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(colors: g),
-                              shape: BoxShape.circle,
-                              border: isSelected
-                                  ? Border.all(color: Colors.white, width: 2)
-                                  : Border.all(color: isDark ? Colors.white24 : Colors.black12, width: 1),
-                              boxShadow: isSelected
-                                  ? [
-                                      BoxShadow(
-                                        color: g[0].withValues(alpha: 0.5),
-                                        blurRadius: 6,
-                                        offset: const Offset(0, 2),
-                                      )
-                                    ]
-                                  : null,
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        tripName,
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                          letterSpacing: -0.4,
+                          shadows: [
+                            Shadow(
+                              color: Colors.black26,
+                              blurRadius: 4,
+                              offset: Offset(0, 1),
                             ),
-                            child: isSelected
-                                ? const Icon(Icons.check_rounded, color: Colors.white, size: 14)
-                                : null,
-                          ),
-                        );
-                      }),
+                          ],
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                 ),
@@ -561,202 +470,56 @@ class _CreateTripViewState extends State<CreateTripView> {
     );
   }
 
-  /// Clean, compact Experience Mode Segment Toggle.
-  Widget _buildExperienceModeSection(CreateTripViewModel createVm, bool isDark, AppLocalizations l10n) {
-    final isJourney = createVm.tripMode == 'split_and_journey';
-    final activeColor = isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary;
-
+  /// Quick 1-tap inspiration chips for fast naming.
+  Widget _buildInspirationChips(bool isDark) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'EXPERIENCE MODE',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.8,
-            color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-          ),
-        ),
-        const SizedBox(height: 8),
-
-        Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
-              width: 0.8,
+        Padding(
+          padding: const EdgeInsets.only(left: 2, bottom: 8),
+          child: Text(
+            'QUICK IDEAS',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.8,
+              color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
             ),
           ),
-          child: Row(
-            children: [
-              // Option 1: Split + Journey
-              Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    HapticHelper.selection();
-                    createVm.setTripMode('split_and_journey');
-                  },
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: BoxDecoration(
-                      color: isJourney
-                          ? activeColor.withValues(alpha: isDark ? 0.2 : 0.12)
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(10),
-                      border: isJourney
-                          ? Border.all(color: activeColor.withValues(alpha: 0.4), width: 1)
-                          : null,
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.auto_awesome_rounded,
-                          size: 15,
-                          color: isJourney ? activeColor : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Split + Journey',
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: isJourney ? FontWeight.w800 : FontWeight.w600,
-                            color: isJourney
-                                ? (isDark ? Colors.white : activeColor)
-                                : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-              // Option 2: Split Only
-              Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    HapticHelper.selection();
-                    createVm.setTripMode('split_only');
-                  },
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: BoxDecoration(
-                      color: !isJourney
-                          ? activeColor.withValues(alpha: isDark ? 0.2 : 0.12)
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(10),
-                      border: !isJourney
-                          ? Border.all(color: activeColor.withValues(alpha: 0.4), width: 1)
-                          : null,
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.pie_chart_outline_rounded,
-                          size: 15,
-                          color: !isJourney ? activeColor : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Split Only',
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: !isJourney ? FontWeight.w800 : FontWeight.w600,
-                            color: !isJourney
-                                ? (isDark ? Colors.white : activeColor)
-                                : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
         ),
-
-        const SizedBox(height: 6),
-        Text(
-          isJourney
-              ? 'Includes full trip timeline, memories, route stops & expense splitting.'
-              : 'Minimalist expense splitting without timeline or journey features.',
-          style: TextStyle(
-            fontSize: 11.5,
-            color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// Compact Currency Selector.
-  Widget _buildCurrencySection(CreateTripViewModel createVm, bool isDark, AppLocalizations l10n) {
-    final activeColor = isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'BASE CURRENCY',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.8,
-            color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-          ),
-        ),
-        const SizedBox(height: 8),
-
         SizedBox(
-          height: 38,
+          height: 34,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
-            itemCount: _currencies.length,
+            itemCount: _tripIdeas.length,
             separatorBuilder: (_, _) => const SizedBox(width: 8),
             itemBuilder: (context, index) {
-              final c = _currencies[index];
-              final isSelected = createVm.currencyCode == c['code'];
-
-              return InkWell(
-                onTap: () {
-                  HapticHelper.selection();
-                  createVm.setCurrencyCode(c['code']!);
-                },
-                borderRadius: BorderRadius.circular(10),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
+              final idea = _tripIdeas[index];
+              return GestureDetector(
+                onTap: () => _applyTripIdea(idea),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: isSelected
-                        ? activeColor.withValues(alpha: isDark ? 0.2 : 0.12)
-                        : (isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard),
+                    color: isDark ? const Color(0xFF161D24) : const Color(0xFFF1F5F9),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: isSelected
-                          ? activeColor
-                          : (isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle),
-                      width: isSelected ? 1.4 : 0.8,
+                      color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
                     ),
                   ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    c['label']!,
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                      color: isSelected
-                          ? (isDark ? Colors.white : activeColor)
-                          : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
-                    ),
+                  child: Row(
+                    children: [
+                      Text(idea['emoji']!, style: const TextStyle(fontSize: 14)),
+                      const SizedBox(width: 6),
+                      Text(
+                        idea['name']!,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? AppColors.darkTextPrimary : const Color(0xFF334155),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               );
@@ -767,51 +530,546 @@ class _CreateTripViewState extends State<CreateTripView> {
     );
   }
 
-  /// Clean, simplified Crew & Friends Section.
-  Widget _buildCrewSection(CreateTripViewModel createVm, bool isDark, AppLocalizations l10n) {
+  /// Trip Identity Card: Name + Emoji + Color Palette
+  Widget _buildTripIdentitySection(CreateTripViewModel createVm, bool isDark, AppLocalizations l10n) {
+    final gradient = AppColors.getGradient(createVm.coverGradientIndex);
+
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(18.0),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
-        borderRadius: BorderRadius.circular(16),
+        color: isDark ? const Color(0xFF0F1418) : Colors.white,
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(
-          color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
-          width: 0.8,
+          color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
+          width: 1.2,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Instant Join Notice
+          Text(
+            'TRIP DETAILS',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.8,
+              color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Emoji Button + Name TextField Row
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: AppColors.emeraldPrimary.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(
-                  Icons.qr_code_scanner_rounded,
-                  size: 16,
-                  color: AppColors.emeraldPrimary,
+              // Emoji Selector Button
+              GestureDetector(
+                onTap: () {
+                  HapticHelper.selection();
+                  setState(() => _showEmojiTray = !_showEmojiTray);
+                },
+                child: Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: gradient[0].withValues(alpha: isDark ? 0.25 : 0.15),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: gradient[0].withValues(alpha: isDark ? 0.6 : 0.4),
+                      width: 1.5,
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    createVm.emoji,
+                    style: const TextStyle(fontSize: 24),
+                  ),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
+
+              // Name Input Field (Borderless)
               Expanded(
-                child: Text(
-                  'Friends can join instantly via QR code or invite code.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                child: Container(
+                  height: 52,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF161D24) : const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: createVm.name.trim().isNotEmpty
+                          ? const Color(0xFF14B8A6).withValues(alpha: 0.6)
+                          : (isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0)),
+                      width: 1.2,
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: TextField(
+                    controller: _nameController,
+                    textCapitalization: TextCapitalization.words,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
+                    ),
+                    decoration: KithInputDecoration.borderless(
+                      hintText: l10n.createTripNameHint,
+                      hintStyle: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w400,
+                        color: isDark ? AppColors.darkTextMuted : const Color(0xFF94A3B8),
+                      ),
+                      suffixIcon: createVm.name.isNotEmpty
+                          ? GestureDetector(
+                              onTap: () {
+                                HapticHelper.light();
+                                _nameController.clear();
+                                createVm.setName('');
+                              },
+                              child: const Icon(Icons.clear_rounded, size: 18),
+                            )
+                          : null,
+                    ),
+                    onChanged: createVm.setName,
                   ),
                 ),
               ),
             ],
           ),
 
-          const SizedBox(height: 10),
+          // Expandable Emoji Picker Grid
+          if (_showEmojiTray) ...[
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF161D24) : const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
+                ),
+              ),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _emojis.map((em) {
+                  final isSelected = createVm.emoji == em;
+                  return InkWell(
+                    onTap: () {
+                      HapticHelper.selection();
+                      createVm.setEmoji(em);
+                      setState(() => _showEmojiTray = false);
+                    },
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? const Color(0xFF14B8A6).withValues(alpha: 0.25)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                        border: isSelected
+                            ? Border.all(color: const Color(0xFF14B8A6), width: 1.5)
+                            : null,
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(em, style: const TextStyle(fontSize: 20)),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 18),
+
+          // Theme Color Gradient Swatches
+          Row(
+            children: [
+              Text(
+                'Theme Color',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? AppColors.darkTextSecondary : const Color(0xFF334155),
+                ),
+              ),
+              const Spacer(),
+              Row(
+                children: List.generate(AppColors.tripGradients.length, (index) {
+                  final isSelected = createVm.coverGradientIndex == index;
+                  final g = AppColors.getGradient(index);
+                  return GestureDetector(
+                    onTap: () {
+                      HapticHelper.selection();
+                      createVm.setCoverGradientIndex(index);
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.only(left: 8),
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(colors: g),
+                        shape: BoxShape.circle,
+                        border: isSelected
+                            ? Border.all(color: Colors.white, width: 2.2)
+                            : Border.all(color: isDark ? Colors.white24 : Colors.black12, width: 1),
+                        boxShadow: isSelected
+                            ? [
+                                BoxShadow(
+                                  color: g[0].withValues(alpha: 0.6),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                )
+                              ]
+                            : null,
+                      ),
+                      child: isSelected
+                          ? const Icon(Icons.check_rounded, color: Colors.white, size: 15)
+                          : null,
+                    ),
+                  );
+                }),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Clean, energetic Experience Mode Selector.
+  Widget _buildExperienceModeSection(CreateTripViewModel createVm, bool isDark, AppLocalizations l10n) {
+    final isJourney = createVm.tripMode == 'split_and_journey';
+
+    return Container(
+      padding: const EdgeInsets.all(18.0),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0F1418) : Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'EXPERIENCE MODE',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.8,
+              color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          Row(
+            children: [
+              // Option 1: Split + Journey
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    HapticHelper.selection();
+                    createVm.setTripMode('split_and_journey');
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+                    decoration: BoxDecoration(
+                      color: isJourney
+                          ? const Color(0xFF14B8A6).withValues(alpha: isDark ? 0.2 : 0.12)
+                          : (isDark ? const Color(0xFF161D24) : const Color(0xFFF8FAFC)),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isJourney
+                            ? const Color(0xFF14B8A6)
+                            : (isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0)),
+                        width: isJourney ? 1.5 : 1,
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.auto_awesome_rounded,
+                          size: 22,
+                          color: isJourney ? const Color(0xFF14B8A6) : (isDark ? AppColors.darkTextMuted : const Color(0xFF64748B)),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Split + Journey',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: isJourney ? FontWeight.w800 : FontWeight.w600,
+                            color: isJourney
+                                ? (isDark ? Colors.white : const Color(0xFF0F172A))
+                                : (isDark ? AppColors.darkTextSecondary : const Color(0xFF475569)),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Splits + Photos & Timeline',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: isDark ? AppColors.darkTextMuted : const Color(0xFF94A3B8),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+
+              // Option 2: Split Only
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    HapticHelper.selection();
+                    createVm.setTripMode('split_only');
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+                    decoration: BoxDecoration(
+                      color: !isJourney
+                          ? const Color(0xFF14B8A6).withValues(alpha: isDark ? 0.2 : 0.12)
+                          : (isDark ? const Color(0xFF161D24) : const Color(0xFFF8FAFC)),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: !isJourney
+                            ? const Color(0xFF14B8A6)
+                            : (isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0)),
+                        width: !isJourney ? 1.5 : 1,
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.pie_chart_outline_rounded,
+                          size: 22,
+                          color: !isJourney ? const Color(0xFF14B8A6) : (isDark ? AppColors.darkTextMuted : const Color(0xFF64748B)),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Split Only',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: !isJourney ? FontWeight.w800 : FontWeight.w600,
+                            color: !isJourney
+                                ? (isDark ? Colors.white : const Color(0xFF0F172A))
+                                : (isDark ? AppColors.darkTextSecondary : const Color(0xFF475569)),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Just Expense Math',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: isDark ? AppColors.darkTextMuted : const Color(0xFF94A3B8),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Currency Selector Pills
+  Widget _buildCurrencySection(CreateTripViewModel createVm, bool isDark, AppLocalizations l10n) {
+    return Container(
+      padding: const EdgeInsets.all(18.0),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0F1418) : Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'BASE CURRENCY',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.8,
+              color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          SizedBox(
+            height: 40,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              itemCount: _currencies.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                final c = _currencies[index];
+                final isSelected = createVm.currencyCode == c['code'];
+
+                return InkWell(
+                  onTap: () {
+                    HapticHelper.selection();
+                    createVm.setCurrencyCode(c['code']!);
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? const Color(0xFF14B8A6)
+                          : (isDark ? const Color(0xFF161D24) : const Color(0xFFF8FAFC)),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isSelected
+                            ? const Color(0xFF14B8A6)
+                            : (isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0)),
+                        width: 1.2,
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      c['label']!,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                        color: isSelected
+                            ? Colors.white
+                            : (isDark ? AppColors.darkTextPrimary : const Color(0xFF334155)),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Crew & Co-Travelers Section
+  Widget _buildCrewSection(CreateTripViewModel createVm, bool isDark, AppLocalizations l10n) {
+    return Container(
+      padding: const EdgeInsets.all(18.0),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0F1418) : Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'CO-TRAVELERS & FRIENDS',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.8,
+                  color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
+                ),
+              ),
+              if (createVm.friendNames.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF14B8A6).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '+${createVm.friendNames.length} friends',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF14B8A6),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Instant QR Notice
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF161D24) : const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.qr_code_scanner_rounded,
+                  size: 20,
+                  color: Color(0xFF14B8A6),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Friends can scan your trip QR code right after creation to join instantly.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? AppColors.darkTextSecondary : const Color(0xFF475569),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 12),
 
           // Expandable Offline Friend Option
           GestureDetector(
@@ -820,23 +1078,23 @@ class _CreateTripViewState extends State<CreateTripView> {
               setState(() => _showManualFriends = !_showManualFriends);
             },
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF0F1418) : const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(10),
+                color: isDark ? const Color(0xFF161D24) : const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
                 children: [
                   Icon(
-                    _showManualFriends ? Icons.keyboard_arrow_up_rounded : Icons.person_add_outlined,
-                    size: 16,
-                    color: isDark ? AppColors.darkTextSecondary : const Color(0xFF475569),
+                    _showManualFriends ? Icons.keyboard_arrow_up_rounded : Icons.person_add_alt_1_rounded,
+                    size: 18,
+                    color: const Color(0xFF14B8A6),
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'Add friend manually (non-app user)',
+                    'Add friend manually (offline/non-app member)',
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 12.5,
                       fontWeight: FontWeight.w600,
                       color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
                     ),
@@ -853,19 +1111,18 @@ class _CreateTripViewState extends State<CreateTripView> {
           ),
 
           if (_showManualFriends || createVm.friendNames.isNotEmpty) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
                   child: Container(
-                    height: 42,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    height: 46,
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
                     decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF0F1418) : const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(10),
+                      color: isDark ? const Color(0xFF161D24) : const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
-                        width: 0.8,
+                        color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
                       ),
                     ),
                     alignment: Alignment.center,
@@ -873,14 +1130,15 @@ class _CreateTripViewState extends State<CreateTripView> {
                       controller: _friendController,
                       textCapitalization: TextCapitalization.words,
                       style: TextStyle(
-                        fontSize: 13,
-                        color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
                       ),
                       decoration: KithInputDecoration.borderless(
-                        hintText: 'Enter friend name...',
+                        hintText: 'e.g. Rahul, Priya, Vikram...',
                         hintStyle: TextStyle(
                           fontSize: 13,
-                          color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                          color: isDark ? AppColors.darkTextMuted : const Color(0xFF94A3B8),
                         ),
                       ),
                       onSubmitted: (_) => _addFriend(),
@@ -888,34 +1146,33 @@ class _CreateTripViewState extends State<CreateTripView> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                InkWell(
+                GestureDetector(
                   onTap: _addFriend,
-                  borderRadius: BorderRadius.circular(10),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
                     decoration: BoxDecoration(
-                      color: AppColors.emeraldPrimary,
-                      borderRadius: BorderRadius.circular(10),
+                      color: const Color(0xFF14B8A6),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.add_rounded, color: Colors.white, size: 18),
+                    child: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
                   ),
                 ),
               ],
             ),
 
             if (createVm.friendNames.isNotEmpty) ...[
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               Wrap(
-                spacing: 6,
-                runSpacing: 6,
+                spacing: 8,
+                runSpacing: 8,
                 children: createVm.friendNames.map((name) {
                   return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: AppColors.emeraldPrimary.withValues(alpha: isDark ? 0.15 : 0.1),
-                      borderRadius: BorderRadius.circular(16),
+                      color: const Color(0xFF14B8A6).withValues(alpha: isDark ? 0.18 : 0.12),
+                      borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                        color: AppColors.emeraldPrimary.withValues(alpha: 0.3),
+                        color: const Color(0xFF14B8A6).withValues(alpha: 0.4),
                       ),
                     ),
                     child: Row(
@@ -924,18 +1181,18 @@ class _CreateTripViewState extends State<CreateTripView> {
                         Text(
                           name,
                           style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? const Color(0xFF2DD4BF) : const Color(0xFF0D9488),
                           ),
                         ),
-                        const SizedBox(width: 4),
+                        const SizedBox(width: 6),
                         GestureDetector(
                           onTap: () {
                             HapticHelper.light();
                             createVm.removeFriendName(name);
                           },
-                          child: const Icon(Icons.close_rounded, size: 14),
+                          child: const Icon(Icons.close_rounded, size: 15),
                         ),
                       ],
                     ),
@@ -949,7 +1206,7 @@ class _CreateTripViewState extends State<CreateTripView> {
     );
   }
 
-  /// Clean, prominent bottom CTA button.
+  /// Sticky Bottom Action Deck
   Widget _buildStickyBottomDeck(
     BuildContext context,
     CreateTripViewModel createVm,
@@ -957,13 +1214,13 @@ class _CreateTripViewState extends State<CreateTripView> {
     AppLocalizations l10n,
   ) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF080C0E) : const Color(0xFFFAFBFB),
+        color: isDark ? const Color(0xFF080C0E) : Colors.white,
         border: Border(
           top: BorderSide(
-            color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
-            width: 0.8,
+            color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
+            width: 1,
           ),
         ),
       ),
@@ -971,16 +1228,17 @@ class _CreateTripViewState extends State<CreateTripView> {
         top: false,
         child: SizedBox(
           width: double.infinity,
-          height: 50,
+          height: 52,
           child: ElevatedButton(
             onPressed: createVm.isValid && !createVm.isCreating ? _handleCreate : null,
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.emeraldPrimary,
+              backgroundColor: const Color(0xFF14B8A6),
               foregroundColor: Colors.white,
               disabledBackgroundColor: isDark ? const Color(0xFF1E2830) : const Color(0xFFE2E8F0),
               disabledForegroundColor: isDark ? Colors.white30 : Colors.black26,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              elevation: 4,
+              shadowColor: const Color(0xFF14B8A6).withValues(alpha: 0.4),
             ),
             child: createVm.isCreating
                 ? const SizedBox(
@@ -993,10 +1251,10 @@ class _CreateTripViewState extends State<CreateTripView> {
                     children: [
                       Text(
                         l10n.tripsCreate,
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
                       ),
                       const SizedBox(width: 8),
-                      const Icon(Icons.arrow_forward_rounded, size: 18),
+                      const Icon(Icons.arrow_forward_rounded, size: 20),
                     ],
                   ),
           ),

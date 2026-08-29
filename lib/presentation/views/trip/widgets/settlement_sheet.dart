@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/localization/app_localizations.dart';
 import '../../../../core/payment/payment_service.dart';
@@ -6,6 +7,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/utils/haptic_feedback_helper.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/currency_display.dart';
@@ -68,83 +70,313 @@ class _SettlementSheetState extends State<SettlementSheet> {
     return widget.trip.members.where((m) => m.id == memberId).firstOrNull;
   }
 
-  Future<void> _openPaymentOrSettlementSheet(
-    String fromMemberId,
-    String toMemberId,
-    String fromName,
-    String toName,
-    int amountInPaise,
-  ) async {
+  Future<void> _handleSettlementAction({
+    required String fromMemberId,
+    required String toMemberId,
+    required String fromName,
+    required String toName,
+    required int amountInPaise,
+    required bool isPayerCurrentUser,
+    required bool isReceiverCurrentUser,
+  }) async {
     final transferKey = fromMemberId + toMemberId;
     if (_processingTransferIds.contains(transferKey)) return;
 
-    final toMember = _findMember(toMemberId);
-    final storage = context.read<LocalStorageService>();
-    final userRepo = context.read<UserRepository>();
     final l10n = context.l10n;
-    final currentUser = storage.getSavedUser();
-    String? recipientUpi = toMember?.upiId;
 
-    if ((recipientUpi == null || recipientUpi.isEmpty) && toMember?.userId != null) {
-      if (toMember!.userId == currentUser?['id']) {
-        recipientUpi = storage.getPrimaryUpiId() ?? (currentUser?['upiId'] as String?);
-      } else {
-        // Query live user UPI from backend/repository
+    // SCENARIO 1: Current User is RECEIVER (Creditor)
+    // Rahul owes Me -> I tap "Mark Received" to confirm I got the money
+    if (isReceiverCurrentUser) {
+      final confirmed = await _showConfirmReceivedDialog(
+        fromName: fromName,
+        amountInPaise: amountInPaise,
+      );
+
+      if (confirmed == true && mounted && widget.onRecordTransfer != null) {
+        setState(() => _processingTransferIds.add(transferKey));
         try {
-          final liveUpi = await userRepo.getUserUpi(toMember.userId);
+          await widget.onRecordTransfer!(
+            fromMemberId,
+            toMemberId,
+            amountInPaise,
+            paymentReference: 'manual_rcvd_${DateTime.now().millisecondsSinceEpoch}',
+            fromName: fromName,
+            toName: toName,
+            paymentStatus: 'completed',
+          );
+          if (mounted) {
+            setState(() => _paidTransferKeys.add(transferKey));
+            HapticHelper.success();
+            KithSuccessToast.show(context, 'Payment of ${CurrencyFormatter.formatPaise(amountInPaise, currencyCode: widget.trip.currencyCode)} marked as received ✓');
+          }
+        } finally {
+          if (mounted) {
+            setState(() => _processingTransferIds.remove(transferKey));
+          }
+        }
+      }
+      return;
+    }
+
+    // SCENARIO 2: Current User is PAYER (Debtor)
+    // I owe Rahul -> I tap "Pay Rahul" to open UPI pay with Rahul's UPI ID
+    if (isPayerCurrentUser) {
+      final toMember = _findMember(toMemberId);
+      final userRepo = context.read<UserRepository>();
+      String? recipientUpi = toMember?.upiId;
+
+      if ((recipientUpi == null || recipientUpi.isEmpty) && toMember?.userId != null) {
+        try {
+          final liveUpi = await userRepo.getUserUpi(toMember!.userId);
           if (liveUpi != null && liveUpi.isNotEmpty) {
             recipientUpi = liveUpi;
           }
         } catch (_) {}
       }
-    }
-    if (!mounted) return;
 
-    final success = await UpiPaymentSheet.show(
-      context,
-      recipientName: toName,
-      initialRecipientUpiId: recipientUpi,
-      amountInPaise: amountInPaise,
-      currencyCode: widget.trip.currencyCode,
-      tripName: widget.trip.name,
-      tripId: widget.trip.id,
-      fromMemberId: fromMemberId,
-      toMemberId: toMemberId,
-      paymentService: _paymentService,
-      onConfirmSettlement: ({
-        required String paymentReference,
-        required String recipientUpiId,
-        required String paymentStatus,
-      }) async {
-        if (widget.onRecordTransfer != null) {
-          setState(() => _processingTransferIds.add(transferKey));
-          try {
-            await widget.onRecordTransfer!(
-              fromMemberId,
-              toMemberId,
-              amountInPaise,
-              paymentReference: paymentReference,
-              recipientUpiId: recipientUpiId,
-              fromName: fromName,
-              toName: toName,
-              paymentStatus: paymentStatus,
-            );
-          } finally {
-            if (mounted) {
-              setState(() => _processingTransferIds.remove(transferKey));
+      if (!mounted) return;
+
+      final success = await UpiPaymentSheet.show(
+        context,
+        recipientName: toName,
+        initialRecipientUpiId: recipientUpi,
+        amountInPaise: amountInPaise,
+        currencyCode: widget.trip.currencyCode,
+        tripName: widget.trip.name,
+        tripId: widget.trip.id,
+        fromMemberId: fromMemberId,
+        toMemberId: toMemberId,
+        paymentService: _paymentService,
+        onConfirmSettlement: ({
+          required String paymentReference,
+          required String recipientUpiId,
+          required String paymentStatus,
+        }) async {
+          if (widget.onRecordTransfer != null) {
+            setState(() => _processingTransferIds.add(transferKey));
+            try {
+              await widget.onRecordTransfer!(
+                fromMemberId,
+                toMemberId,
+                amountInPaise,
+                paymentReference: paymentReference,
+                recipientUpiId: recipientUpiId,
+                fromName: fromName,
+                toName: toName,
+                paymentStatus: paymentStatus,
+              );
+            } finally {
+              if (mounted) {
+                setState(() => _processingTransferIds.remove(transferKey));
+              }
             }
           }
+        },
+      );
+
+      if (success == true && mounted) {
+        setState(() {
+          _paidTransferKeys.add(transferKey);
+        });
+        HapticHelper.success();
+        KithSuccessToast.show(context, l10n.settlementPaidSuccess);
+      }
+      return;
+    }
+
+    // SCENARIO 3: Third Party / Creator recording for others (Alice pays Bob)
+    if (widget.onRecordTransfer != null) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dCtx) => AlertDialog(
+          shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
+          title: const Text('Record Settlement'),
+          content: Text('Confirm that $fromName has paid ${CurrencyFormatter.formatPaise(amountInPaise, currencyCode: widget.trip.currencyCode)} to $toName?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dCtx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppColors.emeraldPrimary),
+              onPressed: () => Navigator.pop(dCtx, true),
+              child: const Text('Confirm'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed == true && mounted) {
+        setState(() => _processingTransferIds.add(transferKey));
+        try {
+          await widget.onRecordTransfer!(
+            fromMemberId,
+            toMemberId,
+            amountInPaise,
+            paymentReference: 'creator_record_${DateTime.now().millisecondsSinceEpoch}',
+            fromName: fromName,
+            toName: toName,
+            paymentStatus: 'completed',
+          );
+          if (mounted) {
+            setState(() => _paidTransferKeys.add(transferKey));
+            HapticHelper.success();
+            KithSuccessToast.show(context, 'Settlement recorded ✓');
+          }
+        } finally {
+          if (mounted) {
+            setState(() => _processingTransferIds.remove(transferKey));
+          }
         }
+      }
+    }
+  }
+
+  Future<bool?> _showConfirmReceivedDialog({
+    required String fromName,
+    required int amountInPaise,
+  }) {
+    final storage = context.read<LocalStorageService>();
+    final myUpiId = storage.getPrimaryUpiId();
+    final formattedAmt = CurrencyFormatter.formatPaise(amountInPaise, currencyCode: widget.trip.currencyCode);
+
+    return showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF0F1418) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            border: Border.all(
+              color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white24 : Colors.black12,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: (isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight)
+                          .withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.check_circle_rounded,
+                      color: isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Payment Received?',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
+                          ),
+                        ),
+                        Text(
+                          '$fromName owes you $formattedAmt',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF161D24) : const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Amount to Clear:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    Text(
+                      formattedAmt,
+                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Color(0xFF14B8A6)),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  if (myUpiId != null && myUpiId.isNotEmpty) ...[
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          HapticHelper.medium();
+                          Clipboard.setData(ClipboardData(text: myUpiId));
+                          Navigator.pop(ctx, false);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Your UPI ID ($myUpiId) copied to share!'),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.copy_rounded, size: 16),
+                        label: const Text('Share My UPI'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 13),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                  ],
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF14B8A6),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        elevation: 0,
+                      ),
+                      child: const Text('Yes, Received ✓', style: TextStyle(fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
       },
     );
-
-    if (success == true && mounted) {
-      setState(() {
-        _paidTransferKeys.add(transferKey);
-      });
-      HapticHelper.success();
-      KithSuccessToast.show(context, l10n.settlementPaidSuccess);
-    }
   }
 
   @override
@@ -236,6 +468,20 @@ class _SettlementSheetState extends State<SettlementSheet> {
                   final isProcessing = _processingTransferIds.contains(transferKey);
                   final isPaid = _paidTransferKeys.contains(transferKey);
 
+                  // Dynamic CTA Label based on role
+                  String actionButtonLabel;
+                  IconData actionButtonIcon;
+                  if (isReceiverCurrentUser) {
+                    actionButtonLabel = 'Mark Received';
+                    actionButtonIcon = Icons.check_circle_outline_rounded;
+                  } else if (isPayerCurrentUser) {
+                    actionButtonLabel = 'Pay $toName';
+                    actionButtonIcon = Icons.bolt_rounded;
+                  } else {
+                    actionButtonLabel = 'Record Payment';
+                    actionButtonIcon = Icons.edit_note_rounded;
+                  }
+
                   return SurfaceCard(
                     backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
                     padding: const EdgeInsets.all(16.0),
@@ -244,7 +490,7 @@ class _SettlementSheetState extends State<SettlementSheet> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            // From Member
+                            // From Member (Payer)
                             Flexible(
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -290,7 +536,7 @@ class _SettlementSheetState extends State<SettlementSheet> {
                               ),
                             ),
 
-                            // To Member
+                            // To Member (Receiver)
                             Flexible(
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -327,7 +573,7 @@ class _SettlementSheetState extends State<SettlementSheet> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              toMember?.upiId != null ? 'UPI Ready • ${toMember!.upiId}' : 'Direct member payment',
+                              toMember?.upiId != null ? 'UPI: ${toMember!.upiId}' : (isReceiverCurrentUser ? 'You are owed' : 'Direct member payment'),
                               style: TextStyle(
                                 fontSize: 11.5,
                                 color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
@@ -355,7 +601,7 @@ class _SettlementSheetState extends State<SettlementSheet> {
                                       ),
                                       const SizedBox(width: 4),
                                       Text(
-                                        'Paid',
+                                        'Settled',
                                         style: TextStyle(
                                           fontSize: 12,
                                           fontWeight: FontWeight.w700,
@@ -367,13 +613,14 @@ class _SettlementSheetState extends State<SettlementSheet> {
                                 )
                               else
                                 SizedBox(
-                                  height: 32,
+                                  height: 34,
                                   child: ElevatedButton.icon(
                                     style: ElevatedButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                                      padding: const EdgeInsets.symmetric(horizontal: 14),
                                       backgroundColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
                                       foregroundColor: isDark ? Colors.black : Colors.white,
                                       shape: RoundedRectangleBorder(borderRadius: AppRadius.fullBorder),
+                                      elevation: 0,
                                     ),
                                     icon: isProcessing
                                         ? const SizedBox(
@@ -381,22 +628,21 @@ class _SettlementSheetState extends State<SettlementSheet> {
                                             height: 12,
                                             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                                           )
-                                        : Icon(
-                                            isPayerCurrentUser ? Icons.bolt_rounded : Icons.check_rounded,
-                                            size: 15,
-                                          ),
+                                        : Icon(actionButtonIcon, size: 15),
                                     label: Text(
-                                      isPayerCurrentUser ? 'Pay / Settle' : context.l10n.settlementMarkPaidBtn,
-                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                                      actionButtonLabel,
+                                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
                                     ),
                                     onPressed: isProcessing
                                         ? null
-                                        : () => _openPaymentOrSettlementSheet(
-                                              s.fromMemberId,
-                                              s.toMemberId,
-                                              fromName,
-                                              toName,
-                                              s.amountInPaise,
+                                        : () => _handleSettlementAction(
+                                              fromMemberId: s.fromMemberId,
+                                              toMemberId: s.toMemberId,
+                                              fromName: fromName,
+                                              toName: toName,
+                                              amountInPaise: s.amountInPaise,
+                                              isPayerCurrentUser: isPayerCurrentUser,
+                                              isReceiverCurrentUser: isReceiverCurrentUser,
                                             ),
                                   ),
                                 ),

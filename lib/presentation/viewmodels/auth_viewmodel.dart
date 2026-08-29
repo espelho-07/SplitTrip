@@ -266,6 +266,38 @@ class AuthViewModel extends ChangeNotifier {
     }
   }
 
+  Future<GuestUser?> updateUserProfile({
+    required String displayName,
+    String? phoneNumber,
+    String? avatarUrl,
+    String? email,
+    String? upiId,
+    String? bio,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final updated = await userRepo.updateUserProfile(
+        displayName: displayName,
+        phoneNumber: phoneNumber,
+        avatarUrl: avatarUrl,
+        email: email,
+        upiId: upiId,
+        bio: bio,
+      );
+      _currentUser = updated;
+      return updated;
+    } catch (e) {
+      _errorMessage = 'Could not update profile: $e';
+      return null;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   bool get hasCompletedOnboarding => userRepo.hasCompletedOnboarding();
 
   Future<void> setOnboardingCompleted(bool completed) async {

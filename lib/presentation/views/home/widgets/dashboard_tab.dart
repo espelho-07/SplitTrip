@@ -234,40 +234,8 @@ class DashboardTab extends StatelessWidget {
             ),
           ],
         ),
-        Row(
-          children: [
-            // QR Scanner Button
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () async {
-                HapticHelper.light();
-                final scannedCode = await context.push<String>('/qr-scanner');
-                if (scannedCode != null && scannedCode.isNotEmpty && context.mounted) {
-                  context.push('/join-trip?code=$scannedCode');
-                }
-              },
-              child: Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isDark ? const Color(0xFF161D24) : const Color(0xFFF1F5F9),
-                  border: Border.all(
-                    color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
-                    width: 1,
-                  ),
-                ),
-                child: Icon(
-                  Icons.qr_code_scanner_rounded,
-                  size: 21,
-                  color: isDark ? AppColors.darkTextPrimary : const Color(0xFF334155),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-
-            // Notifications Button
-            GestureDetector(
+        // Notifications Button
+        GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: () {
                 HapticHelper.light();
@@ -315,11 +283,9 @@ class DashboardTab extends StatelessWidget {
                       ],
                     );
                   },
-                ),
               ),
             ),
-          ],
-        ),
+          ),
       ],
     );
   }

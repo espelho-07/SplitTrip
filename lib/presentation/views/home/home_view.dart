@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/network/realtime_client.dart';
 import '../../../core/services/kith_widget_service.dart';
+import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../data/services/local_storage_service.dart';
 import '../../../data/services/sync_service.dart';
@@ -29,6 +32,7 @@ class HomeView extends StatefulWidget {
 class _HomeViewState extends State<HomeView> {
   late int _currentIndex;
   bool _isRefreshing = false;
+  StreamSubscription<RealtimeTripEvent>? _realtimeSub;
 
   @override
   void initState() {
@@ -36,6 +40,63 @@ class _HomeViewState extends State<HomeView> {
     _currentIndex = widget.initialIndex;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshAllData();
+      _setupRealtimeListener();
+    });
+  }
+
+  @override
+  void dispose() {
+    _realtimeSub?.cancel();
+    super.dispose();
+  }
+
+  void _setupRealtimeListener() {
+    RealtimeClient? realtimeClient;
+    try {
+      realtimeClient = context.read<RealtimeClient>();
+    } catch (_) {}
+
+    _realtimeSub?.cancel();
+    _realtimeSub = realtimeClient?.events.listen((event) {
+      if (!mounted) return;
+      final notifService = context.read<NotificationService>();
+      final currentUserId = context.read<AuthViewModel>().currentUser?.id;
+      if (event.actorId == currentUserId) return;
+
+      if (event.type == 'settlement_recorded') {
+        final fromName = event.data['fromName'] as String? ?? 'A member';
+        final toName = event.data['toName'] as String? ?? 'you';
+        final amountPaise = event.data['amountInPaise'] as int? ?? 0;
+        final formatted = CurrencyFormatter.formatPaise(amountPaise, currencyCode: 'INR');
+        notifService.addNotification(
+          title: 'Payment Settled 🎉',
+          description: '$fromName settled $formatted with $toName.',
+          type: NotificationType.settlement,
+          route: '/trip/${event.tripId}',
+          actionLabel: 'View Trip',
+        );
+      } else if (event.type == 'expense_created') {
+        final title = event.data['title'] as String? ?? 'Expense';
+        final paidByName = event.data['paidByName'] as String? ?? 'A friend';
+        final amountPaise = event.data['amountInPaise'] as int? ?? 0;
+        final formatted = CurrencyFormatter.formatPaise(amountPaise, currencyCode: 'INR');
+        notifService.addNotification(
+          title: 'New Expense Added 🧾',
+          description: '$paidByName added "$title" ($formatted).',
+          type: NotificationType.expense,
+          route: '/trip/${event.tripId}',
+          actionLabel: 'View Expense',
+        );
+      } else if (event.type == 'member_joined') {
+        final memberName = event.data['memberName'] as String? ?? 'A friend';
+        notifService.addNotification(
+          title: 'New Member Joined ✈️',
+          description: '$memberName joined the trip crew!',
+          type: NotificationType.trip,
+          route: '/trip/${event.tripId}',
+          actionLabel: 'View Trip',
+        );
+      }
     });
   }
 

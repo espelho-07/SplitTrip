@@ -504,6 +504,58 @@ class AuthService {
     await storage.clearAllUserData();
   }
 
+  /// Updates user profile details (displayName, phone, avatarUrl, email, upiId, bio)
+  Future<GuestUser> updateUserProfile({
+    required String displayName,
+    String? phoneNumber,
+    String? avatarUrl,
+    String? email,
+    String? upiId,
+    String? bio,
+  }) async {
+    final current = getCurrentUser();
+    if (current == null) {
+      throw StateError('No active user session');
+    }
+
+    final cleanUpi = upiId?.trim().toLowerCase();
+    final updated = current.copyWith(
+      displayName: displayName.trim(),
+      avatarUrl: avatarUrl ?? current.avatarUrl,
+      email: (email != null && email.trim().isNotEmpty) ? email.trim() : current.email,
+      upiId: (cleanUpi != null && cleanUpi.isNotEmpty) ? cleanUpi : current.upiId,
+    );
+
+    await storage.saveUser(updated.toJson());
+    await storage.saveUserToRecoveryVault(updated.toJson());
+
+    if (cleanUpi != null && cleanUpi.isNotEmpty) {
+      await storage.setPrimaryUpiId(cleanUpi);
+    }
+    if (phoneNumber != null) {
+      await storage.setString('user_phone_number', phoneNumber.trim());
+    }
+    if (bio != null) {
+      await storage.setString('user_bio', bio.trim());
+    }
+
+    // Best-effort remote update
+    try {
+      await apiClient.post('/auth/update-profile', body: {
+        'displayName': displayName.trim(),
+        'phoneNumber': phoneNumber,
+        'avatarUrl': avatarUrl,
+        'email': email,
+        'upiId': cleanUpi,
+        'bio': bio,
+      });
+    } catch (_) {
+      // Offline fallback
+    }
+
+    return updated;
+  }
+
   /// Updates user's receiving UPI ID and optional QR in local storage and backend.
   Future<GuestUser?> updatePaymentInfo(String upiId, {String? upiQr}) async {
     final cleanUpi = upiId.trim().toLowerCase();

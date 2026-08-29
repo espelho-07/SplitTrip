@@ -289,25 +289,31 @@ class ProfileHomeTab extends StatelessWidget {
         Center(
           child: Column(
             children: [
-              Stack(
-                alignment: Alignment.bottomRight,
-                children: [
-                  MemberAvatar(
-                    name: displayName,
-                    avatarUrl: user?.avatarUrl,
-                    size: 84,
-                  ),
-                  Container(
-                    width: 24,
-                    height: 24,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Color(0xFF14B8A6),
+              GestureDetector(
+                onTap: () {
+                  HapticHelper.light();
+                  context.push('/profile/edit');
+                },
+                child: Stack(
+                  alignment: Alignment.bottomRight,
+                  children: [
+                    MemberAvatar(
+                      name: displayName,
+                      avatarUrl: user?.avatarUrl,
+                      size: 84,
                     ),
-                    alignment: Alignment.center,
-                    child: const Icon(Icons.check, size: 14, color: Colors.white),
-                  ),
-                ],
+                    Container(
+                      width: 26,
+                      height: 26,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Color(0xFF14B8A6),
+                      ),
+                      alignment: Alignment.center,
+                      child: const Icon(Icons.edit_rounded, size: 14, color: Colors.white),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 12),
               Text(
@@ -346,6 +352,39 @@ class ProfileHomeTab extends StatelessWidget {
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 10),
+              // Edit Nirniq Profile Button
+              GestureDetector(
+                onTap: () {
+                  HapticHelper.light();
+                  context.push('/profile/edit');
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF161D24) : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: const Color(0xFF14B8A6).withValues(alpha: 0.4),
+                    ),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.edit_outlined, size: 14, color: Color(0xFF14B8A6)),
+                      SizedBox(width: 6),
+                      Text(
+                        'Edit Nirniq Profile',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF14B8A6),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
@@ -394,6 +433,14 @@ class ProfileHomeTab extends StatelessWidget {
         _buildMenuSection(
           isDark: isDark,
           children: [
+            _buildMenuItem(
+              icon: Icons.person_rounded,
+              title: 'Nirniq Profile & Identity',
+              subtitle: 'Edit name, phone number, avatar & bio',
+              iconColor: const Color(0xFF14B8A6),
+              isDark: isDark,
+              onTap: () => context.push('/profile/edit'),
+            ),
             if (!isNirniqLinked)
               _buildMenuItem(
                 icon: Icons.verified_user_rounded,

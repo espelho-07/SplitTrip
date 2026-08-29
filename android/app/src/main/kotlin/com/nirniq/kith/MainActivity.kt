@@ -42,6 +42,7 @@ class MainActivity : FlutterFragmentActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
+        // Widget Channel
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "updateWidgets" -> {
@@ -81,6 +82,21 @@ class MainActivity : FlutterFragmentActivity() {
                 }
                 "getInitialDeepLink" -> {
                     result.success(initialDeepLink)
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        // Native Notifications Channel
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.nirniq.kith/notifications").setMethodCallHandler { call, result ->
+            when (call.method) {
+                "showNotification" -> {
+                    val id = call.argument<Int>("id") ?: (System.currentTimeMillis() % 100000).toInt()
+                    val title = call.argument<String>("title") ?: "Kith"
+                    val body = call.argument<String>("body") ?: ""
+                    val route = call.argument<String>("route")
+                    KithNotificationHelper.showNotification(applicationContext, id, title, body, route)
+                    result.success(true)
                 }
                 else -> result.notImplemented()
             }

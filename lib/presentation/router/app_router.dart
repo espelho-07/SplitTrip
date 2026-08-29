@@ -25,6 +25,7 @@ import '../views/trip/trip_members_view.dart';
 import '../views/trip/trip_memories_view.dart';
 import '../views/widgets/widget_gallery_view.dart';
 import '../views/settings/master_settings_view.dart';
+import '../views/profile/nirniq_profile_view.dart';
 import '../views/notifications/notifications_view.dart';
 import '../views/payment/payment_methods_view.dart';
 import '../views/trip/trip_preview_view.dart';
@@ -150,6 +151,10 @@ class AppRouter {
       GoRoute(
         path: '/qr-scanner',
         builder: (context, state) => const QrScannerView(),
+      ),
+      GoRoute(
+        path: '/profile/edit',
+        builder: (context, state) => const NirniqProfileView(),
       ),
       GoRoute(
         path: '/payment-methods',

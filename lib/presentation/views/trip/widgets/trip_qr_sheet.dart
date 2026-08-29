@@ -135,46 +135,7 @@ class TripQrSheet extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(height: AppSpacing.md),
-
-            // Deep Link Card
-            SurfaceCard(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.link_rounded,
-                    size: 20,
-                    color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      inviteLink,
-                      style: AppTypography.bodySmall(isDark: isDark).copyWith(
-                        color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-                        fontFamily: 'monospace',
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.copy_rounded, size: 18),
-                    onPressed: () {
-                      HapticHelper.medium();
-                      Clipboard.setData(ClipboardData(text: inviteLink));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Invite link copied!'),
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xl),
+            const SizedBox(height: AppSpacing.lg),
 
             // Done button
             AppButton(
