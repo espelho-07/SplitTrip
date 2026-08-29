@@ -125,10 +125,11 @@ class AuthViewModel extends ChangeNotifier {
     }
   }
 
-  Future<GuestUser?> signInWithGoogle({
+  Future<GuestUser?> signInWithNirniq({
     required String email,
     required String displayName,
     String? photoUrl,
+    String? nirniqId,
     String? googleId,
     String? supabaseUserId,
   }) async {
@@ -138,10 +139,11 @@ class AuthViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final user = await userRepo.signInWithGoogle(
+      final user = await userRepo.signInWithNirniq(
         email: email,
         displayName: displayName,
         photoUrl: photoUrl,
+        nirniqId: nirniqId,
         googleId: googleId,
         supabaseUserId: supabaseUserId,
       );
@@ -149,13 +151,29 @@ class AuthViewModel extends ChangeNotifier {
       _authState = AuthState.authenticated;
       return user;
     } catch (e) {
-      _errorMessage = 'Could not sign in with Google: $e';
+      _errorMessage = 'Could not sign in with Nirniq Account: $e';
       _authState = AuthState.signedOut;
       return null;
     } finally {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  Future<GuestUser?> signInWithGoogle({
+    required String email,
+    required String displayName,
+    String? photoUrl,
+    String? googleId,
+    String? supabaseUserId,
+  }) {
+    return signInWithNirniq(
+      email: email,
+      displayName: displayName,
+      photoUrl: photoUrl,
+      googleId: googleId,
+      supabaseUserId: supabaseUserId,
+    );
   }
 
   /// Fast one-tap sign in for Google Play Store Review team (review.nirniq@gmail.com)

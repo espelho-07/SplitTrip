@@ -26,12 +26,147 @@ import '../settings/widgets/beta_feedback_sheet.dart';
 class ProfileHomeTab extends StatelessWidget {
   const ProfileHomeTab({super.key});
 
-  Future<void> _handleGoogleSignIn(BuildContext context) async {
+  Future<void> _handleNirniqSignIn(BuildContext context) async {
     final authVm = context.read<AuthViewModel>();
     if (authVm.isLoading) return;
 
     HapticHelper.medium();
-    await AuthProgressDialog.startGoogleSignIn(context);
+    await AuthProgressDialog.startNirniqSignIn(context);
+  }
+
+  void _showConnectedAppsSheet(BuildContext context, bool isDark) {
+    final l10n = context.l10n;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF0F172A) : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          border: Border.all(
+            color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0D9488).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.hub_rounded, color: Color(0xFF0D9488), size: 22),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.profileConnectedApps,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      ),
+                    ),
+                    Text(
+                      l10n.profileConnectedAppsDesc,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            // Kith Active App Tile
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppColors.emeraldPrimary.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: AppColors.emeraldPrimary.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.flight_takeoff_rounded, color: AppColors.emeraldPrimary, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Kith',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          ),
+                        ),
+                        Text(
+                          l10n.profileConnectedAppsKith,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.emeraldPrimary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.emeraldPrimary.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text(
+                      'CONNECTED',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.emeraldPrimary,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Future Nirniq ecosystem apps teaser
+            Center(
+              child: Text(
+                l10n.profileConnectedAppsFuture,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontStyle: FontStyle.italic,
+                  color: isDark ? AppColors.darkTextMuted : const Color(0xFF94A3B8),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showSignOutDialog(BuildContext context) async {
@@ -129,6 +264,7 @@ class ProfileHomeTab extends StatelessWidget {
       localeVm = context.watch<LocaleViewModel>();
     } catch (_) {}
 
+    final storage = context.watch<LocalStorageService>();
     SyncService? syncService;
     try {
       syncService = context.watch<SyncService>();
@@ -138,7 +274,7 @@ class ProfileHomeTab extends StatelessWidget {
 
     final user = authVm.currentUser;
     final displayName = user?.displayName ?? 'Darpan Parmar';
-    final isGoogleLinked = user?.isGoogleLinked ?? false;
+    final isNirniqLinked = user?.isNirniqLinked ?? false;
     final pendingCount = syncService?.pendingCount ?? 0;
 
     final tripsCount = homeVm.trips.length;
@@ -187,22 +323,22 @@ class ProfileHomeTab extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3.5),
                 decoration: BoxDecoration(
-                  color: (isGoogleLinked ? AppColors.emeraldPrimary : AppColors.indigoAccent)
+                  color: (isNirniqLinked ? AppColors.emeraldPrimary : AppColors.indigoAccent)
                       .withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  isGoogleLinked ? l10n.profileGoogleConnected : l10n.profileGuestAccount,
+                  isNirniqLinked ? l10n.profileNirniqConnected : l10n.profileGuestAccount,
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: isGoogleLinked ? AppColors.emeraldPrimary : AppColors.indigoAccent,
+                    color: isNirniqLinked ? AppColors.emeraldPrimary : AppColors.indigoAccent,
                   ),
                 ),
               ),
               const SizedBox(height: 4),
               Text(
-                isGoogleLinked ? (user?.email ?? '') : '@${displayName.toLowerCase().replaceAll(' ', '')}',
+                isNirniqLinked ? (user?.email ?? '') : '@${displayName.toLowerCase().replaceAll(' ', '')}',
                 style: TextStyle(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w500,
@@ -254,18 +390,27 @@ class ProfileHomeTab extends StatelessWidget {
         const SizedBox(height: 24),
 
         // ─── 3. SECTION: Account & Cloud ──────────────────────────────
-        _buildSectionHeader('Account & Cloud Sync', isDark),
+        _buildSectionHeader('Nirniq Account & Cloud Sync', isDark),
         _buildMenuSection(
           isDark: isDark,
           children: [
-            if (!isGoogleLinked)
+            if (!isNirniqLinked)
               _buildMenuItem(
-                icon: Icons.g_mobiledata_rounded,
-                title: l10n.onboardingGoogleSignin,
-                subtitle: l10n.onboardingSyncDevices,
+                icon: Icons.verified_user_rounded,
+                title: l10n.profileConnectNirniq,
+                subtitle: l10n.profileConnectNirniqDesc,
                 iconColor: AppColors.emeraldPrimary,
                 isDark: isDark,
-                onTap: () => _handleGoogleSignIn(context),
+                onTap: () => _handleNirniqSignIn(context),
+              )
+            else
+              _buildMenuItem(
+                icon: Icons.hub_rounded,
+                title: l10n.profileConnectedApps,
+                subtitle: l10n.profileConnectedAppsDesc,
+                iconColor: const Color(0xFF0D9488),
+                isDark: isDark,
+                onTap: () => _showConnectedAppsSheet(context, isDark),
               ),
             _buildMenuItem(
               icon: Icons.key_rounded,
@@ -313,7 +458,9 @@ class ProfileHomeTab extends StatelessWidget {
             _buildMenuItem(
               icon: Icons.payment_rounded,
               title: 'Payment Methods',
-              subtitle: 'UPI ID & Payment QR code',
+              subtitle: storage.hasPaymentMethodConfigured()
+                  ? '✓ Primary: ${storage.getPrimaryUpiId()}'
+                  : 'UPI ID & QR code (Not set)',
               isDark: isDark,
               onTap: () => context.push('/payment-methods'),
             ),

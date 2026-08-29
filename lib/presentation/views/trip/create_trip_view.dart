@@ -28,6 +28,7 @@ class CreateTripView extends StatefulWidget {
 class _CreateTripViewState extends State<CreateTripView> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _friendController = TextEditingController();
+  bool _showManualFriends = false;
 
   static const List<String> _emojis = [
     '✈️', '🏖️', '🏔️', '🍕', '🚗', '🌴',
@@ -265,11 +266,6 @@ class _CreateTripViewState extends State<CreateTripView> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // HERO SECTION
-                          _buildHeroSection(isDark, l10n, reduceMotion),
-
-                          const SizedBox(height: 16),
-
                           // LIVE REACTIVE PREVIEW BANNER
                           RepaintBoundary(
                             child: _buildLivePreviewCard(createVm, isDark, l10n),
@@ -410,71 +406,6 @@ class _CreateTripViewState extends State<CreateTripView> {
         ],
       ),
     );
-  }
-
-  Widget _buildHeroSection(bool isDark, AppLocalizations l10n, bool reduceMotion) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          l10n.createTripHeroTitle,
-          style: AppTypography.displayHero(isDark: isDark).copyWith(
-            height: 1.15,
-            letterSpacing: -0.8,
-            fontSize: 28,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          l10n.createTripHeroSub,
-          style: AppTypography.bodyMedium(isDark: isDark).copyWith(
-            color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-            height: 1.35,
-          ),
-        ),
-        const SizedBox(height: 12),
-        // Stats Badge Row
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          decoration: BoxDecoration(
-            color: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 6,
-                height: 6,
-                decoration: const BoxDecoration(
-                  color: AppColors.emeraldPrimary,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  l10n.createTripBadgeStats,
-                  style: TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    )
-        .animate()
-        .fadeIn(duration: reduceMotion ? 1.ms : 280.ms)
-        .slideY(begin: reduceMotion ? 0 : 0.04, end: 0);
   }
 
   Widget _buildLivePreviewCard(CreateTripViewModel createVm, bool isDark, AppLocalizations l10n) {
@@ -1262,100 +1193,290 @@ class _CreateTripViewState extends State<CreateTripView> {
             ),
           ),
 
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
 
-          // Add Member Input Field
-          Row(
-            children: [
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF0F1418) : const Color(0xFFF3F4F6),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
-                    ),
-                  ),
-                  child: TextField(
-                    controller: _friendController,
-                    textCapitalization: TextCapitalization.words,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                    ),
-                    decoration: InputDecoration(
-                      hintText: l10n.createTripFriendHint,
-                      hintStyle: TextStyle(
-                        fontSize: 13,
-                        color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+          // ─── 1. Primary Highlight: Direct QR & Code for Kith App Users ───
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: isDark
+                    ? [const Color(0xFF0F2620), const Color(0xFF0B1917)]
+                    : [const Color(0xFFE6F7F3), const Color(0xFFF0FDF4)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: AppColors.emeraldPrimary.withValues(alpha: isDark ? 0.35 : 0.25),
+                width: 1.2,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(7),
+                      decoration: BoxDecoration(
+                        color: AppColors.emeraldPrimary.withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                      prefixIcon: const Icon(Icons.person_add_outlined, size: 20, color: AppColors.emeraldPrimary),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      border: InputBorder.none,
+                      child: const Icon(
+                        Icons.qr_code_scanner_rounded,
+                        size: 20,
+                        color: AppColors.emeraldPrimary,
+                      ),
                     ),
-                    onSubmitted: (_) => _addFriend(),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                'Instant Realtime Join',
+                                style: TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: isDark ? Colors.white : const Color(0xFF065F46),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppColors.emeraldPrimary.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  'LIVE SYNC',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.5,
+                                    color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'For friends using Kith app',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w500,
+                              color: isDark ? AppColors.darkTextMuted : const Color(0xFF047857),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Friends with Kith can directly scan your Trip QR code or enter the 6-letter join code to join instantly in real-time. No manual member setup needed!',
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.4,
+                    color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              InkWell(
-                onTap: _addFriend,
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.emeraldPrimary,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.add_rounded, color: Colors.white, size: 22),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
 
-          if (createVm.friendNames.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: createVm.friendNames.map((name) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppColors.emeraldPrimary.withValues(alpha: isDark ? 0.15 : 0.1),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: AppColors.emeraldPrimary.withValues(alpha: 0.3),
+          const SizedBox(height: 14),
+
+          // ─── 2. Secondary Option: Add Offline / Non-App Friends ───
+          InkWell(
+            onTap: () {
+              HapticHelper.light();
+              setState(() {
+                _showManualFriends = !_showManualFriends;
+              });
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF141A1F) : const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isDark ? const Color(0x2AFFFFFF) : const Color(0xFFCBD5E1),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    _showManualFriends || createVm.friendNames.isNotEmpty
+                        ? Icons.person_add_alt_1_rounded
+                        : Icons.person_add_outlined,
+                    size: 18,
+                    color: isDark ? AppColors.darkTextSecondary : const Color(0xFF475569),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Add Offline / Non-App Friends',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
+                          ),
+                        ),
+                        Text(
+                          'Only if friends do not use Kith app',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        name,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      GestureDetector(
-                        onTap: () {
-                          HapticHelper.light();
-                          createVm.removeFriendName(name);
-                        },
-                        child: const Icon(
-                          Icons.close_rounded,
-                          size: 14,
-                          color: AppColors.emeraldPrimary,
-                        ),
-                      ),
-                    ],
+                  Icon(
+                    _showManualFriends || createVm.friendNames.isNotEmpty
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                    color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
                   ),
-                );
-              }).toList(),
+                ],
+              ),
             ),
+          ),
+
+          if (_showManualFriends || createVm.friendNames.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.amberAccent.withValues(alpha: isDark ? 0.08 : 0.06),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: AppColors.amberAccent.withValues(alpha: 0.25),
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.info_outline_rounded, size: 16, color: AppColors.amberAccent),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'You will manually manage and track expenses on behalf of offline friends.',
+                      style: TextStyle(
+                        fontSize: 11,
+                        height: 1.35,
+                        color: isDark ? const Color(0xFFFDE68A) : const Color(0xFF92400E),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // Add Member Input Field
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF0F1418) : const Color(0xFFF3F4F6),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+                      ),
+                    ),
+                    child: TextField(
+                      controller: _friendController,
+                      textCapitalization: TextCapitalization.words,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: l10n.createTripFriendHint,
+                        hintStyle: TextStyle(
+                          fontSize: 13,
+                          color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                        ),
+                        prefixIcon: const Icon(Icons.person_add_outlined, size: 20, color: AppColors.emeraldPrimary),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        border: InputBorder.none,
+                      ),
+                      onSubmitted: (_) => _addFriend(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                InkWell(
+                  onTap: _addFriend,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.emeraldPrimary,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.add_rounded, color: Colors.white, size: 22),
+                  ),
+                ),
+              ],
+            ),
+
+            if (createVm.friendNames.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: createVm.friendNames.map((name) {
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.emeraldPrimary.withValues(alpha: isDark ? 0.15 : 0.1),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: AppColors.emeraldPrimary.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '$name (Offline)',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        GestureDetector(
+                          onTap: () {
+                            HapticHelper.light();
+                            createVm.removeFriendName(name);
+                          },
+                          child: const Icon(
+                            Icons.close_rounded,
+                            size: 14,
+                            color: AppColors.emeraldPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
           ],
         ],
       ),

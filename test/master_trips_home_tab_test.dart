@@ -15,6 +15,7 @@ import 'package:kith_app/data/services/sync_service.dart';
 import 'package:kith_app/domain/models/guest_user.dart';
 import 'package:kith_app/domain/models/trip.dart';
 import 'package:kith_app/domain/models/trip_member.dart';
+import 'package:kith_app/domain/services/notification_service.dart';
 import 'package:kith_app/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/home_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/personal_expense_viewmodel.dart';
@@ -28,6 +29,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late LocalStorageService storage;
+  late NotificationService notificationService;
   late ApiClient apiClient;
   late SyncService syncService;
   late TripRepository tripRepo;
@@ -43,6 +45,7 @@ void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     storage = await LocalStorageService.init();
+    notificationService = NotificationService(storage);
     apiClient = ApiClient();
     final authService = AuthService(apiClient: apiClient, storage: storage);
     final userRepo = UserRepository(authService: authService);
@@ -90,6 +93,8 @@ void main() {
   Widget createTripsHomeScreen({Widget? child}) {
     return MultiProvider(
       providers: [
+        Provider<LocalStorageService>.value(value: storage),
+        Provider<NotificationService>.value(value: notificationService),
         ChangeNotifierProvider.value(value: authVm),
         ChangeNotifierProvider.value(value: homeVm),
         ChangeNotifierProvider.value(value: personalVm),

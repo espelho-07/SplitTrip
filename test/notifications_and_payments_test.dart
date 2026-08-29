@@ -61,6 +61,24 @@ void main() {
 
     await authVm.createGuestSession('Darpan Parmar');
     await storage.saveTrips([testTrip.toJson()]);
+    await storage.saveNotifications([
+      {
+        'id': 'notif_1',
+        'title': 'Settlement Payment Received',
+        'description': 'Rohan Sharma recorded a settlement payment.',
+        'timestamp': DateTime.now().toIso8601String(),
+        'type': 'settlement',
+        'isRead': false,
+      },
+      {
+        'id': 'notif_2',
+        'title': 'New Expense Added',
+        'description': 'Priya added an expense.',
+        'timestamp': DateTime.now().toIso8601String(),
+        'type': 'expense',
+        'isRead': false,
+      },
+    ]);
   });
 
   Widget wrapWithProviders(Widget child) {
@@ -122,20 +140,27 @@ void main() {
   });
 
   group('Payment Methods Suite', () {
-    testWidgets('1. Renders primary QR hero card and saved UPI IDs', (tester) async {
+    testWidgets('1. Renders empty payment method state when unconfigured, and saved UPIs when configured', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
+      // 1. Fresh state - Empty state card
       await tester.pumpWidget(wrapWithProviders(const PaymentMethodsView()));
       await tester.pumpAndSettle();
 
       expect(find.text('Payment Methods'), findsOneWidget);
+      expect(find.text('No Payment Method Added'), findsOneWidget);
+      expect(find.text('Add Receiving UPI ID'), findsOneWidget);
+
+      // 2. Save receiving UPI
+      await storage.setPrimaryUpiId('darpan@okhdfcbank');
+      await tester.pumpWidget(wrapWithProviders(const PaymentMethodsView(key: ValueKey('configured'))));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Payment Methods'), findsOneWidget);
       expect(find.text('LIVE UPI'), findsOneWidget);
-      expect(find.text('Google Pay'), findsWidgets);
       expect(find.text('darpan@okhdfcbank'), findsWidgets);
-      expect(find.text('Paytm UPI'), findsOneWidget);
-      expect(find.text('PhonePe'), findsOneWidget);
     });
   });
 

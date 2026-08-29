@@ -103,7 +103,14 @@ class AuthService {
       crypto.createHash('sha256').update(strippedKith).digest('hex'),
     ]);
 
-    const user = db.findOne('users', (u) => u.recoveryKeyHash && candidateHashes.has(u.recoveryKeyHash));
+    const user = db.findOne('users', (u) => {
+      if (u.recoveryKeyHash && candidateHashes.has(u.recoveryKeyHash)) return true;
+      if (u.recoveryKey) {
+        const uNorm = this._normalizeRecoveryKey(u.recoveryKey);
+        if (uNorm === normalizedKey || u.recoveryKey === rawClean || u.recoveryKey === strippedKith) return true;
+      }
+      return false;
+    });
 
     if (!user) {
       throw AppError.unauthorized('Invalid recovery key. No account matches this key.');
@@ -117,7 +124,7 @@ class AuthService {
         id: user.id,
         displayName: user.displayName,
         avatarUrl: user.avatarUrl,
-        recoveryKey: normalizedKey,
+        recoveryKey: user.recoveryKey || normalizedKey,
         anonymousToken: session.token,
         isGuest: user.isGuest,
         createdAt: user.createdAt,
@@ -141,6 +148,7 @@ class AuthService {
         id,
         displayName: displayName.trim(),
         avatarUrl: avatarUrl || null,
+        recoveryKey: normalizedKey,
         recoveryKeyHash,
         isGuest: true,
         email: null,
@@ -149,12 +157,14 @@ class AuthService {
       };
       db.insert('users', user);
     } else {
-      const updates = { lastActiveAt: now };
-      if (recoveryKeyHash) {
+      const updates = {
+        displayName: displayName.trim(),
+        lastActiveAt: now,
+      };
+      if (avatarUrl) updates.avatarUrl = avatarUrl;
+      if (normalizedKey && !user.recoveryKey) {
+        updates.recoveryKey = normalizedKey;
         updates.recoveryKeyHash = recoveryKeyHash;
-      }
-      if (displayName && displayName.trim()) {
-        updates.displayName = displayName.trim();
       }
       db.update('users', id, updates);
       user = db.get('users', id);
@@ -233,23 +243,27 @@ class AuthService {
     };
   }
 
-  loginWithGoogle({ email, displayName, photoUrl, googleId, supabaseUserId, currentGuestUserId }) {
+  loginWithNirniq({ email, displayName, photoUrl, nirniqId, googleId, supabaseUserId, currentGuestUserId }) {
     if (!email || !email.includes('@')) {
-      throw AppError.badRequest('A valid Google email address is required');
+      throw AppError.badRequest('A valid Google email or Nirniq Account address is required');
     }
 
     const cleanEmail = email.trim().toLowerCase();
+    const cleanNirniqId = nirniqId ? nirniqId.trim() : null;
     const cleanGoogleId = googleId ? googleId.trim() : null;
     const cleanSupabaseUserId = supabaseUserId ? supabaseUserId.trim() : null;
     const now = new Date().toISOString();
 
-    // 1. Check for existing canonical user by googleId, supabaseUserId, or email
+    // 1. Check for existing canonical user by nirniqId, googleId, supabaseUserId, or email
     let user = db.findOne('users', (u) => {
+      if (cleanNirniqId && (u.nirniqId === cleanNirniqId || u.id === cleanNirniqId)) return true;
       if (cleanGoogleId && u.googleId === cleanGoogleId) return true;
       if (cleanSupabaseUserId && (u.supabaseUserId === cleanSupabaseUserId || u.id === cleanSupabaseUserId)) return true;
       if (u.email && u.email.toLowerCase() === cleanEmail) return true;
       return false;
     });
+
+    const canonicalNirniqId = cleanNirniqId || cleanSupabaseUserId || (cleanGoogleId ? `nrn_${cleanGoogleId}` : `nrn_${crypto.createHash('sha256').update(cleanEmail).digest('hex').substring(0, 16)}`);
 
     if (user) {
       // Existing canonical user found
@@ -258,12 +272,14 @@ class AuthService {
         isGuest: false,
         email: cleanEmail,
       };
+      if (!user.nirniqId) updates.nirniqId = canonicalNirniqId;
       if (cleanGoogleId && !user.googleId) updates.googleId = cleanGoogleId;
       if (cleanSupabaseUserId && !user.supabaseUserId) updates.supabaseUserId = cleanSupabaseUserId;
       if (displayName && displayName.trim()) updates.displayName = displayName.trim();
       if (photoUrl && !user.avatarUrl) updates.avatarUrl = photoUrl;
-      if (!user.recoveryKeyHash) {
-        const generatedKey = this._generateRecoveryKey();
+      if (!user.recoveryKeyHash || !user.recoveryKey) {
+        const generatedKey = user.recoveryKey || this._generateRecoveryKey();
+        updates.recoveryKey = generatedKey;
         updates.recoveryKeyHash = this._hashKey(generatedKey);
       }
 
@@ -278,28 +294,32 @@ class AuthService {
       // 2. Check if we should upgrade the current active guest user
       const guestUser = currentGuestUserId ? db.get('users', currentGuestUserId) : null;
       if (guestUser && guestUser.isGuest) {
-        const generatedKey = guestUser.recoveryKeyHash ? null : this._generateRecoveryKey();
+        const generatedKey = guestUser.recoveryKey || this._generateRecoveryKey();
         db.update('users', guestUser.id, {
           email: cleanEmail,
+          nirniqId: canonicalNirniqId,
           googleId: cleanGoogleId,
           supabaseUserId: cleanSupabaseUserId,
           displayName: displayName && displayName.trim() ? displayName.trim() : guestUser.displayName,
           avatarUrl: photoUrl || guestUser.avatarUrl,
-          recoveryKeyHash: guestUser.recoveryKeyHash || (generatedKey ? this._hashKey(generatedKey) : null),
+          recoveryKey: generatedKey,
+          recoveryKeyHash: this._hashKey(generatedKey),
           isGuest: false,
           lastActiveAt: now,
         });
         user = db.get('users', guestUser.id);
       } else {
         // Create new permanent canonical user with stable ID and recovery key
-        const newId = cleanSupabaseUserId || (cleanGoogleId ? `usr_g_${cleanGoogleId}` : `usr_g_${crypto.randomUUID().replace(/-/g, '').substring(0, 12)}`);
+        const newId = cleanSupabaseUserId || (cleanGoogleId ? `usr_g_${cleanGoogleId}` : `usr_nrn_${crypto.randomUUID().replace(/-/g, '').substring(0, 12)}`);
         const generatedKey = this._generateRecoveryKey();
         user = {
           id: newId,
+          nirniqId: canonicalNirniqId,
           displayName: displayName && displayName.trim() ? displayName.trim() : cleanEmail.split('@')[0],
           avatarUrl: photoUrl || null,
           googleId: cleanGoogleId,
           supabaseUserId: cleanSupabaseUserId,
+          recoveryKey: generatedKey,
           recoveryKeyHash: this._hashKey(generatedKey),
           isGuest: false,
           email: cleanEmail,
@@ -315,9 +335,11 @@ class AuthService {
     return {
       user: {
         id: user.id,
+        nirniqId: user.nirniqId || canonicalNirniqId,
         displayName: user.displayName,
         avatarUrl: user.avatarUrl,
         email: user.email,
+        recoveryKey: user.recoveryKey,
         googleId: user.googleId,
         supabaseUserId: user.supabaseUserId,
         isGuest: user.isGuest,
@@ -327,6 +349,10 @@ class AuthService {
       },
       token: session.token,
     };
+  }
+
+  loginWithGoogle(params) {
+    return this.loginWithNirniq(params);
   }
 
   _migrateGuestData(guestUserId, canonicalUserId) {
@@ -633,6 +659,34 @@ class AuthService {
     } catch (_) {}
   }
 
+  updatePaymentInfo(userId, { upiId, upiQr } = {}) {
+    const user = db.get('users', userId);
+    if (!user) {
+      throw AppError.notFound('User not found');
+    }
+    const normalizedUpi = upiId ? upiId.trim().toLowerCase() : null;
+    const now = new Date().toISOString();
+    const updates = {
+      upiId: normalizedUpi,
+      upiQr: upiQr || null,
+      updatedAt: now,
+    };
+    db.update('users', userId, updates);
+
+    // Also update all trip_members for this user so all trips have the new receiving UPI
+    const memberships = db.find('trip_members', (m) => m.userId === userId);
+    for (const m of memberships) {
+      db.update('trip_members', m.id, { upiId: normalizedUpi });
+    }
+
+    return {
+      id: user.id,
+      displayName: user.displayName,
+      upiId: normalizedUpi,
+      upiQr: upiQr || null,
+    };
+  }
+
   getProfile(userId) {
     const user = db.get('users', userId);
     if (!user) {
@@ -644,6 +698,8 @@ class AuthService {
       avatarUrl: user.avatarUrl,
       isGuest: user.isGuest,
       email: user.email,
+      upiId: user.upiId || null,
+      upiQr: user.upiQr || null,
       createdAt: user.createdAt,
     };
   }

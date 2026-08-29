@@ -85,7 +85,7 @@ void main() {
   }
 
   group('Master CreateTripView Suite', () {
-    testWidgets('1. Renders Master TopBar, Hero headline, Stats pill, Live Preview banner, and 4 sections', (tester) async {
+    testWidgets('1. Renders Master TopBar, Live Preview banner, and 4 sections', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -95,8 +95,6 @@ void main() {
 
       expect(find.text('KITH · NEW TRIP'), findsOneWidget);
       expect(find.text('DRAFTING'), findsOneWidget);
-      expect(find.text('Design Your Trip'), findsOneWidget);
-      expect(find.textContaining('Paise-Perfect Math'), findsOneWidget);
       expect(find.text('LIVE PREVIEW'), findsOneWidget);
       expect(find.text('Trip Name'), findsWidgets);
       expect(find.text('TRIP IDENTITY'), findsOneWidget);
@@ -169,23 +167,28 @@ void main() {
       await tester.pumpWidget(buildCreateTripTestWidget());
       await tester.pumpAndSettle();
 
-      final friendField = find.widgetWithText(TextField, "Friend's Name (e.g. Rahul)");
-
       expect(find.text('1 Crew Members'), findsOneWidget);
       expect(find.text('Organizer (You)'), findsOneWidget);
+      expect(find.text('Instant Realtime Join'), findsOneWidget);
+
+      // Expand offline friends section
+      await tester.tap(find.text('Add Offline / Non-App Friends'));
+      await tester.pumpAndSettle();
+
+      final friendField = find.widgetWithText(TextField, "Friend's Name (e.g. Rahul)");
 
       await tester.enterText(friendField, 'Ananya');
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
 
-      expect(find.text('Ananya'), findsOneWidget);
+      expect(find.text('Ananya (Offline)'), findsOneWidget);
       expect(find.text('2 Crew Members'), findsOneWidget);
 
       final removeIcon = find.byIcon(Icons.close_rounded);
       await tester.tap(removeIcon);
       await tester.pumpAndSettle();
 
-      expect(find.text('Ananya'), findsNothing);
+      expect(find.text('Ananya (Offline)'), findsNothing);
       expect(find.text('1 Crew Members'), findsOneWidget);
     });
 
@@ -197,7 +200,6 @@ void main() {
       await tester.pumpWidget(buildCreateTripTestWidget(locale: const Locale('hi')));
       await tester.pumpAndSettle();
 
-      expect(find.text('अपनी यात्रा डिज़ाइन करें'), findsOneWidget);
       expect(find.text('यात्रा की पहचान'), findsOneWidget);
       expect(find.text('अनुभव मोड'), findsOneWidget);
       expect(find.text('मुद्रा'), findsOneWidget);
@@ -212,7 +214,6 @@ void main() {
       await tester.pumpWidget(buildCreateTripTestWidget(locale: const Locale('gu')));
       await tester.pumpAndSettle();
 
-      expect(find.text('તમારી યાત્રા ડિઝાઇન કરો'), findsOneWidget);
       expect(find.text('યાત્રાની ઓળખ'), findsOneWidget);
       expect(find.text('અનુભવ મોડ'), findsOneWidget);
       expect(find.text('ચલણ'), findsOneWidget);

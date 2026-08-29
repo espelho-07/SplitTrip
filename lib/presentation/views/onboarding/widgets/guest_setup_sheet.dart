@@ -10,6 +10,7 @@ import '../../../../core/widgets/app_button.dart';
 import '../../../../domain/enums/app_experience_mode.dart';
 import '../../../router/app_router.dart';
 import '../../../viewmodels/auth_viewmodel.dart';
+import '../../../viewmodels/locale_viewmodel.dart';
 import '../../../widgets/progress/progress.dart';
 
 /// Compact, focused bottom sheet for configuring a guest user session.
@@ -33,6 +34,7 @@ class GuestSetupSheet extends StatefulWidget {
 class _GuestSetupSheetState extends State<GuestSetupSheet> {
   final TextEditingController _nameController = TextEditingController();
   AppExperienceMode _selectedMode = AppExperienceMode.tripsOnly;
+  bool _isSubmitting = false;
 
   @override
   void dispose() {
@@ -42,23 +44,32 @@ class _GuestSetupSheetState extends State<GuestSetupSheet> {
 
   Future<void> _handleStart() async {
     final authVm = context.read<AuthViewModel>();
+    final localeVm = context.read<LocaleViewModel>();
     final l10n = context.l10n;
-    if (authVm.isLoading) return;
+    if (authVm.isLoading || _isSubmitting) return;
 
     final rawName = _nameController.text.trim();
     final name = rawName.isEmpty ? 'Traveler' : rawName;
 
+    setState(() => _isSubmitting = true);
     HapticHelper.medium();
-    Navigator.pop(context); // Close sheet
+    localeVm.markInitialLanguageSelected();
 
     try {
       await authVm.createGuestSession(name, _selectedMode);
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
       final rootCtx = AppRouter.navigatorKey.currentContext;
       if (rootCtx != null && rootCtx.mounted) {
         rootCtx.go('/home');
         KithSuccessToast.show(rootCtx, l10n.onboardingWelcomeToast);
       }
     } catch (_) {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+        Navigator.of(context).pop();
+      }
       final rootCtx = AppRouter.navigatorKey.currentContext;
       if (rootCtx != null && rootCtx.mounted) {
         ScaffoldMessenger.of(rootCtx).showSnackBar(

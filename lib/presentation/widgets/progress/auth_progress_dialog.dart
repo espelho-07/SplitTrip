@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import '../../../core/network/api_client.dart';
-import '../../../core/services/google_auth_service.dart';
+import '../../../core/services/nirniq_account_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -27,12 +27,12 @@ class AuthProgressStep {
 }
 
 /// A modern, high-polish full-screen / modal progress dialog with animated percentage,
-/// live stage checklists, and status indicators during Google Sign-In and Cloud Restore.
+/// live stage checklists, and status indicators during Nirniq Sign-In and Cloud Restore.
 class AuthProgressDialog extends StatefulWidget {
   const AuthProgressDialog({super.key});
 
-  /// Opens the progress dialog and executes the complete Google Sign-In + Cloud Restore sequence.
-  static Future<bool> startGoogleSignIn(BuildContext context) async {
+  /// Opens the progress dialog and executes the complete Nirniq Sign-In + Cloud Restore sequence.
+  static Future<bool> startNirniqSignIn(BuildContext context) async {
     final result = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -44,6 +44,9 @@ class AuthProgressDialog extends StatefulWidget {
     return result ?? false;
   }
 
+  /// Backward-compatible alias
+  static Future<bool> startGoogleSignIn(BuildContext context) => startNirniqSignIn(context);
+
   @override
   State<AuthProgressDialog> createState() => _AuthProgressDialogState();
 }
@@ -52,8 +55,8 @@ class _AuthProgressDialogState extends State<AuthProgressDialog> with SingleTick
   late final AnimationController _pulseController;
 
   double _progress = 0.05;
-  String _statusTitle = 'Connecting to Google…';
-  String _statusSubtitle = 'Opening account picker';
+  String _statusTitle = 'Connecting to Nirniq Account…';
+  String _statusSubtitle = 'Opening account authentication';
   int _activeStepIndex = 0;
   String? _errorMessage;
   bool _isSuccess = false;
@@ -61,13 +64,13 @@ class _AuthProgressDialogState extends State<AuthProgressDialog> with SingleTick
 
   static const List<AuthProgressStep> _steps = [
     AuthProgressStep(
-      title: 'Google Sign-In',
-      description: 'Selecting Google account & verifying credentials',
+      title: 'Nirniq Account',
+      description: 'Selecting identity & verifying Nirniq credentials',
       targetPercentage: 0.25,
     ),
     AuthProgressStep(
       title: 'Authenticating Identity',
-      description: 'Connecting to Kith Cloud Ledger',
+      description: 'Connecting to Nirniq & Kith Cloud Ledger',
       targetPercentage: 0.50,
     ),
     AuthProgressStep(
@@ -124,39 +127,42 @@ class _AuthProgressDialogState extends State<AuthProgressDialog> with SingleTick
       await Future.delayed(const Duration(milliseconds: 200));
       if (!mounted) return;
 
-      // Step 1: Google Account Picker
+      // Step 1: Nirniq Account Authentication
       _updateProgress(
         0.15,
-        'Connecting to Google…',
-        'Please select your account from the popup',
+        'Connecting to Nirniq…',
+        'Please select your account from the prompt',
         0,
       );
 
-      final GoogleAuthResult? googleResult = await GoogleAuthService.signIn();
-      if (googleResult == null) {
+      final NirniqAuthResult? authResult = await NirniqAccountService.authenticate();
+      if (authResult == null || !authResult.isSuccess || authResult.identity == null) {
         // User cancelled picker
         if (mounted) Navigator.of(context).pop(false);
         return;
       }
 
+      final identity = authResult.identity!;
+
       // Step 2: Canonicalize User & Token in Cloud
       _updateProgress(
         0.40,
         'Verifying Identity…',
-        'Linking canonical cloud profile for ${googleResult.email}',
+        'Linking canonical Nirniq profile for ${identity.email}',
         1,
       );
 
-      final user = await authVm.signInWithGoogle(
-        email: googleResult.email,
-        displayName: googleResult.displayName,
-        googleId: googleResult.googleId,
-        photoUrl: googleResult.avatarUrl,
-        supabaseUserId: googleResult.supabaseUserId,
+      final user = await authVm.signInWithNirniq(
+        email: identity.email,
+        displayName: identity.displayName,
+        nirniqId: identity.nirniqId,
+        googleId: identity.googleId,
+        photoUrl: identity.avatarUrl,
+        supabaseUserId: identity.supabaseUserId,
       );
 
       if (user == null) {
-        throw Exception(authVm.errorMessage ?? 'Could not authenticate with cloud server.');
+        throw Exception(authVm.errorMessage ?? 'Could not authenticate with Nirniq cloud server.');
       }
 
       _userName = user.displayName;
@@ -202,15 +208,6 @@ class _AuthProgressDialogState extends State<AuthProgressDialog> with SingleTick
       if (mounted) {
         Navigator.of(context).pop(true);
       }
-    } on GoogleSignInException catch (e) {
-      if (!mounted) return;
-      if (e.failure == GoogleSignInFailure.cancelled) {
-        Navigator.of(context).pop(false);
-        return;
-      }
-      setState(() {
-        _errorMessage = e.message;
-      });
     } catch (e) {
       if (!mounted) return;
       setState(() {

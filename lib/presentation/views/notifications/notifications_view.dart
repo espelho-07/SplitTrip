@@ -1,32 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
-
-enum NotificationType { expense, settlement, trip, system }
-
-class AppNotificationItem {
-  final String id;
-  final String title;
-  final String description;
-  final String timeAgo;
-  final NotificationType type;
-  bool isRead;
-  final String? route;
-  final String? actionLabel;
-
-  AppNotificationItem({
-    required this.id,
-    required this.title,
-    required this.description,
-    required this.timeAgo,
-    required this.type,
-    this.isRead = false,
-    this.route,
-    this.actionLabel,
-  });
-}
+import '../../../data/services/local_storage_service.dart';
+import '../../../domain/services/notification_service.dart';
 
 class NotificationsView extends StatefulWidget {
   const NotificationsView({super.key});
@@ -42,76 +21,47 @@ class _NotificationsViewState extends State<NotificationsView> {
   bool _settleAlerts = true;
   bool _tripAlerts = true;
 
-  late List<AppNotificationItem> _notifications;
+  List<AppNotificationItem> _notifications = [];
 
   @override
   void initState() {
     super.initState();
-    _notifications = [
-      AppNotificationItem(
-        id: 'notif_1',
-        title: 'Settlement Payment Received',
-        description: 'Rohan Sharma recorded a settlement payment of ₹1,200 via UPI for Goa Airbnb.',
-        timeAgo: '5m ago',
-        type: NotificationType.settlement,
-        isRead: false,
-        route: '/personal/balances',
-        actionLabel: 'View Ledger',
-      ),
-      AppNotificationItem(
-        id: 'notif_2',
-        title: 'New Expense Added',
-        description: 'Priya Patel added "Seafood Dinner" for ₹2,400 in Goa Holiday.',
-        timeAgo: '1h ago',
-        type: NotificationType.expense,
-        isRead: false,
-        actionLabel: 'View Expense',
-      ),
-      AppNotificationItem(
-        id: 'notif_3',
-        title: 'New Member Joined Trip',
-        description: 'Amit Verma joined "Goa Holiday" using your invite code GOA777.',
-        timeAgo: '3h ago',
-        type: NotificationType.trip,
-        isRead: true,
-        actionLabel: 'View Crew',
-      ),
-      AppNotificationItem(
-        id: 'notif_4',
-        title: 'Budget Runway Alert',
-        description: 'You have used 71% of your August monthly budget. ₹5,750 remaining.',
-        timeAgo: '1d ago',
-        type: NotificationType.system,
-        isRead: true,
-        route: '/personal/budgets',
-        actionLabel: 'View Budget',
-      ),
-      AppNotificationItem(
-        id: 'notif_5',
-        title: 'Trip Invitation Created',
-        description: 'Invite code for "Himachal Roadtrip" is ready to share with friends.',
-        timeAgo: '2d ago',
-        type: NotificationType.trip,
-        isRead: true,
-        actionLabel: 'Share Code',
-      ),
-    ];
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadNotifications();
+    });
   }
 
-  void _markAllAsRead() {
+  void _loadNotifications() {
+    final storage = context.read<LocalStorageService>();
+    final raw = storage.getSavedNotifications();
+    setState(() {
+      _pushEnabled = storage.getBool('notif_pref_push') ?? true;
+      _expenseAlerts = storage.getBool('notif_pref_expense') ?? true;
+      _settleAlerts = storage.getBool('notif_pref_settlement') ?? true;
+      _tripAlerts = storage.getBool('notif_pref_trip') ?? true;
+
+      _notifications = raw.map((json) => AppNotificationItem.fromJson(json)).toList();
+    });
+  }
+
+  Future<void> _markAllAsRead() async {
     HapticHelper.medium();
+    final storage = context.read<LocalStorageService>();
+    await storage.markAllNotificationsAsRead();
     setState(() {
       for (final n in _notifications) {
         n.isRead = true;
       }
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('All notifications marked as read ✓'),
-        backgroundColor: AppColors.emeraldPrimary,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('All notifications marked as read ✓'),
+          backgroundColor: AppColors.emeraldPrimary,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   void _showPreferencesSheet(BuildContext context, bool isDark, AppLocalizations l10n) {
@@ -166,6 +116,8 @@ class _NotificationsViewState extends State<NotificationsView> {
                 value: _pushEnabled,
                 isDark: isDark,
                 onChanged: (v) {
+                  final storage = context.read<LocalStorageService>();
+                  storage.setBool('notif_pref_push', v);
                   setSheetState(() => _pushEnabled = v);
                   setState(() => _pushEnabled = v);
                 },
@@ -176,6 +128,8 @@ class _NotificationsViewState extends State<NotificationsView> {
                 value: _expenseAlerts,
                 isDark: isDark,
                 onChanged: (v) {
+                  final storage = context.read<LocalStorageService>();
+                  storage.setBool('notif_pref_expense', v);
                   setSheetState(() => _expenseAlerts = v);
                   setState(() => _expenseAlerts = v);
                 },
@@ -186,6 +140,8 @@ class _NotificationsViewState extends State<NotificationsView> {
                 value: _settleAlerts,
                 isDark: isDark,
                 onChanged: (v) {
+                  final storage = context.read<LocalStorageService>();
+                  storage.setBool('notif_pref_settlement', v);
                   setSheetState(() => _settleAlerts = v);
                   setState(() => _settleAlerts = v);
                 },
@@ -196,6 +152,8 @@ class _NotificationsViewState extends State<NotificationsView> {
                 value: _tripAlerts,
                 isDark: isDark,
                 onChanged: (v) {
+                  final storage = context.read<LocalStorageService>();
+                  storage.setBool('notif_pref_trip', v);
                   setSheetState(() => _tripAlerts = v);
                   setState(() => _tripAlerts = v);
                 },
@@ -418,8 +376,10 @@ class _NotificationsViewState extends State<NotificationsView> {
     return GestureDetector(
       onTap: () {
         HapticHelper.light();
+        final storage = context.read<LocalStorageService>();
+        storage.markNotificationAsRead(item.id);
         setState(() => item.isRead = true);
-        if (item.route != null) {
+        if (item.route != null && item.route!.isNotEmpty) {
           context.push(item.route!);
         }
       },

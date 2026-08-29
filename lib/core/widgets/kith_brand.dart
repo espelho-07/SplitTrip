@@ -71,6 +71,7 @@ class _KithMarkPainter extends CustomPainter {
     final double s = size.width;
     final double r = s * 0.22;
 
+    // Outer branded gradient background
     final bgPaint = Paint()
       ..shader = const LinearGradient(
         colors: [Color(0xFF14B8A6), Color(0xFF0F766E)],
@@ -84,22 +85,25 @@ class _KithMarkPainter extends CustomPainter {
     );
     canvas.drawRRect(bgRect, bgPaint);
 
-    final strokePaint = Paint()
+    // Dynamic Companion Arc 1 (Emerald/Teal Companion)
+    final head1Paint = Paint()..color = const Color(0xFF065F46);
+    canvas.drawCircle(Offset(s * 0.35, s * 0.30), s * 0.12, head1Paint);
+
+    // Companion Arc 2 (Amber/Orange Companion)
+    final head2Paint = Paint()..color = const Color(0xFFF59E0B);
+    canvas.drawCircle(Offset(s * 0.65, s * 0.30), s * 0.12, head2Paint);
+
+    // Flowing Trip Ribbon Arc
+    final ribbonPaint = Paint()
       ..color = Colors.white
-      ..strokeWidth = s * 0.085
+      ..strokeWidth = s * 0.10
       ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
       ..style = PaintingStyle.stroke;
 
-    final left = s * 0.30;
-    final top = s * 0.22;
-    final bottom = s * 0.78;
-    final mid = (top + bottom) / 2;
-    final right = s * 0.72;
-
-    canvas.drawLine(Offset(left, top), Offset(left, bottom), strokePaint);
-    canvas.drawLine(Offset(left, mid), Offset(right, top), strokePaint);
-    canvas.drawLine(Offset(left, mid), Offset(right, bottom), strokePaint);
+    final path = Path();
+    path.moveTo(s * 0.22, s * 0.72);
+    path.cubicTo(s * 0.35, s * 0.85, s * 0.65, s * 0.45, s * 0.78, s * 0.48);
+    canvas.drawPath(path, ribbonPaint);
   }
 
   @override

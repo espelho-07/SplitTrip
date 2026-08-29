@@ -169,12 +169,12 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Darpan Parmar'), findsOneWidget);
-      expect(find.text('Connected with Google'), findsOneWidget);
+      expect(find.text('Connected to Nirniq'), findsOneWidget);
       expect(find.text('darpanparmar1707@gmail.com'), findsOneWidget);
 
       // Verify vertical layout ordering: Name -> Badge -> Email
       final nameY = tester.getTopLeft(find.text('Darpan Parmar')).dy;
-      final badgeY = tester.getTopLeft(find.text('Connected with Google')).dy;
+      final badgeY = tester.getTopLeft(find.text('Connected to Nirniq')).dy;
       final emailY = tester.getTopLeft(find.text('darpanparmar1707@gmail.com')).dy;
 
       expect(badgeY, greaterThan(nameY));

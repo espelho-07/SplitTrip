@@ -21,14 +21,18 @@ class TripService {
     const members = this._getMembersForTrip(trip.id);
     return {
       ...trip,
-      members: members.map((m) => ({
-        id: m.id,
-        userId: m.userId,
-        displayName: m.displayName,
-        avatarUrl: m.avatarUrl || null,
-        role: m.role || 'member',
-        joinedAt: m.joinedAt,
-      })),
+      members: members.map((m) => {
+        const u = db.get('users', m.userId) || {};
+        return {
+          id: m.id,
+          userId: m.userId,
+          displayName: m.displayName,
+          avatarUrl: m.avatarUrl || null,
+          role: m.role || 'member',
+          joinedAt: m.joinedAt,
+          upiId: m.upiId || u.upiId || null,
+        };
+      }),
     };
   }
 
@@ -80,6 +84,7 @@ class TripService {
       avatarUrl: user.avatarUrl || null,
       role: 'creator',
       joinedAt: now,
+      upiId: user.upiId || null,
     };
     db.insert('trip_members', creatorMember);
 
@@ -262,6 +267,7 @@ class TripService {
         avatarUrl: user.avatarUrl || null,
         role: 'member',
         joinedAt: now,
+        upiId: user.upiId || null,
       };
       db.insert('trip_members', activeMember);
     }

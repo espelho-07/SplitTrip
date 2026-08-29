@@ -27,6 +27,8 @@ class LocalStorageService {
   Future<bool> setBool(String key, bool value) => _prefs.setBool(key, value);
   Future<bool> remove(String key) => _prefs.remove(key);
 
+  static const String _recoveryVaultKey = 'kith_recovery_vault';
+
   // --- User Session ---
   Map<String, dynamic>? getSavedUser() {
     final raw = _prefs.getString(_userKey);
@@ -39,11 +41,62 @@ class LocalStorageService {
   }
 
   Future<bool> saveUser(Map<String, dynamic> userJson) async {
-    return _prefs.setString(_userKey, jsonEncode(userJson));
+    final saved = await _prefs.setString(_userKey, jsonEncode(userJson));
+    await saveUserToRecoveryVault(userJson);
+    return saved;
   }
 
   Future<bool> clearUser() async {
     return _prefs.remove(_userKey);
+  }
+
+  // --- Recovery Vault (Cross-session offline recovery key backup) ---
+  Map<String, dynamic> _getRecoveryVault() {
+    final raw = _prefs.getString(_recoveryVaultKey);
+    if (raw == null || raw.isEmpty) return {};
+    try {
+      return jsonDecode(raw) as Map<String, dynamic>;
+    } catch (_) {
+      return {};
+    }
+  }
+
+  Future<void> saveUserToRecoveryVault(Map<String, dynamic> userJson) async {
+    final key = userJson['recoveryKey'] as String?;
+    if (key == null || key.isEmpty) return;
+    final normalized = _cleanRecoveryKey(key);
+    if (normalized.isEmpty) return;
+
+    final vault = _getRecoveryVault();
+    vault[normalized] = userJson;
+    await _prefs.setString(_recoveryVaultKey, jsonEncode(vault));
+  }
+
+  Map<String, dynamic>? getUserByRecoveryKey(String recoveryKey) {
+    final normalized = _cleanRecoveryKey(recoveryKey);
+    if (normalized.isEmpty) return null;
+    final vault = _getRecoveryVault();
+    if (vault.containsKey(normalized)) {
+      return vault[normalized] as Map<String, dynamic>?;
+    }
+    for (final entry in vault.entries) {
+      if (_cleanRecoveryKey(entry.key) == normalized) {
+        return entry.value as Map<String, dynamic>?;
+      }
+    }
+    return null;
+  }
+
+  String _cleanRecoveryKey(String raw) {
+    final trimmed = raw.trim().toUpperCase();
+    String clean = trimmed.replaceAll(RegExp(r'[\s\-_:\r\n]'), '');
+    if (clean.startsWith('KITH')) {
+      clean = clean.substring(4);
+    }
+    if (clean.length == 8) {
+      return 'KITH-${clean.substring(0, 4)}-${clean.substring(4, 8)}';
+    }
+    return clean.isEmpty ? '' : (clean.length > 8 ? 'KITH-${clean.substring(0, 4)}-${clean.substring(4, 8)}' : clean);
   }
 
   // --- Trips ---
@@ -336,6 +389,103 @@ class LocalStorageService {
     return _prefs.setBool('$_hintPrefix$hintKey', true);
   }
 
+  // --- Payment Methods & Receiving UPI ---
+  static const String savedUpiItemsKey = 'kith_saved_upi_items';
+  static const String _primaryUpiKey = 'kith_primary_upi';
+  static const String _paymentPromptDismissedKey = 'kith_payment_prompt_dismissed';
+
+  String? getPrimaryUpiId() {
+    final explicit = _prefs.getString(_primaryUpiKey);
+    if (explicit != null && explicit.isNotEmpty) return explicit;
+    final raw = _prefs.getString(savedUpiItemsKey);
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final list = jsonDecode(raw) as List<dynamic>;
+        if (list.isNotEmpty) {
+          final first = list.firstWhere(
+            (item) => item is Map && item['isDefault'] == true,
+            orElse: () => list.first,
+          );
+          if (first is Map && first['vpa'] != null) {
+            return first['vpa'] as String;
+          }
+        }
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  Future<bool> setPrimaryUpiId(String? upiId) async {
+    if (upiId == null || upiId.isEmpty) {
+      return _prefs.remove(_primaryUpiKey);
+    }
+    return _prefs.setString(_primaryUpiKey, upiId.trim().toLowerCase());
+  }
+
+  bool hasPaymentMethodConfigured() {
+    final upi = getPrimaryUpiId();
+    return upi != null && upi.trim().isNotEmpty;
+  }
+
+  bool isPaymentPromptDismissed() {
+    return _prefs.getBool(_paymentPromptDismissedKey) ?? false;
+  }
+
+  Future<bool> dismissPaymentPrompt() async {
+    return _prefs.setBool(_paymentPromptDismissedKey, true);
+  }
+
+  // --- In-App Real Notifications ---
+  static const String _notificationsKey = 'kith_notifications';
+
+  List<Map<String, dynamic>> getSavedNotifications() {
+    final raw = _prefs.getString(_notificationsKey);
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      final list = jsonDecode(raw) as List<dynamic>;
+      return list.cast<Map<String, dynamic>>();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<bool> saveNotifications(List<Map<String, dynamic>> notificationsJson) async {
+    return _prefs.setString(_notificationsKey, jsonEncode(notificationsJson));
+  }
+
+  Future<void> addNotification(Map<String, dynamic> notifJson) async {
+    final current = getSavedNotifications();
+    current.removeWhere((n) => n['id'] == notifJson['id']);
+    current.insert(0, notifJson);
+    // Keep last 100 notifications
+    if (current.length > 100) {
+      current.removeRange(100, current.length);
+    }
+    await saveNotifications(current);
+  }
+
+  Future<void> markAllNotificationsAsRead() async {
+    final current = getSavedNotifications();
+    for (final n in current) {
+      n['isRead'] = true;
+    }
+    await saveNotifications(current);
+  }
+
+  Future<void> markNotificationAsRead(String notifId) async {
+    final current = getSavedNotifications();
+    final idx = current.indexWhere((n) => n['id'] == notifId);
+    if (idx != -1) {
+      current[idx]['isRead'] = true;
+      await saveNotifications(current);
+    }
+  }
+
+  int getUnreadNotificationCount() {
+    final current = getSavedNotifications();
+    return current.where((n) => n['isRead'] != true).length;
+  }
+
   /// Wipes all user-specific data on logout while preserving app settings (language, theme, hints)
   Future<void> clearAllUserData() async {
     await clearUser();
@@ -344,6 +494,7 @@ class LocalStorageService {
     await _prefs.remove(_personalExpensesKey);
     await _prefs.remove(_personalDebtsKey);
     await _prefs.remove(_lastSyncTimeKey);
+    await _prefs.remove(_notificationsKey);
     
     // Clear all prefixed keys
     final keys = _prefs.getKeys().toList();

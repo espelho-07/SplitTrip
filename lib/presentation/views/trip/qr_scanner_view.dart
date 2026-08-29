@@ -61,6 +61,18 @@ class _QrScannerViewState extends State<QrScannerView> with SingleTickerProvider
     super.dispose();
   }
 
+  void _handleCodeExtracted(String cleanCode) {
+    if (_isProcessingCode) return;
+    _isProcessingCode = true;
+    HapticHelper.success();
+
+    if (Navigator.of(context).canPop()) {
+      context.pop(cleanCode);
+    } else {
+      context.pushReplacement('/join-trip?code=$cleanCode');
+    }
+  }
+
   void _onDetect(BarcodeCapture capture) {
     if (_isProcessingCode) return;
 
@@ -69,9 +81,7 @@ class _QrScannerViewState extends State<QrScannerView> with SingleTickerProvider
       if (rawValue != null && rawValue.trim().isNotEmpty) {
         final cleanCode = QrCodeParser.extractInviteCode(rawValue);
         if (cleanCode != null) {
-          _isProcessingCode = true;
-          HapticHelper.success();
-          context.pop(cleanCode);
+          _handleCodeExtracted(cleanCode);
           return;
         } else {
           // Unrecognized or non-Kith QR code: never display raw URL
@@ -158,8 +168,7 @@ class _QrScannerViewState extends State<QrScannerView> with SingleTickerProvider
               if (code.isNotEmpty) {
                 final cleanCode = QrCodeParser.extractInviteCode(code);
                 if (cleanCode != null) {
-                  HapticHelper.success();
-                  context.pop(cleanCode);
+                  _handleCodeExtracted(cleanCode);
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Invalid 6-character trip code')),

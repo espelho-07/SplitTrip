@@ -36,6 +36,24 @@ class UserRepository {
     );
   }
 
+  Future<GuestUser> signInWithNirniq({
+    required String email,
+    required String displayName,
+    String? photoUrl,
+    String? nirniqId,
+    String? googleId,
+    String? supabaseUserId,
+  }) {
+    return authService.signInWithNirniq(
+      email: email,
+      displayName: displayName,
+      photoUrl: photoUrl,
+      nirniqId: nirniqId,
+      googleId: googleId,
+      supabaseUserId: supabaseUserId,
+    );
+  }
+
   Future<GuestUser> signInWithGoogle({
     required String email,
     required String displayName,
@@ -54,6 +72,11 @@ class UserRepository {
 
   Future<GuestUser> signInAsReviewer({String email = 'review.nirniq@gmail.com'}) {
     return authService.loginWithReviewerEmail(email: email);
+  }
+
+  /// Attempts to restore a session from an active Nirniq / Supabase JWT on app startup.
+  Future<GuestUser?> restoreNirniqSession() {
+    return authService.restoreNirniqSession();
   }
 
   /// Attempts to restore a session from an active Supabase JWT on app startup.

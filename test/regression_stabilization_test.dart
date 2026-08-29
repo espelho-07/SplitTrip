@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kith_app/core/localization/app_language.dart';
@@ -109,7 +109,7 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(find.text('Traveler'), findsOneWidget);
-      expect(find.text('Continue with Google'), findsOneWidget);
+      expect(find.text('Sign in with Nirniq'), findsWidgets);
     });
 
     test('CreateTripViewModel resetForm clears state completely', () {

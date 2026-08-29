@@ -1,10 +1,80 @@
 import 'dart:async';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../../data/services/local_storage_service.dart';
 
 enum NotificationCategory {
   expenseActivity,
   tripActivity,
   settlementActivity,
+  systemActivity,
+}
+
+enum NotificationType {
+  expense,
+  settlement,
+  trip,
+  system,
+}
+
+class AppNotificationItem {
+  final String id;
+  final String title;
+  final String description;
+  final DateTime timestamp;
+  final NotificationType type;
+  bool isRead;
+  final String? route;
+  final String? actionLabel;
+
+  AppNotificationItem({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.timestamp,
+    required this.type,
+    this.isRead = false,
+    this.route,
+    this.actionLabel,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'description': description,
+    'timestamp': timestamp.toIso8601String(),
+    'type': type.name,
+    'isRead': isRead,
+    'route': route,
+    'actionLabel': actionLabel,
+  };
+
+  factory AppNotificationItem.fromJson(Map<String, dynamic> json) {
+    return AppNotificationItem(
+      id: json['id'] as String? ?? 'notif_${DateTime.now().millisecondsSinceEpoch}',
+      title: json['title'] as String? ?? 'Notification',
+      description: json['description'] as String? ?? '',
+      timestamp: json['timestamp'] != null
+          ? DateTime.tryParse(json['timestamp'] as String) ?? DateTime.now()
+          : DateTime.now(),
+      type: NotificationType.values.firstWhere(
+        (e) => e.name == json['type'],
+        orElse: () => NotificationType.system,
+      ),
+      isRead: json['isRead'] as bool? ?? false,
+      route: json['route'] as String?,
+      actionLabel: json['actionLabel'] as String?,
+    );
+  }
+
+  String get timeAgo {
+    final now = DateTime.now();
+    final diff = now.difference(timestamp);
+
+    if (diff.inSeconds < 45) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return '${(diff.inDays / 7).floor()}w ago';
+  }
 }
 
 class AppNotificationPayload {
@@ -12,68 +82,42 @@ class AppNotificationPayload {
   final String title;
   final String body;
   final NotificationCategory category;
-  final String tripId;
+  final String? tripId;
   final String? expenseId;
   final String? settlementId;
   final DateTime createdAt;
 
-  const AppNotificationPayload({
+  AppNotificationPayload({
     required this.id,
     required this.title,
     required this.body,
     required this.category,
-    required this.tripId,
+    this.tripId,
     this.expenseId,
     this.settlementId,
     required this.createdAt,
   });
 
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'title': title,
-    'body': body,
-    'category': category.name,
-    'tripId': tripId,
-    'expenseId': expenseId,
-    'settlementId': settlementId,
-    'createdAt': createdAt.toIso8601String(),
-  };
-
-  factory AppNotificationPayload.fromJson(Map<String, dynamic> json) {
-    return AppNotificationPayload(
-      id: json['id'] as String,
-      title: json['title'] as String,
-      body: json['body'] as String,
-      category: NotificationCategory.values.firstWhere(
-        (e) => e.name == json['category'],
-        orElse: () => NotificationCategory.tripActivity,
-      ),
-      tripId: json['tripId'] as String,
-      expenseId: json['expenseId'] as String?,
-      settlementId: json['settlementId'] as String?,
-      createdAt: DateTime.parse(json['createdAt'] as String),
-    );
-  }
-
-  /// Calculates the deep link navigation route for this notification.
-  String get targetRoute {
-    if (settlementId != null) {
-      return '/trip/$tripId';
-    }
-    return '/trip/$tripId';
+  String? get targetRoute {
+    if (tripId != null) return '/trip/$tripId';
+    if (settlementId != null) return '/personal/balances';
+    return null;
   }
 }
 
-/// Notification manager with preference filtering and deep link routing.
+/// Notification manager with persistence, preference filtering and deep link routing.
 class NotificationService {
   static const String _prefExpenseKey = 'notif_pref_expense';
   static const String _prefTripKey = 'notif_pref_trip';
   static const String _prefSettlementKey = 'notif_pref_settlement';
 
-  final StreamController<AppNotificationPayload> _notificationStreamController =
-      StreamController<AppNotificationPayload>.broadcast();
+  final LocalStorageService? _storage;
+  final StreamController<AppNotificationItem> _notificationStreamController =
+      StreamController<AppNotificationItem>.broadcast();
 
-  Stream<AppNotificationPayload> get onNotification => _notificationStreamController.stream;
+  NotificationService([this._storage]);
+
+  Stream<AppNotificationItem> get onNotification => _notificationStreamController.stream;
 
   bool _expenseNotificationsEnabled = true;
   bool _tripNotificationsEnabled = true;
@@ -84,50 +128,87 @@ class NotificationService {
   bool get settlementNotificationsEnabled => _settlementNotificationsEnabled;
 
   Future<void> init() async {
-    final prefs = await SharedPreferences.getInstance();
-    _expenseNotificationsEnabled = prefs.getBool(_prefExpenseKey) ?? true;
-    _tripNotificationsEnabled = prefs.getBool(_prefTripKey) ?? true;
-    _settlementNotificationsEnabled = prefs.getBool(_prefSettlementKey) ?? true;
+    _expenseNotificationsEnabled = _storage?.getBool(_prefExpenseKey) ?? true;
+    _tripNotificationsEnabled = _storage?.getBool(_prefTripKey) ?? true;
+    _settlementNotificationsEnabled = _storage?.getBool(_prefSettlementKey) ?? true;
   }
 
   Future<void> setPreference(NotificationCategory category, bool enabled) async {
-    final prefs = await SharedPreferences.getInstance();
     switch (category) {
       case NotificationCategory.expenseActivity:
         _expenseNotificationsEnabled = enabled;
-        await prefs.setBool(_prefExpenseKey, enabled);
+        await _storage?.setBool(_prefExpenseKey, enabled);
         break;
       case NotificationCategory.tripActivity:
         _tripNotificationsEnabled = enabled;
-        await prefs.setBool(_prefTripKey, enabled);
+        await _storage?.setBool(_prefTripKey, enabled);
         break;
       case NotificationCategory.settlementActivity:
         _settlementNotificationsEnabled = enabled;
-        await prefs.setBool(_prefSettlementKey, enabled);
+        await _storage?.setBool(_prefSettlementKey, enabled);
+        break;
+      case NotificationCategory.systemActivity:
         break;
     }
   }
 
-  /// Dispatches a notification if the category is enabled in user preferences.
   bool dispatchNotification(AppNotificationPayload payload) {
-    bool isAllowed = false;
     switch (payload.category) {
       case NotificationCategory.expenseActivity:
-        isAllowed = _expenseNotificationsEnabled;
+        if (!_expenseNotificationsEnabled) return false;
         break;
       case NotificationCategory.tripActivity:
-        isAllowed = _tripNotificationsEnabled;
+        if (!_tripNotificationsEnabled) return false;
         break;
       case NotificationCategory.settlementActivity:
-        isAllowed = _settlementNotificationsEnabled;
+        if (!_settlementNotificationsEnabled) return false;
+        break;
+      case NotificationCategory.systemActivity:
         break;
     }
+    return true;
+  }
 
-    if (isAllowed) {
-      _notificationStreamController.add(payload);
-      return true;
-    }
-    return false;
+  List<AppNotificationItem> getNotifications() {
+    final raw = _storage?.getSavedNotifications() ?? [];
+    return raw.map((json) => AppNotificationItem.fromJson(json)).toList();
+  }
+
+  int get unreadCount => _storage?.getUnreadNotificationCount() ?? 0;
+
+  Future<void> addNotification({
+    required String title,
+    required String description,
+    required NotificationType type,
+    String? route,
+    String? actionLabel,
+  }) async {
+    // Check preference
+    if (type == NotificationType.expense && !_expenseNotificationsEnabled) return;
+    if (type == NotificationType.trip && !_tripNotificationsEnabled) return;
+    if (type == NotificationType.settlement && !_settlementNotificationsEnabled) return;
+
+    final item = AppNotificationItem(
+      id: 'notif_${DateTime.now().millisecondsSinceEpoch}',
+      title: title,
+      description: description,
+      timestamp: DateTime.now(),
+      type: type,
+      isRead: false,
+      route: route,
+      actionLabel: actionLabel,
+    );
+
+    await _storage?.addNotification(item.toJson());
+    _notificationStreamController.add(item);
+  }
+
+  Future<void> markAllAsRead() async {
+    await _storage?.markAllNotificationsAsRead();
+  }
+
+  Future<void> markAsRead(String id) async {
+    await _storage?.markNotificationAsRead(id);
   }
 
   void dispose() {

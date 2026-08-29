@@ -8,6 +8,7 @@ import '../views/home/home_view.dart';
 import '../views/language/language_select_view.dart';
 import '../views/legal/privacy_policy_view.dart';
 import '../views/onboarding/onboarding_view.dart';
+import '../views/onboarding/walkthrough_view.dart';
 import '../views/personal/category_breakdown_view.dart';
 import '../views/personal/budgets_view.dart';
 import '../views/personal/spend_analytics_view.dart';
@@ -124,6 +125,10 @@ class AppRouter {
           final isSettings = state.uri.queryParameters['isSettings'] == 'true';
           return LanguageSelectView(isFromSettings: isSettings);
         },
+      ),
+      GoRoute(
+        path: '/walkthrough',
+        builder: (context, state) => const WalkthroughView(),
       ),
       GoRoute(
         path: '/onboarding',

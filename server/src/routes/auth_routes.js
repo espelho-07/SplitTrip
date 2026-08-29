@@ -78,14 +78,34 @@ router.post('/link', authMiddleware, (req, res, next) => {
   }
 });
 
-// POST /api/auth/google - Authenticate or canonicalize Google account
-router.post('/google', (req, res, next) => {
+// POST /api/auth/nirniq - Authenticate or canonicalize Nirniq Account identity
+router.post('/nirniq', (req, res, next) => {
   try {
-    const { email, displayName, photoUrl, googleId, supabaseUserId, currentGuestUserId } = req.body;
-    const result = authService.loginWithGoogle({
+    const { email, displayName, photoUrl, nirniqId, googleId, supabaseUserId, currentGuestUserId } = req.body;
+    const result = authService.loginWithNirniq({
       email,
       displayName,
       photoUrl,
+      nirniqId,
+      googleId,
+      supabaseUserId,
+      currentGuestUserId,
+    });
+    res.status(200).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// POST /api/auth/google - Backward compatible alias for Google identity provider
+router.post('/google', (req, res, next) => {
+  try {
+    const { email, displayName, photoUrl, nirniqId, googleId, supabaseUserId, currentGuestUserId } = req.body;
+    const result = authService.loginWithNirniq({
+      email,
+      displayName,
+      photoUrl,
+      nirniqId,
       googleId,
       supabaseUserId,
       currentGuestUserId,
@@ -154,6 +174,17 @@ router.get('/me', authMiddleware, (req, res, next) => {
   try {
     const profile = authService.getProfile(req.user.id);
     res.status(200).json({ data: profile });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// PUT /api/auth/payment - Update user's receiving UPI ID and QR code
+router.put('/payment', authMiddleware, (req, res, next) => {
+  try {
+    const { upiId, upiQr } = req.body || {};
+    const result = authService.updatePaymentInfo(req.user.id, { upiId, upiQr });
+    res.status(200).json({ data: result });
   } catch (e) {
     next(e);
   }

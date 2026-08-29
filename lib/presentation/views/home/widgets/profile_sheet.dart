@@ -53,12 +53,12 @@ class ProfileSheet extends StatelessWidget {
     );
   }
 
-  Future<void> _handleGoogleSignIn(BuildContext context) async {
+  Future<void> _handleNirniqSignIn(BuildContext context) async {
     final authVm = context.read<AuthViewModel>();
     if (authVm.isLoading) return;
 
     HapticHelper.medium();
-    final success = await AuthProgressDialog.startGoogleSignIn(context);
+    final success = await AuthProgressDialog.startNirniqSignIn(context);
     if (success && context.mounted) {
       Navigator.of(context).pop(); // Close profile sheet on successful sign-in
     }
@@ -163,7 +163,7 @@ class ProfileSheet extends StatelessWidget {
     final l10n = context.l10n;
     final user = authVm.currentUser;
     final displayName = user?.displayName ?? 'Traveler';
-    final isGoogleLinked = user?.isGoogleLinked ?? false;
+    final isNirniqLinked = user?.isNirniqLinked ?? false;
     final pendingCount = syncService.pendingCount;
 
     return Container(
@@ -230,23 +230,23 @@ class ProfileSheet extends StatelessWidget {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                               decoration: BoxDecoration(
-                                color: (isGoogleLinked ? AppColors.emeraldPrimary : AppColors.indigoAccent)
+                                color: (isNirniqLinked ? AppColors.emeraldPrimary : AppColors.indigoAccent)
                                     .withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
-                                isGoogleLinked ? l10n.profileGoogleConnected : l10n.profileGuestAccount,
+                                isNirniqLinked ? l10n.profileNirniqConnected : l10n.profileGuestAccount,
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w700,
-                                  color: isGoogleLinked ? AppColors.emeraldPrimary : AppColors.indigoAccent,
+                                  color: isNirniqLinked ? AppColors.emeraldPrimary : AppColors.indigoAccent,
                                 ),
                               ),
                             ),
                             const SizedBox(width: 8),
                             Flexible(
                               child: Text(
-                                isGoogleLinked ? (user?.email ?? '') : l10n.profileLocalData,
+                                isNirniqLinked ? (user?.email ?? '') : l10n.profileLocalData,
                                 style: AppTypography.bodySmall(isDark: isDark),
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -273,9 +273,9 @@ class ProfileSheet extends StatelessWidget {
                   Row(
                     children: [
                       Icon(
-                        isGoogleLinked ? Icons.verified_user_rounded : Icons.person_outline_rounded,
+                        isNirniqLinked ? Icons.verified_user_rounded : Icons.person_outline_rounded,
                         size: 20,
-                        color: isGoogleLinked ? AppColors.emeraldPrimary : AppColors.indigoAccent,
+                        color: isNirniqLinked ? AppColors.emeraldPrimary : AppColors.indigoAccent,
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -283,7 +283,7 @@ class ProfileSheet extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              isGoogleLinked ? l10n.profileGoogleConnected : l10n.profileConnectGoogle,
+                              isNirniqLinked ? l10n.profileNirniqConnected : l10n.profileConnectNirniq,
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
@@ -291,32 +291,32 @@ class ProfileSheet extends StatelessWidget {
                               ),
                             ),
                             Text(
-                              isGoogleLinked
-                                  ? (user?.email ?? l10n.profileGoogleConnected)
-                                  : l10n.onboardingSyncDevices,
+                              isNirniqLinked
+                                  ? (user?.email ?? l10n.profileNirniqConnected)
+                                  : l10n.profileConnectNirniqDesc,
                               style: AppTypography.bodySmall(isDark: isDark),
                             ),
                           ],
                         ),
                       ),
-                      if (isGoogleLinked)
+                      if (isNirniqLinked)
                         const Icon(Icons.check_circle_rounded, size: 18, color: AppColors.emeraldPrimary),
                     ],
                   ),
-                  if (!isGoogleLinked) ...[
+                  if (!isNirniqLinked) ...[
                     Divider(height: 20, color: isDark ? Colors.white10 : Colors.black12),
                     InkWell(
-                      onTap: () => _handleGoogleSignIn(context),
+                      onTap: () => _handleNirniqSignIn(context),
                       borderRadius: AppRadius.smBorder,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Row(
                           children: [
-                            const Icon(Icons.g_mobiledata_rounded, size: 28, color: AppColors.emeraldPrimary),
+                            const Icon(Icons.verified_user_rounded, size: 22, color: AppColors.emeraldPrimary),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                l10n.onboardingGoogleSignin,
+                                l10n.profileConnectNirniq,
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w700,

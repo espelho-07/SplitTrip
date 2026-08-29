@@ -206,7 +206,10 @@ class _JoinTripViewState extends State<JoinTripView> {
               isJoining: joinVm.isJoining,
               onConfirmJoin: () async {
                 Navigator.of(bottomSheetContext).pop();
-                await _executeJoinFlow(preview.inviteCode ?? preview.id);
+                final codeToJoin = (preview.inviteCode != null && (preview.inviteCode as String).isNotEmpty)
+                    ? preview.inviteCode as String
+                    : (preview.tripId as String? ?? _codeController.text.trim());
+                await _executeJoinFlow(codeToJoin);
               },
               onCancel: () {
                 Navigator.of(bottomSheetContext).pop();

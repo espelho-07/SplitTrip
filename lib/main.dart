@@ -21,6 +21,7 @@ import 'data/repositories/user_repository.dart';
 import 'data/services/auth_service.dart';
 import 'data/services/local_storage_service.dart';
 import 'data/services/sync_service.dart';
+import 'domain/services/notification_service.dart';
 import 'presentation/router/app_router.dart';
 import 'presentation/viewmodels/add_expense_viewmodel.dart';
 import 'presentation/viewmodels/auth_viewmodel.dart';
@@ -123,10 +124,15 @@ void main() async {
     unawaited(widgetService.syncSnapshot(currentUser: null));
   }
 
+  // Initialize Notification Service
+  final notificationService = NotificationService(storageService);
+  await notificationService.init();
+
   runApp(
     MultiProvider(
       providers: [
         Provider<LocalStorageService>.value(value: storageService),
+        Provider<NotificationService>.value(value: notificationService),
         Provider<ApiClient>.value(value: apiClient),
         Provider<SyncService>.value(value: syncService),
         Provider<UserRepository>.value(value: userRepo),

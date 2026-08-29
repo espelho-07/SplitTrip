@@ -282,6 +282,7 @@ class AppLocalizations {
   String get profileSecExperience => translate('profile_sec_experience');
   String get profileSecPreferences => translate('profile_sec_preferences');
   String get profileSecHelp => translate('profile_sec_help');
+  String get profileNirniqConnected => translate('profile_nirniq_connected');
   String get profileGoogleConnected => translate('profile_google_connected');
   String get profileGoogleSignin => translate('profile_google_signin');
   String get profileGoogleSigninDesc => translate('profile_google_signin_desc');
@@ -411,6 +412,7 @@ class AppLocalizations {
   // Auth / Cloud / Profile Aliases
   String get authRecoveryKey => translate('profile_sec_recovery');
   String get authGoogleConnected => translate('profile_google_connected');
+  String get authNirniqConnected => translate('profile_nirniq_connected');
   String get authSyncStatusSynced => translate('cloud_status_synced');
   String get authSignOutTitle => translate('profile_sign_out_title');
   String get authSignOutDesc => translate('profile_sign_out_desc');
@@ -421,6 +423,12 @@ class AppLocalizations {
   String get settingsTitle => translate('cloud_title');
   String get profileLocalData => translate('profile_device_only');
   String get profileConnectGoogle => translate('profile_google_signin');
+  String get profileConnectNirniq => translate('profile_nirniq_signin');
+  String get profileConnectNirniqDesc => translate('profile_nirniq_signin_desc');
+  String get profileConnectedApps => translate('profile_connected_apps');
+  String get profileConnectedAppsDesc => translate('profile_connected_apps_desc');
+  String get profileConnectedAppsKith => translate('profile_connected_apps_kith');
+  String get profileConnectedAppsFuture => translate('profile_connected_apps_future');
   String get profileCloudSyncDesc => translate('cloud_auto_sync_desc');
   String get profileRecoverySafe => translate('profile_recovery_desc');
   String get profileAppearance => translate('profile_theme');
@@ -503,6 +511,9 @@ class AppLocalizations {
   // Premium Onboarding & Sign-In Redesign
   String get onboardingHeroTagline => translate('onboarding_hero_tagline');
   String get onboardingHeroSub => translate('onboarding_hero_sub');
+  String get onboardingNirniqBtn => translate('onboarding_nirniq_btn');
+  String get onboardingNirniqSub => translate('onboarding_nirniq_sub');
+  String get onboardingEcosystemNote => translate('onboarding_ecosystem_note');
   String get onboardingGoogleBtn => translate('onboarding_google_btn');
   String get onboardingGuestBtn => translate('onboarding_guest_btn');
   String get onboardingGuestSubtitle => translate('onboarding_guest_subtitle');

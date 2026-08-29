@@ -6,6 +6,10 @@ class QrCodeParser {
     'kith.app',
     'www.kith.app',
     'splittrip.app',
+    'splittrip-4es6.onrender.com',
+    'onrender.com',
+    'localhost',
+    '10.0.2.2',
   ];
 
   static const List<String> _allowedSchemes = [
@@ -24,13 +28,15 @@ class QrCodeParser {
       final uri = Uri.parse(trimmed);
       if (uri.hasScheme) {
         final scheme = uri.scheme.toLowerCase();
+        final host = uri.host.toLowerCase();
+
         if (scheme == 'http' || scheme == 'https') {
-          final host = uri.host.toLowerCase();
-          if (!_allowedHosts.contains(host)) {
-            return null; // Reject external or untrusted domains
+          final isAllowedHost = _allowedHosts.any((h) => host == h || host.endsWith('.$h') || host.endsWith('onrender.com'));
+          if (!isAllowedHost) {
+            return null; // Reject untrusted web host
           }
         } else if (!_allowedSchemes.contains(scheme)) {
-          return null; // Reject non-Kith schemes
+          return null; // Reject untrusted scheme
         }
 
         if (uri.hasQuery && uri.queryParameters.containsKey('code')) {
@@ -40,13 +46,14 @@ class QrCodeParser {
           }
         }
 
-        // Check path segments e.g. https://kith.app/join/ABC123
+        // Check path segments e.g. https://kith.app/join/ABC123 or /trip/ABC123
         if (uri.pathSegments.isNotEmpty) {
           final lastSegment = uri.pathSegments.last;
           if (_isValidCode(lastSegment)) {
             return lastSegment.trim().toUpperCase();
           }
         }
+        return null;
       }
     } catch (_) {
       // Not a standard URI, fallback to direct code check

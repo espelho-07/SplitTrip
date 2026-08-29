@@ -6,6 +6,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/utils/date_formatter.dart';
 import '../../../../core/utils/haptic_feedback_helper.dart';
+import '../../../../data/services/local_storage_service.dart';
 import '../../../../domain/models/trip.dart';
 import '../../../viewmodels/auth_viewmodel.dart';
 import '../../../viewmodels/home_viewmodel.dart';
@@ -45,6 +46,10 @@ class DashboardTab extends StatelessWidget {
     totalOwedToUser += debts.totalLentPaise;
     totalUserOwes += debts.totalBorrowedPaise;
 
+    final storage = context.watch<LocalStorageService>();
+    final hasConfiguredPayment = storage.hasPaymentMethodConfigured();
+    final isPromptDismissed = storage.isPaymentPromptDismissed();
+
     return RefreshIndicator(
       onRefresh: () async {
         if (user != null) {
@@ -57,6 +62,10 @@ class DashboardTab extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
         children: [
           _buildHeaderRow(context, user?.displayName ?? 'Traveler', isDark),
+          if (!hasConfiguredPayment && !isPromptDismissed) ...[
+            const SizedBox(height: 16),
+            _buildPaymentSetupPromptCard(context, isDark, storage),
+          ],
           const SizedBox(height: 20),
           if (activeTrip != null)
             RepaintBoundary(child: _buildActiveTripHeroCard(context, activeTrip, activeNet, isDark, l10n))
@@ -67,6 +76,124 @@ class DashboardTab extends StatelessWidget {
           const SizedBox(height: 24),
           _buildQuickActionsSection(context, isDark, l10n),
           const SizedBox(height: 90),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaymentSetupPromptCard(BuildContext context, bool isDark, LocalStorageService storage) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isDark
+              ? [const Color(0xFF0F1B16), const Color(0xFF0B1411)]
+              : [const Color(0xFFF0FDF4), const Color(0xFFDCFCE7)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: AppColors.emeraldPrimary.withValues(alpha: isDark ? 0.35 : 0.45),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.emeraldPrimary.withValues(alpha: isDark ? 0.1 : 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.emeraldPrimary.withValues(alpha: 0.16),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.qr_code_2_rounded,
+                  color: AppColors.emeraldPrimary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Add Receiving UPI & QR ⚡',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.2,
+                        color: isDark ? Colors.white : const Color(0xFF065F46),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Let friends settle balances directly to your account in 1 tap.',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        height: 1.3,
+                        color: isDark ? AppColors.darkTextSecondary : const Color(0xFF047857),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: Icon(
+                  Icons.close_rounded,
+                  size: 18,
+                  color: isDark ? Colors.white38 : Colors.black38,
+                ),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                onPressed: () {
+                  HapticHelper.light();
+                  storage.dismissPaymentPrompt();
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          GestureDetector(
+            onTap: () {
+              HapticHelper.selection();
+              context.push('/payment-methods');
+            },
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 9),
+              decoration: BoxDecoration(
+                color: AppColors.emeraldPrimary,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              alignment: Alignment.center,
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.add_card_rounded, color: Colors.white, size: 16),
+                  SizedBox(width: 8),
+                  Text(
+                    'Set Up Payment Details →',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -111,9 +238,12 @@ class DashboardTab extends StatelessWidget {
             // QR Scanner Button
             GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: () {
+              onTap: () async {
                 HapticHelper.light();
-                context.push('/qr-scanner');
+                final scannedCode = await context.push<String>('/qr-scanner');
+                if (scannedCode != null && scannedCode.isNotEmpty && context.mounted) {
+                  context.push('/join-trip?code=$scannedCode');
+                }
               },
               child: Container(
                 width: 44,
@@ -153,27 +283,37 @@ class DashboardTab extends StatelessWidget {
                     width: 1,
                   ),
                 ),
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Icon(
-                      Icons.notifications_outlined,
-                      size: 22,
-                      color: isDark ? AppColors.darkTextPrimary : const Color(0xFF334155),
-                    ),
-                    Positioned(
-                      top: 10,
-                      right: 12,
-                      child: Container(
-                        width: 7,
-                        height: 7,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Color(0xFF14B8A6),
+                child: Builder(
+                  builder: (ctx) {
+                    LocalStorageService? storage;
+                    try {
+                      storage = ctx.watch<LocalStorageService>();
+                    } catch (_) {}
+                    final unreadCount = storage?.getUnreadNotificationCount() ?? 0;
+                    return Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Icon(
+                          Icons.notifications_outlined,
+                          size: 22,
+                          color: isDark ? AppColors.darkTextPrimary : const Color(0xFF334155),
                         ),
-                      ),
-                    ),
-                  ],
+                        if (unreadCount > 0)
+                          Positioned(
+                            top: 10,
+                            right: 12,
+                            child: Container(
+                              width: 7,
+                              height: 7,
+                              decoration: const BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Color(0xFF14B8A6),
+                              ),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
                 ),
               ),
             ),

@@ -17,6 +17,7 @@ import 'package:kith_app/presentation/viewmodels/home_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/locale_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/personal_expense_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/theme_viewmodel.dart';
+import 'package:kith_app/domain/services/notification_service.dart';
 import 'package:kith_app/presentation/views/home/home_view.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -25,6 +26,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late LocalStorageService storage;
+  late NotificationService notificationService;
   late SyncService syncService;
   late ApiClient apiClient;
   late UserRepository userRepo;
@@ -41,6 +43,7 @@ void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     storage = await LocalStorageService.init();
+    notificationService = NotificationService(storage);
     syncService = SyncService(storage);
     apiClient = ApiClient();
     final authService = AuthService(apiClient: apiClient, storage: storage);
@@ -67,6 +70,8 @@ void main() {
   Widget createDarkModeHomeScreen() {
     return MultiProvider(
       providers: [
+        Provider<LocalStorageService>.value(value: storage),
+        Provider<NotificationService>.value(value: notificationService),
         ChangeNotifierProvider.value(value: authVm),
         ChangeNotifierProvider.value(value: homeVm),
         ChangeNotifierProvider.value(value: personalVm),

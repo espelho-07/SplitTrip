@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../../core/localization/app_localizations.dart';
 import '../../../../core/payment/payment_service.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -10,6 +11,7 @@ import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/currency_display.dart';
 import '../../../../core/widgets/member_avatar.dart';
 import '../../../../core/widgets/surface_card.dart';
+import '../../../../data/services/local_storage_service.dart';
 import '../../../../domain/models/balance_summary.dart';
 import '../../../../domain/models/trip.dart';
 import '../../../../domain/models/trip_member.dart';
@@ -75,12 +77,20 @@ class _SettlementSheetState extends State<SettlementSheet> {
     if (_processingTransferIds.contains(transferKey)) return;
 
     final toMember = _findMember(toMemberId);
+    final storage = context.read<LocalStorageService>();
+    final currentUser = storage.getSavedUser();
+    String? recipientUpi = toMember?.upiId;
+    if ((recipientUpi == null || recipientUpi.isEmpty) && toMember?.userId != null) {
+      if (toMember!.userId == currentUser?['id']) {
+        recipientUpi = storage.getPrimaryUpiId() ?? (currentUser?['upiId'] as String?);
+      }
+    }
     final l10n = context.l10n;
 
     final success = await UpiPaymentSheet.show(
       context,
       recipientName: toName,
-      initialRecipientUpiId: toMember?.upiId,
+      initialRecipientUpiId: recipientUpi,
       amountInPaise: amountInPaise,
       currencyCode: widget.trip.currencyCode,
       tripName: widget.trip.name,

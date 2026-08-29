@@ -228,6 +228,42 @@ class TripRepository {
         return trip;
       }
     } on NotFoundException {
+      // Check if trip is in local cache (e.g. newly created on this device / offline)
+      final trips = getCachedTrips();
+      final match = trips.where(
+        (t) => t.inviteCode.toUpperCase() == cleanCode || t.id.toUpperCase() == cleanCode,
+      ).firstOrNull;
+      if (match != null) {
+        if (match.members.any((m) => m.userId == user.id)) {
+          return match;
+        }
+
+        final updatedMembers = List<TripMember>.from(match.members);
+        final newMember = TripMember(
+          id: 'mbr_${_uuid.v4().replaceAll('-', '').substring(0, 10)}',
+          userId: user.id,
+          displayName: user.displayName,
+          avatarUrl: user.avatarUrl,
+          role: 'member',
+          joinedAt: DateTime.now(),
+        );
+        updatedMembers.add(newMember);
+
+        final updatedTrip = match.copyWith(
+          members: updatedMembers,
+          updatedAt: DateTime.now(),
+        );
+
+        final idx = trips.indexWhere((t) => t.id == match.id);
+        if (idx != -1) {
+          trips[idx] = updatedTrip;
+        } else {
+          trips.insert(0, updatedTrip);
+        }
+        await storage.saveTrips(trips.map((t) => t.toJson()).toList());
+        await syncService.enqueueMutation(MutationType.joinTrip, {'inviteCode': cleanCode});
+        return updatedTrip;
+      }
       throw NotFoundException(message: 'No trip found for invite code "$cleanCode". Check the code and try again.');
     } on NetworkException {
       // Check if trip was previously cached on this device

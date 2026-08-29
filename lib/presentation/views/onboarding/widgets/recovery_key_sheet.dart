@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/localization/app_localizations.dart';
@@ -34,6 +35,7 @@ class RecoveryKeySheet extends StatefulWidget {
 
 class _RecoveryKeySheetState extends State<RecoveryKeySheet> {
   final TextEditingController _keyController = TextEditingController();
+  bool _isRestoring = false;
 
   @override
   void dispose() {
@@ -41,10 +43,19 @@ class _RecoveryKeySheetState extends State<RecoveryKeySheet> {
     super.dispose();
   }
 
+  Future<void> _pasteFromClipboard() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text?.trim();
+    if (text != null && text.isNotEmpty) {
+      _keyController.text = text.toUpperCase();
+      HapticHelper.selection();
+    }
+  }
+
   Future<void> _handleRecover() async {
     final authVm = context.read<AuthViewModel>();
     final l10n = context.l10n;
-    if (authVm.isLoading) return;
+    if (_isRestoring || authVm.isLoading) return;
 
     final key = _keyController.text.trim().toUpperCase();
     if (key.isEmpty) {
@@ -54,49 +65,13 @@ class _RecoveryKeySheetState extends State<RecoveryKeySheet> {
       return;
     }
 
+    setState(() => _isRestoring = true);
     HapticHelper.medium();
 
-    final stageNotifier = ValueNotifier<int>(0);
-    final stages = [
-      ProgressStage(label: l10n.statusRestoring, description: l10n.authRecoveryKey),
-      ProgressStage(label: l10n.statusSyncing, description: l10n.authGoogleConnected),
-      ProgressStage(label: l10n.statusSaved, description: l10n.tripsBalances),
-    ];
+    try {
+      final user = await authVm.recoverSession(key);
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (dCtx) => ValueListenableBuilder<int>(
-        valueListenable: stageNotifier,
-        builder: (ctx, activeStage, _) {
-          final isDark = Theme.of(ctx).brightness == Brightness.dark;
-          return Dialog(
-            backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
-            shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: KithStageProgress(
-                title: l10n.onboardingRestoringDialog,
-                stages: stages,
-                currentStageIndex: activeStage,
-              ),
-            ),
-          );
-        },
-      ),
-    );
-
-    Future.delayed(const Duration(milliseconds: 250), () {
-      if (mounted) stageNotifier.value = 1;
-    });
-    Future.delayed(const Duration(milliseconds: 550), () {
-      if (mounted) stageNotifier.value = 2;
-    });
-
-    final user = await authVm.recoverSession(key);
-
-    if (mounted) {
-      Navigator.of(context, rootNavigator: true).pop(); // Dismiss progress dialog
+      if (!mounted) return;
 
       if (user != null) {
         Navigator.pop(context); // Close bottom sheet
@@ -115,8 +90,22 @@ class _RecoveryKeySheetState extends State<RecoveryKeySheet> {
           KithSuccessToast.show(context, '${l10n.onboardingWelcomeBack}, ${user.displayName} ✓');
         }
       } else {
+        setState(() => _isRestoring = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.onboardingErrRecoveryFailed)),
+          SnackBar(
+            content: Text(l10n.onboardingErrRecoveryFailed),
+            backgroundColor: AppColors.negativeRedDark,
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isRestoring = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.onboardingErrRecoveryFailed),
+            backgroundColor: AppColors.negativeRedDark,
+          ),
         );
       }
     }
@@ -125,34 +114,40 @@ class _RecoveryKeySheetState extends State<RecoveryKeySheet> {
   Future<void> _handleReviewerLogin() async {
     final authVm = context.read<AuthViewModel>();
     final l10n = context.l10n;
-    if (authVm.isLoading) return;
+    if (_isRestoring || authVm.isLoading) return;
 
+    setState(() => _isRestoring = true);
     HapticHelper.medium();
-    final user = await authVm.signInAsReviewer(email: 'review.nirniq@gmail.com');
+    try {
+      final user = await authVm.signInAsReviewer(email: 'review.nirniq@gmail.com');
 
-    if (user != null && mounted) {
-      Navigator.pop(context);
-      final syncService = context.read<SyncService>();
-      final apiClient = context.read<ApiClient>();
-      final homeVm = context.read<HomeViewModel>();
-      final personalVm = context.read<PersonalExpenseViewModel>();
+      if (user != null && mounted) {
+        Navigator.pop(context);
+        final syncService = context.read<SyncService>();
+        final apiClient = context.read<ApiClient>();
+        final homeVm = context.read<HomeViewModel>();
+        final personalVm = context.read<PersonalExpenseViewModel>();
 
-      await syncService.flushQueue(apiClient);
-      await homeVm.loadTrips(user.id);
-      await personalVm.loadData(user.id);
-      await personalVm.syncTripExpenses(user.id);
+        await syncService.flushQueue(apiClient);
+        await homeVm.loadTrips(user.id);
+        await personalVm.loadData(user.id);
+        await personalVm.syncTripExpenses(user.id);
 
-      if (mounted) {
-        context.go('/home');
-        KithSuccessToast.show(context, '${l10n.onboardingWelcomeBack}, ${user.displayName} ✓');
+        if (mounted) {
+          context.go('/home');
+          KithSuccessToast.show(context, '${l10n.onboardingWelcomeBack}, ${user.displayName} ✓');
+        }
+      } else if (mounted) {
+        setState(() => _isRestoring = false);
       }
+    } catch (_) {
+      if (mounted) setState(() => _isRestoring = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final authVm = context.watch<AuthViewModel>();
     final l10n = context.l10n;
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
@@ -202,10 +197,20 @@ class _RecoveryKeySheetState extends State<RecoveryKeySheet> {
               controller: _keyController,
               autofocus: true,
               textCapitalization: TextCapitalization.characters,
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.2,
+              ),
               decoration: InputDecoration(
                 hintText: 'KITH-XXXX-YYYY',
                 labelText: l10n.authRecoveryKey,
                 prefixIcon: const Icon(Icons.key_rounded, size: 20),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.content_paste_rounded, size: 20),
+                  tooltip: 'Paste from clipboard',
+                  onPressed: _pasteFromClipboard,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppRadius.md),
                 ),
@@ -218,7 +223,7 @@ class _RecoveryKeySheetState extends State<RecoveryKeySheet> {
             AppButton(
               text: l10n.onboardingRecoverySheetCta,
               isFullWidth: true,
-              isLoading: authVm.isLoading,
+              isLoading: _isRestoring,
               onPressed: _handleRecover,
             ),
 
@@ -227,7 +232,7 @@ class _RecoveryKeySheetState extends State<RecoveryKeySheet> {
             // Play Reviewer Quick Access Button
             Center(
               child: TextButton.icon(
-                onPressed: _handleReviewerLogin,
+                onPressed: _isRestoring ? null : _handleReviewerLogin,
                 icon: const Icon(Icons.verified_user_outlined, size: 16, color: AppColors.emeraldPrimary),
                 label: Text(
                   'Reviewer Demo Access (review.nirniq@gmail.com)',

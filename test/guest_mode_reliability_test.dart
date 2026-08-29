@@ -75,7 +75,7 @@ void main() {
   }
 
   group('Guest Mode Reliability, Isolation & Lifecycle Suite', () {
-    testWidgets('1. Tap Continue as Guest creates session & authenticates immediately', (tester) async {
+    testWidgets('1. Tap Continue as Guest opens name input sheet and authenticates with entered name', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -91,9 +91,19 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
 
+      // Enter name in sheet
+      expect(find.byType(TextField), findsOneWidget);
+      await tester.enterText(find.byType(TextField), 'Darpan Traveler');
+      await tester.pump();
+
+      // Submit sheet
+      await tester.tap(find.text('Start Exploring'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
       expect(authVm.isAuthenticated, isTrue);
       expect(authVm.currentUser, isNotNull);
-      expect(authVm.currentUser!.displayName, equals('Traveler'));
+      expect(authVm.currentUser!.displayName, equals('Darpan Traveler'));
       expect(authVm.currentUser!.recoveryKey, startsWith('KITH-'));
       expect(storage.hasSelectedInitialLanguage(), isTrue);
     });

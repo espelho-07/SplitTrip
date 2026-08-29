@@ -71,6 +71,8 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
     try {
       if (authVm.isAuthenticated) {
         context.go('/home');
+      } else if (!authVm.hasCompletedOnboarding) {
+        context.go('/walkthrough');
       } else {
         context.go('/onboarding');
       }

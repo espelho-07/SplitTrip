@@ -59,35 +59,7 @@ class PaymentMethodsView extends StatefulWidget {
 
 class _PaymentMethodsViewState extends State<PaymentMethodsView> {
   static const String _storageKey = 'kith_saved_upi_items';
-  List<SavedUpiItem> _savedUpis = [
-    SavedUpiItem(
-      id: 'upi_1',
-      vpa: 'darpan@okhdfcbank',
-      name: 'Darpan Parmar',
-      appName: 'Google Pay',
-      icon: Icons.account_balance_wallet_rounded,
-      iconColor: const Color(0xFF4285F4),
-      isDefault: true,
-    ),
-    SavedUpiItem(
-      id: 'upi_2',
-      vpa: '9876543210@paytm',
-      name: 'Darpan Parmar',
-      appName: 'Paytm UPI',
-      icon: Icons.payment_rounded,
-      iconColor: const Color(0xFF00B9F1),
-      isDefault: false,
-    ),
-    SavedUpiItem(
-      id: 'upi_3',
-      vpa: 'darpan@ybl',
-      name: 'Darpan Parmar',
-      appName: 'PhonePe',
-      icon: Icons.phone_android_rounded,
-      iconColor: const Color(0xFF5F259F),
-      isDefault: false,
-    ),
-  ];
+  List<SavedUpiItem> _savedUpis = [];
   double _customAmount = 0.0;
   final TextEditingController _amountController = TextEditingController();
 
@@ -104,6 +76,27 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
           setState(() {
             _savedUpis = list.map((item) => SavedUpiItem.fromJson(item as Map<String, dynamic>)).toList();
           });
+        } else {
+          // Check if user has a primary UPI ID from their account
+          final primaryUpi = storage.getPrimaryUpiId();
+          final user = context.read<LocalStorageService>().getSavedUser();
+          final vpa = primaryUpi ?? (user != null ? user['upiId'] as String? : null);
+          if (vpa != null && vpa.isNotEmpty) {
+            final userName = user != null ? (user['displayName'] as String? ?? 'User') : 'User';
+            final item = SavedUpiItem(
+              id: 'upi_${DateTime.now().millisecondsSinceEpoch}',
+              vpa: vpa,
+              name: userName,
+              appName: 'UPI VPA',
+              icon: Icons.payments_rounded,
+              iconColor: AppColors.emeraldPrimary,
+              isDefault: true,
+            );
+            setState(() {
+              _savedUpis = [item];
+            });
+            _persistUpis();
+          }
         }
       } catch (_) {}
     });
@@ -120,22 +113,33 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
       final storage = context.read<LocalStorageService>();
       final jsonList = _savedUpis.map((u) => u.toJson()).toList();
       await storage.setString(_storageKey, jsonEncode(jsonList));
+
+      if (_savedUpis.isNotEmpty) {
+        final primary = _savedUpis.firstWhere((u) => u.isDefault, orElse: () => _savedUpis.first);
+        await storage.setPrimaryUpiId(primary.vpa);
+        // Sync with backend / auth service
+        if (mounted) {
+          try {
+            await context.read<LocalStorageService>().saveUserToRecoveryVault({
+              ...?storage.getSavedUser(),
+              'upiId': primary.vpa,
+            });
+          } catch (_) {}
+        }
+      } else {
+        await storage.setPrimaryUpiId(null);
+      }
     } catch (_) {}
   }
 
-  SavedUpiItem get _primaryUpi =>
-      _savedUpis.firstWhere((u) => u.isDefault, orElse: () => _savedUpis.isNotEmpty ? _savedUpis.first : SavedUpiItem(
-        id: 'fallback',
-        vpa: 'kith@upi',
-        name: 'Kith User',
-        appName: 'UPI',
-        icon: Icons.payment_rounded,
-        iconColor: AppColors.emeraldPrimary,
-        isDefault: true,
-      ));
+  SavedUpiItem? get _primaryUpi =>
+      _savedUpis.isNotEmpty
+          ? _savedUpis.firstWhere((u) => u.isDefault, orElse: () => _savedUpis.first)
+          : null;
 
   String get _dynamicUpiUri {
     final upi = _primaryUpi;
+    if (upi == null) return '';
     final buffer = StringBuffer('upi://pay?pa=${upi.vpa}&pn=${Uri.encodeComponent(upi.name)}&cu=INR&tn=${Uri.encodeComponent('Kith Expense Settlement')}');
     if (_customAmount > 0) {
       buffer.write('&am=${_customAmount.toStringAsFixed(2)}');
@@ -406,283 +410,383 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
         children: [
-          // Dynamic Live QR Card
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: isDark
-                    ? [const Color(0xFF10171D), const Color(0xFF0C1216)]
-                    : [Colors.white, const Color(0xFFF8FAFC)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+          if (_savedUpis.isEmpty) ...[
+            // Empty State Card
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF0F1418) : Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: isDark ? AppColors.emeraldPrimary.withValues(alpha: 0.3) : AppColors.emeraldPrimary.withValues(alpha: 0.25),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.emeraldPrimary.withValues(alpha: isDark ? 0.08 : 0.05),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
               ),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: isDark ? AppColors.emeraldPrimary.withValues(alpha: 0.25) : AppColors.emeraldPrimary.withValues(alpha: 0.35),
-                width: 1.5,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.emeraldPrimary.withValues(alpha: isDark ? 0.1 : 0.08),
-                  blurRadius: 20,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: AppColors.emeraldPrimary.withValues(alpha: 0.15),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.qr_code_2_rounded, color: AppColors.emeraldPrimary, size: 20),
-                        ),
-                        const SizedBox(width: 10),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Instant Receiving QR', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-                            Text(_primaryUpi.appName, style: TextStyle(fontSize: 12, color: isDark ? Colors.white60 : Colors.black54)),
-                          ],
-                        ),
-                      ],
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.emeraldPrimary.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Text('LIVE UPI', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.emeraldPrimary)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-
-                // QR Code
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10),
-                    ],
-                  ),
-                  child: QrImageView(
-                    data: _dynamicUpiUri,
-                    version: QrVersions.auto,
-                    size: 180.0,
-                    eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.square, color: Color(0xFF0F172A)),
-                    dataModuleStyle: const QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: Color(0xFF0F172A)),
-                  ),
-                ),
-                const SizedBox(height: 14),
-
-                // VPA Label
-                Text(
-                  _primaryUpi.vpa,
-                  style: TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: isDark ? Colors.white : Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _primaryUpi.name,
-                  style: TextStyle(fontSize: 12, color: isDark ? Colors.white60 : Colors.black54),
-                ),
-                const SizedBox(height: 16),
-
-                // Custom Amount Input
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF080C0E) : const Color(0xFFF1F5F9),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
-                  ),
-                  child: Row(
-                    children: [
-                      const Text('₹', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.emeraldPrimary)),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: TextField(
-                          controller: _amountController,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-                          decoration: const InputDecoration(
-                            hintText: 'Add request amount (Optional)',
-                            border: InputBorder.none,
-                            isDense: true,
-                          ),
-                          onChanged: (val) {
-                            setState(() {
-                              _customAmount = double.tryParse(val) ?? 0.0;
-                            });
-                          },
-                        ),
-                      ),
-                      if (_customAmount > 0)
-                        IconButton(
-                          icon: const Icon(Icons.clear_rounded, size: 18),
-                          onPressed: () {
-                            _amountController.clear();
-                            setState(() => _customAmount = 0.0);
-                          },
-                        ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                // Preset Chips
-                Wrap(
-                  spacing: 8,
-                  children: [100, 250, 500, 1000, 2000].map((amt) {
-                    final isSelected = _customAmount == amt.toDouble();
-                    return ActionChip(
-                      label: Text('₹$amt', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: isSelected ? Colors.white : null)),
-                      backgroundColor: isSelected ? AppColors.emeraldPrimary : (isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05)),
-                      onPressed: () {
-                        HapticHelper.selection();
-                        setState(() {
-                          _customAmount = amt.toDouble();
-                          _amountController.text = amt.toString();
-                        });
-                      },
-                    );
-                  }).toList(),
-                ),
-
-                const SizedBox(height: 16),
-
-                // Action Buttons
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _copyToClipboard(_primaryUpi.vpa, 'UPI ID copied to clipboard ✓'),
-                        icon: const Icon(Icons.copy_rounded, size: 16),
-                        label: const Text('Copy ID'),
-                        style: OutlinedButton.styleFrom(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: () => _copyToClipboard(_dynamicUpiUri, 'Dynamic Payment Link copied ✓'),
-                        icon: const Icon(Icons.share_rounded, size: 16),
-                        label: const Text('Share Link'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.emeraldPrimary,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          // Saved UPIs List Section
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8.0, left: 4.0),
-            child: Text(
-              'SAVED RECEIVING VPAS',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.8,
-                color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
-              ),
-            ),
-          ),
-
-          Material(
-            color: isDark ? const Color(0xFF0F1418) : Colors.white,
-            clipBehavior: Clip.antiAlias,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-              side: BorderSide(
-                color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
-              ),
-            ),
-            child: Column(
-              children: _savedUpis.map((upi) {
-                return ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
+              child: Column(
+                children: [
+                  Container(
+                    width: 64,
+                    height: 64,
                     decoration: BoxDecoration(
-                      color: upi.iconColor.withValues(alpha: 0.15),
+                      color: AppColors.emeraldPrimary.withValues(alpha: 0.12),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(upi.icon, color: upi.iconColor, size: 20),
+                    child: const Icon(
+                      Icons.account_balance_wallet_outlined,
+                      size: 32,
+                      color: AppColors.emeraldPrimary,
+                    ),
                   ),
-                  title: Row(
+                  const SizedBox(height: 16),
+                  Text(
+                    'No Payment Method Added',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Add your receiving UPI ID so friends in trips can settle balances directly to your account with 1 tap.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.4,
+                      color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  FilledButton.icon(
+                    onPressed: () => _showAddUpiSheet(context, isDark),
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: const Text(
+                      'Add Receiving UPI ID',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                    ),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.emeraldPrimary,
+                      minimumSize: const Size(double.infinity, 48),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            // Info Card
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF141A20) : const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.lock_outline_rounded, size: 18, color: AppColors.emeraldPrimary),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Your UPI ID is only visible to members of trips you join, enabling seamless zero-leakage settlements.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        height: 1.4,
+                        color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else ...[
+            // Dynamic Live QR Card
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: isDark
+                      ? [const Color(0xFF10171D), const Color(0xFF0C1216)]
+                      : [Colors.white, const Color(0xFFF8FAFC)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: isDark ? AppColors.emeraldPrimary.withValues(alpha: 0.25) : AppColors.emeraldPrimary.withValues(alpha: 0.35),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.emeraldPrimary.withValues(alpha: isDark ? 0.1 : 0.08),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Flexible(
-                        child: Text(
-                          upi.vpa,
-                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-                          overflow: TextOverflow.ellipsis,
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppColors.emeraldPrimary.withValues(alpha: 0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.qr_code_2_rounded, color: AppColors.emeraldPrimary, size: 20),
+                          ),
+                          const SizedBox(width: 10),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Instant Receiving QR', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                              Text(_primaryUpi!.appName, style: TextStyle(fontSize: 12, color: isDark ? Colors.white60 : Colors.black54)),
+                            ],
+                          ),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.emeraldPrimary.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Text('LIVE UPI', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.emeraldPrimary)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+
+                  // QR Code
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10),
+                      ],
+                    ),
+                    child: QrImageView(
+                      data: _dynamicUpiUri,
+                      version: QrVersions.auto,
+                      size: 180.0,
+                      eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.square, color: Color(0xFF0F172A)),
+                      dataModuleStyle: const QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: Color(0xFF0F172A)),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // VPA Label
+                  Text(
+                    _primaryUpi!.vpa,
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _primaryUpi!.name,
+                    style: TextStyle(fontSize: 12, color: isDark ? Colors.white60 : Colors.black54),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Custom Amount Input
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF080C0E) : const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
+                    ),
+                    child: Row(
+                      children: [
+                        const Text('₹', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.emeraldPrimary)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: _amountController,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                            decoration: const InputDecoration(
+                              hintText: 'Add request amount (Optional)',
+                              border: InputBorder.none,
+                              isDense: true,
+                            ),
+                            onChanged: (val) {
+                              setState(() {
+                                _customAmount = double.tryParse(val) ?? 0.0;
+                              });
+                            },
+                          ),
+                        ),
+                        if (_customAmount > 0)
+                          IconButton(
+                            icon: const Icon(Icons.clear_rounded, size: 18),
+                            onPressed: () {
+                              _amountController.clear();
+                              setState(() => _customAmount = 0.0);
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Preset Chips
+                  Wrap(
+                    spacing: 8,
+                    children: [100, 250, 500, 1000, 2000].map((amt) {
+                      final isSelected = _customAmount == amt.toDouble();
+                      return ActionChip(
+                        label: Text('₹$amt', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: isSelected ? Colors.white : null)),
+                        backgroundColor: isSelected ? AppColors.emeraldPrimary : (isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05)),
+                        onPressed: () {
+                          HapticHelper.selection();
+                          setState(() {
+                            _customAmount = amt.toDouble();
+                            _amountController.text = amt.toString();
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Action Buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _copyToClipboard(_primaryUpi!.vpa, 'UPI ID copied to clipboard ✓'),
+                          icon: const Icon(Icons.copy_rounded, size: 16),
+                          label: const Text('Copy ID'),
+                          style: OutlinedButton.styleFrom(
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
                         ),
                       ),
-                      if (upi.isDefault) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppColors.emeraldPrimary.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(6),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: () => _copyToClipboard(_dynamicUpiUri, 'Dynamic Payment Link copied ✓'),
+                          icon: const Icon(Icons.share_rounded, size: 16),
+                          label: const Text('Share Link'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.emeraldPrimary,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
-                          child: const Text('DEFAULT', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: AppColors.emeraldPrimary)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // Saved UPIs List Section
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8.0, left: 4.0),
+              child: Text(
+                'SAVED RECEIVING VPAS',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.8,
+                  color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
+                ),
+              ),
+            ),
+
+            Material(
+              color: isDark ? const Color(0xFF0F1418) : Colors.white,
+              clipBehavior: Clip.antiAlias,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+                side: BorderSide(
+                  color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
+                ),
+              ),
+              child: Column(
+                children: _savedUpis.map((upi) {
+                  return ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: upi.iconColor.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(upi.icon, color: upi.iconColor, size: 20),
+                    ),
+                    title: Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            upi.vpa,
+                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (upi.isDefault) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.emeraldPrimary.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text('DEFAULT', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: AppColors.emeraldPrimary)),
+                          ),
+                        ],
+                      ],
+                    ),
+                    subtitle: Text(upi.appName, style: const TextStyle(fontSize: 12)),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (!upi.isDefault)
+                          IconButton(
+                            icon: const Icon(Icons.star_outline_rounded, size: 20),
+                            tooltip: 'Set as Default',
+                            onPressed: () => _setDefaultUpi(upi.id),
+                          ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline_rounded, size: 20, color: Color(0xFFEF4444)),
+                          tooltip: 'Delete UPI',
+                          onPressed: () => _deleteUpi(upi),
                         ),
                       ],
-                    ],
-                  ),
-                  subtitle: Text(upi.appName, style: const TextStyle(fontSize: 12)),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (!upi.isDefault)
-                        IconButton(
-                          icon: const Icon(Icons.star_outline_rounded, size: 20),
-                          tooltip: 'Set as Default',
-                          onPressed: () => _setDefaultUpi(upi.id),
-                        ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline_rounded, size: 20, color: Color(0xFFEF4444)),
-                        tooltip: 'Delete UPI',
-                        onPressed: () => _deleteUpi(upi),
-                      ),
-                    ],
-                  ),
-                  onTap: () {
-                    if (!upi.isDefault) {
-                      _setDefaultUpi(upi.id);
-                    }
-                  },
-                );
-              }).toList(),
+                    ),
+                    onTap: () {
+                      if (!upi.isDefault) {
+                        _setDefaultUpi(upi.id);
+                      }
+                    },
+                  );
+                }).toList(),
+              ),
             ),
-          ),
+          ],
 
           const SizedBox(height: 32),
         ],

@@ -122,12 +122,13 @@ class AuthService {
     final cleanKey = normalizeRecoveryKey(recoveryKey);
     if (cleanKey.isEmpty) return null;
 
-    // Check local match first for instant recovery
+    // 1. Check active local match
     final existing = getCurrentUser();
     if (existing != null && normalizeRecoveryKey(existing.recoveryKey) == cleanKey) {
       return existing;
     }
 
+    // 2. Query backend for cross-device recovery
     try {
       final res = await apiClient.post('/auth/recover', body: {
         'recoveryKey': cleanKey,
@@ -138,7 +139,7 @@ class AuthService {
         final token = res['token'] as String? ?? userData['anonymousToken'] as String? ?? '';
 
         var user = GuestUser.fromJson(userData);
-        if (user.recoveryKey.isEmpty) {
+        if (user.recoveryKey.isEmpty || user.recoveryKey == 'KITH-RECOVERY-KEY') {
           user = user.copyWith(recoveryKey: cleanKey);
         }
         apiClient.setAuthToken(token);
@@ -147,11 +148,17 @@ class AuthService {
         return user;
       }
     } catch (_) {
-      // Offline fallback: check local match
+      // Offline fallback: continue to local vault check
     }
 
-    if (existing != null && normalizeRecoveryKey(existing.recoveryKey) == cleanKey) {
-      return existing;
+    // 3. Fallback to local device Recovery Vault
+    final vaultUserJson = storage.getUserByRecoveryKey(cleanKey);
+    if (vaultUserJson != null) {
+      final user = GuestUser.fromJson(vaultUserJson);
+      apiClient.setAuthToken(user.anonymousToken);
+      realtimeClient?.setAuthToken(user.anonymousToken);
+      await storage.saveUser(user.toJson());
+      return user;
     }
 
     return null;
@@ -228,24 +235,26 @@ class AuthService {
     return updated;
   }
 
-  /// Signs in or canonicalizes account via Google credentials.
-  /// [supabaseUserId] is the Supabase-verified identity — stored for future use.
-  Future<GuestUser> signInWithGoogle({
+  /// Signs in or canonicalizes account via Nirniq Account identity.
+  Future<GuestUser> signInWithNirniq({
     required String email,
     required String displayName,
     String? photoUrl,
+    String? nirniqId,
     String? googleId,
     String? supabaseUserId,
   }) async {
     final currentGuest = getCurrentUser();
     final cleanEmail = email.trim().toLowerCase();
     final cleanDisplayName = displayName.trim().isNotEmpty ? displayName.trim() : cleanEmail.split('@')[0];
+    final cleanNirniqId = nirniqId ?? supabaseUserId ?? (googleId != null && googleId.isNotEmpty ? 'nrn_$googleId' : 'nrn_${cleanEmail.hashCode.abs()}');
 
     try {
-      final res = await apiClient.post('/auth/google', body: {
+      final res = await apiClient.post('/auth/nirniq', body: {
         'email': cleanEmail,
         'displayName': cleanDisplayName,
         'photoUrl': photoUrl,
+        'nirniqId': cleanNirniqId,
         'googleId': googleId,
         'supabaseUserId': supabaseUserId,
         'currentGuestUserId': currentGuest?.id,
@@ -275,9 +284,9 @@ class AuthService {
         return user;
       }
     } catch (e) {
-      // Backend offline or 404: seamlessly canonicalize user locally with Google profile
+      // Backend offline or 404: seamlessly canonicalize user locally with Nirniq profile
       final deterministicId = supabaseUserId ??
-          (googleId != null && googleId.isNotEmpty ? 'usr_g_$googleId' : 'usr_g_${cleanEmail.hashCode.abs()}');
+          (googleId != null && googleId.isNotEmpty ? 'usr_g_$googleId' : 'usr_nrn_${cleanEmail.hashCode.abs()}');
 
       final updatedUser = (currentGuest ?? GuestUser(
         id: deterministicId,
@@ -291,6 +300,8 @@ class AuthService {
         id: currentGuest != null ? currentGuest.id : deterministicId,
         isLinkedToAccount: true,
         email: cleanEmail,
+        nirniqId: cleanNirniqId,
+        googleId: googleId,
         displayName: cleanDisplayName,
         avatarUrl: photoUrl ?? currentGuest?.avatarUrl,
       );
@@ -306,7 +317,7 @@ class AuthService {
     }
 
     final fallbackId = supabaseUserId ??
-        (googleId != null && googleId.isNotEmpty ? 'usr_g_$googleId' : 'usr_g_${cleanEmail.hashCode.abs()}');
+        (googleId != null && googleId.isNotEmpty ? 'usr_g_$googleId' : 'usr_nrn_${cleanEmail.hashCode.abs()}');
 
     final fallback = (currentGuest ?? GuestUser(
       id: fallbackId,
@@ -320,6 +331,8 @@ class AuthService {
       id: currentGuest != null ? currentGuest.id : fallbackId,
       isLinkedToAccount: true,
       email: cleanEmail,
+      nirniqId: cleanNirniqId,
+      googleId: googleId,
       displayName: cleanDisplayName,
       avatarUrl: photoUrl ?? currentGuest?.avatarUrl,
     );
@@ -334,7 +347,24 @@ class AuthService {
     return fallback;
   }
 
-  /// Re-tags local cached guest entities to canonical user ID on Google sign-in
+  /// Signs in or canonicalizes account via Google credentials (delegates to Nirniq Account).
+  Future<GuestUser> signInWithGoogle({
+    required String email,
+    required String displayName,
+    String? photoUrl,
+    String? googleId,
+    String? supabaseUserId,
+  }) {
+    return signInWithNirniq(
+      email: email,
+      displayName: displayName,
+      photoUrl: photoUrl,
+      googleId: googleId,
+      supabaseUserId: supabaseUserId,
+    );
+  }
+
+  /// Re-tags local cached guest entities to canonical user ID on sign-in
   Future<void> _reTagLocalGuestData(String oldGuestId, String canonicalUserId) async {
     try {
       // 1. Re-tag Personal Expenses
@@ -391,10 +421,10 @@ class AuthService {
     }
   }
 
-  /// Attempts to restore an authenticated session from a live Supabase session.
+  /// Attempts to restore an authenticated session from a live Nirniq / Supabase session.
   /// Call this on app startup when no local GuestUser session exists.
-  /// Returns null if no Supabase session is active.
-  Future<GuestUser?> restoreSupabaseSession() async {
+  /// Returns null if no session is active.
+  Future<GuestUser?> restoreNirniqSession() async {
     final session = GoogleAuthService.currentSession;
     if (session == null) return null;
 
@@ -411,7 +441,7 @@ class AuthService {
       return cached;
     }
 
-    // Re-authenticate with backend using the Supabase-verified identity
+    // Re-authenticate with backend using the Nirniq-verified identity
     try {
       final displayName = supabaseUser.userMetadata?['full_name'] as String? ??
           supabaseUser.userMetadata?['name'] as String? ??
@@ -419,7 +449,7 @@ class AuthService {
       final photoUrl = supabaseUser.userMetadata?['avatar_url'] as String?;
       final googleId = supabaseUser.userMetadata?['sub'] as String? ?? supabaseUser.id;
 
-      return await signInWithGoogle(
+      return await signInWithNirniq(
         email: email,
         displayName: displayName,
         photoUrl: photoUrl,
@@ -431,7 +461,10 @@ class AuthService {
     }
   }
 
-  /// Revokes backend session, disconnects realtime, clears Supabase session,
+  /// Backward-compatible alias
+  Future<GuestUser?> restoreSupabaseSession() => restoreNirniqSession();
+
+  /// Revokes backend session, disconnects realtime, clears session,
   /// and clears all local credentials.
   Future<void> logout() async {
     try {
@@ -442,7 +475,6 @@ class AuthService {
     apiClient.setAuthToken(null);
     realtimeClient?.setAuthToken(null);
     realtimeClient?.disconnect();
-    // GoogleAuthService.signOut() handles both Google + Supabase sign-out
     try {
       await GoogleAuthService.signOut();
     } catch (_) {}
@@ -467,6 +499,30 @@ class AuthService {
       await GoogleAuthService.signOut();
     } catch (_) {}
     await storage.clearAllUserData();
+  }
+
+  /// Updates user's receiving UPI ID and optional QR in local storage and backend.
+  Future<GuestUser?> updatePaymentInfo(String upiId, {String? upiQr}) async {
+    final cleanUpi = upiId.trim().toLowerCase();
+    await storage.setPrimaryUpiId(cleanUpi);
+    final current = getCurrentUser();
+    if (current != null) {
+      final updated = current.copyWith(
+        upiId: cleanUpi,
+        upiQr: upiQr ?? current.upiQr,
+      );
+      await storage.saveUser(updated.toJson());
+      try {
+        await apiClient.put('/auth/payment', body: {
+          'upiId': cleanUpi,
+          'upiQr': upiQr,
+        });
+      } catch (_) {
+        // Offline resilient fallback
+      }
+      return updated;
+    }
+    return null;
   }
 
   static String _generateRecoveryKey() {

@@ -30,7 +30,7 @@ void main() {
   group('Google Account Persistence & Cross-Device Restore Tests', () {
     test('1. Guest local data is automatically re-tagged when user signs in with Google', () async {
       final mockClient = MockClient((request) async {
-        if (request.url.path == '/api/auth/google') {
+        if (request.url.path == '/api/auth/google' || request.url.path == '/api/auth/nirniq') {
           return http.Response(
             jsonEncode({
               'data': {
@@ -88,10 +88,9 @@ void main() {
         name: 'Goa Trip',
         creator: guest,
       );
-
       expect(trip.creatorId, guest.id);
 
-      // Step C: Sign in with Google
+      // Step C: User signs in with Google on same device
       final googleUser = await authService.signInWithGoogle(
         email: 'darpan.traveler@gmail.com',
         displayName: 'Darpan Cloud',
@@ -123,7 +122,7 @@ void main() {
       final mockClient = MockClient((request) async {
         final path = request.url.path;
 
-        if (path == '/api/auth/google') {
+        if (path == '/api/auth/google' || path == '/api/auth/nirniq') {
           return http.Response(
             jsonEncode({
               'data': {

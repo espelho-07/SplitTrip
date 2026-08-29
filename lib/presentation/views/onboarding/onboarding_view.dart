@@ -13,15 +13,15 @@ import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/locale_viewmodel.dart';
 import '../../widgets/progress/progress.dart';
 import '../language/language_select_sheet.dart';
-import 'interactive_tutorial_sheet.dart';
-import 'widgets/kith_google_button.dart';
+import 'widgets/guest_setup_sheet.dart';
+import 'widgets/kith_nirniq_button.dart';
 import 'widgets/kith_hero_scene.dart';
 import 'widgets/recovery_key_sheet.dart';
 
 /// Redesigned premium login and welcome experience for Kith.
 ///
 /// Features a cinematic product introduction, layered finance & travel scene,
-/// clear authentication hierarchy, and 100% full localization support.
+/// clear Nirniq Account authentication hierarchy, and 100% full localization support.
 class OnboardingView extends StatefulWidget {
   const OnboardingView({super.key});
 
@@ -30,9 +30,7 @@ class OnboardingView extends StatefulWidget {
 }
 
 class _OnboardingViewState extends State<OnboardingView> {
-  bool _isStartingGuest = false;
-
-  Future<void> _handleGoogleSignIn() async {
+  Future<void> _handleNirniqSignIn() async {
     final localeVm = context.read<LocaleViewModel>();
     if (!localeVm.hasSelectedInitialLanguage) {
       context.push('/language-select');
@@ -40,17 +38,16 @@ class _OnboardingViewState extends State<OnboardingView> {
     }
 
     final authVm = context.read<AuthViewModel>();
-    if (authVm.isLoading || _isStartingGuest) return;
+    if (authVm.isLoading) return;
 
     HapticHelper.medium();
-    final success = await AuthProgressDialog.startGoogleSignIn(context);
+    final success = await AuthProgressDialog.startNirniqSignIn(context);
     if (success == true && mounted) {
       context.go('/home');
     }
   }
 
   Future<void> _handleExploreAsGuest() async {
-    if (_isStartingGuest) return;
     final authVm = context.read<AuthViewModel>();
     if (authVm.isLoading) return;
 
@@ -59,32 +56,9 @@ class _OnboardingViewState extends State<OnboardingView> {
       await localeVm.markInitialLanguageSelected();
     }
 
-    setState(() => _isStartingGuest = true);
-    HapticHelper.medium();
-
-    try {
-      await authVm.createGuestSession('Traveler');
-      if (mounted) {
-        context.go('/home');
-        KithSuccessToast.show(context, context.l10n.onboardingWelcomeToast);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(context.l10n.onboardingErrGuestFailed),
-            action: SnackBarAction(
-              label: context.l10n.actionRetry,
-              onPressed: _handleExploreAsGuest,
-            ),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isStartingGuest = false);
-      }
-    }
+    if (!mounted) return;
+    HapticHelper.light();
+    GuestSetupSheet.show(context);
   }
 
   @override
@@ -95,13 +69,13 @@ class _OnboardingViewState extends State<OnboardingView> {
     final l10n = context.l10n;
     final reduceMotion = MediaQuery.of(context).disableAnimations;
 
-    final bgColor = isDark ? const Color(0xFF080C0E) : const Color(0xFFFAFBFB);
+    final bgColor = isDark ? const Color(0xFF080C0E) : const Color(0xFFF8FAFC);
 
     return Scaffold(
       backgroundColor: bgColor,
       body: Stack(
         children: [
-          // Ambient Emerald Background Glow
+          // Background ambient glow
           Positioned(
             top: -120,
             right: -80,
@@ -180,10 +154,25 @@ class _OnboardingViewState extends State<OnboardingView> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            // Primary: Continue with Google
-                            KithGoogleAuthButton(
+                            // Primary: Continue with Nirniq
+                            KithNirniqAuthButton(
                               isLoading: authVm.isLoading,
-                              onPressed: _handleGoogleSignIn,
+                              onPressed: _handleNirniqSignIn,
+                            ),
+
+                            const SizedBox(height: 10),
+
+                            // Ecosystem Subtitle
+                            Text(
+                              l10n.onboardingEcosystemNote,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                                color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
+                                    .withValues(alpha: 0.9),
+                                letterSpacing: 0.2,
+                              ),
                             ),
 
                             const SizedBox(height: 12),
@@ -193,7 +182,6 @@ class _OnboardingViewState extends State<OnboardingView> {
                               text: l10n.onboardingGuestBtn,
                               variant: AppButtonVariant.secondary,
                               isFullWidth: true,
-                              isLoading: _isStartingGuest,
                               onPressed: _handleExploreAsGuest,
                             ),
 
@@ -289,7 +277,7 @@ class _OnboardingViewState extends State<OnboardingView> {
                 child: InkWell(
                   onTap: () {
                     HapticHelper.light();
-                    InteractiveTutorialSheet.show(context);
+                    context.push('/walkthrough');
                   },
                   borderRadius: BorderRadius.circular(16),
                   child: Container(

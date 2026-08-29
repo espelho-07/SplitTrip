@@ -3,8 +3,10 @@ import 'package:provider/provider.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/services/kith_widget_service.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
+import '../../../data/services/local_storage_service.dart';
 import '../../../data/services/sync_service.dart';
 import '../../../domain/enums/app_experience_mode.dart';
+import '../../../domain/services/notification_service.dart';
 import '../../router/app_router.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
@@ -46,11 +48,28 @@ class _HomeViewState extends State<HomeView> {
         final personalVm = context.read<PersonalExpenseViewModel>();
         final apiClient = context.read<ApiClient>();
         final syncService = context.read<SyncService>();
+        final storage = context.read<LocalStorageService>();
+        final notifService = context.read<NotificationService>();
 
         await syncService.flushQueue(apiClient);
         await homeVm.loadTrips(user.id);
         await personalVm.loadData(user.id);
         await personalVm.syncTripExpenses(user.id);
+
+        // Check if user has not configured payment receiving method
+        if (!storage.hasPaymentMethodConfigured()) {
+          final existing = notifService.getNotifications();
+          final alreadyNotified = existing.any((n) => n.route == '/payment-methods');
+          if (!alreadyNotified) {
+            await notifService.addNotification(
+              title: 'Set Up Receiving UPI & QR ⚡',
+              description: 'Add your UPI ID so trip friends can settle balances directly to your account with 1 tap.',
+              type: NotificationType.system,
+              route: '/payment-methods',
+              actionLabel: 'Set Up Now',
+            );
+          }
+        }
 
         if (mounted) {
           final widgetService = context.read<KithWidgetService>();

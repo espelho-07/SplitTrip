@@ -73,7 +73,7 @@ void main() {
       expect(find.textContaining('Your money'), findsOneWidget);
     });
 
-    testWidgets('2. Renders Google Auth button and Explore as Guest', (tester) async {
+    testWidgets('2. Renders Nirniq Auth button and Explore as Guest', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -82,12 +82,12 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 600));
 
-      expect(find.text('Continue with Google'), findsOneWidget);
+      expect(find.text('Continue with Nirniq'), findsOneWidget);
       expect(find.text('Explore as Guest'), findsOneWidget);
       expect(find.text('Restore with Recovery Key'), findsOneWidget);
     });
 
-    testWidgets('3. Tapping Explore as Guest starts guest session directly', (tester) async {
+    testWidgets('3. Tapping Explore as Guest opens name input sheet and creates guest session', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -101,9 +101,19 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 600));
 
+      // GuestSetupSheet should be shown with name input
+      expect(find.byType(TextField), findsOneWidget);
+      await tester.enterText(find.byType(TextField), 'Darpan');
+      await tester.pump();
+
+      // Tap CTA to start
+      await tester.tap(find.text('Start Exploring'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+
       expect(authVm.isAuthenticated, isTrue);
       expect(authVm.currentUser, isNotNull);
-      expect(authVm.currentUser!.displayName, equals('Traveler'));
+      expect(authVm.currentUser!.displayName, equals('Darpan'));
     });
   });
 }
