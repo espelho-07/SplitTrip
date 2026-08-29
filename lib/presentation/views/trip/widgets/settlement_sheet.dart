@@ -11,6 +11,7 @@ import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/currency_display.dart';
 import '../../../../core/widgets/member_avatar.dart';
 import '../../../../core/widgets/surface_card.dart';
+import '../../../../data/repositories/user_repository.dart';
 import '../../../../data/services/local_storage_service.dart';
 import '../../../../domain/models/balance_summary.dart';
 import '../../../../domain/models/trip.dart';
@@ -78,14 +79,25 @@ class _SettlementSheetState extends State<SettlementSheet> {
 
     final toMember = _findMember(toMemberId);
     final storage = context.read<LocalStorageService>();
+    final userRepo = context.read<UserRepository>();
+    final l10n = context.l10n;
     final currentUser = storage.getSavedUser();
     String? recipientUpi = toMember?.upiId;
+
     if ((recipientUpi == null || recipientUpi.isEmpty) && toMember?.userId != null) {
       if (toMember!.userId == currentUser?['id']) {
         recipientUpi = storage.getPrimaryUpiId() ?? (currentUser?['upiId'] as String?);
+      } else {
+        // Query live user UPI from backend/repository
+        try {
+          final liveUpi = await userRepo.getUserUpi(toMember.userId);
+          if (liveUpi != null && liveUpi.isNotEmpty) {
+            recipientUpi = liveUpi;
+          }
+        } catch (_) {}
       }
     }
-    final l10n = context.l10n;
+    if (!mounted) return;
 
     final success = await UpiPaymentSheet.show(
       context,

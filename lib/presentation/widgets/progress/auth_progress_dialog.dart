@@ -136,13 +136,13 @@ class _AuthProgressDialogState extends State<AuthProgressDialog> with SingleTick
       );
 
       final NirniqAuthResult? authResult = await NirniqAccountService.authenticate();
-      if (authResult == null || !authResult.isSuccess || authResult.identity == null) {
+      if (authResult == null || !authResult.isSuccess) {
         // User cancelled picker
         if (mounted) Navigator.of(context).pop(false);
         return;
       }
 
-      final identity = authResult.identity!;
+      final identity = authResult.identity;
 
       // Step 2: Canonicalize User & Token in Cloud
       _updateProgress(

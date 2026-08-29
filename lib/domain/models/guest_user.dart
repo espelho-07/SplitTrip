@@ -108,7 +108,7 @@ class GuestUser {
       displayName: json['displayName'] as String,
       avatarUrl: json['avatarUrl'] as String?,
       recoveryKey: validKey,
-      anonymousToken: json['anonymousToken'] as String? ?? 'anon_token',
+      anonymousToken: json['anonymousToken'] as String? ?? json['token'] as String? ?? json['sessionToken'] as String? ?? 'anon_token',
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'] as String)
           : DateTime.now(),

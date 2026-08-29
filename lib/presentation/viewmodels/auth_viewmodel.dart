@@ -253,6 +253,19 @@ class AuthViewModel extends ChangeNotifier {
     }
   }
 
+  Future<GuestUser?> updatePaymentInfo(String upiId, {String? upiQr}) async {
+    try {
+      final updated = await userRepo.updatePaymentInfo(upiId, upiQr: upiQr);
+      if (updated != null) {
+        _currentUser = updated;
+        notifyListeners();
+      }
+      return updated;
+    } catch (_) {
+      return null;
+    }
+  }
+
   bool get hasCompletedOnboarding => userRepo.hasCompletedOnboarding();
 
   Future<void> setOnboardingCompleted(bool completed) async {

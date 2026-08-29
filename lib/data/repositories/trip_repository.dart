@@ -148,6 +148,7 @@ class TripRepository {
         avatarUrl: creator.avatarUrl,
         role: 'creator',
         joinedAt: DateTime.now(),
+        upiId: creator.upiId,
       ),
     ];
 
@@ -185,13 +186,36 @@ class TripRepository {
     currentTrips.insert(0, newTrip);
     await storage.saveTrips(currentTrips.map((t) => t.toJson()).toList());
 
-    // 2. Enqueue mutation with non-blocking background flush
-    await syncService.enqueueMutation(
-      MutationType.createTrip,
-      payload,
-      idempotencyKey: tripId,
-      backgroundApiClient: apiClient,
-    );
+    // 2. Ensure auth credentials are active on API client
+    if (creator.anonymousToken.isNotEmpty) {
+      apiClient.setAuthToken(creator.anonymousToken);
+      realtimeClient?.setAuthToken(creator.anonymousToken);
+    }
+
+    // 3. Attempt direct synchronous creation on server when online
+    try {
+      final res = await apiClient.post('/trips', body: payload);
+      if (res is Map<String, dynamic>) {
+        final serverTrip = Trip.fromJson(res);
+        final trips = getCachedTrips();
+        final idx = trips.indexWhere((t) => t.id == serverTrip.id);
+        if (idx != -1) {
+          trips[idx] = serverTrip;
+        } else {
+          trips.insert(0, serverTrip);
+        }
+        await storage.saveTrips(trips.map((t) => t.toJson()).toList());
+        return serverTrip;
+      }
+    } catch (_) {
+      // 4. Offline / network failure: enqueue mutation with non-blocking background flush
+      await syncService.enqueueMutation(
+        MutationType.createTrip,
+        payload,
+        idempotencyKey: tripId,
+        backgroundApiClient: apiClient,
+      );
+    }
 
     return newTrip;
   }

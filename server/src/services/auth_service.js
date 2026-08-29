@@ -659,7 +659,7 @@ class AuthService {
     } catch (_) {}
   }
 
-  updatePaymentInfo(userId, { upiId, upiQr } = {}) {
+  updatePaymentInfo(userId, { upiId, upiQr } = {}, realtimeHub = null) {
     const user = db.get('users', userId);
     if (!user) {
       throw AppError.notFound('User not found');
@@ -677,6 +677,14 @@ class AuthService {
     const memberships = db.find('trip_members', (m) => m.userId === userId);
     for (const m of memberships) {
       db.update('trip_members', m.id, { upiId: normalizedUpi });
+      if (realtimeHub) {
+        realtimeHub.broadcastToTrip(m.tripId, 'member_updated', {
+          tripId: m.tripId,
+          memberId: m.id,
+          userId,
+          upiId: normalizedUpi,
+        });
+      }
     }
 
     return {
@@ -684,6 +692,26 @@ class AuthService {
       displayName: user.displayName,
       upiId: normalizedUpi,
       upiQr: upiQr || null,
+    };
+  }
+
+  getUserUpi(userId) {
+    if (!userId) throw AppError.badRequest('User ID is required');
+    const user = db.get('users', userId);
+    if (!user) {
+      const member = db.findOne('trip_members', (m) => m.userId === userId || m.id === userId);
+      return {
+        userId,
+        displayName: member?.displayName || 'Traveler',
+        upiId: member?.upiId || null,
+        upiQr: null,
+      };
+    }
+    return {
+      userId: user.id,
+      displayName: user.displayName,
+      upiId: user.upiId || null,
+      upiQr: user.upiQr || null,
     };
   }
 

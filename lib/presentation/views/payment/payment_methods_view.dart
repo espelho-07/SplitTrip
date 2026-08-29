@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../data/services/local_storage_service.dart';
+import '../../viewmodels/auth_viewmodel.dart';
 
 class SavedUpiItem {
   final String id;
@@ -117,10 +118,14 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
       if (_savedUpis.isNotEmpty) {
         final primary = _savedUpis.firstWhere((u) => u.isDefault, orElse: () => _savedUpis.first);
         await storage.setPrimaryUpiId(primary.vpa);
-        // Sync with backend / auth service
         if (mounted) {
+          final authVm = context.read<AuthViewModel>();
+          final localStore = context.read<LocalStorageService>();
           try {
-            await context.read<LocalStorageService>().saveUserToRecoveryVault({
+            await authVm.updatePaymentInfo(primary.vpa);
+          } catch (_) {}
+          try {
+            await localStore.saveUserToRecoveryVault({
               ...?storage.getSavedUser(),
               'upiId': primary.vpa,
             });
@@ -128,6 +133,12 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
         }
       } else {
         await storage.setPrimaryUpiId(null);
+        if (mounted) {
+          final authVm = context.read<AuthViewModel>();
+          try {
+            await authVm.updatePaymentInfo('');
+          } catch (_) {}
+        }
       }
     } catch (_) {}
   }

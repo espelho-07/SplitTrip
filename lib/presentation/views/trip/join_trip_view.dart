@@ -10,6 +10,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/widgets/kith_brand.dart';
 import '../../../core/widgets/surface_card.dart';
+import '../../../domain/engine/qr_code_parser.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/join_trip_viewmodel.dart';
@@ -53,18 +54,19 @@ class _JoinTripViewState extends State<JoinTripView> {
 
   Future<void> _pasteFromClipboard() async {
     HapticHelper.selection();
-    final data = await Clipboard.getData(Clipboard.kTextPlain);
-    final text = data?.text?.trim().toUpperCase();
-    if (text != null && text.isNotEmpty) {
-      // Extract alphanumeric 6 chars if present
-      final clean = text.replaceAll(RegExp(r'[^A-Z0-9]'), '');
-      final codeToSet = clean.length >= 6 ? clean.substring(0, 6) : clean;
-      setState(() {
-        _codeController.text = codeToSet;
-      });
-      if (mounted) context.read<JoinTripViewModel>().setCode(codeToSet);
-      if (codeToSet.length == 6) {
-        _handlePreviewOrJoin(codeToSet);
+    final clipboardData = await Clipboard.getData('text/plain');
+    if (clipboardData != null && clipboardData.text != null) {
+      final text = clipboardData.text!.trim();
+      final parsed = QrCodeParser.extractInviteCode(text);
+      final codeToSet = parsed ?? text.replaceAll(RegExp(r'[^A-Z0-9]'), '').toUpperCase();
+      if (codeToSet.isNotEmpty) {
+        setState(() {
+          _codeController.text = codeToSet;
+        });
+        if (mounted) context.read<JoinTripViewModel>().setCode(codeToSet);
+        if (codeToSet.length >= 4) {
+          _handlePreviewOrJoin(codeToSet);
+        }
       }
     }
   }
@@ -79,8 +81,8 @@ class _JoinTripViewState extends State<JoinTripView> {
     final user = authVm.currentUser;
     if (user == null) return;
 
-    final targetCode = (directCode ?? _codeController.text).trim().toUpperCase();
-    if (targetCode.isEmpty || targetCode.length < 6) {
+    final targetCode = (directCode ?? _codeController.text).trim().toUpperCase().replaceAll(RegExp(r'[\s\-]'), '');
+    if (targetCode.isEmpty || targetCode.length < 4) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(l10n.joinErrEmpty),

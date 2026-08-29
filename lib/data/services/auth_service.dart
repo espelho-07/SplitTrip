@@ -65,8 +65,11 @@ class AuthService {
       });
 
       if (res is Map<String, dynamic> && res.containsKey('user')) {
-        final userData = res['user'] as Map<String, dynamic>;
+        final userData = Map<String, dynamic>.from(res['user'] as Map);
         final token = res['token'] as String? ?? userData['anonymousToken'] as String? ?? '';
+        if (token.isNotEmpty && (!userData.containsKey('anonymousToken') || userData['anonymousToken'] == null)) {
+          userData['anonymousToken'] = token;
+        }
 
         final user = GuestUser.fromJson(userData);
         apiClient.setAuthToken(token);
@@ -512,6 +515,13 @@ class AuthService {
         upiQr: upiQr ?? current.upiQr,
       );
       await storage.saveUser(updated.toJson());
+      await storage.saveUserToRecoveryVault(updated.toJson());
+
+      if (updated.anonymousToken.isNotEmpty) {
+        apiClient.setAuthToken(updated.anonymousToken);
+        realtimeClient?.setAuthToken(updated.anonymousToken);
+      }
+
       try {
         await apiClient.put('/auth/payment', body: {
           'upiId': cleanUpi,
@@ -521,6 +531,23 @@ class AuthService {
         // Offline resilient fallback
       }
       return updated;
+    }
+    return null;
+  }
+
+  /// Fetches the live configured UPI ID for a specific user ID from the backend.
+  Future<String?> getUserUpi(String userId) async {
+    if (userId.isEmpty || userId.startsWith('guest_')) return null;
+    try {
+      final res = await apiClient.get('/auth/users/$userId/upi');
+      if (res is Map<String, dynamic>) {
+        final upi = res['upiId'] as String?;
+        if (upi != null && upi.trim().isNotEmpty) {
+          return upi.trim();
+        }
+      }
+    } catch (_) {
+      // Offline fallback
     }
     return null;
   }

@@ -179,11 +179,34 @@ router.get('/me', authMiddleware, (req, res, next) => {
   }
 });
 
-// PUT /api/auth/payment - Update user's receiving UPI ID and QR code
-router.put('/payment', authMiddleware, (req, res, next) => {
+// PUT & POST /api/auth/payment - Update user's receiving UPI ID and QR code
+function handleUpdatePayment(req, res, next) {
   try {
     const { upiId, upiQr } = req.body || {};
-    const result = authService.updatePaymentInfo(req.user.id, { upiId, upiQr });
+    const { realtimeHub } = require('../realtime/websocket_hub');
+    const result = authService.updatePaymentInfo(req.user.id, { upiId, upiQr }, realtimeHub);
+    res.status(200).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+}
+
+router.put('/payment', authMiddleware, handleUpdatePayment);
+router.post('/payment', authMiddleware, handleUpdatePayment);
+
+// GET /api/auth/users/:userId/upi - Lookup a trip member's configured receiving UPI ID
+router.get('/users/:userId/upi', authMiddleware, (req, res, next) => {
+  try {
+    const result = authService.getUserUpi(req.params.userId);
+    res.status(200).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.get('/upi/:userId', authMiddleware, (req, res, next) => {
+  try {
+    const result = authService.getUserUpi(req.params.userId);
     res.status(200).json({ data: result });
   } catch (e) {
     next(e);

@@ -23,7 +23,7 @@ class TripPreview {
 
   factory TripPreview.fromJson(Map<String, dynamic> json) {
     return TripPreview(
-      tripId: json['tripId'] as String? ?? '',
+      tripId: json['tripId'] as String? ?? json['id'] as String? ?? '',
       name: json['name'] as String? ?? '',
       emoji: json['emoji'] as String? ?? '✈️',
       coverGradientIndex: json['coverGradientIndex'] as int? ?? 0,

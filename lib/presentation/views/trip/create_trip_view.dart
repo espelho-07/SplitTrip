@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/localization/app_localizations.dart';
@@ -211,7 +210,6 @@ class _CreateTripViewState extends State<CreateTripView> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final createVm = context.watch<CreateTripViewModel>();
     final l10n = context.l10n;
-    final reduceMotion = MediaQuery.of(context).disableAnimations;
     final hasUnsavedData = createVm.name.trim().isNotEmpty || createVm.friendNames.isNotEmpty;
 
     final bgColor = isDark ? const Color(0xFF080C0E) : const Color(0xFFFAFBFB);

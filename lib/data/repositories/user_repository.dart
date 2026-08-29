@@ -92,6 +92,14 @@ class UserRepository {
     return authService.deleteAccount();
   }
 
+  Future<GuestUser?> updatePaymentInfo(String upiId, {String? upiQr}) {
+    return authService.updatePaymentInfo(upiId, upiQr: upiQr);
+  }
+
+  Future<String?> getUserUpi(String userId) {
+    return authService.getUserUpi(userId);
+  }
+
   String? getAppExperienceMode() {
     return authService.storage.getSavedAppExperienceMode();
   }

@@ -31,7 +31,12 @@ class QrCodeParser {
         final host = uri.host.toLowerCase();
 
         if (scheme == 'http' || scheme == 'https') {
-          final isAllowedHost = _allowedHosts.any((h) => host == h || host.endsWith('.$h') || host.endsWith('onrender.com'));
+          final isAllowedHost = _allowedHosts.any((h) =>
+              host == h ||
+              host.endsWith('.$h') ||
+              host.endsWith('onrender.com') ||
+              host.contains('192.168.') ||
+              host.contains('10.0.'));
           if (!isAllowedHost) {
             return null; // Reject untrusted web host
           }
@@ -39,10 +44,13 @@ class QrCodeParser {
           return null; // Reject untrusted scheme
         }
 
-        if (uri.hasQuery && uri.queryParameters.containsKey('code')) {
-          final code = uri.queryParameters['code'];
-          if (code != null && _isValidCode(code)) {
-            return code.trim().toUpperCase();
+        // Check query parameters: code, inviteCode, tripId, id
+        for (final param in ['code', 'inviteCode', 'tripId', 'id']) {
+          if (uri.queryParameters.containsKey(param)) {
+            final val = uri.queryParameters[param];
+            if (val != null && _isValidCode(val)) {
+              return val.trim().toUpperCase().replaceAll(RegExp(r'[\s\-]'), '');
+            }
           }
         }
 
@@ -50,7 +58,7 @@ class QrCodeParser {
         if (uri.pathSegments.isNotEmpty) {
           final lastSegment = uri.pathSegments.last;
           if (_isValidCode(lastSegment)) {
-            return lastSegment.trim().toUpperCase();
+            return lastSegment.trim().toUpperCase().replaceAll(RegExp(r'[\s\-]'), '');
           }
         }
         return null;
@@ -59,22 +67,24 @@ class QrCodeParser {
       // Not a standard URI, fallback to direct code check
     }
 
-    // 2. Direct alphanumeric join code format check (6 alphanumeric characters or trip_...)
+    // 2. Direct alphanumeric join code format check (4 to 12 alphanumeric characters or trip_...)
     if (_isValidCode(trimmed)) {
-      return trimmed.toUpperCase();
+      return trimmed.trim().toUpperCase().replaceAll(RegExp(r'[\s\-]'), '');
     }
 
     return null;
   }
 
   static bool _isValidCode(String code) {
-    final clean = code.trim().toUpperCase();
-    // 6-character alphanumeric invite code (excluding easily confused chars 0, 1, I, O)
-    final codeRegex = RegExp(r'^[A-Z0-9]{6}$');
+    final clean = code.trim().toUpperCase().replaceAll(RegExp(r'[\s\-]'), '');
+    if (clean.isEmpty) return false;
+
+    // Alphanumeric invite code (4 to 12 characters)
+    final codeRegex = RegExp(r'^[A-Z0-9]{4,12}$');
     if (codeRegex.hasMatch(clean)) return true;
 
     // Direct trip ID format (trip_xxxxxxxxxxxx)
-    final tripIdRegex = RegExp(r'^TRIP_[A-Z0-9_]{6,32}$');
+    final tripIdRegex = RegExp(r'^TRIP_[A-Z0-9_]{4,36}$');
     if (tripIdRegex.hasMatch(clean)) return true;
 
     return false;
