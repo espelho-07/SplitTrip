@@ -36,10 +36,13 @@ android {
         create("release") {
             val storeFilePath = keystoreProperties.getProperty("storeFile") ?: System.getenv("KEYSTORE_PATH")
             if (storeFilePath != null) {
-                storeFile = file(storeFilePath)
-                storePassword = keystoreProperties.getProperty("storePassword") ?: System.getenv("KEYSTORE_PASSWORD")
-                keyAlias = keystoreProperties.getProperty("keyAlias") ?: System.getenv("KEY_ALIAS")
-                keyPassword = keystoreProperties.getProperty("keyPassword") ?: System.getenv("KEY_PASSWORD")
+                val kFile = rootProject.file(storeFilePath).takeIf { it.exists() }
+                    ?: rootProject.file("app/$storeFilePath").takeIf { it.exists() }
+                    ?: file(storeFilePath)
+                storeFile = kFile
+                storePassword = keystoreProperties.getProperty("storePassword") ?: System.getenv("KEYSTORE_PASSWORD") ?: "kithpass123"
+                keyAlias = keystoreProperties.getProperty("keyAlias") ?: System.getenv("KEY_ALIAS") ?: "upload"
+                keyPassword = keystoreProperties.getProperty("keyPassword") ?: System.getenv("KEY_PASSWORD") ?: "kithpass123"
             }
         }
     }
@@ -61,6 +64,9 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+        jniLibs {
+            keepDebugSymbols += "**/*.so"
         }
     }
 }
