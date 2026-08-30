@@ -31,10 +31,24 @@ class _TripsHomeTabState extends State<TripsHomeTab> {
   final TextEditingController _searchController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final authVm = context.read<AuthViewModel>();
+      final user = authVm.currentUser;
+      if (user != null) {
+        final homeVm = context.read<HomeViewModel>();
+        homeVm.loadTrips(user.id);
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
   }
+
 
   @override
   Widget build(BuildContext context) {

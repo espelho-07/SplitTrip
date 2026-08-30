@@ -111,39 +111,54 @@ class Trip {
   factory Trip.fromJson(Map<String, dynamic> json) {
     final parsedCreatedAt = json['createdAt'] != null
         ? DateTime.tryParse(json['createdAt'] as String) ?? DateTime.now()
-        : DateTime.now();
+        : (json['created_at'] != null
+            ? DateTime.tryParse(json['created_at'] as String) ?? DateTime.now()
+            : DateTime.now());
     final parsedStartedAt = json['startedAt'] != null
         ? DateTime.tryParse(json['startedAt'] as String) ?? parsedCreatedAt
         : (json['started_at'] != null
             ? DateTime.tryParse(json['started_at'] as String) ?? parsedCreatedAt
             : parsedCreatedAt);
 
+    final rawLifecycle = json['lifecycleState'] as String? ??
+        json['lifecycle_state'] as String? ??
+        json['status'] as String? ??
+        'active';
+
+    final rawCompletedAt = json['completedAt'] != null
+        ? DateTime.tryParse(json['completedAt'] as String)
+        : (json['completed_at'] != null
+            ? DateTime.tryParse(json['completed_at'] as String)
+            : null);
+
+    final rawCompletedBy = json['completedBy'] as String? ?? json['completed_by'] as String?;
+
     return Trip(
-      id: json['id'] as String,
-      name: json['name'] as String,
+      id: (json['id'] as String?) ?? '',
+      name: (json['name'] as String?) ?? 'Trip',
       description: json['description'] as String?,
       emoji: json['emoji'] as String? ?? '✈️',
-      coverGradientIndex: json['coverGradientIndex'] as int? ?? 0,
-      currencyCode: json['currencyCode'] as String? ?? 'INR',
-      creatorId: json['creatorId'] as String,
+      coverGradientIndex: json['coverGradientIndex'] as int? ?? json['cover_gradient_index'] as int? ?? 0,
+      currencyCode: json['currencyCode'] as String? ?? json['currency_code'] as String? ?? 'INR',
+      creatorId: (json['creatorId'] as String?) ?? (json['creator_id'] as String?) ?? '',
       members: (json['members'] as List<dynamic>?)
               ?.map((e) => TripMember.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],
-      lifecycleState: TripLifecycle.fromString(json['lifecycleState'] as String? ?? 'active'),
-      inviteCode: json['inviteCode'] as String? ?? 'KITH00',
+      lifecycleState: TripLifecycle.fromString(rawLifecycle),
+      inviteCode: json['inviteCode'] as String? ?? json['invite_code'] as String? ?? 'KITH00',
       tripMode: json['tripMode'] as String? ?? json['trip_mode'] as String? ?? 'split_only',
       revision: json['revision'] as int? ?? 1,
-      completionMode: json['completionMode'] as String?,
+      completionMode: json['completionMode'] as String? ?? json['completion_mode'] as String?,
       startedAt: parsedStartedAt,
-      completedAt: json['completedAt'] != null
-          ? DateTime.tryParse(json['completedAt'] as String)
-          : null,
-      completedBy: json['completedBy'] as String?,
+      completedAt: rawCompletedAt,
+      completedBy: rawCompletedBy,
       createdAt: parsedCreatedAt,
       updatedAt: json['updatedAt'] != null
           ? DateTime.tryParse(json['updatedAt'] as String) ?? parsedCreatedAt
-          : parsedCreatedAt,
+          : (json['updated_at'] != null
+              ? DateTime.tryParse(json['updated_at'] as String) ?? parsedCreatedAt
+              : parsedCreatedAt),
     );
   }
 }

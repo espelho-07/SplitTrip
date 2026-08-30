@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/network/api_client.dart';
 import '../../core/network/api_exceptions.dart';
@@ -500,24 +501,42 @@ class TripRepository {
     required String completionMode, // 'NORMAL' or 'FORCED_WITH_PENDING_SYNC'
     int? expectedRevision,
   }) async {
+    debugPrint('[TripRepository] TRIP COMPLETION REQUEST: tripId=$tripId, mode=$completionMode');
     final res = await apiClient.post('/trips/$tripId/complete', body: {
       'completionMode': completionMode,
-      'expectedRevision': ?expectedRevision,
+      'expectedRevision': expectedRevision,
     });
 
     if (res is Map<String, dynamic>) {
       final completedTrip = Trip.fromJson(res);
-      final trips = await getTrips();
-      final idx = trips.indexWhere((t) => t.id == tripId);
+      debugPrint('[TripRepository] SERVER COMPLETION RESULT: tripId=${completedTrip.id}, status=${completedTrip.lifecycleState.name}');
+
+      // 1. Immediately update local storage cache with completed trip
+      final cached = getCachedTrips();
+      final idx = cached.indexWhere((t) => t.id == tripId);
       if (idx != -1) {
-        trips[idx] = completedTrip;
-        await storage.saveTrips(trips.map((t) => t.toJson()).toList());
+        cached[idx] = completedTrip;
+      } else {
+        cached.insert(0, completedTrip);
       }
+      await storage.saveTrips(cached.map((t) => t.toJson()).toList());
+
+      // 2. Fetch authoritative full remote list in background without dropping completed trip
+      try {
+        final remoteTrips = await getTrips();
+        final rIdx = remoteTrips.indexWhere((t) => t.id == tripId);
+        if (rIdx != -1) {
+          remoteTrips[rIdx] = completedTrip;
+          await storage.saveTrips(remoteTrips.map((t) => t.toJson()).toList());
+        }
+      } catch (_) {}
+
       return completedTrip;
     }
 
     throw const NetworkException(message: 'Failed to complete trip on server');
   }
+
 
 
   /// Adds an additional member to a trip.

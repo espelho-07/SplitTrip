@@ -26,7 +26,7 @@ class DashboardTab extends StatelessWidget {
     final user = authVm.currentUser;
 
     final trips = homeVm.trips;
-    final Trip? activeTrip = trips.isNotEmpty ? trips.first : null;
+    final Trip? activeTrip = trips.where((t) => t.lifecycleState.isActive || t.lifecycleState.isCompleting).firstOrNull;
     final activeBalance = activeTrip != null ? homeVm.tripBalances[activeTrip.id] : null;
     final activeNet = activeBalance?.currentUserNetBalanceInPaise ?? 0;
 

@@ -54,7 +54,7 @@ class HomeViewModel extends ChangeNotifier {
         // so the UI immediately moves the trip to "All Trips / Completed" section.
         if (event.data['trip'] is Map<String, dynamic>) {
           final trip = Trip.fromJson(event.data['trip'] as Map<String, dynamic>);
-          _updateTripInPlace(trip, _currentUserId!);
+          updateTripInPlace(trip, _currentUserId!);
         } else {
           // No trip object in payload — do a background refresh
           _computeLocalBalances(_trips, _currentUserId!);
@@ -74,7 +74,8 @@ class HomeViewModel extends ChangeNotifier {
     });
   }
 
-  void _updateTripInPlace(Trip trip, String currentUserId) {
+  void updateTripInPlace(Trip trip, String currentUserId) {
+    debugPrint('[HomeViewModel] Updating trip in place: ${trip.id} -> ${trip.lifecycleState.name}');
     final idx = _trips.indexWhere((t) => t.id == trip.id);
     if (idx != -1) {
       _trips[idx] = trip;
@@ -139,12 +140,13 @@ class HomeViewModel extends ChangeNotifier {
   Future<void> loadTrips(String currentUserId) async {
     _currentUserId = currentUserId;
 
-    // 1. FAST LOCAL HYDRATION: Render cached trips immediately (< 5ms)
+    // 1. FAST LOCAL HYDRATION: Always hydrate cached trips immediately (< 5ms)
     final cachedTrips = tripRepo.getCachedTrips();
-    if (cachedTrips.isNotEmpty && _trips.isEmpty) {
+    if (cachedTrips.isNotEmpty) {
       _trips = cachedTrips;
       _computeLocalBalances(_trips, currentUserId);
       notifyListeners();
+      debugPrint('[HomeViewModel] Hydrated ${cachedTrips.length} cached trips from storage');
     }
 
     _isLoading = _trips.isEmpty;
@@ -155,6 +157,7 @@ class HomeViewModel extends ChangeNotifier {
       // 2. Non-blocking network sync
       final remoteTrips = await tripRepo.getTrips();
       _trips = remoteTrips;
+      debugPrint('[HomeViewModel] ALL TRIPS QUERY: result count=${remoteTrips.length}');
 
       // Hydrate expenses for each trip so balances are immediately available
       for (final trip in remoteTrips) {

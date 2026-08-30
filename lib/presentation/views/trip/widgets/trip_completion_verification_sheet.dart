@@ -14,6 +14,7 @@ import '../../../../data/repositories/trip_repository.dart';
 import '../../../../data/services/sync_service.dart';
 import '../../../../domain/models/trip_sync_status.dart';
 import '../../../viewmodels/auth_viewmodel.dart';
+import '../../../viewmodels/home_viewmodel.dart';
 import '../../../viewmodels/trip_detail_viewmodel.dart';
 
 enum VerificationStage {
@@ -196,11 +197,22 @@ class _TripCompletionVerificationSheetState
 
     try {
       final mode = forced ? 'FORCED_WITH_PENDING_SYNC' : 'NORMAL';
-      await tripRepo.completeTrip(
+      final completedTrip = await tripRepo.completeTrip(
         tripId: widget.tripId,
         completionMode: mode,
         expectedRevision: _syncStatus?.currentRevision,
       );
+
+      // Update HomeViewModel directly if present in provider tree
+      if (mounted) {
+        try {
+          final homeVm = Provider.of<HomeViewModel?>(context, listen: false);
+          if (homeVm != null && authVm.currentUser != null) {
+            homeVm.updateTripInPlace(completedTrip, authVm.currentUser!.id);
+          }
+        } catch (_) {}
+      }
+
 
       // Update viewmodel & notify listeners
       await tripDetailVm.loadTrip(widget.tripId, authVm.currentUser?.id ?? '');
@@ -210,6 +222,7 @@ class _TripCompletionVerificationSheetState
         Navigator.pop(context, true);
         widget.onTripCompleted?.call();
       }
+
     } on ConflictException catch (_) {
       // Revision changed while finalizing: prompt to re-verify
       if (mounted) {

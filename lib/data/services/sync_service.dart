@@ -308,12 +308,16 @@ class SyncService {
       if (idx != -1) {
         trips[idx]['lifecycleState'] = lifecycleState;
         trips[idx]['updatedAt'] = DateTime.now().toIso8601String();
+        if (trips[idx]['completedAt'] == null && (lifecycleState.contains('completed') || lifecycleState == 'settled')) {
+          trips[idx]['completedAt'] = DateTime.now().toIso8601String();
+        }
         _storage.saveTrips(trips);
       }
     } catch (e) {
       debugPrint('[SyncService] Notice updating local trip lifecycle: $e');
     }
   }
+
 
   Future<void> _executeMutation(ApiClient apiClient, SyncMutation mutation) async {
     switch (mutation.type) {

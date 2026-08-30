@@ -32,7 +32,11 @@ enum TripLifecycle {
 
   bool get isActive => this == TripLifecycle.active;
   bool get isCompleting => this == TripLifecycle.completing;
-  bool get isCompleted => this == TripLifecycle.completed || this == TripLifecycle.completedWithPendingChanges;
+  bool get isCompleted =>
+      this == TripLifecycle.completed ||
+      this == TripLifecycle.completedWithPendingChanges ||
+      this == TripLifecycle.settling ||
+      this == TripLifecycle.settled;
   bool get allowsExpenses => this == TripLifecycle.active;
   bool get isLocked => this == TripLifecycle.completed || this == TripLifecycle.completedWithPendingChanges || this == TripLifecycle.settling || this == TripLifecycle.settled;
   bool get isSettlementActive => this == TripLifecycle.completed || this == TripLifecycle.completedWithPendingChanges || this == TripLifecycle.settling || this == TripLifecycle.settled || this == TripLifecycle.completing;
@@ -57,7 +61,14 @@ enum TripLifecycle {
   }
 
   static TripLifecycle fromString(String value) {
-    final clean = value.toLowerCase().replaceAll('_', '');
+    final clean = value.toLowerCase().replaceAll('_', '').trim();
+    if (clean == 'complete' || clean == 'completed') return TripLifecycle.completed;
+    if (clean == 'settled' || clean == 'settle') return TripLifecycle.settled;
+    if (clean == 'settling') return TripLifecycle.settling;
+    if (clean == 'active') return TripLifecycle.active;
+    if (clean == 'completing' || clean == 'finishing') return TripLifecycle.completing;
+    if (clean == 'draft') return TripLifecycle.draft;
+
     return TripLifecycle.values.firstWhere(
       (e) => e.name.toLowerCase().replaceAll('_', '') == clean,
       orElse: () => TripLifecycle.active,
