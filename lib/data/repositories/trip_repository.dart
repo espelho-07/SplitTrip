@@ -91,6 +91,16 @@ class TripRepository {
     ).firstOrNull;
 
     if (cached != null) {
+      final unclaimed = cached.members
+          .where((m) => m.isUnclaimed)
+          .map((m) => UnclaimedMemberPreview(
+                id: m.id,
+                displayName: m.displayName,
+                avatarUrl: m.avatarUrl,
+                claimToken: m.claimToken,
+              ))
+          .toList();
+
       return TripPreview(
         tripId: cached.id,
         name: cached.name,
@@ -101,6 +111,7 @@ class TripRepository {
         memberCount: cached.members.length,
         lifecycleState: cached.lifecycleState.name,
         inviteCode: cached.inviteCode,
+        unclaimedMembers: unclaimed,
       );
     }
 
@@ -148,6 +159,8 @@ class TripRepository {
         displayName: creator.displayName,
         avatarUrl: creator.avatarUrl,
         role: 'creator',
+        status: 'claimed',
+        isClaimed: true,
         joinedAt: DateTime.now(),
         upiId: creator.upiId,
       ),
@@ -157,9 +170,11 @@ class TripRepository {
       if (friendName.trim().isNotEmpty) {
         members.add(TripMember(
           id: 'mbr_${_uuid.v4().replaceAll('-', '').substring(0, 10)}',
-          userId: 'guest_${_uuid.v4().replaceAll('-', '').substring(0, 8)}',
+          userId: 'unclaimed_${_uuid.v4().replaceAll('-', '').substring(0, 8)}',
           displayName: friendName.trim(),
           role: 'member',
+          isClaimed: false,
+          claimToken: 'clm_${_uuid.v4().replaceAll('-', '').substring(0, 10)}',
           joinedAt: DateTime.now(),
         ));
       }
@@ -222,10 +237,12 @@ class TripRepository {
   }
 
 
-  /// Joins a trip via 6-digit alphanumeric invite code.
+  /// Joins a trip via 6-digit alphanumeric invite code, with optional explicit participant claiming.
   Future<Trip> joinTrip({
     required String inviteCodeOrId,
     required GuestUser user,
+    String? claimMemberId,
+    String? claimToken,
   }) async {
     final cleanCode = inviteCodeOrId.trim().toUpperCase().replaceAll(RegExp(r'[\s\-]'), '');
     if (cleanCode.isEmpty) {
@@ -238,8 +255,14 @@ class TripRepository {
       realtimeClient?.setAuthToken(user.anonymousToken);
     }
 
+    final payload = <String, dynamic>{
+      'inviteCode': cleanCode,
+      if (claimMemberId != null && claimMemberId.isNotEmpty) 'claimMemberId': claimMemberId,
+      if (claimToken != null && claimToken.isNotEmpty) 'claimToken': claimToken,
+    };
+
     try {
-      final res = await apiClient.post('/trips/join', body: {'inviteCode': cleanCode});
+      final res = await apiClient.post('/trips/join', body: payload);
       if (res is Map<String, dynamic>) {
         final trip = Trip.fromJson(res);
         final currentTrips = getCachedTrips();
@@ -259,26 +282,7 @@ class TripRepository {
         (t) => t.inviteCode.toUpperCase() == cleanCode || t.id.toUpperCase() == cleanCode,
       ).firstOrNull;
       if (match != null) {
-        if (match.members.any((m) => m.userId == user.id)) {
-          return match;
-        }
-
-        final updatedMembers = List<TripMember>.from(match.members);
-        final newMember = TripMember(
-          id: 'mbr_${_uuid.v4().replaceAll('-', '').substring(0, 10)}',
-          userId: user.id,
-          displayName: user.displayName,
-          avatarUrl: user.avatarUrl,
-          role: 'member',
-          joinedAt: DateTime.now(),
-        );
-        updatedMembers.add(newMember);
-
-        final updatedTrip = match.copyWith(
-          members: updatedMembers,
-          updatedAt: DateTime.now(),
-        );
-
+        final updatedTrip = _processLocalJoin(match, user, claimMemberId: claimMemberId);
         final idx = trips.indexWhere((t) => t.id == match.id);
         if (idx != -1) {
           trips[idx] = updatedTrip;
@@ -286,7 +290,7 @@ class TripRepository {
           trips.insert(0, updatedTrip);
         }
         await storage.saveTrips(trips.map((t) => t.toJson()).toList());
-        await syncService.enqueueMutation(MutationType.joinTrip, {'inviteCode': cleanCode});
+        await syncService.enqueueMutation(MutationType.joinTrip, payload);
         return updatedTrip;
       }
       throw NotFoundException(message: 'No trip found for invite code "$cleanCode". Check the code and try again.');
@@ -297,26 +301,7 @@ class TripRepository {
         (t) => t.inviteCode.toUpperCase() == cleanCode || t.id.toUpperCase() == cleanCode,
       ).firstOrNull;
       if (match != null) {
-        if (match.members.any((m) => m.userId == user.id)) {
-          return match;
-        }
-
-        final updatedMembers = List<TripMember>.from(match.members);
-        final newMember = TripMember(
-          id: 'mbr_${_uuid.v4().replaceAll('-', '').substring(0, 10)}',
-          userId: user.id,
-          displayName: user.displayName,
-          avatarUrl: user.avatarUrl,
-          role: 'member',
-          joinedAt: DateTime.now(),
-        );
-        updatedMembers.add(newMember);
-
-        final updatedTrip = match.copyWith(
-          members: updatedMembers,
-          updatedAt: DateTime.now(),
-        );
-
+        final updatedTrip = _processLocalJoin(match, user, claimMemberId: claimMemberId);
         final idx = trips.indexWhere((t) => t.id == match.id);
         if (idx != -1) {
           trips[idx] = updatedTrip;
@@ -324,7 +309,7 @@ class TripRepository {
           trips.add(updatedTrip);
         }
         await storage.saveTrips(trips.map((t) => t.toJson()).toList());
-        await syncService.enqueueMutation(MutationType.joinTrip, {'inviteCode': cleanCode});
+        await syncService.enqueueMutation(MutationType.joinTrip, payload);
         return updatedTrip;
       }
       throw const NetworkException(message: "You're offline. Reconnect to join this trip.");
@@ -340,26 +325,7 @@ class TripRepository {
         (t) => t.inviteCode.toUpperCase() == cleanCode || t.id.toUpperCase() == cleanCode,
       ).firstOrNull;
       if (match != null) {
-        if (match.members.any((m) => m.userId == user.id)) {
-          return match;
-        }
-
-        final updatedMembers = List<TripMember>.from(match.members);
-        final newMember = TripMember(
-          id: 'mbr_${_uuid.v4().replaceAll('-', '').substring(0, 10)}',
-          userId: user.id,
-          displayName: user.displayName,
-          avatarUrl: user.avatarUrl,
-          role: 'member',
-          joinedAt: DateTime.now(),
-        );
-        updatedMembers.add(newMember);
-
-        final updatedTrip = match.copyWith(
-          members: updatedMembers,
-          updatedAt: DateTime.now(),
-        );
-
+        final updatedTrip = _processLocalJoin(match, user, claimMemberId: claimMemberId);
         final idx = trips.indexWhere((t) => t.id == match.id);
         if (idx != -1) {
           trips[idx] = updatedTrip;
@@ -367,7 +333,7 @@ class TripRepository {
           trips.add(updatedTrip);
         }
         await storage.saveTrips(trips.map((t) => t.toJson()).toList());
-        await syncService.enqueueMutation(MutationType.joinTrip, {'inviteCode': cleanCode});
+        await syncService.enqueueMutation(MutationType.joinTrip, payload);
         return updatedTrip;
       }
       rethrow;
@@ -378,26 +344,7 @@ class TripRepository {
         (t) => t.inviteCode.toUpperCase() == cleanCode || t.id.toUpperCase() == cleanCode,
       ).firstOrNull;
       if (match != null) {
-        if (match.members.any((m) => m.userId == user.id)) {
-          return match;
-        }
-
-        final updatedMembers = List<TripMember>.from(match.members);
-        final newMember = TripMember(
-          id: 'mbr_${_uuid.v4().replaceAll('-', '').substring(0, 10)}',
-          userId: user.id,
-          displayName: user.displayName,
-          avatarUrl: user.avatarUrl,
-          role: 'member',
-          joinedAt: DateTime.now(),
-        );
-        updatedMembers.add(newMember);
-
-        final updatedTrip = match.copyWith(
-          members: updatedMembers,
-          updatedAt: DateTime.now(),
-        );
-
+        final updatedTrip = _processLocalJoin(match, user, claimMemberId: claimMemberId);
         final idx = trips.indexWhere((t) => t.id == match.id);
         if (idx != -1) {
           trips[idx] = updatedTrip;
@@ -405,13 +352,60 @@ class TripRepository {
           trips.add(updatedTrip);
         }
         await storage.saveTrips(trips.map((t) => t.toJson()).toList());
-        await syncService.enqueueMutation(MutationType.joinTrip, {'inviteCode': cleanCode});
+        await syncService.enqueueMutation(MutationType.joinTrip, payload);
         return updatedTrip;
       }
       throw NetworkException(message: "Could not join trip: $e");
     }
 
     throw const NotFoundException(message: 'Could not resolve trip for this invite code.');
+  }
+
+  Trip _processLocalJoin(Trip match, GuestUser user, {String? claimMemberId}) {
+    // 1. Idempotency Check: already a member
+    if (match.members.any((m) => m.userId == user.id)) {
+      return match;
+    }
+
+    final updatedMembers = List<TripMember>.from(match.members);
+
+    // 2. Claim existing unclaimed member
+    if (claimMemberId != null && claimMemberId.isNotEmpty) {
+      final idx = updatedMembers.indexWhere((m) => m.id == claimMemberId && m.isUnclaimed);
+      if (idx != -1) {
+        updatedMembers[idx] = updatedMembers[idx].copyWith(
+          userId: user.id,
+          avatarUrl: user.avatarUrl ?? updatedMembers[idx].avatarUrl,
+          isClaimed: true,
+          status: 'claimed',
+          joinedAt: DateTime.now(),
+          upiId: user.upiId ?? updatedMembers[idx].upiId,
+        );
+        return match.copyWith(
+          members: updatedMembers,
+          updatedAt: DateTime.now(),
+        );
+      }
+    }
+
+    // 3. New member join
+    final newMember = TripMember(
+      id: 'mbr_${_uuid.v4().replaceAll('-', '').substring(0, 10)}',
+      userId: user.id,
+      displayName: user.displayName,
+      avatarUrl: user.avatarUrl,
+      role: 'member',
+      status: 'claimed',
+      isClaimed: true,
+      joinedAt: DateTime.now(),
+      upiId: user.upiId,
+    );
+    updatedMembers.add(newMember);
+
+    return match.copyWith(
+      members: updatedMembers,
+      updatedAt: DateTime.now(),
+    );
   }
 
   /// Updates the lifecycle of a trip (e.g. active -> completed).
@@ -556,9 +550,12 @@ class TripRepository {
     final updatedMembers = List<TripMember>.from(trips[index].members);
     final newMember = TripMember(
       id: 'mbr_${_uuid.v4().replaceAll('-', '').substring(0, 10)}',
-      userId: 'guest_${_uuid.v4().replaceAll('-', '').substring(0, 8)}',
+      userId: 'unclaimed_${_uuid.v4().replaceAll('-', '').substring(0, 8)}',
       displayName: displayName.trim(),
       role: 'member',
+      status: 'unclaimed',
+      isClaimed: false,
+      claimToken: 'clm_${_uuid.v4().replaceAll('-', '').substring(0, 10)}',
       joinedAt: DateTime.now(),
     );
     updatedMembers.add(newMember);
@@ -572,6 +569,38 @@ class TripRepository {
     await storage.saveTrips(trips.map((t) => t.toJson()).toList());
 
     return updatedTrip;
+  }
+
+  /// Reconciles duplicate members sharing the same user ID safely.
+  Trip reconcileDuplicateMembers(Trip trip) {
+    final byUserId = <String, List<TripMember>>{};
+    for (final m in trip.members) {
+      if (m.userId.isEmpty || m.isUnclaimed) continue;
+      byUserId.putIfAbsent(m.userId, () => []).add(m);
+    }
+
+    var hasDuplicates = false;
+    for (final list in byUserId.values) {
+      if (list.length > 1) {
+        hasDuplicates = true;
+        break;
+      }
+    }
+    if (!hasDuplicates) return trip;
+
+    final deduplicated = <TripMember>[];
+    final seenUserIds = <String>{};
+
+    for (final m in trip.members) {
+      if (m.isUnclaimed || m.userId.isEmpty) {
+        deduplicated.add(m);
+      } else if (!seenUserIds.contains(m.userId)) {
+        seenUserIds.add(m.userId);
+        deduplicated.add(m);
+      }
+    }
+
+    return trip.copyWith(members: deduplicated, updatedAt: DateTime.now());
   }
 
   /// Synchronously returns cached activity logs or synthesizes from trip and expenses if empty.

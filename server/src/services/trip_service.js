@@ -28,12 +28,16 @@ class TripService {
       completedBy: trip.completedBy || null,
       members: members.map((m) => {
         const u = db.get('users', m.userId) || {};
+        const isUnclaimed = m.status === 'unclaimed' || (m.userId && m.userId.startsWith('unclaimed_'));
         return {
           id: m.id,
           userId: m.userId,
           displayName: m.displayName,
           avatarUrl: m.avatarUrl || null,
           role: m.role || 'member',
+          status: m.status || (isUnclaimed ? 'unclaimed' : 'claimed'),
+          isClaimed: typeof m.isClaimed === 'boolean' ? m.isClaimed : !isUnclaimed,
+          claimToken: m.claimToken || null,
           joinedAt: m.joinedAt,
           lastSeenAt: m.lastSeenAt || m.joinedAt || null,
           lastSyncedRevision: m.lastSyncedRevision || trip.revision || 1,
@@ -96,6 +100,8 @@ class TripService {
       displayName: user.displayName,
       avatarUrl: user.avatarUrl || null,
       role: 'creator',
+      status: 'claimed',
+      isClaimed: true,
       joinedAt: now,
       lastSeenAt: now,
       lastSyncedRevision: 1,
@@ -104,17 +110,20 @@ class TripService {
     };
     db.insert('trip_members', creatorMember);
 
-    // Initial friends
+    // Initial friends (unclaimed placeholders)
     if (Array.isArray(initialFriendNames)) {
       for (const friendName of initialFriendNames) {
         if (friendName && friendName.trim()) {
           const placeholderMember = {
             id: `mbr_${crypto.randomUUID().replace(/-/g, '').substring(0, 10)}`,
             tripId,
-            userId: `guest_${crypto.randomUUID().replace(/-/g, '').substring(0, 8)}`,
+            userId: `unclaimed_${crypto.randomUUID().replace(/-/g, '').substring(0, 8)}`,
             displayName: friendName.trim(),
             avatarUrl: null,
             role: 'member',
+            status: 'unclaimed',
+            isClaimed: false,
+            claimToken: `clm_${crypto.randomUUID().replace(/-/g, '').substring(0, 10)}`,
             joinedAt: now,
             lastSeenAt: now,
             lastSyncedRevision: 1,
@@ -217,6 +226,15 @@ class TripService {
     const creator = db.get('users', trip.creatorId);
     const members = this._getMembersForTrip(trip.id);
 
+    const unclaimedMembers = members
+      .filter((m) => m.status === 'unclaimed' || m.isClaimed === false || (m.userId && m.userId.startsWith('unclaimed_')))
+      .map((m) => ({
+        id: m.id,
+        displayName: m.displayName,
+        avatarUrl: m.avatarUrl || null,
+        claimToken: m.claimToken || null,
+      }));
+
     return {
       id: trip.id,
       tripId: trip.id,
@@ -228,10 +246,11 @@ class TripService {
       memberCount: members.length,
       lifecycleState: trip.lifecycleState,
       inviteCode: trip.inviteCode,
+      unclaimedMembers,
     };
   }
 
-  joinTripByCode(user, inviteCode, realtimeHub = null) {
+  joinTripByCode(user, inviteCode, { claimMemberId, claimToken } = {}, realtimeHub = null) {
     if (!inviteCode || !inviteCode.toString().trim()) {
       throw AppError.badRequest('Join code is required');
     }
@@ -251,33 +270,48 @@ class TripService {
       throw AppError.badRequest('This trip is already settled and closed.');
     }
 
-    // Check if already a member
+    // 1. Idempotency Check: if user is already a member, return existing trip
     const existingMember = db.findOne('trip_members', (m) => m.tripId === trip.id && m.userId === user.id);
     if (existingMember) {
       return this._enrichTrip(trip);
     }
 
     const now = new Date().toISOString();
-
-    // Check if there is an unlinked placeholder member created via initialFriendNames
-    const placeholderMember = db.findOne(
-      'trip_members',
-      (m) => m.tripId === trip.id &&
-             m.userId.startsWith('guest_') &&
-             m.displayName.trim().toLowerCase() === user.displayName.trim().toLowerCase()
-    );
-
     let activeMember;
-    if (placeholderMember) {
-      // Upgrade existing placeholder member with authenticated user
-      db.update('trip_members', placeholderMember.id, {
+
+    // 2. Authoritative Claim Flow: claim a specific unclaimed participant placeholder
+    if (claimMemberId) {
+      const targetMember = db.findOne('trip_members', (m) => m.tripId === trip.id && m.id === claimMemberId);
+      if (!targetMember) {
+        throw AppError.notFound('Target member not found in this trip.');
+      }
+
+      // Check if already claimed by someone else (concurrency protection / double claim prevention)
+      if (targetMember.status === 'claimed' || (targetMember.userId && !targetMember.userId.startsWith('unclaimed_') && targetMember.userId !== user.id)) {
+        throw AppError.conflict('This member participant has already been claimed.');
+      }
+
+      // Atomically link user identity to the existing participant record
+      db.update('trip_members', targetMember.id, {
         userId: user.id,
-        avatarUrl: user.avatarUrl || placeholderMember.avatarUrl,
+        avatarUrl: user.avatarUrl || targetMember.avatarUrl || null,
+        status: 'claimed',
+        isClaimed: true,
         joinedAt: now,
+        lastSeenAt: now,
+        upiId: user.upiId || targetMember.upiId || null,
       });
-      activeMember = db.get('trip_members', placeholderMember.id);
+      activeMember = db.get('trip_members', targetMember.id);
+
+      this.logActivity(trip.id, {
+        type: 'member_joined',
+        actorId: user.id,
+        actorName: user.displayName,
+        description: `${user.displayName} joined as ${targetMember.displayName}`,
+        metadata: { memberId: activeMember.id, claimed: true, originalDisplayName: targetMember.displayName },
+      });
     } else {
-      // Create new member record
+      // 3. New Member Flow: create fresh member record
       activeMember = {
         id: `mbr_${crypto.randomUUID().replace(/-/g, '').substring(0, 10)}`,
         tripId: trip.id,
@@ -285,21 +319,26 @@ class TripService {
         displayName: user.displayName,
         avatarUrl: user.avatarUrl || null,
         role: 'member',
+        status: 'claimed',
+        isClaimed: true,
         joinedAt: now,
+        lastSeenAt: now,
+        lastSyncedRevision: 1,
+        pendingMutationsCount: 0,
         upiId: user.upiId || null,
       };
       db.insert('trip_members', activeMember);
+
+      this.logActivity(trip.id, {
+        type: 'member_joined',
+        actorId: user.id,
+        actorName: user.displayName,
+        description: `${user.displayName} joined the trip`,
+        metadata: { memberId: activeMember.id, claimed: false },
+      });
     }
 
     db.update('trips', trip.id, { updatedAt: now });
-
-    this.logActivity(trip.id, {
-      type: 'member_joined',
-      actorId: user.id,
-      actorName: user.displayName,
-      description: `${user.displayName} joined the trip`,
-      metadata: { memberId: activeMember.id },
-    });
 
     const enriched = this._enrichTrip(trip);
 
@@ -336,11 +375,17 @@ class TripService {
     const newMember = {
       id: `mbr_${crypto.randomUUID().replace(/-/g, '').substring(0, 10)}`,
       tripId,
-      userId: `guest_${crypto.randomUUID().replace(/-/g, '').substring(0, 8)}`,
+      userId: `unclaimed_${crypto.randomUUID().replace(/-/g, '').substring(0, 8)}`,
       displayName: displayName.trim(),
       avatarUrl: null,
       role: 'member',
+      status: 'unclaimed',
+      isClaimed: false,
+      claimToken: `clm_${crypto.randomUUID().replace(/-/g, '').substring(0, 10)}`,
       joinedAt: now,
+      lastSeenAt: now,
+      lastSyncedRevision: 1,
+      pendingMutationsCount: 0,
     };
 
     db.insert('trip_members', newMember);
@@ -350,14 +395,14 @@ class TripService {
       type: 'member_joined',
       actorId: currentUserId,
       actorName: authMember.displayName,
-      description: `${authMember.displayName} added ${displayName.trim()} to the trip`,
-      metadata: { memberId: newMember.id },
+      description: `${authMember.displayName} added "${displayName.trim()}"`,
+      metadata: { memberId: newMember.id, isUnclaimed: true },
     });
 
     const enriched = this._enrichTrip(trip);
 
     if (realtimeHub) {
-      realtimeHub.broadcastToTrip(tripId, 'member_joined', {
+      realtimeHub.broadcastToTrip(tripId, 'member_added', {
         tripId,
         member: newMember,
         trip: enriched,
@@ -631,6 +676,69 @@ class TripService {
     }
 
     return enriched;
+  }
+
+  reconcileDuplicateMembers(tripId) {
+    const trip = db.get('trips', tripId);
+    if (!trip) return null;
+
+    const members = this._getMembersForTrip(tripId);
+    const byUserId = new Map();
+
+    for (const m of members) {
+      if (!m.userId || m.userId.startsWith('unclaimed_')) continue;
+      if (!byUserId.has(m.userId)) {
+        byUserId.set(m.userId, []);
+      }
+      byUserId.get(m.userId).push(m);
+    }
+
+    let changed = false;
+    for (const [userId, userMembers] of byUserId.entries()) {
+      if (userMembers.length > 1) {
+        // Keep the primary member (first joined or claimed)
+        const primary = userMembers[0];
+        const duplicates = userMembers.slice(1);
+
+        for (const dup of duplicates) {
+          // Re-attach any expenses or splits pointing to duplicate member
+          const expenses = db.find('expenses', (e) => e.tripId === tripId);
+          for (const exp of expenses) {
+            let expModified = false;
+            let updatedPayer = exp.paidById;
+            if (exp.paidById === dup.id) {
+              updatedPayer = primary.id;
+              expModified = true;
+            }
+
+            const updatedSplits = (exp.splits || []).map((s) => {
+              if (s.memberId === dup.id) {
+                expModified = true;
+                return { ...s, memberId: primary.id };
+              }
+              return s;
+            });
+
+            if (expModified) {
+              db.update('expenses', exp.id, {
+                paidById: updatedPayer,
+                splits: updatedSplits,
+              });
+            }
+          }
+
+          // Delete the duplicate member record
+          db.delete('trip_members', dup.id);
+          changed = true;
+        }
+      }
+    }
+
+    if (changed) {
+      db.update('trips', tripId, { updatedAt: new Date().toISOString() });
+    }
+
+    return this._enrichTrip(db.get('trips', tripId));
   }
 }
 

@@ -109,6 +109,15 @@ class Database {
     if (!item.id) throw new Error('Item must have an id');
     if (table.has(item.id)) throw new Error(`Item ${item.id} already exists in ${tableName}`);
 
+    // Enforce UNIQUE(tripId, userId) for active/claimed memberships
+    if (tableName === 'trip_members' && item.tripId && item.userId && !item.userId.startsWith('unclaimed_')) {
+      for (const existing of table.values()) {
+        if (existing.tripId === item.tripId && existing.userId === item.userId && existing.id !== item.id) {
+          throw new Error(`User ${item.userId} is already a member of trip ${item.tripId}`);
+        }
+      }
+    }
+
     const cloned = { ...item };
     table.set(item.id, cloned);
     this._persistTable(tableName);

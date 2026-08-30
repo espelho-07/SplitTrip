@@ -53,8 +53,8 @@ router.post('/', (req, res, next) => {
 // POST /api/trips/join - Join trip by invite code
 router.post('/join', (req, res, next) => {
   try {
-    const { inviteCode } = req.body;
-    const trip = tripService.joinTripByCode(req.user, inviteCode, realtimeHub);
+    const { inviteCode, claimMemberId, claimToken } = req.body;
+    const trip = tripService.joinTripByCode(req.user, inviteCode, { claimMemberId, claimToken }, realtimeHub);
     res.status(200).json({ data: trip });
   } catch (e) {
     next(e);

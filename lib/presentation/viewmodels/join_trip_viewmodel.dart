@@ -62,7 +62,7 @@ class JoinTripViewModel extends ChangeNotifier {
     }
   }
 
-  Future<Trip?> joinTrip(GuestUser user, [String? directCode]) async {
+  Future<Trip?> joinTrip(GuestUser user, [String? directCode, String? claimMemberId]) async {
     if (_isJoining) return null;
 
     final targetCode = (directCode ?? _code).trim().toUpperCase().replaceAll(RegExp(r'[\s\-]'), '');
@@ -80,6 +80,7 @@ class JoinTripViewModel extends ChangeNotifier {
       final trip = await tripRepo.joinTrip(
         inviteCodeOrId: targetCode,
         user: user,
+        claimMemberId: claimMemberId,
       );
 
       return trip;

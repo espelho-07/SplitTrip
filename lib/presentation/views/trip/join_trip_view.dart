@@ -117,7 +117,7 @@ class _JoinTripViewState extends State<JoinTripView> {
     }
   }
 
-  Future<void> _executeJoinFlow(String code) async {
+  Future<void> _executeJoinFlow(String code, {String? claimMemberId}) async {
     final authVm = context.read<AuthViewModel>();
     final homeVm = context.read<HomeViewModel>();
     final joinVm = context.read<JoinTripViewModel>();
@@ -165,7 +165,7 @@ class _JoinTripViewState extends State<JoinTripView> {
       if (mounted) stageNotifier.value = 2;
     });
 
-    final trip = await joinVm.joinTrip(user, code);
+    final trip = await joinVm.joinTrip(user, code, claimMemberId);
 
     if (mounted) {
       Navigator.of(context, rootNavigator: true).pop(); // Dismiss progress
@@ -187,7 +187,7 @@ class _JoinTripViewState extends State<JoinTripView> {
             action: SnackBarAction(
               label: 'Retry',
               textColor: Colors.white,
-              onPressed: () => _executeJoinFlow(code),
+              onPressed: () => _executeJoinFlow(code, claimMemberId: claimMemberId),
             ),
           ),
         );
@@ -206,12 +206,12 @@ class _JoinTripViewState extends State<JoinTripView> {
             return JoinPreviewSheet(
               preview: preview,
               isJoining: joinVm.isJoining,
-              onConfirmJoin: () async {
+              onConfirmJoin: ({String? claimMemberId}) async {
                 Navigator.of(bottomSheetContext).pop();
                 final codeToJoin = (preview.inviteCode != null && (preview.inviteCode as String).isNotEmpty)
                     ? preview.inviteCode as String
                     : (preview.tripId as String? ?? _codeController.text.trim());
-                await _executeJoinFlow(codeToJoin);
+                await _executeJoinFlow(codeToJoin, claimMemberId: claimMemberId);
               },
               onCancel: () {
                 Navigator.of(bottomSheetContext).pop();

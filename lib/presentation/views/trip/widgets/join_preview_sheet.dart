@@ -12,7 +12,7 @@ import '../../../../domain/models/trip_preview.dart';
 class JoinPreviewSheet extends StatelessWidget {
   final TripPreview preview;
   final bool isJoining;
-  final VoidCallback onConfirmJoin;
+  final void Function({String? claimMemberId}) onConfirmJoin;
   final VoidCallback onCancel;
 
   const JoinPreviewSheet({
@@ -27,6 +27,7 @@ class JoinPreviewSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final l10n = context.l10n;
+    final unclaimed = preview.unclaimedMembers;
 
     return Container(
       decoration: BoxDecoration(
@@ -175,7 +176,104 @@ class JoinPreviewSheet extends StatelessWidget {
             ),
           ),
 
-          const SizedBox(height: AppSpacing.xl),
+          if (unclaimed.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.lg),
+            // Unclaimed Claim Section
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF132322) : const Color(0xFFE6F4F1),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: AppColors.emeraldLight.withValues(alpha: 0.3),
+                  width: 1,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.person_pin_rounded, size: 16, color: AppColors.emeraldLight),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Claim Your Spot'.toUpperCase(),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.8,
+                          color: AppColors.emeraldLight,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Were you added manually? Claim your spot below to keep your expenses and balance history intact.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  for (final member in unclaimed)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8.0),
+                      child: InkWell(
+                        onTap: isJoining
+                            ? null
+                            : () {
+                                HapticHelper.medium();
+                                onConfirmJoin(claimMemberId: member.id);
+                              },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF1B2B28) : Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: AppColors.emeraldLight.withValues(alpha: 0.4),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 15,
+                                backgroundColor: AppColors.emeraldLight.withValues(alpha: 0.2),
+                                child: Text(
+                                  member.displayName.isNotEmpty ? member.displayName[0].toUpperCase() : '?',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.emeraldLight,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Join as ${member.displayName}',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                                  ),
+                                ),
+                              ),
+                              const Icon(Icons.arrow_forward_ios_rounded, size: 13, color: AppColors.emeraldLight),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+
+          const SizedBox(height: AppSpacing.lg),
 
           // Action Deck
           GestureDetector(
@@ -188,19 +286,32 @@ class JoinPreviewSheet extends StatelessWidget {
             child: Container(
               height: 52,
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF14B8A6), Color(0xFF0F766E)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                gradient: unclaimed.isNotEmpty
+                    ? null
+                    : const LinearGradient(
+                        colors: [Color(0xFF14B8A6), Color(0xFF0F766E)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                color: unclaimed.isNotEmpty
+                    ? (isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard)
+                    : null,
                 borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.emeraldLight.withValues(alpha: 0.35),
-                    blurRadius: 14,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+                border: unclaimed.isNotEmpty
+                    ? Border.all(
+                        color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+                        width: 1,
+                      )
+                    : null,
+                boxShadow: unclaimed.isNotEmpty
+                    ? null
+                    : [
+                        BoxShadow(
+                          color: AppColors.emeraldLight.withValues(alpha: 0.35),
+                          blurRadius: 14,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
               ),
               alignment: Alignment.center,
               child: isJoining
@@ -212,11 +323,23 @@ class JoinPreviewSheet extends StatelessWidget {
                   : Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.check_circle_outline_rounded, size: 18, color: Colors.white),
+                        Icon(
+                          unclaimed.isNotEmpty ? Icons.person_add_outlined : Icons.check_circle_outline_rounded,
+                          size: 18,
+                          color: unclaimed.isNotEmpty
+                              ? (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary)
+                              : Colors.white,
+                        ),
                         const SizedBox(width: 8),
                         Text(
-                          l10n.joinPreviewConfirm,
-                          style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700),
+                          unclaimed.isNotEmpty ? 'Join as New Member' : l10n.joinPreviewConfirm,
+                          style: TextStyle(
+                            color: unclaimed.isNotEmpty
+                                ? (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary)
+                                : Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ],
                     ),
