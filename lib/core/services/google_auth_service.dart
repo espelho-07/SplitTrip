@@ -49,7 +49,7 @@ class GoogleAuthService {
   /// The Android client ID is embedded in google-services.json for the
   /// native SDK; the Web client ID here identifies the token audience.
   static const String _webClientId =
-      '975934560976-s1podmdjsd712456iies9je5sso82nll.apps.googleusercontent.com';
+      '752190461758-m6ikshjbood33faqfacgfnvkdjrp7vj2.apps.googleusercontent.com';
 
   static final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: ['email', 'profile'],
