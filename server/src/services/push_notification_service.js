@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 
 /**
  * Push Notification Service — Firebase Admin SDK integration.
@@ -65,10 +65,12 @@ async function sendToUser(db, userId, payload) {
   }
 
   try {
-    // Fetch all FCM tokens registered for this user
+    // Fetch all active FCM tokens registered for this user
     const tokenRecords = db.find('user_fcm_tokens', (r) => r.userId === userId && !r.deleted);
+    console.info(`[PushNotification] DEVICE RESOLUTION: recipient_user_id=${userId}, active_devices=${tokenRecords.length}`);
+
     if (!tokenRecords.length) {
-      console.debug('[PushNotification] No FCM tokens for user', userId);
+      console.debug('[PushNotification] No active FCM tokens for user', userId);
       return;
     }
 
@@ -95,8 +97,9 @@ async function sendToUser(db, userId, payload) {
       tokens,
     };
 
+    console.info(`[PushNotification] PUSH DISPATCH: recipient_user_id=${userId}, device_count=${tokens.length}, type=${data.type || 'unknown'}`);
     const response = await admin.messaging().sendEachForMulticast(message);
-    console.info(`[PushNotification] Sent to ${response.successCount}/${tokens.length} devices for user ${userId}`);
+    console.info(`[PushNotification] PUSH RESULT: Delivered to ${response.successCount}/${tokens.length} devices for user ${userId}`);
 
     // Clean up invalid/expired tokens
     const invalidTokens = [];

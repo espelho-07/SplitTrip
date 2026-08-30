@@ -27,7 +27,7 @@ class AuthService {
     }
   }
 
-  /// Syncs local guest user registration and recovery key to server
+  /// Syncs local guest user registration, recovery key, and FCM token to server
   Future<void> syncLocalGuestSession([GuestUser? targetUser]) async {
     final user = targetUser ?? getCurrentUser();
     if (user == null) return;
@@ -39,6 +39,16 @@ class AuthService {
         'token': user.anonymousToken,
         'avatarUrl': user.avatarUrl,
       });
+
+      final fcmToken = storage.getString('kith_fcm_token');
+      if (fcmToken != null && fcmToken.isNotEmpty) {
+        final deviceId = storage.getString('kith_device_id');
+        await apiClient.post('/auth/fcm-token', body: {
+          'token': fcmToken,
+          'deviceId': deviceId,
+          'platform': 'android',
+        });
+      }
     } catch (_) {
       // Non-blocking background sync
     }
@@ -473,9 +483,18 @@ class AuthService {
   /// Backward-compatible alias
   Future<GuestUser?> restoreSupabaseSession() => restoreNirniqSession();
 
-  /// Revokes backend session, disconnects realtime, clears session,
-  /// and clears all local credentials.
+  /// Revokes backend session, unlinks FCM tokens, disconnects realtime,
+  /// clears session, and clears all local credentials.
   Future<void> logout() async {
+    try {
+      final token = storage.getString('kith_fcm_token');
+      if (token != null && token.isNotEmpty) {
+        await apiClient.post('/auth/fcm-token/delete', body: {'token': token});
+      } else {
+        await apiClient.post('/auth/fcm-token/delete', body: {});
+      }
+    } catch (_) {}
+
     try {
       await apiClient.post('/auth/logout', body: {});
     } catch (_) {
@@ -491,8 +510,17 @@ class AuthService {
   }
 
   /// Permanently deletes the user account, associated personal records,
-  /// and cloud backups from the server, and purges all local storage.
+  /// unlinks FCM tokens, and cloud backups from the server, and purges all local storage.
   Future<void> deleteAccount() async {
+    try {
+      final token = storage.getString('kith_fcm_token');
+      if (token != null && token.isNotEmpty) {
+        await apiClient.post('/auth/fcm-token/delete', body: {'token': token});
+      } else {
+        await apiClient.post('/auth/fcm-token/delete', body: {});
+      }
+    } catch (_) {}
+
     try {
       await apiClient.delete('/auth/account');
     } catch (_) {
@@ -509,6 +537,7 @@ class AuthService {
     } catch (_) {}
     await storage.clearAllUserData();
   }
+
 
   /// Updates user profile details (displayName, phone, avatarUrl, email, upiId, bio)
   Future<GuestUser> updateUserProfile({

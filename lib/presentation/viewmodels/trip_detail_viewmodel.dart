@@ -118,6 +118,24 @@ class TripDetailViewModel extends ChangeNotifier {
         if (notifData != null) {
           final recipientUserId = notifData['recipientUserId'] as String?;
           if (recipientUserId != null && recipientUserId == _currentUserId) {
+            final settlementId = notifData['settlementId'] as String? ?? event.data['settlementId'] as String? ?? event.eventId;
+            expenseRepo.storage.addPaymentVerification({
+              'id': 'pvr_$settlementId',
+              'settlementId': settlementId,
+              'tripId': event.tripId,
+              'tripName': notifData['tripName'] as String? ?? _trip?.name ?? 'Trip',
+              'payerMemberId': notifData['payerMemberId'],
+              'payerUserId': notifData['payerUserId'],
+              'payerName': notifData['payerName'] ?? 'A friend',
+              'receiverMemberId': notifData['recipientMemberId'],
+              'receiverUserId': _currentUserId,
+              'receiverName': notifData['receiverName'] ?? 'You',
+              'amountInPaise': notifData['amountInPaise'] ?? 0,
+              'paymentMethod': 'Direct',
+              'status': 'pending_verification',
+              'markedAt': DateTime.now().toIso8601String(),
+            });
+
             _notificationEventController.add({
               ...notifData,
               'eventType': event.type,

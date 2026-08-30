@@ -223,10 +223,16 @@ router.post('/fcm-token', authMiddleware, (req, res, next) => {
     const userId = req.user.id;
     const now = new Date().toISOString();
 
-    // Upsert: update existing token for this device or insert new one
-    const existing = db.findOne('user_fcm_tokens', (r) => r.userId === userId && r.deviceId === deviceId);
+    // Account Switching / Isolation: Unbind this device / token from any other previous user accounts
+    const staleTokens = db.find('user_fcm_tokens', (r) => (r.token === token || (deviceId && r.deviceId === deviceId)) && r.userId !== userId && !r.deleted);
+    for (const stale of staleTokens) {
+      db.update('user_fcm_tokens', stale.id, { deleted: true, deletedAt: now });
+    }
+
+    // Upsert: update existing token for this device or insert new one for the current user
+    const existing = db.findOne('user_fcm_tokens', (r) => r.userId === userId && (r.deviceId === deviceId || r.token === token));
     if (existing) {
-      db.update('user_fcm_tokens', existing.id, { token, updatedAt: now, deleted: false });
+      db.update('user_fcm_tokens', existing.id, { token, deviceId: deviceId || existing.deviceId, platform: platform || existing.platform, updatedAt: now, deleted: false, deletedAt: null });
     } else {
       const { v4: uuidv4 } = require('uuid');
       db.insert('user_fcm_tokens', {

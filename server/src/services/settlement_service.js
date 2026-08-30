@@ -237,14 +237,18 @@ class SettlementService {
       });
     }
 
-    // FCM push to receiver (works even when app is backgrounded or terminated)
+    // Safe Diagnostic Logging (Rule 55)
+    console.info(`[Payment] PAYMENT CREATED: id=${settlement.id}, tripId=${tripId}, payerUserId=${fromMember.userId}, receiverUserId=${toMember.userId}, amountInPaise=${amountInPaise}`);
+
+    // FCM push strictly to receiver (Rule 1, 10, 12, 13)
     if (toMember.userId) {
+      const formattedAmount = (amountInPaise / 100).toFixed(amountInPaise % 100 === 0 ? 0 : 2);
       pushNotificationService.sendToUser(db, toMember.userId, {
-        title: 'Payment Sent — Confirm Receipt 💸',
-        body: `${fromMember.displayName} marked ₹${(amountInPaise / 100).toFixed(0)} as paid to you. Tap to confirm.`,
+        title: 'Payment received',
+        body: `${fromMember.displayName} says they paid you ₹${formattedAmount}.`,
         data: {
           type: 'settlement_marked_paid',
-          route: `/trip/${tripId}`,
+          route: `/trip/${tripId}?settlementId=${settlement.id}`,
           tripId,
           settlementId: settlement.id,
           idempotencyKey: `${settlement.id}_marked_paid`,

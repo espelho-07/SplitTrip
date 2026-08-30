@@ -230,27 +230,31 @@ class ExpenseRepository {
     final receiverDisplay = toName ?? 'Member';
     final formattedAmt = (amountInPaise / 100).toStringAsFixed(2);
 
-    // If marked as pending verification or paid by Payer, register a verification request
-    final verificationPayload = {
-      'id': 'pvr_$id',
-      'settlementId': id,
-      'tripId': tripId,
-      'tripName': tripName ?? 'Trip',
-      'payerMemberId': fromMemberId,
-      'payerUserId': fromUserId,
-      'payerName': payerDisplay,
-      'receiverMemberId': toMemberId,
-      'receiverUserId': toUserId,
-      'receiverName': receiverDisplay,
-      'amountInPaise': amountInPaise,
-      'paymentMethod': recipientUpiId != null && recipientUpiId.contains('@') ? 'UPI' : 'Direct',
-      'paymentReference': paymentReference,
-      'recipientUpiId': recipientUpiId,
-      'note': note,
-      'status': isActuallyPaid ? 'confirmed' : 'pending_verification',
-      'markedAt': DateTime.now().toIso8601String(),
-    };
-    await storage.addPaymentVerification(verificationPayload);
+    // Only save verification request locally if current user is the Receiver (Payee)
+    final savedUser = storage.getSavedUser();
+    final currentUserId = savedUser != null ? savedUser['id'] as String? : null;
+    if (currentUserId != null && toUserId != null && currentUserId == toUserId) {
+      final verificationPayload = {
+        'id': 'pvr_$id',
+        'settlementId': id,
+        'tripId': tripId,
+        'tripName': tripName ?? 'Trip',
+        'payerMemberId': fromMemberId,
+        'payerUserId': fromUserId,
+        'payerName': payerDisplay,
+        'receiverMemberId': toMemberId,
+        'receiverUserId': toUserId,
+        'receiverName': receiverDisplay,
+        'amountInPaise': amountInPaise,
+        'paymentMethod': recipientUpiId != null && recipientUpiId.contains('@') ? 'UPI' : 'Direct',
+        'paymentReference': paymentReference,
+        'recipientUpiId': recipientUpiId,
+        'note': note,
+        'status': isActuallyPaid ? 'confirmed' : 'pending_verification',
+        'markedAt': DateTime.now().toIso8601String(),
+      };
+      await storage.addPaymentVerification(verificationPayload);
+    }
 
     _logLocalActivity(
       tripId: tripId,

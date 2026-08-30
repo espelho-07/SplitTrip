@@ -85,37 +85,51 @@ class _HomeViewState extends State<HomeView> {
         return pid != null && pid == currentUserId;
       }
 
-      if (event.type == 'settlement_marked_paid') {
-        // Y receives notification that X marked payment as paid
+      if (event.type == 'settlement_marked_paid' || event.type == 'settlement_recorded') {
+        // Y (Receiver) receives notification that X marked payment as paid
         final nd = notifData(event);
         if (isRecipient(nd)) {
           final fromName = nd['payerName'] as String? ?? nd['fromName'] as String? ?? 'A member';
+          final toName = nd['receiverName'] as String? ?? 'You';
           final amountPaise = nd['amountInPaise'] as int? ?? 0;
+          final settlementId = nd['settlementId'] as String? ?? event.data['settlementId'] as String? ?? event.eventId;
           final formatted = CurrencyFormatter.formatPaise(amountPaise, currencyCode: 'INR');
+
+          // Store verification payload on receiver device
+          final storage = context.read<LocalStorageService>();
+          storage.addPaymentVerification({
+            'id': 'pvr_$settlementId',
+            'settlementId': settlementId,
+            'tripId': event.tripId,
+            'tripName': nd['tripName'] as String? ?? 'Trip',
+            'payerMemberId': nd['payerMemberId'],
+            'payerUserId': nd['payerUserId'],
+            'payerName': fromName,
+            'receiverMemberId': nd['recipientMemberId'],
+            'receiverUserId': currentUserId,
+            'receiverName': toName,
+            'amountInPaise': amountPaise,
+            'paymentMethod': 'Direct',
+            'status': 'pending_verification',
+            'markedAt': DateTime.now().toIso8601String(),
+          });
+
+          // Add in-app and system notification strictly for receiver (Rule 13, 14, 18)
           notifService.addNotification(
-            title: 'Payment Sent — Confirm Receipt 💸',
-            description: '$fromName marked $formatted as paid to you. Tap to confirm.',
+            title: 'Payment received',
+            description: '$fromName says they paid you $formatted.',
             type: NotificationType.settlement,
-            route: '/trip/${event.tripId}',
-            actionLabel: 'Confirm',
-            idempotencyKey: '${event.data['settlementId'] ?? event.eventId}_marked_paid',
+            route: '/trip/${event.tripId}?settlementId=$settlementId',
+            actionLabel: 'Verify Payment',
+            idempotencyKey: '${settlementId}_marked_paid',
           );
-        }
-      } else if (event.type == 'settlement_recorded') {
-        // Legacy event type — handle same as settlement_marked_paid for backward compat
-        final nd = notifData(event);
-        if (isRecipient(nd)) {
-          final fromName = nd['payerName'] as String? ?? nd['fromName'] as String? ?? 'A member';
-          final amountPaise = nd['amountInPaise'] as int? ?? 0;
-          final formatted = CurrencyFormatter.formatPaise(amountPaise, currencyCode: 'INR');
-          notifService.addNotification(
-            title: 'Payment Received — Confirm 💸',
-            description: '$fromName marked $formatted as paid to you.',
-            type: NotificationType.settlement,
-            route: '/trip/${event.tripId}',
-            actionLabel: 'Confirm',
-            idempotencyKey: '${event.data['settlementId'] ?? event.eventId}_recorded',
-          );
+
+          // Prompt the verification sheet in foreground
+          Future.microtask(() {
+            if (mounted) {
+              PaymentVerificationManager.checkAndPrompt(context);
+            }
+          });
         }
       } else if (event.type == 'settlement_confirmed') {
         // X (payer) receives confirmation that Y acknowledged the payment

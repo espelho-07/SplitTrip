@@ -159,7 +159,6 @@ class _SettlementSheetState extends State<SettlementSheet> {
           if (widget.onRecordTransfer != null) {
             setState(() => _processingTransferIds.add(transferKey));
             try {
-              final notifService = context.read<NotificationService>();
               await widget.onRecordTransfer!(
                 fromMemberId,
                 toMemberId,
@@ -169,14 +168,6 @@ class _SettlementSheetState extends State<SettlementSheet> {
                 fromName: fromName,
                 toName: toName,
                 paymentStatus: 'pending_verification',
-              );
-              await notifService.notifyPaymentMarkedPaid(
-                tripName: widget.trip.name,
-                payerName: fromName,
-                receiverName: toName,
-                amountInPaise: amountInPaise,
-                verificationId: 'pvr_$paymentReference',
-                tripId: widget.trip.id,
               );
             } finally {
               if (mounted) {

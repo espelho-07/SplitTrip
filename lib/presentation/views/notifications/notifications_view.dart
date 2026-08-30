@@ -5,7 +5,10 @@ import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../data/services/local_storage_service.dart';
+import '../../../domain/models/payment_verification_request.dart';
 import '../../../domain/services/notification_service.dart';
+import '../../viewmodels/auth_viewmodel.dart';
+import '../payment/payment_verification_view.dart';
 
 class NotificationsView extends StatefulWidget {
   const NotificationsView({super.key});
@@ -374,15 +377,31 @@ class _NotificationsViewState extends State<NotificationsView> {
     }
 
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
         HapticHelper.light();
         final storage = context.read<LocalStorageService>();
         storage.markNotificationAsRead(item.id);
         setState(() => item.isRead = true);
+
+        if (item.type == NotificationType.settlement) {
+          final authVm = Provider.of<AuthViewModel?>(context, listen: false);
+          final currentUserId = authVm?.currentUser?.id;
+          if (currentUserId != null) {
+            final pending = storage.getPendingVerificationsForReceiver(userId: currentUserId);
+            if (pending.isNotEmpty) {
+              final req = PaymentVerificationRequest.fromJson(pending.first);
+              await PaymentVerificationView.show(context, request: req);
+              _loadNotifications();
+              return;
+            }
+          }
+        }
+
         if (item.route != null && item.route!.isNotEmpty) {
           context.push(item.route!);
         }
       },
+
       child: Container(
         padding: const EdgeInsets.all(14.0),
         decoration: BoxDecoration(

@@ -549,18 +549,17 @@ class LocalStorageService {
     String? memberId,
     String? name,
   }) {
+    if (userId == null || userId.isEmpty) return const [];
     final current = getSavedPaymentVerifications();
-    final cleanName = name?.trim().toLowerCase();
     return current.where((item) {
       final st = item['status'];
       if (st != 'pending_verification' && st != 'marked_paid' && st != 'proof_submitted') return false;
       final rUserId = item['receiverUserId'] as String?;
       final rMemberId = item['receiverMemberId'] as String?;
-      final rName = (item['receiverName'] as String?)?.trim().toLowerCase();
 
-      if (userId != null && rUserId != null && userId == rUserId) return true;
+      // Non-negotiable Rule: Strict authenticated User ID identity matching
+      if (rUserId != null && rUserId == userId) return true;
       if (memberId != null && rMemberId != null && memberId == rMemberId) return true;
-      if (cleanName != null && rName != null && cleanName == rName) return true;
       return false;
     }).toList();
   }
@@ -570,18 +569,17 @@ class LocalStorageService {
     String? memberId,
     String? name,
   }) {
+    if (userId == null || userId.isEmpty) return const [];
     final current = getSavedPaymentVerifications();
-    final cleanName = name?.trim().toLowerCase();
     return current.where((item) {
       final st = item['status'];
       if (st != 'disputed' && st != 'not_received') return false;
       final pUserId = item['payerUserId'] as String?;
       final pMemberId = item['payerMemberId'] as String?;
-      final pName = (item['payerName'] as String?)?.trim().toLowerCase();
 
-      if (userId != null && pUserId != null && userId == pUserId) return true;
+      // Non-negotiable Rule: Strict authenticated User ID identity matching
+      if (pUserId != null && pUserId == userId) return true;
       if (memberId != null && pMemberId != null && memberId == pMemberId) return true;
-      if (cleanName != null && pName != null && cleanName == pName) return true;
       return false;
     }).toList();
   }

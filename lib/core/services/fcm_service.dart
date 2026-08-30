@@ -128,6 +128,17 @@ class FcmService {
     }
   }
 
+  Future<void> registerToken() async {
+    try {
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token != null && token.isNotEmpty) {
+        await _registerTokenWithServer(token);
+      }
+    } catch (e) {
+      debugPrint('[FCM] registerToken error: $e');
+    }
+  }
+
   Future<void> _registerTokenWithServer(String token) async {
     try {
       var deviceId = _storage.getString('kith_device_id');
@@ -155,10 +166,12 @@ class FcmService {
       if (token != null) {
         await _apiClient.post('/auth/fcm-token/delete', body: {'token': token});
       }
+      await _storage.remove('kith_fcm_token');
       await FirebaseMessaging.instance.deleteToken();
     } catch (e) {
       debugPrint('[FCM] Token unregister failed: $e');
     }
   }
 }
+
 

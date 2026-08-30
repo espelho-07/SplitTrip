@@ -12,6 +12,7 @@ import '../../../domain/models/payment_verification_request.dart';
 import '../../../domain/services/notification_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/trip_detail_viewmodel.dart';
+import 'payment_verification_view.dart';
 import 'upi_payment_dialog.dart';
 
 /// Modal bottom sheet shown to the Receiver (Payee) when a Payer marks payment as done.
@@ -935,11 +936,7 @@ class PaymentVerificationManager {
       if (pendingReceiver.isNotEmpty) {
         final req = PaymentVerificationRequest.fromJson(pendingReceiver.first);
         if (context.mounted) {
-          if (req.isProofSubmitted) {
-            await PaymentProofSheet.show(context, request: req, isPayer: false);
-          } else {
-            await PaymentVerificationSheet.show(context, request: req);
-          }
+          await PaymentVerificationView.show(context, request: req);
           return;
         }
       }
