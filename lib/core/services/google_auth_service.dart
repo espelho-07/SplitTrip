@@ -70,7 +70,21 @@ class GoogleAuthService {
         await _googleSignIn.signOut();
       } catch (_) {}
 
-      account = await _googleSignIn.signIn();
+      try {
+        account = await _googleSignIn.signIn();
+      } on PlatformException catch (pErr) {
+        final msg = pErr.message ?? '';
+        if (pErr.code == 'sign_in_failed' || msg.contains('10') || msg.contains('DEVELOPER_ERROR') || msg.contains('12500')) {
+          debugPrint('[GoogleAuthService] ServerClientId sign-in error ($pErr). Trying native GoogleSignIn fallback...');
+          final nativeSignIn = GoogleSignIn(scopes: ['email', 'profile']);
+          try {
+            await nativeSignIn.signOut();
+          } catch (_) {}
+          account = await nativeSignIn.signIn();
+        } else {
+          rethrow;
+        }
+      }
       if (account == null) return null; // User cancelled
     } on PlatformException catch (e) {
       debugPrint('[GoogleAuthService] PlatformException: ${e.code} — ${e.message}');
