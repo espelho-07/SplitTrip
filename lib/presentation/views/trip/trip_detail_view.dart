@@ -32,6 +32,7 @@ import '../../../data/services/sync_service.dart';
 import 'dart:async';
 import '../../../core/localization/app_localizations.dart';
 import '../add_expense/add_expense_view.dart';
+import '../payment/payment_verification_dialog.dart';
 import 'widgets/activity_log_sheet.dart';
 import 'widgets/add_journey_moment_sheet.dart';
 import 'widgets/expense_detail_sheet.dart';
@@ -99,10 +100,13 @@ class _TripDetailViewState extends State<TripDetailView> {
       }
     });
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       final user = context.read<AuthViewModel>().currentUser;
       if (user != null) {
-        context.read<TripDetailViewModel>().loadTrip(widget.tripId, user.id);
+        await context.read<TripDetailViewModel>().loadTrip(widget.tripId, user.id);
+        if (mounted) {
+          await PaymentVerificationManager.checkAndPrompt(context);
+        }
       }
     });
   }
@@ -175,8 +179,82 @@ class _TripDetailViewState extends State<TripDetailView> {
 
   void _showCompleteTripConfirmation() {
     final tripDetailVm = context.read<TripDetailViewModel>();
+    final authVm = context.read<AuthViewModel>();
     final trip = tripDetailVm.trip;
     if (trip == null) return;
+
+    final remainingSettlements = tripDetailVm.balanceSummary.simplifiedSettlements;
+    final totalPendingPaise = remainingSettlements.fold(0, (sum, s) => sum + s.amountInPaise);
+
+    if (totalPendingPaise > 0) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      final formattedTotal = CurrencyFormatter.formatPaise(totalPendingPaise, currencyCode: trip.currencyCode);
+
+      showDialog(
+        context: context,
+        builder: (dCtx) => AlertDialog(
+          backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+          shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
+          title: Row(
+            children: [
+              const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 24),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Pending Payments Remaining',
+                  style: AppTypography.titleMedium(isDark: isDark),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'There is still $formattedTotal pending across members in this trip.\n\nAre you sure you want to mark all remaining bills as settled and complete the trip?',
+                style: AppTypography.bodyMedium(isDark: isDark),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dCtx);
+                _showSettlementSheet();
+              },
+              child: Text(
+                'Review Payments',
+                style: TextStyle(color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF14B8A6),
+                foregroundColor: Colors.white,
+                shape: const RoundedRectangleBorder(borderRadius: AppRadius.mdBorder),
+              ),
+              onPressed: () async {
+                Navigator.pop(dCtx);
+                final currentUserId = authVm.currentUser?.id ?? '';
+                await tripDetailVm.settleAllRemainingDues(currentUserId);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('🎉 All bills marked as settled & trip completed!'),
+                      backgroundColor: Color(0xFF14B8A6),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              },
+              child: const Text('Yes, Settle All & Complete'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
 
     TripCompletionVerificationSheet.show(
       context,
@@ -213,6 +291,8 @@ class _TripDetailViewState extends State<TripDetailView> {
           toName,
           paymentStatus,
         }) async {
+          final fromMember = trip.members.where((m) => m.id == fromMemberId).firstOrNull;
+          final toMember = trip.members.where((m) => m.id == toMemberId).firstOrNull;
           await tripDetailVm.recordSettlement(
             fromMemberId: fromMemberId,
             toMemberId: toMemberId,
@@ -223,6 +303,8 @@ class _TripDetailViewState extends State<TripDetailView> {
             toName: toName,
             paymentStatus: paymentStatus ?? 'paid',
             currentUserId: authVm.currentUser?.id ?? '',
+            fromUserId: fromMember?.userId,
+            toUserId: toMember?.userId,
           );
         },
         onMarkSettled: () {

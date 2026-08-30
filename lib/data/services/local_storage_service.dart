@@ -481,6 +481,91 @@ class LocalStorageService {
     }
   }
 
+  // --- 2-Sided Payment Verifications ---
+  static const String _paymentVerificationsKey = 'kith_payment_verifications';
+
+  List<Map<String, dynamic>> getSavedPaymentVerifications() {
+    final raw = _prefs.getString(_paymentVerificationsKey);
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      final list = jsonDecode(raw) as List<dynamic>;
+      return list.cast<Map<String, dynamic>>();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<bool> savePaymentVerifications(List<Map<String, dynamic>> list) async {
+    return _prefs.setString(_paymentVerificationsKey, jsonEncode(list));
+  }
+
+  Future<void> addPaymentVerification(Map<String, dynamic> req) async {
+    final current = getSavedPaymentVerifications();
+    current.removeWhere((item) => item['id'] == req['id']);
+    current.insert(0, req);
+    if (current.length > 200) {
+      current.removeRange(200, current.length);
+    }
+    await savePaymentVerifications(current);
+  }
+
+  Future<void> updatePaymentVerificationStatus(
+    String id,
+    String status, {
+    String? reason,
+  }) async {
+    final current = getSavedPaymentVerifications();
+    final idx = current.indexWhere((item) => item['id'] == id);
+    if (idx != -1) {
+      current[idx]['status'] = status;
+      current[idx]['respondedAt'] = DateTime.now().toIso8601String();
+      if (reason != null) {
+        current[idx]['disputeReason'] = reason;
+      }
+      await savePaymentVerifications(current);
+    }
+  }
+
+  List<Map<String, dynamic>> getPendingVerificationsForReceiver({
+    String? userId,
+    String? memberId,
+    String? name,
+  }) {
+    final current = getSavedPaymentVerifications();
+    final cleanName = name?.trim().toLowerCase();
+    return current.where((item) {
+      if (item['status'] != 'pending_verification') return false;
+      final rUserId = item['receiverUserId'] as String?;
+      final rMemberId = item['receiverMemberId'] as String?;
+      final rName = (item['receiverName'] as String?)?.trim().toLowerCase();
+
+      if (userId != null && rUserId != null && userId == rUserId) return true;
+      if (memberId != null && rMemberId != null && memberId == rMemberId) return true;
+      if (cleanName != null && rName != null && cleanName == rName) return true;
+      return false;
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> getDisputedVerificationsForPayer({
+    String? userId,
+    String? memberId,
+    String? name,
+  }) {
+    final current = getSavedPaymentVerifications();
+    final cleanName = name?.trim().toLowerCase();
+    return current.where((item) {
+      if (item['status'] != 'disputed') return false;
+      final pUserId = item['payerUserId'] as String?;
+      final pMemberId = item['payerMemberId'] as String?;
+      final pName = (item['payerName'] as String?)?.trim().toLowerCase();
+
+      if (userId != null && pUserId != null && userId == pUserId) return true;
+      if (memberId != null && pMemberId != null && memberId == pMemberId) return true;
+      if (cleanName != null && pName != null && cleanName == pName) return true;
+      return false;
+    }).toList();
+  }
+
   int getUnreadNotificationCount() {
     final current = getSavedNotifications();
     return current.where((n) => n['isRead'] != true).length;

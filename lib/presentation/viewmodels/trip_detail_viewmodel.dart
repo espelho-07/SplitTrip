@@ -275,6 +275,8 @@ class TripDetailViewModel extends ChangeNotifier {
     String? note,
     String paymentStatus = 'paid',
     required String currentUserId,
+    String? fromUserId,
+    String? toUserId,
   }) async {
     if (_trip == null) return;
     try {
@@ -290,8 +292,41 @@ class TripDetailViewModel extends ChangeNotifier {
         toName: toName,
         note: note,
         paymentStatus: paymentStatus,
+        tripName: _trip!.name,
+        fromUserId: fromUserId,
+        toUserId: toUserId,
       );
       _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
+      await refresh(currentUserId);
+    } catch (e) {
+      _errorMessage = KithErrorFormatter.format(e);
+      notifyListeners();
+    }
+  }
+
+  /// Settle all remaining debt transfers in one tap and mark the trip as settled.
+  Future<void> settleAllRemainingDues(String currentUserId) async {
+    if (_trip == null) return;
+    try {
+      final settlements = List.of(_balanceSummary.simplifiedSettlements);
+      for (final s in settlements) {
+        final fromMember = _trip!.members.where((m) => m.id == s.fromMemberId).firstOrNull;
+        final toMember = _trip!.members.where((m) => m.id == s.toMemberId).firstOrNull;
+        await expenseRepo.recordSettlement(
+          tripId: _trip!.id,
+          fromMemberId: s.fromMemberId,
+          toMemberId: s.toMemberId,
+          amountInPaise: s.amountInPaise,
+          fromName: fromMember?.displayName ?? 'Member',
+          toName: toMember?.displayName ?? 'Member',
+          fromUserId: fromMember?.userId,
+          toUserId: toMember?.userId,
+          tripName: _trip!.name,
+          paymentStatus: 'paid',
+          paymentReference: 'settle_all_${DateTime.now().millisecondsSinceEpoch}',
+        );
+      }
+      await markAsSettled(currentUserId);
       await refresh(currentUserId);
     } catch (e) {
       _errorMessage = KithErrorFormatter.format(e);

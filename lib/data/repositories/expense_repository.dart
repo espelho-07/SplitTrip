@@ -197,8 +197,12 @@ class ExpenseRepository {
     String? toName,
     String? note,
     String paymentStatus = 'paid',
+    String? tripName,
+    String? fromUserId,
+    String? toUserId,
   }) async {
     final id = settlementId ?? 'stl_loc_${DateTime.now().millisecondsSinceEpoch}';
+    final isActuallyPaid = paymentStatus == 'paid' || paymentStatus == 'completed' || paymentStatus == 'manual_settled';
     final payload = {
       'id': id,
       'tripId': tripId,
@@ -211,7 +215,7 @@ class ExpenseRepository {
       'toName': toName,
       'note': note,
       'status': paymentStatus,
-      'isSettled': paymentStatus == 'paid',
+      'isSettled': isActuallyPaid,
       'createdAt': DateTime.now().toIso8601String(),
     };
 
@@ -225,10 +229,34 @@ class ExpenseRepository {
     final receiverDisplay = toName ?? 'Member';
     final formattedAmt = (amountInPaise / 100).toStringAsFixed(2);
 
+    // If marked as pending verification or paid by Payer, register a verification request
+    final verificationPayload = {
+      'id': 'pvr_$id',
+      'settlementId': id,
+      'tripId': tripId,
+      'tripName': tripName ?? 'Trip',
+      'payerMemberId': fromMemberId,
+      'payerUserId': fromUserId,
+      'payerName': payerDisplay,
+      'receiverMemberId': toMemberId,
+      'receiverUserId': toUserId,
+      'receiverName': receiverDisplay,
+      'amountInPaise': amountInPaise,
+      'paymentMethod': recipientUpiId != null && recipientUpiId.contains('@') ? 'UPI' : 'Direct',
+      'paymentReference': paymentReference,
+      'recipientUpiId': recipientUpiId,
+      'note': note,
+      'status': isActuallyPaid ? 'confirmed' : 'pending_verification',
+      'markedAt': DateTime.now().toIso8601String(),
+    };
+    await storage.addPaymentVerification(verificationPayload);
+
     _logLocalActivity(
       tripId: tripId,
       type: 'settlement_recorded',
-      description: '$payerDisplay paid ₹$formattedAmt to $receiverDisplay',
+      description: isActuallyPaid
+          ? '$payerDisplay paid ₹$formattedAmt to $receiverDisplay'
+          : '$payerDisplay marked ₹$formattedAmt as paid to $receiverDisplay (Pending confirmation)',
       metadata: {
         'settlementId': id,
         'fromMemberId': fromMemberId,
@@ -244,6 +272,114 @@ class ExpenseRepository {
       MutationType.recordTripSettlement,
       payload,
       idempotencyKey: id,
+      backgroundApiClient: apiClient,
+    );
+  }
+
+  /// Confirm payment receipt by Receiver (Payee Handshake)
+  Future<void> confirmSettlementVerification({
+    required String tripId,
+    required String verificationId,
+    required String settlementId,
+    String? receiverName,
+    String? payerName,
+    int? amountInPaise,
+  }) async {
+    // 1. Update verification request status
+    await storage.updatePaymentVerificationStatus(verificationId, 'confirmed');
+
+    // 2. Update settlement in local trip storage
+    final settlements = storage.getSavedTripSettlements(tripId);
+    final idx = settlements.indexWhere((s) => s['id'] == settlementId);
+    if (idx != -1) {
+      settlements[idx]['status'] = 'paid';
+      settlements[idx]['isSettled'] = true;
+      settlements[idx]['confirmedAt'] = DateTime.now().toIso8601String();
+      await storage.saveTripSettlements(tripId, settlements);
+    }
+
+    final rName = receiverName ?? 'Receiver';
+    final pName = payerName ?? 'Payer';
+    final amtStr = amountInPaise != null ? '₹${(amountInPaise / 100).toStringAsFixed(2)}' : 'payment';
+
+    _logLocalActivity(
+      tripId: tripId,
+      type: 'settlement_confirmed',
+      description: '$rName confirmed receiving $amtStr from $pName ✓',
+      metadata: {
+        'verificationId': verificationId,
+        'settlementId': settlementId,
+        'status': 'confirmed',
+      },
+    );
+
+    await syncService.enqueueMutation(
+      MutationType.recordTripSettlement,
+      {
+        'id': settlementId,
+        'tripId': tripId,
+        'status': 'paid',
+        'isSettled': true,
+        'verificationId': verificationId,
+      },
+      idempotencyKey: 'cnf_$verificationId',
+      backgroundApiClient: apiClient,
+    );
+  }
+
+  /// Dispute payment receipt by Receiver (Payee Handshake)
+  Future<void> disputeSettlementVerification({
+    required String tripId,
+    required String verificationId,
+    required String settlementId,
+    String? receiverName,
+    String? payerName,
+    int? amountInPaise,
+    String? reason,
+  }) async {
+    // 1. Update verification request status
+    await storage.updatePaymentVerificationStatus(
+      verificationId,
+      'disputed',
+      reason: reason ?? 'Marked not received by payee',
+    );
+
+    // 2. Revert settlement in local trip storage
+    final settlements = storage.getSavedTripSettlements(tripId);
+    final idx = settlements.indexWhere((s) => s['id'] == settlementId);
+    if (idx != -1) {
+      settlements[idx]['status'] = 'disputed';
+      settlements[idx]['isSettled'] = false;
+      settlements[idx]['disputedAt'] = DateTime.now().toIso8601String();
+      await storage.saveTripSettlements(tripId, settlements);
+    }
+
+    final rName = receiverName ?? 'Receiver';
+    final pName = payerName ?? 'Payer';
+    final amtStr = amountInPaise != null ? '₹${(amountInPaise / 100).toStringAsFixed(2)}' : 'payment';
+
+    _logLocalActivity(
+      tripId: tripId,
+      type: 'settlement_disputed',
+      description: '$rName reported that $amtStr was NOT received from $pName',
+      metadata: {
+        'verificationId': verificationId,
+        'settlementId': settlementId,
+        'status': 'disputed',
+        'reason': reason,
+      },
+    );
+
+    await syncService.enqueueMutation(
+      MutationType.recordTripSettlement,
+      {
+        'id': settlementId,
+        'tripId': tripId,
+        'status': 'disputed',
+        'isSettled': false,
+        'verificationId': verificationId,
+      },
+      idempotencyKey: 'dsp_$verificationId',
       backgroundApiClient: apiClient,
     );
   }

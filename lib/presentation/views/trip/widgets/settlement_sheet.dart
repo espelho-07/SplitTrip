@@ -20,6 +20,7 @@ import '../../../../domain/models/trip.dart';
 import '../../../../domain/models/trip_member.dart';
 import '../../../widgets/progress/progress.dart';
 import '../../payment/upi_payment_dialog.dart';
+import '../../../../domain/services/notification_service.dart';
 import '../../../viewmodels/trip_detail_viewmodel.dart';
 
 typedef RecordSettlementCallback = Future<void> Function(
@@ -155,6 +156,7 @@ class _SettlementSheetState extends State<SettlementSheet> {
           if (widget.onRecordTransfer != null) {
             setState(() => _processingTransferIds.add(transferKey));
             try {
+              final notifService = context.read<NotificationService>();
               await widget.onRecordTransfer!(
                 fromMemberId,
                 toMemberId,
@@ -163,7 +165,15 @@ class _SettlementSheetState extends State<SettlementSheet> {
                 recipientUpiId: recipientUpiId,
                 fromName: fromName,
                 toName: toName,
-                paymentStatus: paymentStatus,
+                paymentStatus: 'pending_verification',
+              );
+              await notifService.notifyPaymentMarkedPaid(
+                tripName: widget.trip.name,
+                payerName: fromName,
+                receiverName: toName,
+                amountInPaise: amountInPaise,
+                verificationId: 'pvr_$paymentReference',
+                tripId: widget.trip.id,
               );
             } finally {
               if (mounted) {
@@ -179,7 +189,10 @@ class _SettlementSheetState extends State<SettlementSheet> {
           _paidTransferKeys.add(transferKey);
         });
         HapticHelper.success();
-        KithSuccessToast.show(context, l10n.settlementPaidSuccess);
+        KithSuccessToast.show(
+          context,
+          'Payment marked as paid. Waiting for $toName to confirm receipt.',
+        );
       }
       return;
     }
@@ -665,13 +678,81 @@ class _SettlementSheetState extends State<SettlementSheet> {
               text: l10n.settlementMarkAllDone,
               icon: Icons.check_circle_rounded,
               isFullWidth: true,
-              onPressed: () {
-                Navigator.pop(context);
-                widget.onMarkSettled!();
-              },
+              onPressed: _handleMarkAllDone,
             ),
         ],
       ),
     );
+  }
+
+  void _handleMarkAllDone() {
+    final remainingSettlements = widget.balanceSummary.simplifiedSettlements;
+    final totalPendingPaise = remainingSettlements.fold(0, (sum, s) => sum + s.amountInPaise);
+
+    if (totalPendingPaise > 0) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      final formattedTotal = CurrencyFormatter.formatPaise(totalPendingPaise, currencyCode: widget.trip.currencyCode);
+
+      showDialog(
+        context: context,
+        builder: (dCtx) => AlertDialog(
+          backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+          shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
+          title: Row(
+            children: [
+              const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 24),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Pending Payments Remaining',
+                  style: AppTypography.titleMedium(isDark: isDark),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'There is still $formattedTotal pending across members in this trip.\n\nAre you sure you want to mark all remaining bills as settled and complete the trip?',
+                style: AppTypography.bodyMedium(isDark: isDark),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dCtx),
+              child: Text(
+                'Review Payments',
+                style: TextStyle(color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF14B8A6),
+                foregroundColor: Colors.white,
+                shape: const RoundedRectangleBorder(borderRadius: AppRadius.mdBorder),
+              ),
+              onPressed: () {
+                Navigator.pop(dCtx);
+                Navigator.pop(context);
+                final tripDetailVm = Provider.of<TripDetailViewModel?>(context, listen: false);
+                if (tripDetailVm != null) {
+                  tripDetailVm.settleAllRemainingDues(widget.currentUserId);
+                  KithSuccessToast.show(context, '🎉 All bills marked as settled & trip completed!');
+                } else {
+                  widget.onMarkSettled?.call();
+                }
+              },
+              child: const Text('Yes, Settle All & Complete'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      Navigator.pop(context);
+      widget.onMarkSettled?.call();
+    }
   }
 }

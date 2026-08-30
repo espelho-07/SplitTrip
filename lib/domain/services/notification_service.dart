@@ -221,6 +221,62 @@ class NotificationService {
     }
   }
 
+  /// Dispatched when Payer marks payment as paid (Receiver receives this notice)
+  Future<void> notifyPaymentMarkedPaid({
+    required String tripName,
+    required String payerName,
+    required String receiverName,
+    required int amountInPaise,
+    required String verificationId,
+    String? tripId,
+  }) async {
+    final amtFormatted = '₹${(amountInPaise / 100.0).toStringAsFixed(amountInPaise % 100 == 0 ? 0 : 2)}';
+    await addNotification(
+      title: 'Payment Verification • $tripName',
+      description: '$payerName marked $amtFormatted as paid to $receiverName for $tripName. Tap to confirm receipt.',
+      type: NotificationType.settlement,
+      route: tripId != null ? '/trip/$tripId' : null,
+      actionLabel: 'Verify Payment',
+    );
+  }
+
+  /// Dispatched when Receiver confirms receipt (Payer receives this notice)
+  Future<void> notifyPaymentConfirmed({
+    required String tripName,
+    required String payerName,
+    required String receiverName,
+    required int amountInPaise,
+    String? tripId,
+  }) async {
+    final amtFormatted = '₹${(amountInPaise / 100.0).toStringAsFixed(amountInPaise % 100 == 0 ? 0 : 2)}';
+    await addNotification(
+      title: 'Payment Received ✓ • $tripName',
+      description: '$receiverName confirmed receiving $amtFormatted for $tripName! All balances updated.',
+      type: NotificationType.settlement,
+      route: tripId != null ? '/trip/$tripId' : null,
+      actionLabel: 'View Trip',
+    );
+  }
+
+  /// Dispatched when Receiver disputes payment (Payer receives this notice)
+  Future<void> notifyPaymentDisputed({
+    required String tripName,
+    required String payerName,
+    required String receiverName,
+    required int amountInPaise,
+    String? tripId,
+    String? reason,
+  }) async {
+    final amtFormatted = '₹${(amountInPaise / 100.0).toStringAsFixed(amountInPaise % 100 == 0 ? 0 : 2)}';
+    await addNotification(
+      title: 'Payment Not Received ⚠️ • $tripName',
+      description: '$receiverName indicated they did not receive $amtFormatted for $tripName. Tap to review or retry payment.',
+      type: NotificationType.settlement,
+      route: tripId != null ? '/trip/$tripId' : null,
+      actionLabel: 'Retry Payment',
+    );
+  }
+
   Future<void> markAllAsRead() async {
     await _storage?.markAllNotificationsAsRead();
   }

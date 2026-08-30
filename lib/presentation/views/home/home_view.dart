@@ -20,6 +20,7 @@ import '../personal/personal_home_tab.dart';
 import '../profile/profile_home_tab.dart';
 import '../trip/trips_home_tab.dart';
 import '../version/update_available_banner.dart';
+import '../payment/payment_verification_dialog.dart';
 import 'widgets/dashboard_tab.dart';
 
 class HomeView extends StatefulWidget {
@@ -149,6 +150,9 @@ class _HomeViewState extends State<HomeView> {
           final versionVm = Provider.of<VersionViewModel?>(context, listen: false);
           if (versionVm != null) {
             await versionVm.checkForUpdates();
+          }
+          if (mounted) {
+            await PaymentVerificationManager.checkAndPrompt(context);
           }
         }
       }
