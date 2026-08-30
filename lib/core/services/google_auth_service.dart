@@ -51,10 +51,12 @@ class GoogleAuthService {
   static const String _webClientId =
       '752190461758-m6ikshjbood33faqfacgfnvkdjrp7vj2.apps.googleusercontent.com';
 
-  static final GoogleSignIn _googleSignIn = GoogleSignIn(
-    scopes: ['email', 'profile'],
-    serverClientId: _webClientId,
-  );
+  static GoogleSignIn _createGoogleSignIn({bool withServerClientId = false}) {
+    return GoogleSignIn(
+      scopes: const ['email', 'profile'],
+      serverClientId: (withServerClientId && SupabaseConfig.isConfigured) ? _webClientId : null,
+    );
+  }
 
   /// Triggers the native Google account picker, verifies identity via Supabase,
   /// and returns a [GoogleAuthResult] on success.
@@ -65,22 +67,23 @@ class GoogleAuthService {
     GoogleSignInAccount? account;
 
     try {
+      final googleSignIn = _createGoogleSignIn(withServerClientId: SupabaseConfig.isConfigured);
       // Force account picker to appear even if a session was previously cached
       try {
-        await _googleSignIn.signOut();
+        await googleSignIn.signOut();
       } catch (_) {}
 
       try {
-        account = await _googleSignIn.signIn();
+        account = await googleSignIn.signIn();
       } on PlatformException catch (pErr) {
         final msg = pErr.message ?? '';
         if (pErr.code == 'sign_in_failed' || msg.contains('10') || msg.contains('DEVELOPER_ERROR') || msg.contains('12500')) {
-          debugPrint('[GoogleAuthService] ServerClientId sign-in error ($pErr). Trying native GoogleSignIn fallback...');
-          final nativeSignIn = GoogleSignIn(scopes: ['email', 'profile']);
+          debugPrint('[GoogleAuthService] Primary sign-in error ($pErr). Retrying with pure native GoogleSignIn...');
+          final pureNative = GoogleSignIn(scopes: const ['email', 'profile']);
           try {
-            await nativeSignIn.signOut();
+            await pureNative.signOut();
           } catch (_) {}
-          account = await nativeSignIn.signIn();
+          account = await pureNative.signIn();
         } else {
           rethrow;
         }
@@ -178,7 +181,7 @@ class GoogleAuthService {
   /// Signs the user out of both Google and Supabase.
   static Future<void> signOut() async {
     try {
-      await _googleSignIn.signOut();
+      await _createGoogleSignIn().signOut();
     } catch (_) {}
     if (SupabaseConfig.isConfigured) {
       try {
