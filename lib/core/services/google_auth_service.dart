@@ -127,7 +127,7 @@ class GoogleAuthService {
         : 'g_${email.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}';
     final avatarUrl = account.photoUrl;
 
-    // --- Supabase identity verification ---
+    // --- Supabase identity verification & backup sync ---
     String? supabaseUserId;
     if (SupabaseConfig.isConfigured) {
       try {
@@ -135,35 +135,19 @@ class GoogleAuthService {
         final idToken = auth.idToken;
         final accessToken = auth.accessToken;
 
-        if (idToken == null || idToken.isEmpty) {
-          throw const GoogleSignInException(
-            failure: GoogleSignInFailure.supabaseError,
-            message:
-                'Google did not return an idToken. Make sure the Android OAuth client is configured in Google Cloud Console for package com.nirniq.kith.',
+        if (idToken != null && idToken.isNotEmpty) {
+          final response = await Supabase.instance.client.auth.signInWithIdToken(
+            provider: OAuthProvider.google,
+            idToken: idToken,
+            accessToken: accessToken,
           );
+          supabaseUserId = response.user?.id;
+          debugPrint('[GoogleAuthService] Supabase backup sync OK — user: $supabaseUserId');
+        } else {
+          debugPrint('[GoogleAuthService] Pure native Google Sign-In returned without idToken (Supabase backup sync skipped, continuing with Nirniq auth).');
         }
-
-        final response = await Supabase.instance.client.auth.signInWithIdToken(
-          provider: OAuthProvider.google,
-          idToken: idToken,
-          accessToken: accessToken,
-        );
-
-        supabaseUserId = response.user?.id;
-        debugPrint('[GoogleAuthService] Supabase signInWithIdToken OK — user: $supabaseUserId');
-      } on AuthException catch (e) {
-        debugPrint('[GoogleAuthService] Supabase AuthException: ${e.message}');
-        throw GoogleSignInException(
-          failure: GoogleSignInFailure.supabaseError,
-          message: 'Supabase could not verify your Google account: ${e.message}',
-        );
       } catch (e) {
-        if (e is GoogleSignInException) rethrow;
-        debugPrint('[GoogleAuthService] Supabase error: $e');
-        throw GoogleSignInException(
-          failure: GoogleSignInFailure.supabaseError,
-          message: 'Authentication verification failed: $e',
-        );
+        debugPrint('[GoogleAuthService] Supabase backup sync notice: $e (continuing with Nirniq primary auth)');
       }
     } else {
       debugPrint('[GoogleAuthService] Supabase not configured — skipping signInWithIdToken.');

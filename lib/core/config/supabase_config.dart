@@ -1,4 +1,4 @@
-﻿/// Supabase project configuration.
+/// Supabase project configuration.
 ///
 /// SUPABASE_URL and SUPABASE_ANON_KEY are SAFE to commit — the anon key is
 /// designed to be public. Row-Level Security (RLS) policies control data access.
@@ -13,11 +13,12 @@ class SupabaseConfig {
 
   /// Your Supabase project URL.
   /// Find it at: Supabase Dashboard > Project Settings > API > Project URL
-  static const String _defaultUrl = 'https://REPLACE_WITH_YOUR_SUPABASE_URL.supabase.co';
+  static const String _defaultUrl = 'https://vcttgydigitisovoibvf.supabase.co';
 
   /// Your Supabase anon (public) key.
   /// Find it at: Supabase Dashboard > Project Settings > API > anon (public)
-  static const String _defaultAnonKey = 'REPLACE_WITH_YOUR_SUPABASE_ANON_KEY';
+  static const String _defaultAnonKey =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZjdHRneWRpZ2l0aXNvdm9pYnZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1NTc4MjMsImV4cCI6MjEwMzEzMzgyM30.CbWNo_LZToLoB-F2vp_dodTvW0kf0hwlWvqle0QYULI';
 
   static String get url => _envSupabaseUrl.isNotEmpty ? _envSupabaseUrl : _defaultUrl;
   static String get anonKey => _envAnonKey.isNotEmpty ? _envAnonKey : _defaultAnonKey;
