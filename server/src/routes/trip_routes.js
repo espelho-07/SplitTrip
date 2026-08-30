@@ -1,5 +1,6 @@
 const express = require('express');
 const tripService = require('../services/trip_service');
+const operationSyncService = require('../services/operation_sync_service');
 const { authMiddleware } = require('../middleware/auth');
 const { realtimeHub } = require('../realtime/websocket_hub');
 
@@ -96,6 +97,43 @@ router.post('/:id/ack-sync', (req, res, next) => {
   try {
     const { revision, pendingCount } = req.body;
     const result = tripService.acknowledgeSync(req.params.id, req.user.id, { revision, pendingCount });
+    res.status(200).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// POST /api/trips/:id/sync-operations - Batch operation reconciliation & deduplication
+router.post('/:id/sync-operations', (req, res, next) => {
+  try {
+    const { operations } = req.body;
+    const result = operationSyncService.batchSyncOperations(req.user, req.params.id, operations, realtimeHub);
+    res.status(200).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// POST /api/trips/:id/operations - Single operation atomic apply & deduplication
+router.post('/:id/operations', (req, res, next) => {
+  try {
+    const operation = req.body;
+    const result = operationSyncService.applyOperation(req.user, req.params.id, operation, realtimeHub);
+    res.status(200).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// GET /api/trips/:id/operations - Fetch processed operations for watermarking/reconciliation
+router.get('/:id/operations', (req, res, next) => {
+  try {
+    const sinceRevision = parseInt(req.query.sinceRevision || '0', 10);
+    const knownIds = req.query.knownIds ? req.query.knownIds.split(',') : [];
+    const result = operationSyncService.getOperationsSince(req.params.id, req.user.id, {
+      sinceRevision,
+      knownOperationIds: knownIds,
+    });
     res.status(200).json({ data: result });
   } catch (e) {
     next(e);

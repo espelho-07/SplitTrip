@@ -22,6 +22,7 @@ class Database {
       trip_journey_moments: new Map(),
       user_fcm_tokens: new Map(),
       notifications: new Map(),
+      processed_operations: new Map(),
     };
     if (!this.inMemory) {
       this._initStorage();

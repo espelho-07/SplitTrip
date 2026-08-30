@@ -153,6 +153,36 @@ class LocalStorageService {
     return _prefs.setString(_mutationQueueKey, jsonEncode(queue));
   }
 
+  // --- Processed P2P Operations ---
+  static const String _processedP2POpsKey = 'kith_processed_p2p_ops';
+
+  List<String> getProcessedP2POperationIds() {
+    final raw = _prefs.getString(_processedP2POpsKey);
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      final list = jsonDecode(raw) as List<dynamic>;
+      return list.map((e) => e.toString()).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<void> markP2POperationProcessed(String opId) async {
+    final list = getProcessedP2POperationIds();
+    if (!list.contains(opId)) {
+      list.add(opId);
+      // Retain max 1000 recent P2P operation IDs to prevent unbounded cache growth
+      if (list.length > 1000) {
+        list.removeRange(0, list.length - 1000);
+      }
+      await _prefs.setString(_processedP2POpsKey, jsonEncode(list));
+    }
+  }
+
+  bool isP2POperationProcessed(String opId) {
+    return getProcessedP2POperationIds().contains(opId);
+  }
+
   // --- Theme Mode ---
   String? getSavedThemeMode() {
     return _prefs.getString(_themeModeKey);

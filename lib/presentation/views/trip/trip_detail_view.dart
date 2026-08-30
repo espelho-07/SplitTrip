@@ -31,6 +31,7 @@ import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/trip_detail_viewmodel.dart';
 import '../../../data/repositories/expense_repository.dart';
 import '../../../data/services/local_storage_service.dart';
+import '../../../data/services/p2p_sync_service.dart';
 import '../../../data/services/sync_service.dart';
 import 'dart:async';
 import '../../../core/localization/app_localizations.dart';
@@ -42,6 +43,7 @@ import 'widgets/activity_log_sheet.dart';
 import 'widgets/add_journey_moment_sheet.dart';
 import 'widgets/expense_detail_sheet.dart';
 import 'widgets/member_spend_breakdown_sheet.dart';
+import 'widgets/nearby_sync_badge.dart';
 import 'widgets/settlement_sheet.dart';
 import 'widgets/trip_completion_verification_sheet.dart';
 import 'widgets/trip_qr_sheet.dart';
@@ -794,10 +796,20 @@ class _TripDetailViewState extends State<TripDetailView> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              PillBadge(
-                label: trip.lifecycleState.displayName.toUpperCase(),
-                color: Colors.white,
-                backgroundColor: Colors.black.withValues(alpha: 0.25),
+              Row(
+                children: [
+                  PillBadge(
+                    label: trip.lifecycleState.displayName.toUpperCase(),
+                    color: Colors.white,
+                    backgroundColor: Colors.black.withValues(alpha: 0.25),
+                  ),
+                  const SizedBox(width: 8),
+                  NearbySyncBadge(
+                    p2pService: context.read<P2PSyncService>(),
+                    syncService: context.read<SyncService>(),
+                    tripId: trip.id,
+                  ),
+                ],
               ),
               Row(
                 children: [

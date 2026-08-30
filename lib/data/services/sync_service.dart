@@ -38,6 +38,13 @@ enum SyncStatus {
   error,
 }
 
+enum SyncState {
+  localPending,
+  p2pShared,
+  serverPending,
+  serverAcked,
+}
+
 class SyncMutation {
   final String id;
   final String idempotencyKey;
@@ -47,6 +54,8 @@ class SyncMutation {
   final int retryCount;
   final DateTime? lastAttemptAt;
   final List<String> dependsOn;
+  final SyncState syncState;
+  final String? originDeviceId;
 
   SyncMutation({
     required this.id,
@@ -57,6 +66,8 @@ class SyncMutation {
     this.retryCount = 0,
     this.lastAttemptAt,
     this.dependsOn = const [],
+    this.syncState = SyncState.localPending,
+    this.originDeviceId,
   }) : idempotencyKey = idempotencyKey ?? id;
 
   /// Returns the tripId associated with this mutation, if applicable.
@@ -79,6 +90,8 @@ class SyncMutation {
     'retryCount': retryCount,
     'lastAttemptAt': lastAttemptAt?.toIso8601String(),
     'dependsOn': dependsOn,
+    'syncState': syncState.name,
+    'originDeviceId': originDeviceId,
   };
 
   factory SyncMutation.fromJson(Map<String, dynamic> json) => SyncMutation(
@@ -99,12 +112,19 @@ class SyncMutation {
     dependsOn: json['dependsOn'] is List
         ? (json['dependsOn'] as List).map((e) => e.toString()).toList()
         : const [],
+    syncState: SyncState.values.firstWhere(
+      (e) => e.name == json['syncState'],
+      orElse: () => SyncState.localPending,
+    ),
+    originDeviceId: json['originDeviceId'] as String?,
   );
 
   SyncMutation copyWith({
     int? retryCount,
     DateTime? lastAttemptAt,
     List<String>? dependsOn,
+    SyncState? syncState,
+    String? originDeviceId,
   }) => SyncMutation(
     id: id,
     idempotencyKey: idempotencyKey,
@@ -114,11 +134,14 @@ class SyncMutation {
     retryCount: retryCount ?? this.retryCount,
     lastAttemptAt: lastAttemptAt ?? this.lastAttemptAt,
     dependsOn: dependsOn ?? this.dependsOn,
+    syncState: syncState ?? this.syncState,
+    originDeviceId: originDeviceId ?? this.originDeviceId,
   );
 }
 
 /// Offline-first synchronization queue service.
-/// Enqueues user mutations when offline and processes them with jittered backoff.
+/// Enqueues user mutations when offline, manages P2P operation exchanges,
+/// and reconciles operations with the server with jittered backoff.
 class SyncService {
   final LocalStorageService _storage;
   final Uuid _uuid = const Uuid();
@@ -126,6 +149,7 @@ class SyncService {
   SyncStatus _currentStatus = SyncStatus.synced;
   final StreamController<SyncStatus> _statusController =
       StreamController<SyncStatus>.broadcast();
+  StreamSubscription? _realtimeSubscription;
 
   SyncService(this._storage);
 
@@ -135,7 +159,6 @@ class SyncService {
   List<SyncMutation> getQueue() => getPendingMutations();
   SyncStatus get currentStatus => _currentStatus;
   Stream<SyncStatus> get statusStream => _statusController.stream;
-
 
   void _setStatus(SyncStatus status) {
     if (_currentStatus != status) {
@@ -181,6 +204,7 @@ class SyncService {
       payload: payload,
       createdAt: DateTime.now(),
       dependsOn: dependsOn ?? const [],
+      syncState: SyncState.localPending,
     );
 
     final queue = getPendingMutations();
@@ -205,6 +229,69 @@ class SyncService {
     }
   }
 
+  Future<void> markMutationP2PShared(String id) async {
+    final queue = getPendingMutations();
+    final idx = queue.indexWhere((m) => m.id == id);
+    if (idx != -1) {
+      queue[idx] = queue[idx].copyWith(syncState: SyncState.p2pShared);
+      await _storage.saveMutationQueue(queue.map((m) => m.toJson()).toList());
+    }
+  }
+
+  /// Applies an operation received via P2P locally and stores it in the sync queue as P2P_SHARED.
+  /// Preserves the exact same unique operation_id for eventual server reconciliation.
+  Future<bool> applyRemoteP2PMutation(SyncMutation mutation, LocalStorageService storage) async {
+    // Deduplication check
+    final queue = getPendingMutations();
+    if (queue.any((m) => m.id == mutation.id) || storage.isP2POperationProcessed(mutation.id)) {
+      return false; // Already present or applied
+    }
+
+    final tripId = mutation.tripId;
+    if (tripId == null) return false;
+
+    // Apply domain mutation locally to local storage
+    try {
+      if (mutation.type == MutationType.addExpense || mutation.type == MutationType.updateExpense) {
+        final existingExpenses = storage.getSavedExpenses(tripId);
+        final expenseJson = Map<String, dynamic>.from(mutation.payload);
+        final expId = expenseJson['id'] as String?;
+
+        if (expId != null) {
+          final idx = existingExpenses.indexWhere((e) => e['id'] == expId);
+          if (idx != -1) {
+            existingExpenses[idx] = expenseJson;
+          } else {
+            existingExpenses.add(expenseJson);
+          }
+          await storage.saveExpenses(tripId, existingExpenses);
+        }
+      } else if (mutation.type == MutationType.deleteExpense) {
+        final existingExpenses = storage.getSavedExpenses(tripId);
+        final expId = mutation.payload['id'] as String? ?? mutation.payload['expenseId'] as String?;
+        if (expId != null) {
+          existingExpenses.removeWhere((e) => e['id'] == expId);
+          await storage.saveExpenses(tripId, existingExpenses);
+        }
+      } else if (mutation.type == MutationType.updateTripLifecycle) {
+        final targetLifecycle = mutation.payload['lifecycleState'] as String?;
+        if (targetLifecycle != null) {
+          _promoteLocalTripLifecycle(tripId, targetLifecycle);
+        }
+      }
+
+      // Enqueue in local mutation queue as P2P_SHARED with SAME operation_id
+      final p2pMutation = mutation.copyWith(syncState: SyncState.p2pShared);
+      queue.add(p2pMutation);
+      await storage.saveMutationQueue(queue.map((m) => m.toJson()).toList());
+      _setStatus(SyncStatus.pending);
+      return true;
+    } catch (e) {
+      debugPrint('[SyncService] Failed to apply remote P2P mutation ${mutation.id}: $e');
+      return false;
+    }
+  }
+
   Future<void> _updateMutationAttempt(String id, int retryCount) async {
     final queue = getPendingMutations();
     final idx = queue.indexWhere((m) => m.id == id);
@@ -214,6 +301,57 @@ class SyncService {
         lastAttemptAt: DateTime.now(),
       );
       await _storage.saveMutationQueue(queue.map((m) => m.toJson()).toList());
+    }
+  }
+
+  /// Batch reconciles all pending mutations for a trip against the authoritative server endpoint.
+  Future<int> syncTripBatchWithServer(ApiClient apiClient, String tripId) async {
+    final tripMutations = getPendingMutationsForTrip(tripId);
+    if (tripMutations.isEmpty) return 0;
+
+    try {
+      final res = await apiClient.post(
+        '/trips/$tripId/sync-operations',
+        body: {
+          'operations': tripMutations.map((m) => m.toJson()).toList(),
+        },
+      );
+
+      final data = res is Map<String, dynamic> && res.containsKey('data')
+          ? res['data'] as Map<String, dynamic>
+          : (res is Map<String, dynamic> ? res : <String, dynamic>{});
+
+      final results = data['results'] as List<dynamic>? ?? [];
+      int ackedCount = 0;
+
+      for (final r in results) {
+        if (r is Map<String, dynamic>) {
+          final opId = r['operationId'] as String?;
+          final status = r['status'] as String?;
+          if (opId != null && (status == 'APPLIED' || status == 'ALREADY_PROCESSED')) {
+            await removeMutation(opId);
+            ackedCount++;
+          }
+        }
+      }
+
+      // Update local storage trip snapshot if returned
+      if (data.containsKey('trip') && data['trip'] is Map<String, dynamic>) {
+        final serverTrip = data['trip'] as Map<String, dynamic>;
+        final trips = _storage.getSavedTrips();
+        final idx = trips.indexWhere((t) => t['id'] == tripId);
+        if (idx != -1) {
+          trips[idx] = serverTrip;
+        } else {
+          trips.add(serverTrip);
+        }
+        await _storage.saveTrips(trips);
+      }
+
+      return ackedCount;
+    } catch (e) {
+      debugPrint('[SyncService] Batch sync notice for trip $tripId: $e');
+      return 0;
     }
   }
 
@@ -227,7 +365,6 @@ class SyncService {
       final queue = getPendingMutations();
       final now = DateTime.now();
 
-      // Track blocked trip IDs in this pass (if an earlier mutation for a trip failed, subsequent dependent operations must wait)
       final blockedTripIds = <String>{};
       final completedMutationIds = <String>{};
 
@@ -239,7 +376,7 @@ class SyncService {
           continue;
         }
 
-        // Dependency check: If any mutation in dependsOn is still pending in the queue, skip
+        // Dependency check
         final pendingIds = queue.map((m) => m.id).toSet();
         final hasUnresolvedDependencies = mutation.dependsOn.any(
           (depId) => pendingIds.contains(depId) && !completedMutationIds.contains(depId),
@@ -248,13 +385,13 @@ class SyncService {
           continue;
         }
 
-        // Jittered exponential backoff check: base 1s * 2^retryCount, capped at 30s
+        // Jittered exponential backoff check
         if (!force && mutation.lastAttemptAt != null && mutation.retryCount > 0) {
           final backoffSeconds = min(30, pow(2, mutation.retryCount).toInt());
           final nextAllowed = mutation.lastAttemptAt!.add(Duration(seconds: backoffSeconds));
           if (now.isBefore(nextAllowed)) {
             if (tId != null) blockedTripIds.add(tId);
-            continue; // Skip this item until backoff period passes
+            continue;
           }
         }
 
@@ -263,7 +400,6 @@ class SyncService {
           completedMutationIds.add(mutation.id);
           await removeMutation(mutation.id);
 
-          // If this was a trip lifecycle update to completed, ensure local storage reflects completed state
           if (mutation.type == MutationType.updateTripLifecycle && tId != null) {
             final targetLifecycle = mutation.payload['lifecycleState'] as String?;
             if (targetLifecycle == 'completed' || targetLifecycle == 'settled') {
@@ -271,13 +407,11 @@ class SyncService {
             }
           }
         } on NetworkException catch (_) {
-          // Increment retry count and back off
           await _updateMutationAttempt(mutation.id, mutation.retryCount + 1);
           if (tId != null) blockedTripIds.add(tId);
           _setStatus(SyncStatus.offline);
-          break; // Break loop and retry later when connection returns
+          break;
         } on ApiException catch (e) {
-          // If server rejects with 4xx unrecoverable client error, drop mutation to unblock queue
           debugPrint('[SyncService] Client error ${e.statusCode} for mutation ${mutation.id}: ${e.message}');
           completedMutationIds.add(mutation.id);
           await removeMutation(mutation.id);
@@ -301,108 +435,128 @@ class SyncService {
     }
   }
 
-  void _promoteLocalTripLifecycle(String tripId, String lifecycleState) {
+  void _promoteLocalTripLifecycle(String tripId, String targetLifecycle) {
     try {
       final trips = _storage.getSavedTrips();
       final idx = trips.indexWhere((t) => t['id'] == tripId);
       if (idx != -1) {
-        trips[idx]['lifecycleState'] = lifecycleState;
-        trips[idx]['updatedAt'] = DateTime.now().toIso8601String();
-        if (trips[idx]['completedAt'] == null && (lifecycleState.contains('completed') || lifecycleState == 'settled')) {
-          trips[idx]['completedAt'] = DateTime.now().toIso8601String();
-        }
+        trips[idx] = {
+          ...trips[idx],
+          'lifecycleState': targetLifecycle,
+          'completedAt': targetLifecycle == 'completed' || targetLifecycle == 'settled'
+              ? (trips[idx]['completedAt'] ?? DateTime.now().toIso8601String())
+              : trips[idx]['completedAt'],
+        };
         _storage.saveTrips(trips);
       }
-    } catch (e) {
-      debugPrint('[SyncService] Notice updating local trip lifecycle: $e');
-    }
+    } catch (_) {}
   }
-
 
   Future<void> _executeMutation(ApiClient apiClient, SyncMutation mutation) async {
+    final payload = mutation.payload;
+
     switch (mutation.type) {
       case MutationType.createTrip:
-        await apiClient.post('/trips', body: mutation.payload);
+        await apiClient.post('/trips', body: payload);
         break;
+
       case MutationType.joinTrip:
-        await apiClient.post('/trips/join', body: mutation.payload);
+        await apiClient.post('/trips/join', body: payload);
         break;
+
       case MutationType.updateTripLifecycle:
         final tripId = mutation.payload['tripId'] as String;
-        await apiClient.patch('/trips/$tripId/lifecycle', body: mutation.payload);
+        await apiClient.patch('/trips/$tripId/lifecycle', body: payload);
         break;
+
       case MutationType.addExpense:
         final tripId = mutation.payload['tripId'] as String;
-        await apiClient.post('/trips/$tripId/expenses', body: mutation.payload);
+        await apiClient.post('/trips/$tripId/expenses', body: payload);
         break;
+
       case MutationType.updateExpense:
         final tripId = mutation.payload['tripId'] as String;
-        final expenseId = mutation.payload['id'] as String;
-        await apiClient.put('/trips/$tripId/expenses/$expenseId', body: mutation.payload);
+        final expenseId = payload['id'] as String? ?? payload['expenseId'] as String;
+        await apiClient.put('/trips/$tripId/expenses/$expenseId', body: payload);
         break;
+
       case MutationType.deleteExpense:
         final tripId = mutation.payload['tripId'] as String;
-        final expenseId = mutation.payload['expenseId'] as String;
+        final expenseId = payload['id'] as String? ?? payload['expenseId'] as String;
         await apiClient.delete('/trips/$tripId/expenses/$expenseId');
         break;
+
       case MutationType.createPersonalExpense:
-        await apiClient.post('/personal/expenses', body: mutation.payload);
+        await apiClient.post('/personal/expenses', body: payload);
         break;
+
       case MutationType.updatePersonalExpense:
-        final id = mutation.payload['id'] as String;
-        await apiClient.put('/personal/expenses/$id', body: mutation.payload);
+        final expenseId = payload['id'] as String? ?? payload['expenseId'] as String;
+        await apiClient.put('/personal/expenses/$expenseId', body: payload);
         break;
+
       case MutationType.deletePersonalExpense:
-        final id = mutation.payload['id'] as String;
-        await apiClient.delete('/personal/expenses/$id');
+        final expenseId = payload['id'] as String? ?? payload['expenseId'] as String;
+        await apiClient.delete('/personal/expenses/$expenseId');
         break;
+
       case MutationType.createPersonalDebt:
-        await apiClient.post('/personal/debts', body: mutation.payload);
+        await apiClient.post('/personal/debts', body: payload);
         break;
+
       case MutationType.recordPersonalRepayment:
-        final debtId = mutation.payload['debtId'] as String;
-        await apiClient.post('/personal/debts/$debtId/repayments', body: mutation.payload);
+        final debtId = payload['debtId'] as String? ?? payload['id'] as String;
+        await apiClient.post('/personal/debts/$debtId/repayments', body: payload);
         break;
+
       case MutationType.deletePersonalDebt:
-        final id = mutation.payload['id'] as String;
-        await apiClient.delete('/personal/debts/$id');
+        final debtId = payload['debtId'] as String? ?? payload['id'] as String;
+        await apiClient.delete('/personal/debts/$debtId');
         break;
+
       case MutationType.setPersonalBudget:
-        await apiClient.put('/personal/budget', body: mutation.payload);
+        final category = payload['category'] as String;
+        await apiClient.post('/personal/budgets/$category', body: payload);
         break;
+
       case MutationType.createJourneyMoment:
         final tripId = mutation.payload['tripId'] as String;
-        final momentPayload = mutation.payload['moment'] as Map<String, dynamic>;
+        final momentPayload = mutation.payload.containsKey('moment')
+            ? mutation.payload['moment'] as Map<String, dynamic>
+            : payload;
         await apiClient.post('/trips/$tripId/moments', body: momentPayload);
         break;
+
       case MutationType.deleteJourneyMoment:
         final tripId = mutation.payload['tripId'] as String;
-        final momentId = mutation.payload['momentId'] as String;
+        final momentId = payload['id'] as String? ?? payload['momentId'] as String;
         await apiClient.delete('/trips/$tripId/moments/$momentId');
         break;
+
       case MutationType.recordTripSettlement:
         final tripId = mutation.payload['tripId'] as String;
-        await apiClient.post('/trips/$tripId/settlements', body: mutation.payload);
+        await apiClient.post('/trips/$tripId/settlements', body: payload);
         break;
+
       case MutationType.confirmTripSettlement:
         final tripId = mutation.payload['tripId'] as String;
-        final settlementId = mutation.payload['settlementId'] as String;
-        await apiClient.post('/trips/$tripId/settlements/$settlementId/confirm', body: mutation.payload);
+        final settlementId = payload['id'] as String? ?? payload['settlementId'] as String;
+        await apiClient.post('/trips/$tripId/settlements/$settlementId/confirm', body: payload);
         break;
+
       case MutationType.disputeTripSettlement:
         final tripId = mutation.payload['tripId'] as String;
-        final settlementId = mutation.payload['settlementId'] as String;
-        await apiClient.post('/trips/$tripId/settlements/$settlementId/dispute', body: mutation.payload);
+        final settlementId = payload['id'] as String? ?? payload['settlementId'] as String;
+        await apiClient.post('/trips/$tripId/settlements/$settlementId/dispute', body: payload);
         break;
+
       case MutationType.submitSettlementProof:
         final tripId = mutation.payload['tripId'] as String;
-        final settlementId = mutation.payload['settlementId'] as String;
-        await apiClient.post('/trips/$tripId/settlements/$settlementId/proof', body: mutation.payload);
+        final settlementId = payload['id'] as String? ?? payload['settlementId'] as String;
+        await apiClient.post('/trips/$tripId/settlements/$settlementId/proof', body: payload);
         break;
     }
   }
-
-  StreamSubscription? _realtimeSubscription;
 
   /// Attaches a realtime client to automatically trigger local queue flush when sync is requested.
   void attachRealtimeClient(RealtimeClient realtimeClient, {ApiClient? apiClient}) {
@@ -421,4 +575,3 @@ class SyncService {
     _statusController.close();
   }
 }
-

@@ -24,6 +24,7 @@ import 'data/repositories/user_repository.dart';
 import 'data/services/auth_service.dart';
 import 'data/services/local_migration_runner.dart';
 import 'data/services/local_storage_service.dart';
+import 'data/services/p2p_sync_service.dart';
 import 'data/services/sync_service.dart';
 import 'domain/services/notification_service.dart';
 import 'presentation/router/app_router.dart';
@@ -80,6 +81,7 @@ void main() async {
   realtimeClient.connect();
 
   final syncService = SyncService(storageService);
+  final p2pSyncService = P2PSyncService(storageService, syncService);
   final authService = AuthService(
     storage: storageService,
     apiClient: apiClient,
@@ -96,8 +98,9 @@ void main() async {
   // Initialize Production Security Lock Service
   final securityLockService = SecurityLockService(storageService);
 
-  // Trigger background offline queue flush and non-blocking version check
+  // Trigger background offline queue flush, P2P discovery start, and non-blocking version check
   unawaited(syncService.flushQueue(apiClient));
+  unawaited(p2pSyncService.start());
   unawaited(appVersionService.checkVersion());
 
   // Repositories
@@ -172,6 +175,7 @@ void main() async {
         Provider<kith_realtime.RealtimeClient>.value(value: realtimeClient),
         Provider<ApiClient>.value(value: apiClient),
         Provider<SyncService>.value(value: syncService),
+        Provider<P2PSyncService>.value(value: p2pSyncService),
         Provider<LocalMigrationRunner>.value(value: migrationRunner),
         Provider<AppVersionService>.value(value: appVersionService),
         Provider<UserRepository>.value(value: userRepo),
