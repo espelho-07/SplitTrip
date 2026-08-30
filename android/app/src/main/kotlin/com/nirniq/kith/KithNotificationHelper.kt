@@ -3,37 +3,55 @@ package com.nirniq.kith
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
 import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 
 object KithNotificationHelper {
-    const val CHANNEL_ID = "kith_alerts"
-    const val CHANNEL_NAME = "Kith Alerts & Settlements"
+    const val CHANNEL_ID = "kith_activity"
+    const val CHANNEL_NAME = "Kith Activity"
     const val CHANNEL_ID_PAYMENTS = "kith_payments"
-    const val CHANNEL_NAME_PAYMENTS = "Kith Payments"
+    const val CHANNEL_NAME_PAYMENTS = "Kith Payments & Settlements"
+
+    fun getSoundUri(context: Context): Uri {
+        return Uri.parse("${ContentResolver.SCHEME_ANDROID_RESOURCE}://${context.packageName}/${R.raw.kith_notification}")
+    }
 
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val notificationManager: NotificationManager =
                 context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-            // General alerts channel
-            val alertsChannel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Trip updates, member invites, payments and settlement alerts"
+            val soundUri = getSoundUri(context)
+            val audioAttributes = AudioAttributes.Builder()
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .build()
+
+            val subtleVibrationPattern = longArrayOf(0, 100, 50, 80)
+
+            // 1. Activity channel (Expenses, Member Updates, Trip Events)
+            val activityChannel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Expenses, member updates, and trip activity alerts"
                 enableLights(true)
                 enableVibration(true)
+                vibrationPattern = subtleVibrationPattern
+                setSound(soundUri, audioAttributes)
             }
-            notificationManager.createNotificationChannel(alertsChannel)
+            notificationManager.createNotificationChannel(activityChannel)
 
-            // Dedicated payments channel — used by FCM for background/terminated push delivery
+            // 2. Dedicated payments channel (Payment Confirmations, Settlement Requests)
             val paymentsChannel = NotificationChannel(CHANNEL_ID_PAYMENTS, CHANNEL_NAME_PAYMENTS, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "Payment confirmations, settlement requests, and payment proof notifications"
                 enableLights(true)
                 enableVibration(true)
+                vibrationPattern = subtleVibrationPattern
+                setSound(soundUri, audioAttributes)
             }
             notificationManager.createNotificationChannel(paymentsChannel)
         }
@@ -75,6 +93,7 @@ object KithNotificationHelper {
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setSound(getSoundUri(context))
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
 

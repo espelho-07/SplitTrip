@@ -115,10 +115,19 @@ async function sendToUser(db, userId, payload) {
       ),
       android: {
         notification: {
-          channelId: 'kith_payments',
+          channelId: data.channelId || (data.type?.includes('settlement') || data.type?.includes('payment') ? 'kith_payments' : 'kith_activity'),
+          sound: 'kith_notification',
           priority: 'high',
+          defaultSound: false,
         },
         priority: 'high',
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'kith_notification.wav',
+          },
+        },
       },
       tokens,
     };
