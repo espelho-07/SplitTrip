@@ -1059,12 +1059,12 @@ const Map<String, String> hiTranslations = {
   'widgets_card_smart_desc': 'लाइव स्थिति के आधार पर सबसे महत्वपूर्ण वित्तीय कार्य को रैंक करने वाला स्मार्ट कार्ड।',
 
   // Profile Home Tab Keys
-  'profile_edit_profile_btn': 'Nirniq प्रोफ़ाइल संपादित करें',
+  'profile_edit_profile_btn': 'प्रोफ़ाइल संपादित करें',
   'profile_stats_trips': 'ट्रिप्स',
   'profile_stats_expenses': 'खर्चे',
   'profile_stats_spent': 'कुल खर्च',
-  'profile_sec_cloud_title': 'Nirniq खाता और क्लाउड सिंक',
-  'profile_identity_title': 'Nirniq प्रोफ़ाइल और पहचान',
+  'profile_sec_cloud_title': 'खाता और क्लाउड सिंक',
+  'profile_identity_title': 'प्रोफ़ाइल और पहचान',
   'profile_identity_sub': 'नाम, फ़ोन नंबर, अवतार और बायो संपादित करें',
   'profile_cloud_storage': 'क्लाउड स्टोरेज और बैकअप',
   'profile_cloud_storage_sub': 'ऑफ़लाइन ऑटो-सिंक अंतराल कॉन्फ़िगर करें',

@@ -21,6 +21,7 @@ import '../../widgets/progress/progress.dart';
 import '../cloud/cloud_sync_sheet.dart';
 import '../language/language_select_sheet.dart';
 import '../onboarding/interactive_tutorial_sheet.dart';
+import '../onboarding/widgets/recovery_key_sheet.dart';
 import '../settings/widgets/beta_feedback_sheet.dart';
 
 class ProfileHomeTab extends StatelessWidget {
@@ -435,7 +436,7 @@ class ProfileHomeTab extends StatelessWidget {
           children: [
             _buildMenuItem(
               icon: Icons.person_rounded,
-              title: l10n.profileIdentityTitle,
+              title: isNirniqLinked ? l10n.profileMenuNirniqIdentity : l10n.profileIdentityTitle,
               subtitle: l10n.profileIdentitySub,
               iconColor: const Color(0xFF14B8A6),
               isDark: isDark,
@@ -487,6 +488,14 @@ class ProfileHomeTab extends StatelessWidget {
                   );
                 }
               },
+            ),
+            _buildMenuItem(
+              icon: Icons.restore_page_rounded,
+              title: l10n.onboardingRecoverySheetTitle,
+              subtitle: l10n.onboardingRecoverySheetDesc,
+              iconColor: const Color(0xFF6366F1),
+              isDark: isDark,
+              onTap: () => RecoveryKeySheet.show(context),
             ),
             _buildMenuItem(
               icon: Icons.cloud_sync_rounded,

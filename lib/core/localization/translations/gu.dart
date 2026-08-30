@@ -1059,12 +1059,12 @@ const Map<String, String> guTranslations = {
   'widgets_card_smart_desc': 'લાઇવ સ્થિતિના આધારે સૌથી મહત્વપૂર્ણ નાણાકીય ક્રિયા દર્શાવતું સ્માર્ટ કાર્ડ.',
 
   // Profile Home Tab Keys
-  'profile_edit_profile_btn': 'Nirniq પ્રોફાઇલ સંપાદિત કરો',
+  'profile_edit_profile_btn': 'પ્રોફાઇલ સંપાદિત કરો',
   'profile_stats_trips': 'ટ્રિપ્સ',
   'profile_stats_expenses': 'ખર્ચ',
   'profile_stats_spent': 'કુલ ખર્ચ',
-  'profile_sec_cloud_title': 'Nirniq એકાઉન્ટ અને ક્લાઉડ સિંક',
-  'profile_identity_title': 'Nirniq પ્રોફાઇલ અને ઓળખ',
+  'profile_sec_cloud_title': 'એકાઉન્ટ અને ક્લાઉડ સિંક',
+  'profile_identity_title': 'પ્રોફાઇલ અને ઓળખ',
   'profile_identity_sub': 'નામ, ફોન નંબર, અવતાર અને બાયો સંપાદિત કરો',
   'profile_cloud_storage': 'ક્લાઉડ સ્ટોરેજ અને બેકઅપ',
   'profile_cloud_storage_sub': 'ઑફલાઇન ઑટો-સિંક સમયગાળો ગોઠવો',

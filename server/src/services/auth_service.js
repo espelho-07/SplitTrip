@@ -13,7 +13,13 @@ class AuthService {
     if (clean.length === 8) {
       return `KITH-${clean.substring(0, 4)}-${clean.substring(4, 8)}`;
     }
-    return clean ? (clean.length > 8 ? `KITH-${clean.substring(0, 4)}-${clean.substring(4, 8)}` : clean) : '';
+    if (clean.length === 12) {
+      return `KITH-${clean.substring(0, 4)}-${clean.substring(4, 8)}-${clean.substring(8, 12)}`;
+    }
+    if (clean.length === 16) {
+      return `KITH-${clean.substring(0, 4)}-${clean.substring(4, 8)}-${clean.substring(8, 12)}-${clean.substring(12, 16)}`;
+    }
+    return clean ? `KITH-${clean}` : '';
   }
 
   _hashKey(key) {
@@ -52,7 +58,8 @@ class AuthService {
 
     const trimmedName = displayName.trim();
     const recoveryKey = this._generateRecoveryKey();
-    const recoveryKeyHash = this._hashKey(recoveryKey);
+    const normalizedKey = this._normalizeRecoveryKey(recoveryKey);
+    const recoveryKeyHash = this._hashKey(normalizedKey);
     const userId = `usr_${crypto.randomUUID().replace(/-/g, '').substring(0, 12)}`;
 
     const user = {
@@ -74,7 +81,7 @@ class AuthService {
         id: user.id,
         displayName: user.displayName,
         avatarUrl: user.avatarUrl,
-        recoveryKey, // Only returned at creation time or recovery
+        recoveryKey: normalizedKey,
         anonymousToken: session.token,
         isGuest: user.isGuest,
         createdAt: user.createdAt,
@@ -107,8 +114,19 @@ class AuthService {
       if (u.recoveryKeyHash && candidateHashes.has(u.recoveryKeyHash)) return true;
       if (u.recoveryKey) {
         const uNorm = this._normalizeRecoveryKey(u.recoveryKey);
-        if (uNorm === normalizedKey || u.recoveryKey === rawClean || u.recoveryKey === strippedKith) return true;
+        const uRaw = String(u.recoveryKey).trim().toUpperCase();
+        const uNoSpecial = uRaw.replace(/[\s\-_:\r\n]/g, '');
+        const uStripped = uNoSpecial.startsWith('KITH') ? uNoSpecial.substring(4) : uNoSpecial;
+        if (
+          uNorm === normalizedKey ||
+          uRaw === rawClean ||
+          uNoSpecial === noSpecial ||
+          uStripped === strippedKith
+        ) {
+          return true;
+        }
       }
+      if (u.id === rawClean || u.id === recoveryKey.trim()) return true;
       return false;
     });
 
@@ -127,6 +145,7 @@ class AuthService {
         recoveryKey: user.recoveryKey || normalizedKey,
         anonymousToken: session.token,
         isGuest: user.isGuest,
+        email: user.email,
         createdAt: user.createdAt,
       },
       token: session.token,

@@ -24,6 +24,7 @@ import '../../../widgets/progress/progress.dart';
 import '../../cloud/cloud_sync_sheet.dart';
 import '../../language/language_select_sheet.dart';
 import '../../onboarding/interactive_tutorial_sheet.dart';
+import '../../onboarding/widgets/recovery_key_sheet.dart';
 import '../../settings/widgets/beta_feedback_sheet.dart';
 
 class ProfileSheet extends StatelessWidget {
@@ -453,6 +454,38 @@ class ProfileSheet extends StatelessWidget {
                   Text(
                     l10n.profileRecoverySafe,
                     style: TextStyle(fontSize: 11, color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                  ),
+                  Divider(height: 18, color: isDark ? Colors.white10 : Colors.black12),
+                  InkWell(
+                    onTap: () {
+                      Navigator.pop(context);
+                      if (onShowRestoreAccount != null) {
+                        onShowRestoreAccount!(context);
+                      } else {
+                        RecoveryKeySheet.show(context);
+                      }
+                    },
+                    borderRadius: AppRadius.smBorder,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.restore_page_rounded, size: 18, color: Color(0xFF6366F1)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              l10n.onboardingRecoverySheetTitle,
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF6366F1),
+                              ),
+                            ),
+                          ),
+                          const Icon(Icons.arrow_forward_rounded, size: 16, color: Color(0xFF6366F1)),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),

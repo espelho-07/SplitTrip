@@ -37,7 +37,7 @@ class _BetaFeedbackSheetState extends State<BetaFeedbackSheet> {
   bool _isSubmitted = false;
   bool _isSubmitting = false;
 
-  static const String _creatorEmail = 'review.nirniq@gmail.com';
+  static const String _creatorEmail = 'support@kith.app';
 
   @override
   void dispose() {
@@ -82,7 +82,7 @@ class _BetaFeedbackSheetState extends State<BetaFeedbackSheet> {
       await Clipboard.setData(ClipboardData(text: 'To: $_creatorEmail\nSubject: [Kith App Feedback] ${_selectedCategory.label}\n\n$text'));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text('Email app not found. Feedback copied to clipboard ✓ ($_creatorEmail)'),
             behavior: SnackBarBehavior.floating,
           ),

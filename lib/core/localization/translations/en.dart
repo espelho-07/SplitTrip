@@ -1059,12 +1059,12 @@ const Map<String, String> enTranslations = {
   'widgets_card_smart_desc': 'Intelligent card dynamically ranking the single most critical financial action based on live state.',
 
   // Profile Home Tab Keys
-  'profile_edit_profile_btn': 'Edit Nirniq Profile',
+  'profile_edit_profile_btn': 'Edit Profile',
   'profile_stats_trips': 'Trips',
   'profile_stats_expenses': 'Expenses',
   'profile_stats_spent': 'Total Spent',
-  'profile_sec_cloud_title': 'Nirniq Account & Cloud Sync',
-  'profile_identity_title': 'Nirniq Profile & Identity',
+  'profile_sec_cloud_title': 'Account & Cloud Sync',
+  'profile_identity_title': 'Profile & Identity',
   'profile_identity_sub': 'Edit name, phone number, avatar & bio',
   'profile_cloud_storage': 'Cloud Storage & Backups',
   'profile_cloud_storage_sub': 'Configure offline auto-sync interval',

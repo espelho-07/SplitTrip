@@ -96,7 +96,13 @@ class LocalStorageService {
     if (clean.length == 8) {
       return 'KITH-${clean.substring(0, 4)}-${clean.substring(4, 8)}';
     }
-    return clean.isEmpty ? '' : (clean.length > 8 ? 'KITH-${clean.substring(0, 4)}-${clean.substring(4, 8)}' : clean);
+    if (clean.length == 12) {
+      return 'KITH-${clean.substring(0, 4)}-${clean.substring(4, 8)}-${clean.substring(8, 12)}';
+    }
+    if (clean.length == 16) {
+      return 'KITH-${clean.substring(0, 4)}-${clean.substring(4, 8)}-${clean.substring(8, 12)}-${clean.substring(12, 16)}';
+    }
+    return clean.isEmpty ? '' : 'KITH-$clean';
   }
 
   // --- Trips ---
