@@ -1,0 +1,59 @@
+# ==============================================================================
+# Kith Self-Hosting Production Docker Compose Stack
+# Includes Kith Node.js API server and PostgreSQL 16 database with persistent volumes
+# ==============================================================================
+
+version: '3.8'
+
+services:
+  kith-backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: kith-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgresql://kith_user:kith_secure_password_change_me@postgres:5432/kith_db?sslmode=disable
+      - CORS_ORIGIN=*
+      - CLIENT_APP_VERSION=2.3.0
+      - MIN_SUPPORTED_VERSION=2.0.0
+      - AUTO_UPDATE_RECOMMENDED=true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - kith-data:/app/data_storage
+    networks:
+      - kith-network
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: kith-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=kith_user
+      - POSTGRES_PASSWORD=kith_secure_password_change_me
+      - POSTGRES_DB=kith_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kith_user -d kith_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kith-network
+
+volumes:
+  kith-data:
+  pgdata:
+
+networks:
+  kith-network:
+    driver: bridge
