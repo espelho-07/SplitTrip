@@ -274,7 +274,7 @@ class ProfileHomeTab extends StatelessWidget {
     final l10n = context.l10n;
 
     final user = authVm.currentUser;
-    final displayName = user?.displayName ?? 'Darpan Parmar';
+    final displayName = user?.displayName ?? 'Traveler';
     final isNirniqLinked = user?.isNirniqLinked ?? false;
     final pendingCount = syncService?.pendingCount ?? 0;
 

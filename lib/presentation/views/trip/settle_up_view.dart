@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/payment/upi_validator.dart';
@@ -16,7 +16,7 @@ class SettleUpView extends StatefulWidget {
 
 class _SettleUpViewState extends State<SettleUpView> {
   final Set<String> _selectedPeople = {'Rohan', 'Priya', 'Karan'};
-  final TextEditingController _upiController = TextEditingController(text: 'darpan@okhdfcbank');
+  final TextEditingController _upiController = TextEditingController();
   String? _upiError;
 
   @override

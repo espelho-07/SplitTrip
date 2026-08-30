@@ -225,8 +225,10 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
 
   void _showAddUpiSheet(BuildContext context, bool isDark) {
     final l10n = context.l10n;
+    final authVm = context.read<AuthViewModel>();
+    final user = authVm.currentUser;
     final vpaController = TextEditingController();
-    final nameController = TextEditingController(text: 'Darpan Parmar');
+    final nameController = TextEditingController(text: (user?.displayName != null && user!.displayName != 'Guest User') ? user.displayName : '');
     bool isDefault = _savedUpis.isEmpty;
 
     showModalBottomSheet(
@@ -301,7 +303,7 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
                   textCapitalization: TextCapitalization.words,
                   decoration: InputDecoration(
                     labelText: 'Account Holder Name',
-                    hintText: 'e.g. Darpan Parmar',
+                    hintText: 'e.g. Rahul Sharma',
                     prefixIcon: const Icon(Icons.person_outline_rounded, size: 20),
                     filled: true,
                     fillColor: isDark ? const Color(0xFF141A20) : const Color(0xFFF1F5F9),

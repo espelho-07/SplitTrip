@@ -81,7 +81,7 @@ class _ActivityHomeTabState extends State<ActivityHomeTab> {
         else ...[
           // Sample chronological activities
           _buildActivityItem(
-            avatarName: 'Darpan',
+            avatarName: 'Aman',
             actionText: 'added an expense',
             itemTitle: 'Lunch at Cafe 🍕',
             amountPaise: 95000,
@@ -117,7 +117,7 @@ class _ActivityHomeTabState extends State<ActivityHomeTab> {
             isDark: isDark,
           ),
           _buildActivityItem(
-            avatarName: 'Darpan',
+            avatarName: 'Aman',
             actionText: 'added an expense',
             itemTitle: 'Beachside Dinner 🍽️',
             amountPaise: 120000,

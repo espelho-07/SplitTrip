@@ -381,7 +381,7 @@ class _WalkthroughViewState extends State<WalkthroughView> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildMiniAvatarPill('Darpan', '₹3,100', isDark, isPositive: true),
+              _buildMiniAvatarPill('You', '₹3,100', isDark, isPositive: true),
               _buildMiniAvatarPill('Priya', '₹3,100', isDark, isPositive: false),
               _buildMiniAvatarPill('Rohan', '₹3,100', isDark, isPositive: false),
             ],
