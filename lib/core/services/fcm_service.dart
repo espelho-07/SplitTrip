@@ -89,6 +89,7 @@ class FcmService {
     final idempotencyKey = data['idempotencyKey'] as String?;
     final tripId = data['tripId'] as String?;
     final settlementId = data['settlementId'] as String?;
+    final expenseId = data['expenseId'] as String?;
 
     final notifType = eventType.contains('expense')
         ? NotificationType.expense
@@ -115,13 +116,15 @@ class FcmService {
       });
     }
 
+    final targetRoute = route ?? (tripId != null ? (expenseId != null ? '/trip/$tripId?expenseId=$expenseId' : (settlementId != null ? '/trip/$tripId?settlementId=$settlementId' : '/trip/$tripId')) : null);
+
     _notificationService.addNotification(
       title: title,
       description: body,
       type: notifType,
-      route: route ?? (tripId != null ? '/trip/$tripId?settlementId=$settlementId' : null),
+      route: targetRoute,
       actionLabel: _actionLabelForType(eventType),
-      idempotencyKey: idempotencyKey,
+      idempotencyKey: idempotencyKey ?? (expenseId != null ? '${expenseId}_$eventType' : null),
     );
   }
 
@@ -129,7 +132,8 @@ class FcmService {
     final route = message.data['route'] as String?;
     final tripId = message.data['tripId'] as String?;
     final settlementId = message.data['settlementId'] as String?;
-    final targetRoute = route ?? (tripId != null && settlementId != null ? '/trip/$tripId?settlementId=$settlementId' : null);
+    final expenseId = message.data['expenseId'] as String?;
+    final targetRoute = route ?? (tripId != null ? (expenseId != null ? '/trip/$tripId?expenseId=$expenseId' : (settlementId != null ? '/trip/$tripId?settlementId=$settlementId' : '/trip/$tripId')) : null);
 
     if (targetRoute != null && targetRoute.isNotEmpty && onNavigate != null) {
       Future.delayed(const Duration(milliseconds: 300), () {
@@ -148,6 +152,11 @@ class FcmService {
         return 'Resolve';
       case 'payment_proof_submitted':
         return 'Review';
+      case 'expense_created':
+      case 'expense_updated':
+        return 'View Expense';
+      case 'expense_deleted':
+        return 'View Trip';
       default:
         return 'Open';
     }

@@ -49,11 +49,13 @@ import 'widgets/trip_qr_sheet.dart';
 class TripDetailView extends StatefulWidget {
   final String tripId;
   final String? settlementId;
+  final String? expenseId;
 
   const TripDetailView({
     super.key,
     required this.tripId,
     this.settlementId,
+    this.expenseId,
   });
 
   @override
@@ -119,7 +121,15 @@ class _TripDetailViewState extends State<TripDetailView> {
         if (!mounted) return;
         await context.read<TripDetailViewModel>().loadTrip(widget.tripId, user.id);
         if (mounted) {
-          if (widget.settlementId != null && widget.settlementId!.isNotEmpty) {
+          if (widget.expenseId != null && widget.expenseId!.isNotEmpty) {
+            final vm = context.read<TripDetailViewModel>();
+            final targetExpense = vm.expenses.where((e) => e.id == widget.expenseId).firstOrNull;
+            if (targetExpense != null && vm.trip != null) {
+              _showExpenseDetailSheet(targetExpense, vm.trip!, user.id);
+            } else {
+              await PaymentVerificationManager.checkAndPrompt(context);
+            }
+          } else if (widget.settlementId != null && widget.settlementId!.isNotEmpty) {
             final storage = context.read<LocalStorageService>();
             final allPending = storage.getSavedPaymentVerifications();
             final match = allPending.firstWhere(

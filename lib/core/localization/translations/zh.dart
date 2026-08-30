@@ -1018,4 +1018,12 @@ const Map<String, String> zhTranslations = {
   'settlement_proof_submitted_badge': '凭证已提交',
   'settlement_disputed_badge': '付款存疑',
   'settlement_history_title': '结算历史',
+
+  'expense_notif_added_title': '新增支出',
+  'expense_notif_added_body': '{name}在{trip}中添加了{amount}。',
+  'expense_notif_updated_title': '支出已更新',
+  'expense_notif_updated_amount_body': '{name}将{title}从{oldAmount}更新为{newAmount}。',
+  'expense_notif_updated_body': '{name}更新了{trip}中的"{title}"。',
+  'expense_notif_deleted_title': '支出已删除',
+  'expense_notif_deleted_body': '{name}删除了{amount}的"{title}"支出。',
 };

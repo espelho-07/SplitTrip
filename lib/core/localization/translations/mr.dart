@@ -1018,4 +1018,12 @@ const Map<String, String> mrTranslations = {
   'settlement_proof_submitted_badge': 'पुरावा सादर केला',
   'settlement_disputed_badge': 'पेमेंट विवादित',
   'settlement_history_title': 'पेमेंट इतिहास',
+
+  'expense_notif_added_title': 'नवीन खर्च जोडला',
+  'expense_notif_added_body': '{name} ने {trip} मध्ये {amount} जोडले.',
+  'expense_notif_updated_title': 'खर्च अपडेट केला',
+  'expense_notif_updated_amount_body': '{name} ने {title} {oldAmount} वरून {newAmount} केले.',
+  'expense_notif_updated_body': '{name} ने {trip} मध्ये "{title}" अपडेट केले.',
+  'expense_notif_deleted_title': 'खर्च काढला',
+  'expense_notif_deleted_body': '{name} ने {amount} चा "{title}" खर्च काढला.',
 };

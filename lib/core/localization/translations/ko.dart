@@ -1018,4 +1018,12 @@ const Map<String, String> koTranslations = {
   'settlement_proof_submitted_badge': '증빙 제출됨',
   'settlement_disputed_badge': '미수령 이의제기',
   'settlement_history_title': '정산 내역',
+
+  'expense_notif_added_title': '새 지출 추가됨',
+  'expense_notif_added_body': '{name}님이 {trip}에 {amount}을(를) 추가했습니다.',
+  'expense_notif_updated_title': '지출 수정됨',
+  'expense_notif_updated_amount_body': '{name}님이 {title}을(를) {oldAmount}에서 {newAmount}(으)로 수정했습니다.',
+  'expense_notif_updated_body': '{name}님이 {trip}의 "{title}" 지출을 수정했습니다.',
+  'expense_notif_deleted_title': '지출 삭제됨',
+  'expense_notif_deleted_body': '{name}님이 {amount}의 "{title}" 지출을 삭제했습니다.',
 };

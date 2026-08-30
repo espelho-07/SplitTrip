@@ -1142,5 +1142,13 @@ const Map<String, String> enTranslations = {
   'settlement_proof_submitted_badge': 'Proof Submitted',
   'settlement_disputed_badge': 'Payment Disputed',
   'settlement_history_title': 'Settlement History',
+
+  'expense_notif_added_title': 'New expense added',
+  'expense_notif_added_body': '{name} added {amount} to {trip}.',
+  'expense_notif_updated_title': 'Expense updated',
+  'expense_notif_updated_amount_body': '{name} updated {title} from {oldAmount} to {newAmount}.',
+  'expense_notif_updated_body': '{name} updated "{title}" in {trip}.',
+  'expense_notif_deleted_title': 'Expense removed',
+  'expense_notif_deleted_body': '{name} removed the {amount} "{title}" expense.',
 };
 

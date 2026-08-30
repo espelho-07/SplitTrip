@@ -1018,4 +1018,12 @@ const Map<String, String> mlTranslations = {
   'settlement_proof_submitted_badge': 'തെളിവ് സമർപ്പിച്ചു',
   'settlement_disputed_badge': 'പേയ്‌മെന്റ് തർക്കത്തിൽ',
   'settlement_history_title': 'സെറ്റിൽമെന്റ് ചരിത്രം',
+
+  'expense_notif_added_title': 'പുതിയ ചെലവ് ചേർത്തു',
+  'expense_notif_added_body': '{name} {trip}-ലേക്ക് {amount} ചേർത്തു.',
+  'expense_notif_updated_title': 'ചെലവ് അപ്‌ഡേറ്റ് ചെയ്തു',
+  'expense_notif_updated_amount_body': '{name} {title} {oldAmount}-ൽ നിന്ന് {newAmount} ആയി മാറ്റി.',
+  'expense_notif_updated_body': '{name} {trip}-ൽ "{title}" അപ്‌ഡേറ്റ് ചെയ്തു.',
+  'expense_notif_deleted_title': 'ചെലവ് നീക്കംചെയ്തു',
+  'expense_notif_deleted_body': '{name} {amount} രൂപയുടെ "{title}" ചെലവ് നീക്കംചെയ്തു.',
 };

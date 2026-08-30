@@ -837,6 +837,23 @@ class AppLocalizations {
   String get notificationsSettleToggle => translate('notifications_settle_toggle');
   String get notificationsTripToggle => translate('notifications_trip_toggle');
 
+  // Expense Activity Notifications
+  String get expenseNotifAddedTitle => translate('expense_notif_added_title');
+  String expenseNotifAddedBody(String name, String amount, String trip) =>
+      translate('expense_notif_added_body').replaceAll('{name}', name).replaceAll('{amount}', amount).replaceAll('{trip}', trip);
+  String get expenseNotifUpdatedTitle => translate('expense_notif_updated_title');
+  String expenseNotifUpdatedAmountBody(String name, String title, String oldAmount, String newAmount) =>
+      translate('expense_notif_updated_amount_body')
+          .replaceAll('{name}', name)
+          .replaceAll('{title}', title)
+          .replaceAll('{oldAmount}', oldAmount)
+          .replaceAll('{newAmount}', newAmount);
+  String expenseNotifUpdatedBody(String name, String title, String trip) =>
+      translate('expense_notif_updated_body').replaceAll('{name}', name).replaceAll('{title}', title).replaceAll('{trip}', trip);
+  String get expenseNotifDeletedTitle => translate('expense_notif_deleted_title');
+  String expenseNotifDeletedBody(String name, String amount, String title) =>
+      translate('expense_notif_deleted_body').replaceAll('{name}', name).replaceAll('{amount}', amount).replaceAll('{title}', title);
+
   // Payment Methods Getters
   String get paymentsTitle => translate('payments_title');
   String get paymentsSubtitle => translate('payments_subtitle');

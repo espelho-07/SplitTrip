@@ -1142,5 +1142,13 @@ const Map<String, String> guTranslations = {
   'settlement_proof_submitted_badge': 'પુરાવો સબમિટ કર્યો',
   'settlement_disputed_badge': 'ચુકવણી વિવાદિત',
   'settlement_history_title': 'ચુકવણી ઇતિહાસ',
+
+  'expense_notif_added_title': 'નવો ખર્ચ ઉમેર્યો',
+  'expense_notif_added_body': '{name} એ {trip} માં {amount} ઉમેર્યા.',
+  'expense_notif_updated_title': 'ખર્ચ અપડેટ કર્યો',
+  'expense_notif_updated_amount_body': '{name} એ {title} ને {oldAmount} થી {newAmount} માં અપડેટ કર્યો.',
+  'expense_notif_updated_body': '{name} એ {trip} માં "{title}" અપડેટ કર્યો.',
+  'expense_notif_deleted_title': 'ખર્ચ હટાવ્યો',
+  'expense_notif_deleted_body': '{name} એ {amount} નો "{title}" ખર્ચ હટાવ્યો.',
 };
 

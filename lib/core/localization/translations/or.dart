@@ -1018,4 +1018,12 @@ const Map<String, String> orTranslations = {
   'settlement_proof_submitted_badge': 'ପ୍ରମାଣ ଦାଖଲ ହୋଇଛି',
   'settlement_disputed_badge': 'ପେମେଣ୍ଟ ବିବାଦୀୟ',
   'settlement_history_title': 'ସମାଧାନ ଇତିହାସ',
+
+  'expense_notif_added_title': 'ନୂତନ ଖର୍ଚ୍ଚ ଯୋଡ଼ାଗଲା',
+  'expense_notif_added_body': '{name} {trip} ରେ {amount} ଯୋଡ଼ିଲେ।',
+  'expense_notif_updated_title': 'ଖର୍ଚ୍ଚ ଅପଡେଟ୍ ହେଲା',
+  'expense_notif_updated_amount_body': '{name} {title} କୁ {oldAmount} ରୁ {newAmount} ପରିବର୍ତ୍ତନ କଲେ।',
+  'expense_notif_updated_body': '{name} {trip} ରେ "{title}" ଅପଡେଟ୍ କଲେ।',
+  'expense_notif_deleted_title': 'ଖର୍ଚ୍ଚ ହଟାଗଲା',
+  'expense_notif_deleted_body': '{name} {amount} ର "{title}" ଖର୍ଚ୍ଚ ହଟାଇଲେ।',
 };

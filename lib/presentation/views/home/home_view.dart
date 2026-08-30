@@ -179,16 +179,47 @@ class _HomeViewState extends State<HomeView> {
       } else if (event.type == 'expense_added' || event.type == 'expense_created') {
         // Don't notify the person who added the expense
         if (event.actorId == currentUserId) return;
-        final title = event.data['title'] as String? ?? 'Expense';
-        final paidByName = event.data['paidByName'] as String? ?? 'A friend';
-        final amountPaise = event.data['amountInPaise'] as int? ?? 0;
+        final expenseMap = event.data['expense'] is Map ? event.data['expense'] as Map : event.data;
+        final expenseId = expenseMap['id'] as String? ?? event.data['expenseId'] as String?;
+        final title = expenseMap['title'] as String? ?? event.data['title'] as String? ?? 'Expense';
+        final paidByName = event.data['actorName'] as String? ?? event.data['paidByName'] as String? ?? 'A friend';
+        final amountPaise = (expenseMap['amountInPaise'] as int?) ?? (event.data['amountInPaise'] as int?) ?? 0;
         final formatted = CurrencyFormatter.formatPaise(amountPaise, currencyCode: 'INR');
         notifService.addNotification(
-          title: 'New Expense Added 🧾',
-          description: '$paidByName added "$title" ($formatted).',
+          title: 'New Expense Added',
+          description: '$paidByName added $formatted ($title).',
+          type: NotificationType.expense,
+          route: '/trip/${event.tripId}${expenseId != null ? '?expenseId=$expenseId' : ''}',
+          actionLabel: 'View Expense',
+          idempotencyKey: expenseId != null ? '${expenseId}_created' : null,
+        );
+      } else if (event.type == 'expense_updated') {
+        if (event.actorId == currentUserId) return;
+        final expenseMap = event.data['expense'] is Map ? event.data['expense'] as Map : event.data;
+        final expenseId = expenseMap['id'] as String? ?? event.data['expenseId'] as String?;
+        final title = expenseMap['title'] as String? ?? event.data['title'] as String? ?? 'Expense';
+        final actorName = event.data['actorName'] as String? ?? 'A friend';
+        final amountPaise = (expenseMap['amountInPaise'] as int?) ?? (event.data['amountInPaise'] as int?) ?? 0;
+        final formatted = CurrencyFormatter.formatPaise(amountPaise, currencyCode: 'INR');
+        notifService.addNotification(
+          title: 'Expense Updated',
+          description: '$actorName updated "$title" ($formatted).',
+          type: NotificationType.expense,
+          route: '/trip/${event.tripId}${expenseId != null ? '?expenseId=$expenseId' : ''}',
+          actionLabel: 'View Expense',
+          idempotencyKey: expenseId != null ? '${expenseId}_updated_${DateTime.now().minute}' : null,
+        );
+      } else if (event.type == 'expense_deleted') {
+        if (event.actorId == currentUserId) return;
+        final actorName = event.data['actorName'] as String? ?? 'A friend';
+        final expenseId = event.data['expenseId'] as String?;
+        notifService.addNotification(
+          title: 'Expense Removed',
+          description: '$actorName removed an expense from the trip.',
           type: NotificationType.expense,
           route: '/trip/${event.tripId}',
-          actionLabel: 'View Expense',
+          actionLabel: 'View Trip',
+          idempotencyKey: expenseId != null ? '${expenseId}_deleted' : null,
         );
       } else if (event.type == 'member_joined') {
         if (event.actorId == currentUserId) return;

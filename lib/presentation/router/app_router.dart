@@ -246,9 +246,11 @@ class AppRouter {
         builder: (context, state) {
           final tripId = state.pathParameters['tripId']!;
           final settlementId = state.uri.queryParameters['settlementId'];
+          final expenseId = state.uri.queryParameters['expenseId'];
           return TripDetailView(
             tripId: tripId,
             settlementId: settlementId,
+            expenseId: expenseId,
           );
         },
         routes: [

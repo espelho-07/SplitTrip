@@ -1018,4 +1018,12 @@ const Map<String, String> jaTranslations = {
   'settlement_proof_submitted_badge': '証明提出済み',
   'settlement_disputed_badge': '未着報告あり',
   'settlement_history_title': '精算履歴',
+
+  'expense_notif_added_title': '新しい支出が追加されました',
+  'expense_notif_added_body': '{name}が{trip}に{amount}を追加しました。',
+  'expense_notif_updated_title': '支出が更新されました',
+  'expense_notif_updated_amount_body': '{name}が{title}を{oldAmount}から{newAmount}に更新しました。',
+  'expense_notif_updated_body': '{name}が{trip}の「{title}」を更新しました。',
+  'expense_notif_deleted_title': '支出が削除されました',
+  'expense_notif_deleted_body': '{name}が{amount}の「{title}」の支出を削除しました。',
 };

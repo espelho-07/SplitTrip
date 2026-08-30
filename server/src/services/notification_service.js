@@ -16,6 +16,7 @@ class NotificationService {
     tripName = null,
     paymentId = null,
     settlementId = null,
+    expenseId = null,
     type = 'PAYMENT_CONFIRMATION_REQUIRED',
     title = 'Notification',
     body = '',
@@ -41,12 +42,13 @@ class NotificationService {
       tripName,
       paymentId: paymentId || settlementId,
       settlementId: settlementId || paymentId,
+      expenseId,
       type,
       title,
       body,
       description: body,
       amountInPaise,
-      route: route || (tripId ? `/trip/${tripId}?settlementId=${settlementId || paymentId}` : '/notifications'),
+      route: route || (tripId ? `/trip/${tripId}${expenseId ? `?expenseId=${expenseId}` : (settlementId ? `?settlementId=${settlementId}` : '')}` : '/notifications'),
       status: 'UNREAD', // 'UNREAD' | 'READ' | 'RESOLVED'
       isRead: false,
       metadata,
@@ -58,6 +60,213 @@ class NotificationService {
     db.insert('notifications', record);
     console.info(`[NotificationService] NOTIFICATION CREATED: id=${id}, recipient=${recipientUserId}, type=${type}`);
     return record;
+  }
+
+  /**
+   * Dispatches notifications and push alerts for a newly created expense.
+   */
+  async notifyExpenseCreated({ actor, trip, expense, authMember, realtimeHub = null }) {
+    if (!trip || !expense || !actor) return;
+
+    const pushService = require('./push_notification_service');
+    const formattedAmt = '₹' + (expense.amountInPaise / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+    const actorName = authMember?.displayName || actor.displayName || 'A member';
+    const tripName = trip.name || 'Trip';
+
+    // 1. Resolve eligible active members of the trip, excluding the actor
+    const members = db.find('trip_members', (m) => m.tripId === trip.id && m.status !== 'merged');
+    const recipientUserIds = new Set();
+
+    for (const m of members) {
+      if (m.userId && !m.userId.startsWith('unclaimed_') && m.userId !== actor.id) {
+        recipientUserIds.add(m.userId);
+      }
+    }
+
+    console.info(`[NotificationService] EXPENSE CREATED DISPATCH: trip=${trip.id}, expense=${expense.id}, recipients=${recipientUserIds.size}`);
+
+    for (const recipientUserId of recipientUserIds) {
+      // Idempotency check: verify notification not already created for this expense and recipient
+      const existing = db.findOne('notifications', (n) => 
+        n.recipientUserId === recipientUserId && 
+        n.expenseId === expense.id && 
+        n.type === 'EXPENSE_CREATED' && 
+        !n.deleted
+      );
+      if (existing) continue;
+
+      const title = 'New expense added';
+      const body = `${actorName} added ${formattedAmt} to ${tripName}.`;
+      const route = `/trip/${trip.id}?expenseId=${expense.id}`;
+
+      // Persist in database notifications table
+      this.createNotification({
+        recipientUserId,
+        actorUserId: actor.id,
+        actorName,
+        tripId: trip.id,
+        tripName,
+        expenseId: expense.id,
+        type: 'EXPENSE_CREATED',
+        title,
+        body,
+        amountInPaise: expense.amountInPaise,
+        route,
+        metadata: {
+          expenseTitle: expense.title,
+          category: expense.category,
+        },
+      });
+
+      // Dispatch FCM Push Notification for background/terminated devices
+      pushService.sendToUser(db, recipientUserId, {
+        title,
+        body,
+        data: {
+          type: 'expense_created',
+          tripId: trip.id,
+          tripName,
+          expenseId: expense.id,
+          actorUserId: actor.id,
+          actorName,
+          amountInPaise: String(expense.amountInPaise),
+          route,
+          channelId: 'kith_activity',
+        },
+      });
+    }
+  }
+
+  /**
+   * Dispatches notifications and push alerts for an edited expense.
+   */
+  async notifyExpenseUpdated({ actor, trip, oldExpense, newExpense, authMember, realtimeHub = null }) {
+    if (!trip || !newExpense || !actor) return;
+
+    const pushService = require('./push_notification_service');
+    const oldAmt = '₹' + (oldExpense.amountInPaise / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+    const newAmt = '₹' + (newExpense.amountInPaise / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+    const actorName = authMember?.displayName || actor.displayName || 'A member';
+    const tripName = trip.name || 'Trip';
+
+    const members = db.find('trip_members', (m) => m.tripId === trip.id && m.status !== 'merged');
+    const recipientUserIds = new Set();
+
+    for (const m of members) {
+      if (m.userId && !m.userId.startsWith('unclaimed_') && m.userId !== actor.id) {
+        recipientUserIds.add(m.userId);
+      }
+    }
+
+    console.info(`[NotificationService] EXPENSE UPDATED DISPATCH: trip=${trip.id}, expense=${newExpense.id}, recipients=${recipientUserIds.size}`);
+
+    for (const recipientUserId of recipientUserIds) {
+      const title = 'Expense updated';
+      let body;
+      if (oldExpense.amountInPaise !== newExpense.amountInPaise) {
+        body = `${actorName} updated ${newExpense.title} from ${oldAmt} to ${newAmt}.`;
+      } else {
+        body = `${actorName} updated "${newExpense.title}" in ${tripName}.`;
+      }
+      const route = `/trip/${trip.id}?expenseId=${newExpense.id}`;
+
+      this.createNotification({
+        recipientUserId,
+        actorUserId: actor.id,
+        actorName,
+        tripId: trip.id,
+        tripName,
+        expenseId: newExpense.id,
+        type: 'EXPENSE_UPDATED',
+        title,
+        body,
+        amountInPaise: newExpense.amountInPaise,
+        route,
+        metadata: {
+          expenseTitle: newExpense.title,
+          oldAmountInPaise: oldExpense.amountInPaise,
+          newAmountInPaise: newExpense.amountInPaise,
+        },
+      });
+
+      pushService.sendToUser(db, recipientUserId, {
+        title,
+        body,
+        data: {
+          type: 'expense_updated',
+          tripId: trip.id,
+          tripName,
+          expenseId: newExpense.id,
+          actorUserId: actor.id,
+          actorName,
+          amountInPaise: String(newExpense.amountInPaise),
+          route,
+          channelId: 'kith_activity',
+        },
+      });
+    }
+  }
+
+  /**
+   * Dispatches notifications and push alerts for a deleted expense.
+   */
+  async notifyExpenseDeleted({ actor, trip, expense, authMember, realtimeHub = null }) {
+    if (!trip || !expense || !actor) return;
+
+    const pushService = require('./push_notification_service');
+    const formattedAmt = '₹' + (expense.amountInPaise / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+    const actorName = authMember?.displayName || actor.displayName || 'A member';
+    const tripName = trip.name || 'Trip';
+
+    const members = db.find('trip_members', (m) => m.tripId === trip.id && m.status !== 'merged');
+    const recipientUserIds = new Set();
+
+    for (const m of members) {
+      if (m.userId && !m.userId.startsWith('unclaimed_') && m.userId !== actor.id) {
+        recipientUserIds.add(m.userId);
+      }
+    }
+
+    console.info(`[NotificationService] EXPENSE DELETED DISPATCH: trip=${trip.id}, expense=${expense.id}, recipients=${recipientUserIds.size}`);
+
+    for (const recipientUserId of recipientUserIds) {
+      const title = 'Expense removed';
+      const body = `${actorName} removed the ${formattedAmt} "${expense.title}" expense.`;
+      const route = `/trip/${trip.id}`; // Navigates to trip overview, not broken deleted expense detail
+
+      this.createNotification({
+        recipientUserId,
+        actorUserId: actor.id,
+        actorName,
+        tripId: trip.id,
+        tripName,
+        expenseId: expense.id,
+        type: 'EXPENSE_DELETED',
+        title,
+        body,
+        amountInPaise: expense.amountInPaise,
+        route,
+        metadata: {
+          expenseTitle: expense.title,
+        },
+      });
+
+      pushService.sendToUser(db, recipientUserId, {
+        title,
+        body,
+        data: {
+          type: 'expense_deleted',
+          tripId: trip.id,
+          tripName,
+          expenseId: expense.id,
+          actorUserId: actor.id,
+          actorName,
+          amountInPaise: String(expense.amountInPaise),
+          route,
+          channelId: 'kith_activity',
+        },
+      });
+    }
   }
 
   /**

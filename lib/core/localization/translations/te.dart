@@ -1018,4 +1018,12 @@ const Map<String, String> teTranslations = {
   'settlement_proof_submitted_badge': 'రుజువు సమర్పించబడింది',
   'settlement_disputed_badge': 'చెల్లింపు వివాదం',
   'settlement_history_title': 'సెటిల్మెంట్ చరిత్ర',
+
+  'expense_notif_added_title': 'కొత్త ఖర్చు జోడించబడింది',
+  'expense_notif_added_body': '{name} {trip} లో {amount} జోడించారు.',
+  'expense_notif_updated_title': 'ఖర్చు నవీకరించబడింది',
+  'expense_notif_updated_amount_body': '{name} {title} ను {oldAmount} నుండి {newAmount} కు మార్చారు.',
+  'expense_notif_updated_body': '{name} {trip} లో "{title}" ను నవీకరించారు.',
+  'expense_notif_deleted_title': 'ఖర్చు తీసివేయబడింది',
+  'expense_notif_deleted_body': '{name} {amount} "{title}" ఖర్చును తీసివేశారు.',
 };

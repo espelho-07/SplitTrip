@@ -1018,4 +1018,12 @@ const Map<String, String> asTranslations = {
   'settlement_proof_submitted_badge': 'প্ৰমাণ জমা দিয়া হৈছে',
   'settlement_disputed_badge': 'পেমেন্ট বিবাদিত',
   'settlement_history_title': 'নিষ্পত্তিৰ ইতিহাস',
+
+  'expense_notif_added_title': 'নতুন খৰচ যোগ কৰা হ’ল',
+  'expense_notif_added_body': '{name} এ {trip} ত {amount} যোগ কৰিলে।',
+  'expense_notif_updated_title': 'খৰচ আপডেট কৰা হ’ল',
+  'expense_notif_updated_amount_body': '{name} এ {title} ক {oldAmount} ৰ পৰা {newAmount} লৈ সলনি কৰিলে।',
+  'expense_notif_updated_body': '{name} এ {trip} ত "{title}" আপডেট কৰিলে।',
+  'expense_notif_deleted_title': 'খৰচ আঁতৰোৱা হ’ল',
+  'expense_notif_deleted_body': '{name} এ {amount} ৰ "{title}" খৰচ আঁতৰালে।',
 };

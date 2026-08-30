@@ -244,11 +244,21 @@ class NotificationService {
           if (item is Map) {
             final notifMap = Map<String, dynamic>.from(item);
             final typeStr = notifMap['type'] as String? ?? '';
-            final notifType = typeStr.contains('expense')
+            final isExpense = typeStr.toLowerCase().contains('expense');
+            final notifType = isExpense
                 ? NotificationType.expense
-                : typeStr.contains('trip')
+                : typeStr.toLowerCase().contains('trip')
                     ? NotificationType.trip
                     : NotificationType.settlement;
+
+            String actionLabel = 'Open';
+            if (typeStr == 'PAYMENT_CONFIRMATION_REQUIRED') {
+              actionLabel = 'Verify Payment';
+            } else if (typeStr == 'EXPENSE_CREATED' || typeStr == 'EXPENSE_UPDATED') {
+              actionLabel = 'View Expense';
+            } else if (typeStr == 'EXPENSE_DELETED') {
+              actionLabel = 'View Trip';
+            }
 
             final parsedItem = AppNotificationItem(
               id: notifMap['id'] as String? ?? 'notif_${DateTime.now().millisecondsSinceEpoch}',
@@ -260,8 +270,8 @@ class NotificationService {
               type: notifType,
               isRead: notifMap['isRead'] as bool? ?? false,
               route: notifMap['route'] as String?,
-              actionLabel: typeStr == 'PAYMENT_CONFIRMATION_REQUIRED' ? 'Verify Payment' : 'Open',
-              idempotencyKey: notifMap['settlementId'] != null ? '${notifMap['settlementId']}_marked_paid' : null,
+              actionLabel: actionLabel,
+              idempotencyKey: notifMap['id'] as String? ?? (notifMap['expenseId'] != null ? '${notifMap['expenseId']}_$typeStr' : (notifMap['settlementId'] != null ? '${notifMap['settlementId']}_$typeStr' : null)),
             );
 
             // Add without popping extra system status bar notification if syncing historical records

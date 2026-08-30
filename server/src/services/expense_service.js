@@ -152,6 +152,19 @@ class ExpenseService {
 
     const balanceSummary = this.getBalanceSummary(tripId, user.id);
 
+    try {
+      const notificationService = require('./notification_service');
+      notificationService.notifyExpenseCreated({
+        actor: user,
+        trip,
+        expense,
+        authMember,
+        realtimeHub,
+      });
+    } catch (err) {
+      console.warn('[ExpenseService] notifyExpenseCreated notice:', err.message);
+    }
+
     if (realtimeHub) {
       realtimeHub.broadcastToTrip(tripId, 'expense_added', {
         tripId,
@@ -267,6 +280,20 @@ class ExpenseService {
 
     const balanceSummary = this.getBalanceSummary(tripId, user.id);
 
+    try {
+      const notificationService = require('./notification_service');
+      notificationService.notifyExpenseUpdated({
+        actor: user,
+        trip,
+        oldExpense: existing,
+        newExpense: updated,
+        authMember,
+        realtimeHub,
+      });
+    } catch (err) {
+      console.warn('[ExpenseService] notifyExpenseUpdated notice:', err.message);
+    }
+
     if (realtimeHub) {
       realtimeHub.broadcastToTrip(tripId, 'expense_updated', {
         tripId,
@@ -329,6 +356,19 @@ class ExpenseService {
     });
 
     const balanceSummary = this.getBalanceSummary(tripId, user.id);
+
+    try {
+      const notificationService = require('./notification_service');
+      notificationService.notifyExpenseDeleted({
+        actor: user,
+        trip,
+        expense,
+        authMember,
+        realtimeHub,
+      });
+    } catch (err) {
+      console.warn('[ExpenseService] notifyExpenseDeleted notice:', err.message);
+    }
 
     if (realtimeHub) {
       realtimeHub.broadcastToTrip(tripId, 'expense_deleted', {

@@ -1018,4 +1018,12 @@ const Map<String, String> knTranslations = {
   'settlement_proof_submitted_badge': 'ಪುರಾವೆ ಸಲ್ಲಿಸಲಾಗಿದೆ',
   'settlement_disputed_badge': 'ಪಾವತಿ ವಿವಾದದಲ್ಲಿದೆ',
   'settlement_history_title': 'ಇತ್ಯರ್ಥ ಇತಿಹಾಸ',
+
+  'expense_notif_added_title': 'ಹೊಸ ಖರ್ಚು ಸೇರಿಸಲಾಗಿದೆ',
+  'expense_notif_added_body': '{name} {trip} ಗೆ {amount} ಸೇರಿಸಿದ್ದಾರೆ.',
+  'expense_notif_updated_title': 'ಖರ್ಚು ನವೀಕರಿಸಲಾಗಿದೆ',
+  'expense_notif_updated_amount_body': '{name} {title} ಅನ್ನು {oldAmount} ರಿಂದ {newAmount} ಗೆ ಬದಲಾಯಿಸಿದ್ದಾರೆ.',
+  'expense_notif_updated_body': '{name} {trip} ನಲ್ಲಿ "{title}" ಅನ್ನು ನವೀಕರಿಸಿದ್ದಾರೆ.',
+  'expense_notif_deleted_title': 'ಖರ್ಚು ತೆಗೆದುಹಾಕಲಾಗಿದೆ',
+  'expense_notif_deleted_body': '{name} {amount} ಮೌಲ್ಯದ "{title}" ಖರ್ಚನ್ನು ತೆಗೆದುಹಾಕಿದ್ದಾರೆ.',
 };

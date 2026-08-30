@@ -1142,5 +1142,13 @@ const Map<String, String> hiTranslations = {
   'settlement_proof_submitted_badge': 'प्रमाण प्रस्तुत किया गया',
   'settlement_disputed_badge': 'भुगतान विवादित',
   'settlement_history_title': 'निपटान इतिहास',
+
+  'expense_notif_added_title': 'नया खर्च जोड़ा गया',
+  'expense_notif_added_body': '{name} ने {trip} में {amount} जोड़े।',
+  'expense_notif_updated_title': 'खर्च अपडेट किया गया',
+  'expense_notif_updated_amount_body': '{name} ने {title} को {oldAmount} से {newAmount} में अपडेट किया।',
+  'expense_notif_updated_body': '{name} ने {trip} में "{title}" अपडेट किया।',
+  'expense_notif_deleted_title': 'खर्च हटाया गया',
+  'expense_notif_deleted_body': '{name} ने {amount} का "{title}" खर्च हटा दिया।',
 };
 

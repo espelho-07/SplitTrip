@@ -1018,4 +1018,12 @@ const Map<String, String> bnTranslations = {
   'settlement_proof_submitted_badge': 'প্রমাণ জমা দেওয়া হয়েছে',
   'settlement_disputed_badge': 'পেমেন্ট বিরোধপূর্ণ',
   'settlement_history_title': 'নিষ্পত্তির ইতিহাস',
+
+  'expense_notif_added_title': 'নতুন খরচ যোগ করা হয়েছে',
+  'expense_notif_added_body': '{name} {trip}-এ {amount} যোগ করেছেন।',
+  'expense_notif_updated_title': 'খরচ আপডেট করা হয়েছে',
+  'expense_notif_updated_amount_body': '{name} {title} {oldAmount} থেকে {newAmount} পরিবর্তন করেছেন।',
+  'expense_notif_updated_body': '{name} {trip}-এ "{title}" আপডেট করেছেন।',
+  'expense_notif_deleted_title': 'খরচ মুছে ফেলা হয়েছে',
+  'expense_notif_deleted_body': '{name} {amount} টাকার "{title}" খরচ মুছে ফেলেছেন।',
 };

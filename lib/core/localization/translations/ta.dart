@@ -1018,4 +1018,12 @@ const Map<String, String> taTranslations = {
   'settlement_proof_submitted_badge': 'சான்று சமர்ப்பிக்கப்பட்டது',
   'settlement_disputed_badge': 'பணம் செலுத்துவதில் சர்ச்சை',
   'settlement_history_title': 'செட்டில்மென்ட் வரலாறு',
+
+  'expense_notif_added_title': 'புதிய செலவு சேர்க்கப்பட்டது',
+  'expense_notif_added_body': '{name} {trip} இல் {amount} சேர்த்தார்.',
+  'expense_notif_updated_title': 'செலவு புதுப்பிக்கப்பட்டது',
+  'expense_notif_updated_amount_body': '{name} {title} ஐ {oldAmount} இலிருந்து {newAmount} ஆக மாற்றினார்.',
+  'expense_notif_updated_body': '{name} {trip} இல் "{title}" ஐ புதுப்பித்தார்.',
+  'expense_notif_deleted_title': 'செலவு நீக்கப்பட்டது',
+  'expense_notif_deleted_body': '{name} {amount} "{title}" செலவை நீக்கினார்.',
 };

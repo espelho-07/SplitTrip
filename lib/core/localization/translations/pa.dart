@@ -1018,4 +1018,12 @@ const Map<String, String> paTranslations = {
   'settlement_proof_submitted_badge': 'ਸਬੂਤ ਜਮ੍ਹਾ ਕੀਤਾ ਗਿਆ',
   'settlement_disputed_badge': 'ਭੁਗਤਾਨ ਵਿਵਾਦਿਤ',
   'settlement_history_title': 'ਨਿਪਟਾਰਾ ਇਤਿਹਾਸ',
+
+  'expense_notif_added_title': 'ਨਵਾਂ ਖ਼ਰਚ ਸ਼ਾਮਲ ਕੀਤਾ ਗਿਆ',
+  'expense_notif_added_body': '{name} ਨੇ {trip} ਵਿੱਚ {amount} ਸ਼ਾਮਲ ਕੀਤੇ।',
+  'expense_notif_updated_title': 'ਖ਼ਰਚ ਅੱਪਡੇਟ ਕੀਤਾ ਗਿਆ',
+  'expense_notif_updated_amount_body': '{name} ਨੇ {title} ਨੂੰ {oldAmount} ਤੋਂ {newAmount} ਵਿੱਚ ਅੱਪਡੇਟ ਕੀਤਾ।',
+  'expense_notif_updated_body': '{name} ਨੇ {trip} ਵਿੱਚ "{title}" ਅੱਪਡੇਟ ਕੀਤਾ।',
+  'expense_notif_deleted_title': 'ਖ਼ਰਚ ਹਟਾਇਆ ਗਿਆ',
+  'expense_notif_deleted_body': '{name} ਨੇ {amount} ਦਾ "{title}" ਖ਼ਰਚ ਹਟਾ ਦਿੱਤਾ।',
 };

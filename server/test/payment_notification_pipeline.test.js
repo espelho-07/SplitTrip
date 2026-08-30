@@ -68,8 +68,8 @@ test('Payment Notification & Verification Pipeline Test Suite', async (t) => {
     assert.strictEqual(hardevNotifs[0].amountInPaise, 30000);
     assert.ok(hardevNotifs[0].body.includes('User A says they paid you ₹300'));
 
-    const payerNotifs = notificationService.getNotificationsForUser(userA.id);
-    assert.strictEqual(payerNotifs.length, 0, 'Payer must NEVER receive receiver notification');
+    const payerPaymentNotifs = notificationService.getNotificationsForUser(userA.id).filter((n) => n.type === 'PAYMENT_CONFIRMATION_REQUIRED');
+    assert.strictEqual(payerPaymentNotifs.length, 0, 'Payer must NEVER receive receiver notification');
   });
 
   await t.test('2. GET pending settlements endpoint returns authoritative verification request for Hardev', () => {
@@ -100,11 +100,11 @@ test('Payment Notification & Verification Pipeline Test Suite', async (t) => {
     assert.strictEqual(updatedHardevNotif.status, 'RESOLVED');
 
     // Payer A should now have a PAYMENT_CONFIRMED notification
-    const payerNotifs = notificationService.getNotificationsForUser(userA.id);
-    assert.strictEqual(payerNotifs.length, 1);
-    assert.strictEqual(payerNotifs[0].recipientUserId, userA.id);
-    assert.strictEqual(payerNotifs[0].type, 'PAYMENT_CONFIRMED');
-    assert.ok(payerNotifs[0].title.includes('Payment Confirmed'));
+    const payerConfirmedNotifs = notificationService.getNotificationsForUser(userA.id).filter((n) => n.type === 'PAYMENT_CONFIRMED');
+    assert.strictEqual(payerConfirmedNotifs.length, 1);
+    assert.strictEqual(payerConfirmedNotifs[0].recipientUserId, userA.id);
+    assert.strictEqual(payerConfirmedNotifs[0].type, 'PAYMENT_CONFIRMED');
+    assert.ok(payerConfirmedNotifs[0].title.includes('Payment Confirmed'));
   });
 
   await t.test('4. Mark all notifications as read works idempotently', () => {
