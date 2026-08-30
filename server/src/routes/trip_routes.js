@@ -149,6 +149,44 @@ router.post('/:id/members', (req, res, next) => {
   }
 });
 
+// PATCH /api/trips/:id/members/:memberId - Rename an unclaimed member
+router.patch('/:id/members/:memberId', (req, res, next) => {
+  try {
+    const { displayName } = req.body;
+    const trip = tripService.renameMember(req.params.id, req.user.id, req.params.memberId, displayName, realtimeHub);
+    res.status(200).json({ data: trip });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// DELETE /api/trips/:id/members/:memberId - Remove an eligible member with zero financial activity
+router.delete('/:id/members/:memberId', (req, res, next) => {
+  try {
+    const trip = tripService.removeMember(req.params.id, req.user.id, req.params.memberId, realtimeHub);
+    res.status(200).json({ data: trip });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// POST /api/trips/:id/members/merge - Merge two duplicate members into a canonical member
+router.post('/:id/members/merge', (req, res, next) => {
+  try {
+    const { sourceMemberId, canonicalMemberId, operationId } = req.body;
+    const trip = tripService.mergeMembers(
+      req.params.id,
+      req.user.id,
+      { sourceMemberId, canonicalMemberId, operationId },
+      realtimeHub
+    );
+    res.status(200).json({ data: trip });
+  } catch (e) {
+    next(e);
+  }
+});
+
+
 // POST /api/trips/:id/settlements - Record a settlement transfer
 router.post('/:id/settlements', (req, res, next) => {
   try {

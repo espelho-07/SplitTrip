@@ -13,7 +13,7 @@ class TripService {
   }
 
   _getMembersForTrip(tripId) {
-    return db.find('trip_members', (m) => m.tripId === tripId);
+    return db.find('trip_members', (m) => m.tripId === tripId && m.status !== 'merged');
   }
 
   _enrichTrip(trip) {
@@ -38,6 +38,7 @@ class TripService {
           status: m.status || (isUnclaimed ? 'unclaimed' : 'claimed'),
           isClaimed: typeof m.isClaimed === 'boolean' ? m.isClaimed : !isUnclaimed,
           claimToken: m.claimToken || null,
+          mergedIntoMemberId: m.mergedIntoMemberId || null,
           joinedAt: m.joinedAt,
           lastSeenAt: m.lastSeenAt || m.joinedAt || null,
           lastSyncedRevision: m.lastSyncedRevision || trip.revision || 1,
@@ -47,6 +48,7 @@ class TripService {
       }),
     };
   }
+
 
   createTrip(user, { id, inviteCode: customInviteCode, name, description, emoji, coverGradientIndex, currencyCode, initialFriendNames = [], tripMode = 'split_only' } = {}, realtimeHub = null) {
     if (!name || !name.trim()) {
@@ -412,7 +414,274 @@ class TripService {
     return enriched;
   }
 
+  renameMember(tripId, currentUserId, memberId, newDisplayName, realtimeHub = null) {
+    if (!newDisplayName || !newDisplayName.trim()) {
+      throw AppError.badRequest('Member display name is required');
+    }
+
+    const trip = db.get('trips', tripId);
+    if (!trip) throw AppError.notFound('Trip not found');
+
+    const authMember = db.findOne('trip_members', (m) => m.tripId === tripId && m.userId === currentUserId);
+    if (!authMember) throw AppError.forbidden('Not authorized for this trip');
+
+    if (trip.creatorId !== currentUserId && authMember.role !== 'creator') {
+      throw AppError.forbidden('Only the trip creator can rename members');
+    }
+
+    const targetMember = db.findOne('trip_members', (m) => m.tripId === tripId && m.id === memberId);
+    if (!targetMember) throw AppError.notFound('Member not found in this trip');
+
+    const isRealUser = targetMember.userId && !targetMember.userId.startsWith('unclaimed_');
+    if (isRealUser && targetMember.isClaimed !== false && targetMember.status !== 'unclaimed') {
+      throw AppError.forbidden('Cannot rename registered Kith users. Their identity belongs to their Kith profile.');
+    }
+
+    const oldName = targetMember.displayName;
+    const now = new Date().toISOString();
+    db.update('trip_members', memberId, {
+      displayName: newDisplayName.trim(),
+      updatedAt: now,
+    });
+    db.update('trips', tripId, { updatedAt: now });
+
+    this.logActivity(tripId, {
+      type: 'member_renamed',
+      actorId: currentUserId,
+      actorName: authMember.displayName,
+      description: `${authMember.displayName} renamed "${oldName}" to "${newDisplayName.trim()}"`,
+      metadata: { memberId, oldName, newName: newDisplayName.trim() },
+    });
+
+    const enriched = this._enrichTrip(db.get('trips', tripId));
+
+    if (realtimeHub) {
+      realtimeHub.broadcastToTrip(tripId, 'member_renamed', {
+        tripId,
+        memberId,
+        oldName,
+        displayName: newDisplayName.trim(),
+        trip: enriched,
+      });
+    }
+
+    return enriched;
+  }
+
+  removeMember(tripId, currentUserId, memberId, realtimeHub = null) {
+    const trip = db.get('trips', tripId);
+    if (!trip) throw AppError.notFound('Trip not found');
+
+    const authMember = db.findOne('trip_members', (m) => m.tripId === tripId && m.userId === currentUserId);
+    if (!authMember) throw AppError.forbidden('Not authorized for this trip');
+
+    if (trip.creatorId !== currentUserId && authMember.role !== 'creator') {
+      throw AppError.forbidden('Only the trip creator can remove members');
+    }
+
+    const targetMember = db.findOne('trip_members', (m) => m.tripId === tripId && m.id === memberId);
+    if (!targetMember) throw AppError.notFound('Member not found in this trip');
+
+    if (targetMember.id === authMember.id || targetMember.userId === trip.creatorId || targetMember.role === 'creator') {
+      throw AppError.forbidden('Cannot remove the trip creator');
+    }
+
+    // Financial Safety Check: verify no expenses paid, no splits, and no settlements
+    const expenses = db.find('expenses', (e) => e.tripId === tripId && !e.isDeleted);
+    const hasExpensesPaid = expenses.some((e) => e.paidById === memberId);
+    const hasExpenseSplits = expenses.some((e) =>
+      (e.splits || []).some((s) => s.memberId === memberId && (s.amountInPaise > 0 || s.amount > 0))
+    );
+    const settlements = db.find('settlements', (s) => s.tripId === tripId);
+    const hasSettlements = settlements.some((s) => s.fromMemberId === memberId || s.toMemberId === memberId);
+
+    if (hasExpensesPaid || hasExpenseSplits || hasSettlements) {
+      throw AppError.badRequest(
+        'Cannot remove member with financial activity. Expenses or settlements are linked to this member. Settle all debts and reassign or merge their activity first.'
+      );
+    }
+
+    // Safe deletion of participant with zero financial footprint
+    db.delete('trip_members', memberId);
+
+    const now = new Date().toISOString();
+    const newRevision = (trip.revision || 1) + 1;
+    db.update('trips', tripId, { revision: newRevision, updatedAt: now });
+
+    this.logActivity(tripId, {
+      type: 'member_removed',
+      actorId: currentUserId,
+      actorName: authMember.displayName,
+      description: `${authMember.displayName} removed "${targetMember.displayName}"`,
+      metadata: { memberId, removedDisplayName: targetMember.displayName },
+    });
+
+    const enriched = this._enrichTrip(db.get('trips', tripId));
+
+    if (realtimeHub) {
+      realtimeHub.broadcastToTrip(tripId, 'member_removed', {
+        tripId,
+        memberId,
+        displayName: targetMember.displayName,
+        trip: enriched,
+      });
+    }
+
+    return enriched;
+  }
+
+  mergeMembers(tripId, currentUserId, { sourceMemberId, canonicalMemberId, operationId } = {}, realtimeHub = null) {
+    if (!sourceMemberId || !canonicalMemberId) {
+      throw AppError.badRequest('Both sourceMemberId and canonicalMemberId are required');
+    }
+
+    if (sourceMemberId === canonicalMemberId) {
+      throw AppError.badRequest('Cannot merge a member into themselves');
+    }
+
+    const trip = db.get('trips', tripId);
+    if (!trip) throw AppError.notFound('Trip not found');
+
+    const authMember = db.findOne('trip_members', (m) => m.tripId === tripId && m.userId === currentUserId);
+    if (!authMember) throw AppError.forbidden('Not authorized for this trip');
+
+    if (trip.creatorId !== currentUserId && authMember.role !== 'creator') {
+      throw AppError.forbidden('Only the trip creator can merge members');
+    }
+
+    const sourceMember = db.findOne('trip_members', (m) => m.tripId === tripId && m.id === sourceMemberId);
+    const canonicalMember = db.findOne('trip_members', (m) => m.tripId === tripId && m.id === canonicalMemberId);
+
+    if (!sourceMember || !canonicalMember) {
+      throw AppError.notFound('One or both members not found in this trip');
+    }
+
+    if (sourceMember.role === 'creator' || sourceMember.userId === trip.creatorId) {
+      throw AppError.forbidden('Cannot merge the trip creator away. The creator must remain canonical.');
+    }
+
+    // Protect against silently merging two distinct authenticated Kith users
+    const isSourceReal = sourceMember.userId && !sourceMember.userId.startsWith('unclaimed_');
+    const isCanonicalReal = canonicalMember.userId && !canonicalMember.userId.startsWith('unclaimed_');
+    if (isSourceReal && isCanonicalReal && sourceMember.userId !== canonicalMember.userId) {
+      throw AppError.badRequest(
+        'Cannot merge two distinct authenticated Kith accounts. Merging is reserved for unclaimed members and duplicate profiles.'
+      );
+    }
+
+    const now = new Date().toISOString();
+
+    // 1. Repoint all Expenses & Splits atomically
+    const expenses = db.find('expenses', (e) => e.tripId === tripId);
+    for (const exp of expenses) {
+      let expModified = false;
+      let updatedPayer = exp.paidById;
+
+      if (exp.paidById === sourceMemberId) {
+        updatedPayer = canonicalMemberId;
+        expModified = true;
+      }
+
+      let updatedSplits = [...(exp.splits || [])];
+      const sourceSplitIdx = updatedSplits.findIndex((s) => s.memberId === sourceMemberId);
+      const canonSplitIdx = updatedSplits.findIndex((s) => s.memberId === canonicalMemberId);
+
+      if (sourceSplitIdx !== -1) {
+        expModified = true;
+        if (canonSplitIdx !== -1) {
+          // Combine shares for same expense
+          const sSplit = updatedSplits[sourceSplitIdx];
+          const cSplit = updatedSplits[canonSplitIdx];
+          updatedSplits[canonSplitIdx] = {
+            ...cSplit,
+            amountInPaise: (cSplit.amountInPaise || 0) + (sSplit.amountInPaise || 0),
+            amount: (cSplit.amount || 0) + (sSplit.amount || 0),
+          };
+          updatedSplits.splice(sourceSplitIdx, 1);
+        } else {
+          // Repoint source split to canonical member
+          updatedSplits[sourceSplitIdx] = {
+            ...updatedSplits[sourceSplitIdx],
+            memberId: canonicalMemberId,
+          };
+        }
+      }
+
+      if (expModified) {
+        db.update('expenses', exp.id, {
+          paidById: updatedPayer,
+          splits: updatedSplits,
+          updatedAt: now,
+        });
+      }
+    }
+
+    // 2. Repoint all Settlements atomically
+    const settlements = db.find('settlements', (s) => s.tripId === tripId);
+    for (const s of settlements) {
+      let sMod = false;
+      let fromM = s.fromMemberId;
+      let toM = s.toMemberId;
+
+      if (s.fromMemberId === sourceMemberId) {
+        fromM = canonicalMemberId;
+        sMod = true;
+      }
+      if (s.toMemberId === sourceMemberId) {
+        toM = canonicalMemberId;
+        sMod = true;
+      }
+
+      if (sMod) {
+        db.update('settlements', s.id, {
+          fromMemberId: fromM,
+          toMemberId: toM,
+          updatedAt: now,
+        });
+      }
+    }
+
+    // 3. Mark source member as merged tombstone (excluded from active roster)
+    db.update('trip_members', sourceMemberId, {
+      status: 'merged',
+      mergedIntoMemberId: canonicalMemberId,
+      updatedAt: now,
+    });
+
+    // 4. Increment trip revision and log activity
+    const newRevision = (trip.revision || 1) + 1;
+    db.update('trips', tripId, { revision: newRevision, updatedAt: now });
+
+    this.logActivity(tripId, {
+      type: 'members_merged',
+      actorId: currentUserId,
+      actorName: authMember.displayName,
+      description: `${authMember.displayName} merged "${sourceMember.displayName}" into "${canonicalMember.displayName}"`,
+      metadata: {
+        sourceMemberId,
+        canonicalMemberId,
+        sourceDisplayName: sourceMember.displayName,
+        canonicalDisplayName: canonicalMember.displayName,
+        operationId: operationId || null,
+      },
+    });
+
+    const enriched = this._enrichTrip(db.get('trips', tripId));
+
+    if (realtimeHub) {
+      realtimeHub.broadcastToTrip(tripId, 'members_merged', {
+        tripId,
+        sourceMemberId,
+        canonicalMemberId,
+        trip: enriched,
+      });
+    }
+
+    return enriched;
+  }
+
   updateLifecycle(tripId, currentUserId, newLifecycle, realtimeHub = null) {
+
     const validStates = ['draft', 'active', 'completing', 'completed', 'settling', 'settled'];
     if (!validStates.includes(newLifecycle)) {
       throw AppError.badRequest(`Invalid lifecycle state: ${newLifecycle}`);

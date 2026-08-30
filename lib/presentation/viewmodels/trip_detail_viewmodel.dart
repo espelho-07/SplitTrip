@@ -249,20 +249,32 @@ class TripDetailViewModel extends ChangeNotifier {
           notifyListeners();
           return;
         }
-      } else if (event.type == 'member_joined') {
+      } else if (event.type == 'member_joined' ||
+          event.type == 'member_added' ||
+          event.type == 'member_renamed' ||
+          event.type == 'member_removed' ||
+          event.type == 'members_merged') {
         if (event.data['trip'] is Map<String, dynamic>) {
           _trip = Trip.fromJson(event.data['trip'] as Map<String, dynamic>);
-          _recomputeLocalBalances();
-          _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
-          notifyListeners();
-          return;
+        } else if (_trip != null) {
+          _trip = tripRepo.getCachedTripById(_trip!.id);
         }
+        if (_trip != null) {
+          _expenses = expenseRepo.getCachedExpenses(_trip!.id);
+        }
+        _recomputeLocalBalances();
+        if (_trip != null) {
+          _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
+        }
+        notifyListeners();
+        return;
       }
 
       if (_currentUserId != null) {
         _recomputeLocalBalances();
         notifyListeners();
       }
+
     });
   }
 
@@ -460,8 +472,79 @@ class TripDetailViewModel extends ChangeNotifier {
     } catch (e) {
       _errorMessage = KithErrorFormatter.format(e);
       notifyListeners();
+      rethrow;
     }
   }
+
+  Future<void> renameMember(String memberId, String newDisplayName, String currentUserId) async {
+    if (_trip == null) return;
+    try {
+      _trip = await tripRepo.renameMember(
+        tripId: _trip!.id,
+        memberId: memberId,
+        newDisplayName: newDisplayName,
+      );
+      _balanceSummary = await expenseRepo.getBalanceSummary(
+        trip: _trip!,
+        currentUserId: currentUserId,
+      );
+      _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
+      notifyListeners();
+    } catch (e) {
+      _errorMessage = KithErrorFormatter.format(e);
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> removeMember(String memberId, String currentUserId) async {
+    if (_trip == null) return;
+    try {
+      _trip = await tripRepo.removeMember(
+        tripId: _trip!.id,
+        memberId: memberId,
+      );
+      _balanceSummary = await expenseRepo.getBalanceSummary(
+        trip: _trip!,
+        currentUserId: currentUserId,
+      );
+      _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
+      notifyListeners();
+    } catch (e) {
+      _errorMessage = KithErrorFormatter.format(e);
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> mergeMembers({
+    required String sourceMemberId,
+    required String canonicalMemberId,
+    required String currentUserId,
+    String? operationId,
+  }) async {
+    if (_trip == null) return;
+    try {
+      _trip = await tripRepo.mergeMembers(
+        tripId: _trip!.id,
+        sourceMemberId: sourceMemberId,
+        canonicalMemberId: canonicalMemberId,
+        operationId: operationId,
+      );
+      _expenses = expenseRepo.getCachedExpenses(_trip!.id);
+      _balanceSummary = await expenseRepo.getBalanceSummary(
+        trip: _trip!,
+        currentUserId: currentUserId,
+      );
+      _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
+      notifyListeners();
+    } catch (e) {
+      _errorMessage = KithErrorFormatter.format(e);
+      notifyListeners();
+      rethrow;
+    }
+  }
+
 
   /// Atomically completes the trip via direct server call.
   /// Uses the /complete endpoint (not the sync queue) so the server persists

@@ -590,10 +590,213 @@ class TripRepository {
     return updatedTrip;
   }
 
+  /// Renames an unclaimed member in a trip.
+  Future<Trip> renameMember({
+    required String tripId,
+    required String memberId,
+    required String newDisplayName,
+  }) async {
+    try {
+      final res = await apiClient.patch('/trips/$tripId/members/$memberId', body: {
+        'displayName': newDisplayName.trim(),
+      });
+      if (res is Map<String, dynamic>) {
+        final updatedTrip = Trip.fromJson(res);
+        final trips = await getTrips();
+        final idx = trips.indexWhere((t) => t.id == tripId);
+        if (idx != -1) {
+          trips[idx] = updatedTrip;
+          await storage.saveTrips(trips.map((t) => t.toJson()).toList());
+        }
+        return updatedTrip;
+      }
+    } catch (_) {
+      // Offline fallback
+    }
+
+    final trips = await getTrips();
+    final index = trips.indexWhere((t) => t.id == tripId);
+    if (index == -1) throw StateError('Trip not found');
+
+    final updatedMembers = trips[index].members.map((m) {
+      if (m.id == memberId) {
+        return m.copyWith(displayName: newDisplayName.trim());
+      }
+      return m;
+    }).toList();
+
+    final updatedTrip = trips[index].copyWith(
+      members: updatedMembers,
+      updatedAt: DateTime.now(),
+    );
+
+    trips[index] = updatedTrip;
+    await storage.saveTrips(trips.map((t) => t.toJson()).toList());
+    return updatedTrip;
+  }
+
+  /// Removes an eligible member from a trip (blocked if financial activity exists).
+  Future<Trip> removeMember({
+    required String tripId,
+    required String memberId,
+  }) async {
+    try {
+      final res = await apiClient.delete('/trips/$tripId/members/$memberId');
+      if (res is Map<String, dynamic>) {
+        final updatedTrip = Trip.fromJson(res);
+        final trips = await getTrips();
+        final idx = trips.indexWhere((t) => t.id == tripId);
+        if (idx != -1) {
+          trips[idx] = updatedTrip;
+          await storage.saveTrips(trips.map((t) => t.toJson()).toList());
+        }
+        return updatedTrip;
+      }
+    } on NetworkException {
+      rethrow;
+    } catch (_) {
+      // Offline fallback
+    }
+
+    final trips = await getTrips();
+    final index = trips.indexWhere((t) => t.id == tripId);
+    if (index == -1) throw StateError('Trip not found');
+
+    final updatedMembers = trips[index].members.where((m) => m.id != memberId).toList();
+    final updatedTrip = trips[index].copyWith(
+      members: updatedMembers,
+      updatedAt: DateTime.now(),
+    );
+
+    trips[index] = updatedTrip;
+    await storage.saveTrips(trips.map((t) => t.toJson()).toList());
+    return updatedTrip;
+  }
+
+  /// Merges two duplicate members into a single canonical participant, migrating all expenses, splits, and settlements atomically.
+  Future<Trip> mergeMembers({
+    required String tripId,
+    required String sourceMemberId,
+    required String canonicalMemberId,
+    String? operationId,
+  }) async {
+    debugPrint('[TripRepository] MERGE REQUEST: tripId=$tripId, source=$sourceMemberId, canonical=$canonicalMemberId');
+    try {
+      final res = await apiClient.post('/trips/$tripId/members/merge', body: {
+        'sourceMemberId': sourceMemberId,
+        'canonicalMemberId': canonicalMemberId,
+        'operationId': operationId,
+      });
+
+      if (res is Map<String, dynamic>) {
+        final updatedTrip = Trip.fromJson(res);
+
+        // 1. Update local expenses to reflect migrated ownership
+        final cachedExpenses = storage.getSavedExpenses(tripId);
+        for (final expJson in cachedExpenses) {
+          if (expJson['paidById'] == sourceMemberId) {
+            expJson['paidById'] = canonicalMemberId;
+          }
+          final splits = (expJson['splits'] as List<dynamic>?) ?? [];
+          final sourceIdx = splits.indexWhere((s) => s['memberId'] == sourceMemberId);
+          final canonIdx = splits.indexWhere((s) => s['memberId'] == canonicalMemberId);
+
+          if (sourceIdx != -1) {
+            if (canonIdx != -1) {
+              final sSplit = splits[sourceIdx];
+              final cSplit = splits[canonIdx];
+              cSplit['amountInPaise'] = ((cSplit['amountInPaise'] as int?) ?? 0) + ((sSplit['amountInPaise'] as int?) ?? 0);
+              splits.removeAt(sourceIdx);
+            } else {
+              splits[sourceIdx]['memberId'] = canonicalMemberId;
+            }
+          }
+        }
+        await storage.saveExpenses(tripId, cachedExpenses);
+
+        // 2. Update local settlements
+        final cachedSettlements = storage.getSavedTripSettlements(tripId);
+        for (final sJson in cachedSettlements) {
+          if (sJson['fromMemberId'] == sourceMemberId) {
+            sJson['fromMemberId'] = canonicalMemberId;
+          }
+          if (sJson['toMemberId'] == sourceMemberId) {
+            sJson['toMemberId'] = canonicalMemberId;
+          }
+        }
+        await storage.saveTripSettlements(tripId, cachedSettlements);
+
+        // 3. Update local trips cache
+        final trips = await getTrips();
+        final idx = trips.indexWhere((t) => t.id == tripId);
+        if (idx != -1) {
+          trips[idx] = updatedTrip;
+          await storage.saveTrips(trips.map((t) => t.toJson()).toList());
+        }
+
+        return updatedTrip;
+      }
+    } on NetworkException {
+      rethrow;
+    } catch (_) {
+      // Offline fallback
+    }
+
+    // Offline Local Migration Fallback
+    final cachedExpenses = storage.getSavedExpenses(tripId);
+    for (final expJson in cachedExpenses) {
+      if (expJson['paidById'] == sourceMemberId) {
+        expJson['paidById'] = canonicalMemberId;
+      }
+      final splits = (expJson['splits'] as List<dynamic>?) ?? [];
+      final sourceIdx = splits.indexWhere((s) => s['memberId'] == sourceMemberId);
+      final canonIdx = splits.indexWhere((s) => s['memberId'] == canonicalMemberId);
+
+      if (sourceIdx != -1) {
+        if (canonIdx != -1) {
+          final sSplit = splits[sourceIdx];
+          final cSplit = splits[canonIdx];
+          cSplit['amountInPaise'] = ((cSplit['amountInPaise'] as int?) ?? 0) + ((sSplit['amountInPaise'] as int?) ?? 0);
+          splits.removeAt(sourceIdx);
+        } else {
+          splits[sourceIdx]['memberId'] = canonicalMemberId;
+        }
+      }
+    }
+    await storage.saveExpenses(tripId, cachedExpenses);
+
+    final cachedSettlements = storage.getSavedTripSettlements(tripId);
+    for (final sJson in cachedSettlements) {
+      if (sJson['fromMemberId'] == sourceMemberId) {
+        sJson['fromMemberId'] = canonicalMemberId;
+      }
+      if (sJson['toMemberId'] == sourceMemberId) {
+        sJson['toMemberId'] = canonicalMemberId;
+      }
+    }
+    await storage.saveTripSettlements(tripId, cachedSettlements);
+
+
+    final trips = await getTrips();
+    final index = trips.indexWhere((t) => t.id == tripId);
+    if (index == -1) throw StateError('Trip not found');
+
+    final updatedMembers = trips[index].members.where((m) => m.id != sourceMemberId).toList();
+    final updatedTrip = trips[index].copyWith(
+      members: updatedMembers,
+      updatedAt: DateTime.now(),
+    );
+
+    trips[index] = updatedTrip;
+    await storage.saveTrips(trips.map((t) => t.toJson()).toList());
+    return updatedTrip;
+  }
+
   /// Reconciles duplicate members sharing the same user ID safely.
   Trip reconcileDuplicateMembers(Trip trip) {
     final byUserId = <String, List<TripMember>>{};
     for (final m in trip.members) {
+
       if (m.userId.isEmpty || m.isUnclaimed) continue;
       byUserId.putIfAbsent(m.userId, () => []).add(m);
     }

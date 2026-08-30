@@ -13,6 +13,7 @@ class TripMember {
   final bool isClaimed;
   final String? claimToken;
   final String? status;
+  final String? mergedIntoMemberId;
 
   const TripMember({
     required this.id,
@@ -28,10 +29,12 @@ class TripMember {
     this.isClaimed = true,
     this.claimToken,
     this.status,
+    this.mergedIntoMemberId,
   });
 
   bool get isCreator => role.toLowerCase() == 'creator';
   bool get isUnclaimed => !isClaimed || status == 'unclaimed';
+  bool get isMerged => status == 'merged' || mergedIntoMemberId != null;
   String get currentStatus => status ?? (isClaimed ? 'claimed' : 'unclaimed');
 
   TripMember copyWith({
@@ -48,6 +51,7 @@ class TripMember {
     bool? isClaimed,
     String? claimToken,
     String? status,
+    String? mergedIntoMemberId,
   }) {
     return TripMember(
       id: id ?? this.id,
@@ -63,6 +67,7 @@ class TripMember {
       isClaimed: isClaimed ?? this.isClaimed,
       claimToken: claimToken ?? this.claimToken,
       status: status ?? this.status,
+      mergedIntoMemberId: mergedIntoMemberId ?? this.mergedIntoMemberId,
     );
   }
 
@@ -80,33 +85,41 @@ class TripMember {
     'isClaimed': isClaimed,
     'claimToken': claimToken,
     'status': currentStatus,
+    'mergedIntoMemberId': mergedIntoMemberId,
   };
 
   factory TripMember.fromJson(Map<String, dynamic> json) {
-    final rawUserId = json['userId'] as String? ?? '';
+    final rawUserId = json['userId'] as String? ?? json['user_id'] as String? ?? '';
     final rawStatus = json['status'] as String?;
     final isUnclaimed = json['isClaimed'] == false ||
+        json['is_claimed'] == false ||
         rawStatus == 'unclaimed' ||
         rawUserId.startsWith('unclaimed_');
 
     return TripMember(
-      id: json['id'] as String,
+      id: (json['id'] as String?) ?? '',
       userId: rawUserId,
-      displayName: json['displayName'] as String,
-      avatarUrl: json['avatarUrl'] as String?,
+      displayName: (json['displayName'] as String?) ?? (json['display_name'] as String?) ?? 'Member',
+      avatarUrl: json['avatarUrl'] as String? ?? json['avatar_url'] as String?,
       role: json['role'] as String? ?? 'member',
       joinedAt: json['joinedAt'] != null
           ? DateTime.tryParse(json['joinedAt'] as String) ?? DateTime.now()
-          : DateTime.now(),
+          : (json['joined_at'] != null
+              ? DateTime.tryParse(json['joined_at'] as String) ?? DateTime.now()
+              : DateTime.now()),
       lastSeenAt: json['lastSeenAt'] != null
           ? DateTime.tryParse(json['lastSeenAt'] as String)
-          : null,
-      lastSyncedRevision: json['lastSyncedRevision'] as int? ?? 1,
-      pendingMutationsCount: json['pendingMutationsCount'] as int? ?? 0,
-      upiId: json['upiId'] as String?,
-      isClaimed: json['isClaimed'] as bool? ?? !isUnclaimed,
-      claimToken: json['claimToken'] as String?,
+          : (json['last_seen_at'] != null
+              ? DateTime.tryParse(json['last_seen_at'] as String)
+              : null),
+      lastSyncedRevision: json['lastSyncedRevision'] as int? ?? json['last_synced_revision'] as int? ?? 1,
+      pendingMutationsCount: json['pendingMutationsCount'] as int? ?? json['pending_mutations_count'] as int? ?? 0,
+      upiId: json['upiId'] as String? ?? json['upi_id'] as String?,
+      isClaimed: json['isClaimed'] as bool? ?? json['is_claimed'] as bool? ?? !isUnclaimed,
+      claimToken: json['claimToken'] as String? ?? json['claim_token'] as String?,
       status: rawStatus ?? (isUnclaimed ? 'unclaimed' : 'claimed'),
+      mergedIntoMemberId: json['mergedIntoMemberId'] as String? ?? json['merged_into_member_id'] as String?,
     );
   }
 }
+

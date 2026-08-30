@@ -33,6 +33,7 @@ import 'dart:async';
 import '../../../core/localization/app_localizations.dart';
 import '../add_expense/add_expense_view.dart';
 import '../payment/payment_verification_dialog.dart';
+import 'manage_members_view.dart';
 import 'widgets/activity_log_sheet.dart';
 import 'widgets/add_journey_moment_sheet.dart';
 import 'widgets/expense_detail_sheet.dart';
@@ -1159,9 +1160,12 @@ class _TripDetailViewState extends State<TripDetailView> {
   ) {
     final recentExpenses = vm.expenses.take(4).toList();
     final recentMoments = vm.journeyMoments.take(3).toList();
+    final isCreator = trip.creatorId == currentUserId ||
+        trip.members.any((m) => m.userId == currentUserId && m.isCreator);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+
       children: [
         // Trip Members and Meta Card
         SurfaceCard(
@@ -1193,23 +1197,50 @@ class _TripDetailViewState extends State<TripDetailView> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(l10n.tripDetailMembersCount(trip.members.length), style: AppTypography.bodySmall(isDark: isDark)),
-                  InkWell(
-                    onTap: _showAddFriendDialog,
-                    child: Row(
-                      children: [
-                        Icon(Icons.person_add_alt_1_rounded, size: 14, color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary),
-                        const SizedBox(width: 4),
-                        Text(
-                          l10n.tripDetailAddFriend,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                  Text(l10n.tripDetailMembersCount(trip.members.where((m) => !m.isMerged).length), style: AppTypography.bodySmall(isDark: isDark)),
+                  Row(
+                    children: [
+                      if (isCreator) ...[
+                        InkWell(
+                          onTap: () {
+                            HapticHelper.light();
+                            Navigator.push(context, ManageMembersView.route(trip.id));
+                          },
+                          child: Row(
+                            children: [
+                              Icon(Icons.manage_accounts_rounded, size: 14, color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Manage',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
+                        const SizedBox(width: 12),
                       ],
-                    ),
+                      InkWell(
+                        onTap: _showAddFriendDialog,
+                        child: Row(
+                          children: [
+                            Icon(Icons.person_add_alt_1_rounded, size: 14, color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary),
+                            const SizedBox(width: 4),
+                            Text(
+                              l10n.tripDetailAddFriend,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -1217,7 +1248,8 @@ class _TripDetailViewState extends State<TripDetailView> {
               Wrap(
                 spacing: 8,
                 runSpacing: 6,
-                children: trip.members.map((m) {
+                children: trip.members.where((m) => !m.isMerged).map((m) {
+
                   final isSelf = m.userId == currentUserId || m.id == currentUserId;
                   return Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
