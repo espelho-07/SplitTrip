@@ -7,6 +7,7 @@ import '../../../core/network/realtime_client.dart';
 import '../../../core/services/kith_widget_service.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
+import '../../../data/repositories/expense_repository.dart';
 import '../../../data/services/local_storage_service.dart';
 import '../../../data/services/sync_service.dart';
 import '../../../domain/enums/app_experience_mode.dart';
@@ -239,6 +240,11 @@ class _HomeViewState extends State<HomeView> {
 
         if (mounted) {
           final widgetService = context.read<KithWidgetService>();
+          final versionVm = Provider.of<VersionViewModel?>(context, listen: false);
+          final expenseRepo = context.read<ExpenseRepository>();
+          final notifService = context.read<NotificationService>();
+          final apiClient = context.read<ApiClient>();
+
           await widgetService.syncSnapshot(
             currentUser: user,
             personalExpenses: personalVm.expenses,
@@ -247,13 +253,14 @@ class _HomeViewState extends State<HomeView> {
             trips: homeVm.trips,
             tripBalances: homeVm.tripBalances,
           );
-          if (!mounted) return;
-          final versionVm = Provider.of<VersionViewModel?>(context, listen: false);
           if (versionVm != null) {
             await versionVm.checkForUpdates();
           }
+          await expenseRepo.syncPendingVerifications(user.id);
+          await notifService.syncServerNotifications(apiClient);
+
           if (mounted) {
-            await PaymentVerificationManager.checkAndPrompt(context);
+            await PaymentVerificationManager.checkAndPrompt(context, syncServer: false);
           }
         }
       }

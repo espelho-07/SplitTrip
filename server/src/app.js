@@ -95,14 +95,28 @@ app.get('/ready', async (req, res) => {
   }
 });
 
+const notificationRoutes = require('./routes/notification_routes');
+
 // Mount Routes
 app.use('/', webRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/trips', tripRoutes);
 app.use('/api/trips/:tripId/expenses', expenseRoutes);
 app.use('/api/personal', personalRoutes);
+app.use('/api/notifications', notificationRoutes);
 app.use('/api/app/version', versionRoutes);
 app.use('/api/version', versionRoutes);
+
+// GET /api/settlements/pending - User pending settlement verifications
+app.get('/api/settlements/pending', require('./middleware/auth').authMiddleware, (req, res, next) => {
+  try {
+    const notificationService = require('./services/notification_service');
+    const result = notificationService.getPendingSettlementsForUser(req.user.id);
+    res.status(200).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+});
 
 // Fallback 404 for unhandled API routes
 app.use('/api/*', (req, res) => {

@@ -23,16 +23,20 @@ import '../../../domain/enums/trip_lifecycle.dart';
 import '../../../domain/models/balance_summary.dart';
 import '../../../domain/models/expense.dart';
 import '../../../domain/models/journey_moment.dart';
+import '../../../domain/models/payment_verification_request.dart';
 import '../../../domain/models/trip.dart';
 import '../../../domain/services/trip_export_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/trip_detail_viewmodel.dart';
+import '../../../data/repositories/expense_repository.dart';
+import '../../../data/services/local_storage_service.dart';
 import '../../../data/services/sync_service.dart';
 import 'dart:async';
 import '../../../core/localization/app_localizations.dart';
 import '../add_expense/add_expense_view.dart';
 import '../payment/payment_verification_dialog.dart';
+import '../payment/payment_verification_view.dart';
 import 'manage_members_view.dart';
 import 'widgets/activity_log_sheet.dart';
 import 'widgets/add_journey_moment_sheet.dart';
@@ -44,8 +48,13 @@ import 'widgets/trip_qr_sheet.dart';
 
 class TripDetailView extends StatefulWidget {
   final String tripId;
+  final String? settlementId;
 
-  const TripDetailView({super.key, required this.tripId});
+  const TripDetailView({
+    super.key,
+    required this.tripId,
+    this.settlementId,
+  });
 
   @override
   State<TripDetailView> createState() => _TripDetailViewState();
@@ -105,9 +114,27 @@ class _TripDetailViewState extends State<TripDetailView> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final user = context.read<AuthViewModel>().currentUser;
       if (user != null) {
+        final expenseRepo = context.read<ExpenseRepository>();
+        await expenseRepo.getSettlements(widget.tripId);
+        if (!mounted) return;
         await context.read<TripDetailViewModel>().loadTrip(widget.tripId, user.id);
         if (mounted) {
-          await PaymentVerificationManager.checkAndPrompt(context);
+          if (widget.settlementId != null && widget.settlementId!.isNotEmpty) {
+            final storage = context.read<LocalStorageService>();
+            final allPending = storage.getSavedPaymentVerifications();
+            final match = allPending.firstWhere(
+              (p) => p['settlementId'] == widget.settlementId || p['id'] == widget.settlementId,
+              orElse: () => <String, dynamic>{},
+            );
+            if (match.isNotEmpty) {
+              final req = PaymentVerificationRequest.fromJson(match);
+              await PaymentVerificationView.show(context, request: req);
+            } else {
+              await PaymentVerificationManager.checkAndPrompt(context);
+            }
+          } else {
+            await PaymentVerificationManager.checkAndPrompt(context);
+          }
         }
       }
     });

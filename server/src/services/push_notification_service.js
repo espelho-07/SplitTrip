@@ -22,29 +22,55 @@ function initFirebaseAdmin() {
   if (isInitialized) return;
   try {
     admin = require('firebase-admin');
-    const projectId = process.env.FIREBASE_PROJECT_ID;
-    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-    const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+    const fs = require('fs');
 
-    if (!projectId || !clientEmail || !privateKey) {
-      console.warn('[PushNotification] Firebase credentials not configured — FCM push disabled. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY to enable.');
+    let credential = null;
+
+    // 1. Explicit Service Account JSON string or file path
+    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+      const sa = process.env.FIREBASE_SERVICE_ACCOUNT.trim();
+      if (sa.startsWith('{')) {
+        credential = admin.credential.cert(JSON.parse(sa));
+      } else if (fs.existsSync(sa)) {
+        credential = admin.credential.cert(require(sa));
+      }
+    }
+
+    // 2. Individual Environment Variables
+    if (!credential) {
+      const projectId = process.env.FIREBASE_PROJECT_ID || 'amazing-pipe-484506-t8';
+      const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+      const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+
+      if (clientEmail && privateKey) {
+        credential = admin.credential.cert({
+          projectId,
+          clientEmail,
+          privateKey,
+        });
+      }
+    }
+
+    // 3. GOOGLE_APPLICATION_CREDENTIALS or Application Default Credentials
+    if (!credential && (process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.GCLOUD_PROJECT)) {
+      try {
+        credential = admin.credential.applicationDefault();
+      } catch (_) {}
+    }
+
+    if (!credential) {
+      console.warn('[PushNotification] Firebase Admin credentials not set. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY (or FIREBASE_SERVICE_ACCOUNT) to enable FCM push.');
       return;
     }
 
     if (!admin.apps.length) {
-      admin.initializeApp({
-        credential: admin.credential.cert({
-          projectId,
-          clientEmail,
-          privateKey,
-        }),
-      });
+      admin.initializeApp({ credential });
     }
 
     isInitialized = true;
     console.info('[PushNotification] Firebase Admin SDK initialized successfully');
   } catch (err) {
-    console.error('[PushNotification] Firebase Admin SDK init failed:', err.message);
+    console.error('[PushNotification] Firebase Admin SDK init notice:', err.message);
   }
 }
 

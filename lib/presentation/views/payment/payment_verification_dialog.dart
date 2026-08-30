@@ -920,12 +920,21 @@ class _PaymentProofSheetState extends State<PaymentProofSheet> {
 class PaymentVerificationManager {
   PaymentVerificationManager._();
 
-  static Future<void> checkAndPrompt(BuildContext context) async {
+  static Future<void> checkAndPrompt(BuildContext context, {bool syncServer = true}) async {
     try {
       final storage = context.read<LocalStorageService>();
       final authVm = Provider.of<AuthViewModel?>(context, listen: false);
       final currentUser = authVm?.currentUser;
       if (currentUser == null) return;
+
+      if (syncServer) {
+        try {
+          final expenseRepo = context.read<ExpenseRepository>();
+          await expenseRepo.syncPendingVerifications(currentUser.id);
+        } catch (_) {}
+      }
+
+      if (!context.mounted) return;
 
       // 1. Check for incoming pending verifications where current user is the Receiver (Payee)
       final pendingReceiver = storage.getPendingVerificationsForReceiver(

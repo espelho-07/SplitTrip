@@ -169,6 +169,7 @@ void main() async {
         Provider<LocalStorageService>.value(value: storageService),
         Provider<NotificationService>.value(value: notificationService),
         Provider<FcmService>.value(value: fcmService),
+        Provider<kith_realtime.RealtimeClient>.value(value: realtimeClient),
         Provider<ApiClient>.value(value: apiClient),
         Provider<SyncService>.value(value: syncService),
         Provider<LocalMigrationRunner>.value(value: migrationRunner),

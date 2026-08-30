@@ -87,6 +87,8 @@ class FcmService {
     final route = data['route'] as String?;
     final eventType = data['type'] as String? ?? 'settlement';
     final idempotencyKey = data['idempotencyKey'] as String?;
+    final tripId = data['tripId'] as String?;
+    final settlementId = data['settlementId'] as String?;
 
     final notifType = eventType.contains('expense')
         ? NotificationType.expense
@@ -94,11 +96,30 @@ class FcmService {
             ? NotificationType.trip
             : NotificationType.settlement;
 
+    if (eventType == 'settlement_marked_paid' && settlementId != null) {
+      // Store payment verification in local vault for immediate foreground prompt
+      _storage.addPaymentVerification({
+        'id': 'pvr_$settlementId',
+        'settlementId': settlementId,
+        'tripId': tripId ?? '',
+        'tripName': data['tripName'] ?? 'Trip',
+        'payerMemberId': data['payerMemberId'],
+        'payerUserId': data['payerUserId'],
+        'payerName': data['payerName'] ?? title,
+        'receiverUserId': _storage.getSavedUser()?['id'],
+        'receiverName': _storage.getSavedUser()?['displayName'] ?? 'You',
+        'amountInPaise': int.tryParse(data['amountInPaise']?.toString() ?? '0') ?? 0,
+        'paymentMethod': 'Direct',
+        'status': 'pending_verification',
+        'markedAt': DateTime.now().toIso8601String(),
+      });
+    }
+
     _notificationService.addNotification(
       title: title,
       description: body,
       type: notifType,
-      route: route,
+      route: route ?? (tripId != null ? '/trip/$tripId?settlementId=$settlementId' : null),
       actionLabel: _actionLabelForType(eventType),
       idempotencyKey: idempotencyKey,
     );
@@ -106,9 +127,13 @@ class FcmService {
 
   void _handleNotificationTap(RemoteMessage message) {
     final route = message.data['route'] as String?;
-    if (route != null && route.isNotEmpty && onNavigate != null) {
+    final tripId = message.data['tripId'] as String?;
+    final settlementId = message.data['settlementId'] as String?;
+    final targetRoute = route ?? (tripId != null && settlementId != null ? '/trip/$tripId?settlementId=$settlementId' : null);
+
+    if (targetRoute != null && targetRoute.isNotEmpty && onNavigate != null) {
       Future.delayed(const Duration(milliseconds: 300), () {
-        onNavigate?.call(route);
+        onNavigate?.call(targetRoute);
       });
     }
   }
@@ -149,14 +174,19 @@ class FcmService {
       }
       await _storage.setString('kith_fcm_token', token);
 
-      await _apiClient.post('/auth/fcm-token', body: {
-        'token': token,
-        'deviceId': deviceId,
-        'platform': 'android',
-      });
-      debugPrint('[FCM] Token registered with server');
+      final user = _storage.getSavedUser();
+      if (user != null && user['id'] != null) {
+        await _apiClient.post('/auth/fcm-token', body: {
+          'token': token,
+          'deviceId': deviceId,
+          'platform': 'android',
+        });
+        debugPrint('[FCM] Token registered with server for user ${user['id']}');
+      } else {
+        debugPrint('[FCM] Token saved locally, will register once user session is active');
+      }
     } catch (e) {
-      debugPrint('[FCM] Token registration failed (will retry on next launch): $e');
+      debugPrint('[FCM] Token registration notice: $e');
     }
   }
 

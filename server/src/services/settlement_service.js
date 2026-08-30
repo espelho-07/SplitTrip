@@ -240,9 +240,34 @@ class SettlementService {
     // Safe Diagnostic Logging (Rule 55)
     console.info(`[Payment] PAYMENT CREATED: id=${settlement.id}, tripId=${tripId}, payerUserId=${fromMember.userId}, receiverUserId=${toMember.userId}, amountInPaise=${amountInPaise}`);
 
-    // FCM push strictly to receiver (Rule 1, 10, 12, 13)
+    // Persistent Database Notification strictly for receiver (Rule 10, 11)
     if (toMember.userId) {
       const formattedAmount = (amountInPaise / 100).toFixed(amountInPaise % 100 === 0 ? 0 : 2);
+      const notificationService = require('./notification_service');
+      notificationService.createNotification({
+        recipientUserId: toMember.userId,
+        actorUserId: fromMember.userId,
+        actorName: fromMember.displayName || 'Member',
+        tripId,
+        tripName: trip.name,
+        paymentId: settlement.id,
+        settlementId: settlement.id,
+        type: 'PAYMENT_CONFIRMATION_REQUIRED',
+        title: 'Payment received',
+        body: `${fromMember.displayName} says they paid you ₹${formattedAmount}.`,
+        amountInPaise,
+        currencyCode: trip.currencyCode || 'INR',
+        route: `/trip/${tripId}?settlementId=${settlement.id}`,
+        metadata: {
+          settlementId: settlement.id,
+          tripId,
+          fromMemberId: fromMember.id,
+          toMemberId: toMember.id,
+          amountInPaise,
+        },
+      });
+
+      // FCM push strictly to receiver (Rule 1, 10, 12, 13)
       pushNotificationService.sendToUser(db, toMember.userId, {
         title: 'Payment received',
         body: `${fromMember.displayName} says they paid you ₹${formattedAmount}.`,
@@ -337,11 +362,33 @@ class SettlementService {
       });
     }
 
-    // FCM push to payer (notify them that the receiver confirmed)
+    // Resolve pending receiver notification and create confirmation notification for payer (Rule 27)
+    const notificationService = require('./notification_service');
+    notificationService.resolveNotificationForSettlement(settlementId, 'RESOLVED');
+
     if (fromMember?.userId) {
+      const formattedAmount = (settlement.amountInPaise / 100).toFixed(settlement.amountInPaise % 100 === 0 ? 0 : 2);
+      notificationService.createNotification({
+        recipientUserId: fromMember.userId,
+        actorUserId: toMember?.userId,
+        actorName: toMember?.displayName || 'Receiver',
+        tripId,
+        tripName: trip.name,
+        paymentId: settlement.id,
+        settlementId: settlement.id,
+        type: 'PAYMENT_CONFIRMED',
+        title: 'Payment Confirmed ✅',
+        body: `${toMember?.displayName || 'Receiver'} confirmed receiving ₹${formattedAmount}. Payment complete!`,
+        amountInPaise: settlement.amountInPaise,
+        currencyCode: trip.currencyCode || 'INR',
+        route: `/trip/${tripId}`,
+        metadata: { settlementId, tripId, status: 'confirmed' },
+      });
+
+      // FCM push to payer (notify them that the receiver confirmed)
       pushNotificationService.sendToUser(db, fromMember.userId, {
         title: 'Payment Confirmed ✅',
-        body: `${toMember?.displayName || 'Your friend'} confirmed receiving ₹${(settlement.amountInPaise / 100).toFixed(0)}. Payment complete!`,
+        body: `${toMember?.displayName || 'Your friend'} confirmed receiving ₹${formattedAmount}. Payment complete!`,
         data: {
           type: 'settlement_confirmed',
           route: `/trip/${tripId}`,
@@ -434,11 +481,33 @@ class SettlementService {
       });
     }
 
-    // FCM push to payer (notify them that the receiver disputed the payment)
+    // Resolve pending receiver notification and create dispute notification for payer (Rule 28)
+    const notificationService = require('./notification_service');
+    notificationService.resolveNotificationForSettlement(settlementId, 'RESOLVED');
+
     if (fromMember?.userId) {
+      const formattedAmount = (settlement.amountInPaise / 100).toFixed(settlement.amountInPaise % 100 === 0 ? 0 : 2);
+      notificationService.createNotification({
+        recipientUserId: fromMember.userId,
+        actorUserId: toMember?.userId,
+        actorName: toMember?.displayName || 'Receiver',
+        tripId,
+        tripName: trip.name,
+        paymentId: settlement.id,
+        settlementId: settlement.id,
+        type: 'PAYMENT_DISPUTED',
+        title: 'Payment Disputed ⚠️',
+        body: `${toMember?.displayName || 'Receiver'} reported they didn't receive your ₹${formattedAmount} payment.`,
+        amountInPaise: settlement.amountInPaise,
+        currencyCode: trip.currencyCode || 'INR',
+        route: `/trip/${tripId}`,
+        metadata: { settlementId, tripId, status: 'disputed', reason: reason || 'Not received' },
+      });
+
+      // FCM push to payer (notify them that the receiver disputed the payment)
       pushNotificationService.sendToUser(db, fromMember.userId, {
         title: 'Payment Disputed ⚠️',
-        body: `${toMember?.displayName || 'Your friend'} reported they didn't receive your ₹${(settlement.amountInPaise / 100).toFixed(0)} payment. Please review.`,
+        body: `${toMember?.displayName || 'Your friend'} reported they didn't receive your ₹${formattedAmount} payment. Please review.`,
         data: {
           type: 'settlement_disputed',
           route: `/trip/${tripId}`,

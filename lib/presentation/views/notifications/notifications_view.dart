@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/localization/app_localizations.dart';
+import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
+import '../../../data/repositories/expense_repository.dart';
 import '../../../data/services/local_storage_service.dart';
 import '../../../domain/models/payment_verification_request.dart';
 import '../../../domain/services/notification_service.dart';
@@ -45,12 +47,42 @@ class _NotificationsViewState extends State<NotificationsView> {
 
       _notifications = raw.map((json) => AppNotificationItem.fromJson(json)).toList();
     });
+
+    // Background sync latest notifications & pending settlements from server
+    final authVm = Provider.of<AuthViewModel?>(context, listen: false);
+    final user = authVm?.currentUser;
+    if (user != null) {
+      final notifService = Provider.of<NotificationService?>(context, listen: false);
+      final apiClient = Provider.of<ApiClient?>(context, listen: false);
+      final expenseRepo = Provider.of<ExpenseRepository?>(context, listen: false);
+      if (notifService != null && apiClient != null) {
+        Future.microtask(() async {
+          await notifService.syncServerNotifications(apiClient);
+          if (expenseRepo != null) {
+            await expenseRepo.syncPendingVerifications(user.id);
+          }
+          if (mounted) {
+            final updatedRaw = storage.getSavedNotifications();
+            setState(() {
+              _notifications = updatedRaw.map((json) => AppNotificationItem.fromJson(json)).toList();
+            });
+          }
+        });
+      }
+    }
   }
 
   Future<void> _markAllAsRead() async {
     HapticHelper.medium();
     final storage = context.read<LocalStorageService>();
+    final apiClient = Provider.of<ApiClient?>(context, listen: false);
     await storage.markAllNotificationsAsRead();
+    if (apiClient != null) {
+      try {
+        await apiClient.post('/notifications/read-all', body: {});
+      } catch (_) {}
+    }
+    if (!mounted) return;
     setState(() {
       for (final n in _notifications) {
         n.isRead = true;

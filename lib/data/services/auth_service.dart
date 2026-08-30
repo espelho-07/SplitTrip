@@ -32,6 +32,11 @@ class AuthService {
     final user = targetUser ?? getCurrentUser();
     if (user == null) return;
     try {
+      if (user.anonymousToken.isNotEmpty) {
+        apiClient.setAuthToken(user.anonymousToken);
+        realtimeClient?.setAuthToken(user.anonymousToken);
+      }
+
       await apiClient.post('/auth/sync-guest', body: {
         'id': user.id,
         'displayName': user.displayName,

@@ -184,6 +184,48 @@ class ExpenseRepository {
     return storage.getSavedTripSettlements(tripId);
   }
 
+  /// Fetches authoritative settlements for a trip from the server and updates local cache.
+  Future<List<Map<String, dynamic>>> getSettlements(String tripId) async {
+    final cached = storage.getSavedTripSettlements(tripId);
+    try {
+      final res = await apiClient.get('/trips/$tripId/settlements');
+      if (res is List) {
+        final serverList = res.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        await storage.saveTripSettlements(tripId, serverList);
+        return serverList;
+      }
+    } catch (_) {
+      // Offline fallback to cached settlements
+    }
+    return cached;
+  }
+
+  /// Fetches pending settlement verifications across all user trips from the server.
+  Future<void> syncPendingVerifications(String currentUserId) async {
+    if (currentUserId.isEmpty) return;
+    try {
+      final res = await apiClient.get('/settlements/pending');
+      if (res is Map<String, dynamic>) {
+        final pendingList = (res['pending'] as List?) ?? [];
+        for (final p in pendingList) {
+          if (p is Map) {
+            final pMap = Map<String, dynamic>.from(p);
+            await storage.addPaymentVerification(pMap);
+          }
+        }
+        final disputedList = (res['disputed'] as List?) ?? [];
+        for (final d in disputedList) {
+          if (d is Map) {
+            final dMap = Map<String, dynamic>.from(d);
+            await storage.addPaymentVerification(dMap);
+          }
+        }
+      }
+    } catch (_) {
+      // Background sync non-blocking
+    }
+  }
+
   /// Records a direct settlement payment between two members.
   Future<void> recordSettlement({
     required String tripId,

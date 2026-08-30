@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/services.dart';
+import '../../core/network/api_client.dart';
 import '../../data/services/local_storage_service.dart';
 
 enum NotificationCategory {
@@ -234,6 +235,45 @@ class NotificationService {
     }
   }
 
+  /// Syncs notifications from the backend server into local storage
+  Future<void> syncServerNotifications(ApiClient apiClient) async {
+    try {
+      final res = await apiClient.get('/notifications');
+      if (res is List) {
+        for (final item in res) {
+          if (item is Map) {
+            final notifMap = Map<String, dynamic>.from(item);
+            final typeStr = notifMap['type'] as String? ?? '';
+            final notifType = typeStr.contains('expense')
+                ? NotificationType.expense
+                : typeStr.contains('trip')
+                    ? NotificationType.trip
+                    : NotificationType.settlement;
+
+            final parsedItem = AppNotificationItem(
+              id: notifMap['id'] as String? ?? 'notif_${DateTime.now().millisecondsSinceEpoch}',
+              title: notifMap['title'] as String? ?? 'Notification',
+              description: notifMap['description'] as String? ?? notifMap['body'] as String? ?? '',
+              timestamp: notifMap['createdAt'] != null
+                  ? DateTime.tryParse(notifMap['createdAt'] as String) ?? DateTime.now()
+                  : DateTime.now(),
+              type: notifType,
+              isRead: notifMap['isRead'] as bool? ?? false,
+              route: notifMap['route'] as String?,
+              actionLabel: typeStr == 'PAYMENT_CONFIRMATION_REQUIRED' ? 'Verify Payment' : 'Open',
+              idempotencyKey: notifMap['settlementId'] != null ? '${notifMap['settlementId']}_marked_paid' : null,
+            );
+
+            // Add without popping extra system status bar notification if syncing historical records
+            await _storage?.addNotification(parsedItem.toJson());
+          }
+        }
+      }
+    } catch (_) {
+      // Non-blocking background sync
+    }
+  }
+
   /// Dispatched when Payer marks payment as paid (Receiver receives this notice)
   Future<void> notifyPaymentMarkedPaid({
     required String tripName,
@@ -246,7 +286,7 @@ class NotificationService {
     final amtFormatted = '₹${(amountInPaise / 100.0).toStringAsFixed(amountInPaise % 100 == 0 ? 0 : 2)}';
     await addNotification(
       title: 'Payment Verification • $tripName',
-      description: '$payerName marked $amtFormatted as paid to $receiverName for $tripName. Tap to confirm receipt.',
+      description: '$payerName says they paid you $amtFormatted.',
       type: NotificationType.settlement,
       route: tripId != null ? '/trip/$tripId' : null,
       actionLabel: 'Verify Payment',
