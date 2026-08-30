@@ -18,6 +18,8 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Create notification channels at startup — required before FCM can deliver
+        KithNotificationHelper.createNotificationChannel(applicationContext)
         handleIntent(intent)
     }
 

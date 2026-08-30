@@ -1011,4 +1011,11 @@ const Map<String, String> teTranslations = {
   'lang_category_indic': 'భారతీయ భాషలు',
   'lang_category_east_asian': 'తూర్పు ఆసియా భాషలు',
   'lang_search_hint': 'భాష లేదా లిపిని శోధించండి...',
+  'settlement_awaiting_confirmation': 'చెల్లింపు పంపబడింది • నిర్ధారణ కోసం వేచి ఉంది',
+  'settlement_not_received_btn': 'అందలేదు',
+  'settlement_send_proof_btn': 'చెల్లింపు రుజువు పంపండి',
+  'settlement_review_proof_btn': 'రుజువును సమీక్షించండి',
+  'settlement_proof_submitted_badge': 'రుజువు సమర్పించబడింది',
+  'settlement_disputed_badge': 'చెల్లింపు వివాదం',
+  'settlement_history_title': 'సెటిల్మెంట్ చరిత్ర',
 };

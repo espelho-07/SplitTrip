@@ -20,6 +20,7 @@ class Database {
       personal_repayments: new Map(),
       personal_budgets: new Map(),
       trip_journey_moments: new Map(),
+      user_fcm_tokens: new Map(),
     };
     if (!this.inMemory) {
       this._initStorage();

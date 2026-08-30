@@ -1,4 +1,4 @@
-﻿/// State lifecycle for settlement payments.
+/// State lifecycle for settlement payments.
 enum PaymentStatus {
   /// Settlement created or pending payment.
   pending,
@@ -6,11 +6,26 @@ enum PaymentStatus {
   /// UPI application or external gateway was launched.
   initiated,
 
-  /// Waiting for user or webhook confirmation.
+  /// Payer marked as paid / awaiting recipient confirmation.
+  markedPaid,
+
+  /// Waiting for receiver confirmation.
   awaitingConfirmation,
+
+  /// Receiver confirmed payment receipt.
+  confirmed,
 
   /// Genuinely confirmed and recorded as paid.
   paid,
+
+  /// Receiver reported payment was not received.
+  disputed,
+
+  /// Not received alias.
+  notReceived,
+
+  /// Payer uploaded payment proof (UTR / screenshot / note).
+  proofSubmitted,
 
   /// Payment attempt failed or rejected.
   failed,
@@ -20,12 +35,23 @@ enum PaymentStatus {
 
   String get key => name;
 
+  bool get isSettled => this == PaymentStatus.paid || this == PaymentStatus.confirmed;
+  bool get isAwaitingConfirmation => this == PaymentStatus.markedPaid || this == PaymentStatus.awaitingConfirmation;
+  bool get isDisputed => this == PaymentStatus.disputed || this == PaymentStatus.notReceived;
+  bool get isProofSubmitted => this == PaymentStatus.proofSubmitted;
+
   static PaymentStatus fromKey(String? key) {
     if (key == null) return PaymentStatus.pending;
-    return PaymentStatus.values.firstWhere(
-      (e) => e.name.toLowerCase() == key.toLowerCase(),
-      orElse: () => PaymentStatus.pending,
-    );
+    final normalized = key.toLowerCase().replaceAll('_', '').replaceAll('-', '');
+    for (final status in PaymentStatus.values) {
+      if (status.name.toLowerCase() == normalized) return status;
+    }
+    if (normalized == 'pendingverification') return PaymentStatus.awaitingConfirmation;
+    if (normalized == 'settled' || normalized == 'completed') return PaymentStatus.confirmed;
+    if (normalized == 'notreceived') return PaymentStatus.disputed;
+    if (normalized == 'proofsubmitted') return PaymentStatus.proofSubmitted;
+    if (normalized == 'markedpaid') return PaymentStatus.markedPaid;
+    return PaymentStatus.pending;
   }
 }
 

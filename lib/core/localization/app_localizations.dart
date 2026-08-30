@@ -548,6 +548,13 @@ class AppLocalizations {
   String get paymentYesMarkPaid => translate('payment_yes_mark_paid');
   String get paymentNotYet => translate('payment_not_yet');
   String get paymentOfflineWarning => translate('payment_offline_warning');
+  String get settlementAwaitingConfirmation => translate('settlement_awaiting_confirmation');
+  String get settlementNotReceivedBtn => translate('settlement_not_received_btn');
+  String get settlementSendProofBtn => translate('settlement_send_proof_btn');
+  String get settlementReviewProofBtn => translate('settlement_review_proof_btn');
+  String get settlementProofSubmittedBadge => translate('settlement_proof_submitted_badge');
+  String get settlementDisputedBadge => translate('settlement_disputed_badge');
+  String get settlementHistoryTitle => translate('settlement_history_title');
 
   // Clean QR Scanner
   String get qrInvalidTitle => translate('qr_invalid_title');

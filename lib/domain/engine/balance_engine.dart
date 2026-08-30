@@ -56,7 +56,7 @@ class BalanceEngine {
         amt = (s['amountInPaise'] as num?)?.toInt() ?? 0;
         final status = s['status'] as String?;
         final isSettled = s['isSettled'] as bool? ?? false;
-        isPaid = isSettled || status == 'paid' || status == 'manual_settled' || status == 'completed';
+        isPaid = isSettled || status == 'paid' || status == 'confirmed' || status == 'manual_settled' || status == 'completed';
       } else if (s != null) {
         try {
           fromId = (s as dynamic).fromMemberId as String?;
@@ -64,7 +64,7 @@ class BalanceEngine {
           amt = (s as dynamic).amountInPaise as int? ?? 0;
           final isSettled = (s as dynamic).isSettled as bool? ?? false;
           final status = (s as dynamic).status?.toString();
-          isPaid = isSettled || status == 'paid' || status == 'PaymentStatus.paid' || status == 'manual_settled' || status == 'completed';
+          isPaid = isSettled || status == 'paid' || status == 'confirmed' || status == 'PaymentStatus.paid' || status == 'PaymentStatus.confirmed' || status == 'manual_settled' || status == 'completed';
         } catch (_) {}
       }
 

@@ -1135,5 +1135,12 @@ const Map<String, String> guTranslations = {
   'lang_category_indic': 'ભારતીય ભાષાઓ',
   'lang_category_east_asian': 'પૂર્વ એશિયન ભાષાઓ',
   'lang_search_hint': 'ભાષા અથવા લિપિ શોધો...',
+  'settlement_awaiting_confirmation': 'ચુકવણી મોકલી • પુષ્ટિની રાહ જોવાઈ રહી છે',
+  'settlement_not_received_btn': 'મળ્યું નથી',
+  'settlement_send_proof_btn': 'ચુકવણી પુરાવો મોકલો',
+  'settlement_review_proof_btn': 'પુરાવો તપાસો',
+  'settlement_proof_submitted_badge': 'પુરાવો સબમિટ કર્યો',
+  'settlement_disputed_badge': 'ચુકવણી વિવાદિત',
+  'settlement_history_title': 'ચુકવણી ઇતિહાસ',
 };
 

@@ -196,13 +196,13 @@ class ExpenseRepository {
     String? fromName,
     String? toName,
     String? note,
-    String paymentStatus = 'paid',
+    String paymentStatus = 'marked_paid',
     String? tripName,
     String? fromUserId,
     String? toUserId,
   }) async {
     final id = settlementId ?? 'stl_loc_${DateTime.now().millisecondsSinceEpoch}';
-    final isActuallyPaid = paymentStatus == 'paid' || paymentStatus == 'completed' || paymentStatus == 'manual_settled';
+    final isActuallyPaid = paymentStatus == 'confirmed' || paymentStatus == 'paid' || paymentStatus == 'completed' || paymentStatus == 'manual_settled';
     final payload = {
       'id': id,
       'tripId': tripId,
@@ -216,6 +216,7 @@ class ExpenseRepository {
       'note': note,
       'status': paymentStatus,
       'isSettled': isActuallyPaid,
+      'markedPaidAt': DateTime.now().toIso8601String(),
       'createdAt': DateTime.now().toIso8601String(),
     };
 
@@ -292,7 +293,7 @@ class ExpenseRepository {
     final settlements = storage.getSavedTripSettlements(tripId);
     final idx = settlements.indexWhere((s) => s['id'] == settlementId);
     if (idx != -1) {
-      settlements[idx]['status'] = 'paid';
+      settlements[idx]['status'] = 'confirmed';
       settlements[idx]['isSettled'] = true;
       settlements[idx]['confirmedAt'] = DateTime.now().toIso8601String();
       await storage.saveTripSettlements(tripId, settlements);
@@ -314,11 +315,11 @@ class ExpenseRepository {
     );
 
     await syncService.enqueueMutation(
-      MutationType.recordTripSettlement,
+      MutationType.confirmTripSettlement,
       {
-        'id': settlementId,
+        'settlementId': settlementId,
         'tripId': tripId,
-        'status': 'paid',
+        'status': 'confirmed',
         'isSettled': true,
         'verificationId': verificationId,
       },
@@ -351,6 +352,7 @@ class ExpenseRepository {
       settlements[idx]['status'] = 'disputed';
       settlements[idx]['isSettled'] = false;
       settlements[idx]['disputedAt'] = DateTime.now().toIso8601String();
+      settlements[idx]['disputeReason'] = reason;
       await storage.saveTripSettlements(tripId, settlements);
     }
 
@@ -371,15 +373,79 @@ class ExpenseRepository {
     );
 
     await syncService.enqueueMutation(
-      MutationType.recordTripSettlement,
+      MutationType.disputeTripSettlement,
       {
-        'id': settlementId,
+        'settlementId': settlementId,
         'tripId': tripId,
-        'status': 'disputed',
-        'isSettled': false,
+        'reason': reason,
         'verificationId': verificationId,
       },
       idempotencyKey: 'dsp_$verificationId',
+      backgroundApiClient: apiClient,
+    );
+  }
+
+  /// Submit payment proof for disputed or pending settlement (by Payer)
+  Future<void> submitSettlementProof({
+    required String tripId,
+    required String verificationId,
+    required String settlementId,
+    String? receiverName,
+    String? payerName,
+    int? amountInPaise,
+    String? transactionRef,
+    String? proofImageUrl,
+    String? proofNote,
+  }) async {
+    // 1. Update verification request status & proof in local storage
+    await storage.updatePaymentVerificationStatus(
+      verificationId,
+      'proof_submitted',
+      transactionRef: transactionRef,
+      proofImageUrl: proofImageUrl,
+      proofNote: proofNote,
+    );
+
+    // 2. Update settlement in local trip storage
+    final settlements = storage.getSavedTripSettlements(tripId);
+    final idx = settlements.indexWhere((s) => s['id'] == settlementId);
+    if (idx != -1) {
+      settlements[idx]['status'] = 'proof_submitted';
+      settlements[idx]['isSettled'] = false;
+      settlements[idx]['transactionRef'] = transactionRef;
+      settlements[idx]['proofImageUrl'] = proofImageUrl;
+      settlements[idx]['proofNote'] = proofNote;
+      settlements[idx]['proofSubmittedAt'] = DateTime.now().toIso8601String();
+      await storage.saveTripSettlements(tripId, settlements);
+    }
+
+    final rName = receiverName ?? 'Receiver';
+    final pName = payerName ?? 'Payer';
+    final amtStr = amountInPaise != null ? '₹${(amountInPaise / 100).toStringAsFixed(2)}' : 'payment';
+
+    _logLocalActivity(
+      tripId: tripId,
+      type: 'payment_proof_submitted',
+      description: '$pName submitted payment proof for $amtStr to $rName',
+      metadata: {
+        'verificationId': verificationId,
+        'settlementId': settlementId,
+        'transactionRef': transactionRef,
+        'status': 'proof_submitted',
+      },
+    );
+
+    await syncService.enqueueMutation(
+      MutationType.submitSettlementProof,
+      {
+        'settlementId': settlementId,
+        'tripId': tripId,
+        'transactionRef': transactionRef,
+        'proofImageUrl': proofImageUrl,
+        'proofNote': proofNote,
+        'verificationId': verificationId,
+      },
+      idempotencyKey: 'prf_$verificationId',
       backgroundApiClient: apiClient,
     );
   }

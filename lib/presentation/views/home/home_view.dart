@@ -63,21 +63,107 @@ class _HomeViewState extends State<HomeView> {
       if (!mounted) return;
       final notifService = context.read<NotificationService>();
       final currentUserId = context.read<AuthViewModel>().currentUser?.id;
-      if (event.actorId == currentUserId) return;
+      if (currentUserId == null) return;
 
-      if (event.type == 'settlement_recorded') {
-        final fromName = event.data['fromName'] as String? ?? 'A member';
-        final toName = event.data['toName'] as String? ?? 'you';
-        final amountPaise = event.data['amountInPaise'] as int? ?? 0;
-        final formatted = CurrencyFormatter.formatPaise(amountPaise, currencyCode: 'INR');
-        notifService.addNotification(
-          title: 'Payment Settled 🎉',
-          description: '$fromName settled $formatted with $toName.',
-          type: NotificationType.settlement,
-          route: '/trip/${event.tripId}',
-          actionLabel: 'View Trip',
-        );
-      } else if (event.type == 'expense_created') {
+      // Helper: extract notification sub-map or top-level data
+      Map<String, dynamic> notifData(RealtimeTripEvent e) {
+        if (e.data['notification'] is Map<String, dynamic>) {
+          return e.data['notification'] as Map<String, dynamic>;
+        }
+        return e.data;
+      }
+
+      // Helper: check if current user is the recipient of this notification
+      bool isRecipient(Map<String, dynamic> data) {
+        final rid = data['recipientUserId'] as String?;
+        return rid != null && rid == currentUserId;
+      }
+
+      // Helper: check if current user is the payer (for confirm/dispute notifications)
+      bool isPayer(Map<String, dynamic> data) {
+        final pid = data['payerUserId'] as String? ?? data['fromUserId'] as String?;
+        return pid != null && pid == currentUserId;
+      }
+
+      if (event.type == 'settlement_marked_paid') {
+        // Y receives notification that X marked payment as paid
+        final nd = notifData(event);
+        if (isRecipient(nd)) {
+          final fromName = nd['payerName'] as String? ?? nd['fromName'] as String? ?? 'A member';
+          final amountPaise = nd['amountInPaise'] as int? ?? 0;
+          final formatted = CurrencyFormatter.formatPaise(amountPaise, currencyCode: 'INR');
+          notifService.addNotification(
+            title: 'Payment Sent — Confirm Receipt 💸',
+            description: '$fromName marked $formatted as paid to you. Tap to confirm.',
+            type: NotificationType.settlement,
+            route: '/trip/${event.tripId}',
+            actionLabel: 'Confirm',
+            idempotencyKey: '${event.data['settlementId'] ?? event.eventId}_marked_paid',
+          );
+        }
+      } else if (event.type == 'settlement_recorded') {
+        // Legacy event type — handle same as settlement_marked_paid for backward compat
+        final nd = notifData(event);
+        if (isRecipient(nd)) {
+          final fromName = nd['payerName'] as String? ?? nd['fromName'] as String? ?? 'A member';
+          final amountPaise = nd['amountInPaise'] as int? ?? 0;
+          final formatted = CurrencyFormatter.formatPaise(amountPaise, currencyCode: 'INR');
+          notifService.addNotification(
+            title: 'Payment Received — Confirm 💸',
+            description: '$fromName marked $formatted as paid to you.',
+            type: NotificationType.settlement,
+            route: '/trip/${event.tripId}',
+            actionLabel: 'Confirm',
+            idempotencyKey: '${event.data['settlementId'] ?? event.eventId}_recorded',
+          );
+        }
+      } else if (event.type == 'settlement_confirmed') {
+        // X (payer) receives confirmation that Y acknowledged the payment
+        final nd = notifData(event);
+        if (isPayer(nd)) {
+          final toName = nd['receiverName'] as String? ?? nd['toName'] as String? ?? 'your friend';
+          final amountPaise = nd['amountInPaise'] as int? ?? 0;
+          final formatted = CurrencyFormatter.formatPaise(amountPaise, currencyCode: 'INR');
+          notifService.addNotification(
+            title: 'Payment Confirmed ✅',
+            description: '$toName confirmed receiving $formatted. Payment complete!',
+            type: NotificationType.settlement,
+            route: '/trip/${event.tripId}',
+            actionLabel: 'View',
+            idempotencyKey: '${event.data['settlementId'] ?? event.eventId}_confirmed',
+          );
+        }
+      } else if (event.type == 'settlement_disputed') {
+        // X (payer) receives dispute from Y
+        final nd = notifData(event);
+        if (isPayer(nd)) {
+          final toName = nd['receiverName'] as String? ?? nd['toName'] as String? ?? 'your friend';
+          notifService.addNotification(
+            title: 'Payment Disputed ⚠️',
+            description: '$toName raised an issue with your payment. Please review.',
+            type: NotificationType.settlement,
+            route: '/trip/${event.tripId}',
+            actionLabel: 'View',
+            idempotencyKey: '${event.data['settlementId'] ?? event.eventId}_disputed',
+          );
+        }
+      } else if (event.type == 'payment_proof_submitted') {
+        // Y (receiver) gets notified that X uploaded proof
+        final nd = notifData(event);
+        if (isRecipient(nd)) {
+          final fromName = nd['payerName'] as String? ?? nd['fromName'] as String? ?? 'A member';
+          notifService.addNotification(
+            title: 'Payment Proof Uploaded 📎',
+            description: '$fromName submitted payment proof. Review and confirm receipt.',
+            type: NotificationType.settlement,
+            route: '/trip/${event.tripId}',
+            actionLabel: 'Review',
+            idempotencyKey: '${event.data['settlementId'] ?? event.eventId}_proof',
+          );
+        }
+      } else if (event.type == 'expense_added' || event.type == 'expense_created') {
+        // Don't notify the person who added the expense
+        if (event.actorId == currentUserId) return;
         final title = event.data['title'] as String? ?? 'Expense';
         final paidByName = event.data['paidByName'] as String? ?? 'A friend';
         final amountPaise = event.data['amountInPaise'] as int? ?? 0;
@@ -90,6 +176,7 @@ class _HomeViewState extends State<HomeView> {
           actionLabel: 'View Expense',
         );
       } else if (event.type == 'member_joined') {
+        if (event.actorId == currentUserId) return;
         final memberName = event.data['memberName'] as String? ?? 'A friend';
         notifService.addNotification(
           title: 'New Member Joined ✈️',

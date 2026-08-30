@@ -24,6 +24,9 @@ enum MutationType {
   createJourneyMoment,
   deleteJourneyMoment,
   recordTripSettlement,
+  confirmTripSettlement,
+  disputeTripSettlement,
+  submitSettlementProof,
 }
 
 enum SyncStatus {
@@ -376,6 +379,21 @@ class SyncService {
       case MutationType.recordTripSettlement:
         final tripId = mutation.payload['tripId'] as String;
         await apiClient.post('/trips/$tripId/settlements', body: mutation.payload);
+        break;
+      case MutationType.confirmTripSettlement:
+        final tripId = mutation.payload['tripId'] as String;
+        final settlementId = mutation.payload['settlementId'] as String;
+        await apiClient.post('/trips/$tripId/settlements/$settlementId/confirm', body: mutation.payload);
+        break;
+      case MutationType.disputeTripSettlement:
+        final tripId = mutation.payload['tripId'] as String;
+        final settlementId = mutation.payload['settlementId'] as String;
+        await apiClient.post('/trips/$tripId/settlements/$settlementId/dispute', body: mutation.payload);
+        break;
+      case MutationType.submitSettlementProof:
+        final tripId = mutation.payload['tripId'] as String;
+        final settlementId = mutation.payload['settlementId'] as String;
+        await apiClient.post('/trips/$tripId/settlements/$settlementId/proof', body: mutation.payload);
         break;
     }
   }

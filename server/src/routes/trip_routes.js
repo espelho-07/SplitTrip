@@ -166,6 +166,58 @@ router.post('/:id/settlements', (req, res, next) => {
   }
 });
 
+// POST /api/trips/:id/settlements/:settlementId/confirm - Confirm settlement payment received
+router.post('/:id/settlements/:settlementId/confirm', (req, res, next) => {
+  try {
+    const settlementService = require('../services/settlement_service');
+    const result = settlementService.confirmSettlement(
+      req.user,
+      req.params.id,
+      req.params.settlementId,
+      realtimeHub
+    );
+    res.status(200).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// POST /api/trips/:id/settlements/:settlementId/dispute - Dispute settlement payment not received
+router.post('/:id/settlements/:settlementId/dispute', (req, res, next) => {
+  try {
+    const settlementService = require('../services/settlement_service');
+    const { reason } = req.body || {};
+    const result = settlementService.disputeSettlement(
+      req.user,
+      req.params.id,
+      req.params.settlementId,
+      { reason },
+      realtimeHub
+    );
+    res.status(200).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// POST /api/trips/:id/settlements/:settlementId/proof - Submit payment proof for disputed or pending settlement
+router.post('/:id/settlements/:settlementId/proof', (req, res, next) => {
+  try {
+    const settlementService = require('../services/settlement_service');
+    const { transactionRef, proofImageUrl, proofNote } = req.body || {};
+    const result = settlementService.submitPaymentProof(
+      req.user,
+      req.params.id,
+      req.params.settlementId,
+      { transactionRef, proofImageUrl, proofNote },
+      realtimeHub
+    );
+    res.status(200).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
 // GET /api/trips/:id/settlements - Get all recorded settlements
 router.get('/:id/settlements', (req, res, next) => {
   try {

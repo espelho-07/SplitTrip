@@ -1011,4 +1011,11 @@ const Map<String, String> koTranslations = {
   'lang_category_indic': '인도 언어',
   'lang_category_east_asian': '동아시아 언어',
   'lang_search_hint': '언어 또는 문자 검색...',
+  'settlement_awaiting_confirmation': '송금 완료 • 수령 확인 대기',
+  'settlement_not_received_btn': '미수령',
+  'settlement_send_proof_btn': '송금 영수증/증빙 전송',
+  'settlement_review_proof_btn': '증빙 검토',
+  'settlement_proof_submitted_badge': '증빙 제출됨',
+  'settlement_disputed_badge': '미수령 이의제기',
+  'settlement_history_title': '정산 내역',
 };

@@ -25,6 +25,7 @@ class AppNotificationItem {
   bool isRead;
   final String? route;
   final String? actionLabel;
+  final String? idempotencyKey;
 
   AppNotificationItem({
     required this.id,
@@ -35,6 +36,7 @@ class AppNotificationItem {
     this.isRead = false,
     this.route,
     this.actionLabel,
+    this.idempotencyKey,
   });
 
   Map<String, dynamic> toJson() => {
@@ -46,6 +48,7 @@ class AppNotificationItem {
     'isRead': isRead,
     'route': route,
     'actionLabel': actionLabel,
+    if (idempotencyKey != null) 'idempotencyKey': idempotencyKey,
   };
 
   factory AppNotificationItem.fromJson(Map<String, dynamic> json) {
@@ -63,6 +66,7 @@ class AppNotificationItem {
       isRead: json['isRead'] as bool? ?? false,
       route: json['route'] as String?,
       actionLabel: json['actionLabel'] as String?,
+      idempotencyKey: json['idempotencyKey'] as String?,
     );
   }
 
@@ -183,11 +187,19 @@ class NotificationService {
     required NotificationType type,
     String? route,
     String? actionLabel,
+    String? idempotencyKey,
   }) async {
     // Check preference
     if (type == NotificationType.expense && !_expenseNotificationsEnabled) return;
     if (type == NotificationType.trip && !_tripNotificationsEnabled) return;
     if (type == NotificationType.settlement && !_settlementNotificationsEnabled) return;
+
+    // Idempotency: skip if a notification with this key already exists
+    if (idempotencyKey != null && idempotencyKey.isNotEmpty) {
+      final existing = getNotifications();
+      final alreadyExists = existing.any((n) => n.idempotencyKey == idempotencyKey);
+      if (alreadyExists) return;
+    }
 
     final item = AppNotificationItem(
       id: 'notif_${DateTime.now().millisecondsSinceEpoch}',
@@ -198,6 +210,7 @@ class NotificationService {
       isRead: false,
       route: route,
       actionLabel: actionLabel,
+      idempotencyKey: idempotencyKey,
     );
 
     await _storage?.addNotification(item.toJson());
@@ -270,10 +283,30 @@ class NotificationService {
     final amtFormatted = '₹${(amountInPaise / 100.0).toStringAsFixed(amountInPaise % 100 == 0 ? 0 : 2)}';
     await addNotification(
       title: 'Payment Not Received ⚠️ • $tripName',
-      description: '$receiverName indicated they did not receive $amtFormatted for $tripName. Tap to review or retry payment.',
+      description: '$receiverName indicated they did not receive $amtFormatted for $tripName. Tap to submit proof or retry payment.',
       type: NotificationType.settlement,
       route: tripId != null ? '/trip/$tripId' : null,
-      actionLabel: 'Retry Payment',
+      actionLabel: 'Send Proof',
+    );
+  }
+
+  /// Dispatched when Payer submits payment proof (Receiver receives this notice)
+  Future<void> notifyPaymentProofSubmitted({
+    required String tripName,
+    required String payerName,
+    required String receiverName,
+    required int amountInPaise,
+    String? tripId,
+    String? transactionRef,
+  }) async {
+    final amtFormatted = '₹${(amountInPaise / 100.0).toStringAsFixed(amountInPaise % 100 == 0 ? 0 : 2)}';
+    final refStr = transactionRef != null && transactionRef.isNotEmpty ? ' (Ref: $transactionRef)' : '';
+    await addNotification(
+      title: 'Payment Proof Submitted 📄 • $tripName',
+      description: '$payerName submitted payment proof for $amtFormatted$refStr. Tap to review and confirm receipt.',
+      type: NotificationType.settlement,
+      route: tripId != null ? '/trip/$tripId' : null,
+      actionLabel: 'Review Proof',
     );
   }
 

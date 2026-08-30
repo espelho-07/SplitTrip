@@ -1011,4 +1011,11 @@ const Map<String, String> paTranslations = {
   'lang_category_indic': 'ਭਾਰਤੀ ਭਾਸ਼ਾਵਾਂ',
   'lang_category_east_asian': 'ਪੂਰਬੀ ਏਸ਼ੀਆਈ ਭਾਸ਼ਾਵਾਂ',
   'lang_search_hint': 'ਭਾਸ਼ਾ ਜਾਂ ਲਿਪੀ ਖੋਜੋ...',
+  'settlement_awaiting_confirmation': 'ਭੁਗਤਾਨ ਭੇਜਿਆ ਗਿਆ • ਪੁਸ਼ਟੀ ਦੀ ਉਡੀਕ',
+  'settlement_not_received_btn': 'ਨਹੀਂ ਮਿਲਿਆ',
+  'settlement_send_proof_btn': 'ਭੁਗਤਾਨ ਦਾ ਸਬੂਤ ਭੇਜੋ',
+  'settlement_review_proof_btn': 'ਸਬੂਤ ਦੀ ਸਮੀਖਿਆ ਕਰੋ',
+  'settlement_proof_submitted_badge': 'ਸਬੂਤ ਜਮ੍ਹਾ ਕੀਤਾ ਗਿਆ',
+  'settlement_disputed_badge': 'ਭੁਗਤਾਨ ਵਿਵਾਦਿਤ',
+  'settlement_history_title': 'ਨਿਪਟਾਰਾ ਇਤਿਹਾਸ',
 };

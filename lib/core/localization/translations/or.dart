@@ -1011,4 +1011,11 @@ const Map<String, String> orTranslations = {
   'lang_category_indic': 'ଭାରତୀୟ ଭାଷା',
   'lang_category_east_asian': 'ପୂର୍ବ ଏସୀୟ ଭାଷା',
   'lang_search_hint': 'ଭାଷା କିମ୍ବା ଲିପି ଖୋଜନ୍ତୁ...',
+  'settlement_awaiting_confirmation': 'ପେମେଣ୍ଟ ପଠାଯାଇଛି • ନିଶ୍ଚିତକରଣକୁ ଅପେକ୍ଷା',
+  'settlement_not_received_btn': 'ପାଇନାହିଁ',
+  'settlement_send_proof_btn': 'ପେମେଣ୍ଟ ପ୍ରମାଣ ପଠାନ୍ତୁ',
+  'settlement_review_proof_btn': 'ପ୍ରମାଣ ଯାଞ୍ଚ କରନ୍ତୁ',
+  'settlement_proof_submitted_badge': 'ପ୍ରମାଣ ଦାଖଲ ହୋଇଛି',
+  'settlement_disputed_badge': 'ପେମେଣ୍ଟ ବିବାଦୀୟ',
+  'settlement_history_title': 'ସମାଧାନ ଇତିହାସ',
 };

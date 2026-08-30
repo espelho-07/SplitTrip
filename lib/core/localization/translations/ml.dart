@@ -1011,4 +1011,11 @@ const Map<String, String> mlTranslations = {
   'lang_category_indic': 'ഇന്ത്യൻ ഭാഷകൾ',
   'lang_category_east_asian': 'കിഴക്കൻ ഏഷ്യൻ ഭാഷകൾ',
   'lang_search_hint': 'ഭാഷയോ അക്ഷരമാലയോ തിരയുക...',
+  'settlement_awaiting_confirmation': 'പേയ്‌മെന്റ് അയച്ചു • സ്ഥിരീകരണത്തിനായി കാത്തിരിക്കുന്നു',
+  'settlement_not_received_btn': 'ലഭിച്ചില്ല',
+  'settlement_send_proof_btn': 'പേയ്‌മെന്റ് തെളിവ് അയയ്ക്കുക',
+  'settlement_review_proof_btn': 'തെളിവ് പരിശോധിക്കുക',
+  'settlement_proof_submitted_badge': 'തെളിവ് സമർപ്പിച്ചു',
+  'settlement_disputed_badge': 'പേയ്‌മെന്റ് തർക്കത്തിൽ',
+  'settlement_history_title': 'സെറ്റിൽമെന്റ് ചരിത്രം',
 };

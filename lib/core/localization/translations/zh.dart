@@ -1011,4 +1011,11 @@ const Map<String, String> zhTranslations = {
   'lang_category_indic': '印度各语言',
   'lang_category_east_asian': '东亚各语言',
   'lang_search_hint': '搜索语言或文字...',
+  'settlement_awaiting_confirmation': '已付款 • 等待收款确认',
+  'settlement_not_received_btn': '未收到',
+  'settlement_send_proof_btn': '发送付款凭证',
+  'settlement_review_proof_btn': '查看付款凭证',
+  'settlement_proof_submitted_badge': '凭证已提交',
+  'settlement_disputed_badge': '付款存疑',
+  'settlement_history_title': '结算历史',
 };

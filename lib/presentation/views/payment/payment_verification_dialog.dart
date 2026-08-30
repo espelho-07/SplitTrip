@@ -415,9 +415,27 @@ class PaymentDisputeAlertSheet extends StatelessWidget {
           ),
           const SizedBox(height: 24),
 
+          // Send Payment Proof
+          AppButton(
+            text: 'Send Payment Proof',
+            icon: Icons.upload_file_rounded,
+            isFullWidth: true,
+            onPressed: () {
+              Navigator.pop(context);
+              PaymentProofSheet.show(
+                context,
+                request: request,
+                isPayer: true,
+                onHandled: onHandled,
+              );
+            },
+          ),
+          const SizedBox(height: 10),
+
           // Retry UPI Payment
           AppButton(
             text: 'Retry UPI Payment',
+            variant: AppButtonVariant.secondary,
             icon: Icons.bolt_rounded,
             isFullWidth: true,
             onPressed: () {
@@ -460,7 +478,7 @@ class PaymentDisputeAlertSheet extends StatelessWidget {
           // Dismiss
           AppButton(
             text: 'Dismiss / Contact ${request.receiverName}',
-            variant: AppButtonVariant.secondary,
+            variant: AppButtonVariant.ghost,
             isFullWidth: true,
             onPressed: () {
               final storage = context.read<LocalStorageService>();
@@ -471,6 +489,427 @@ class PaymentDisputeAlertSheet extends StatelessWidget {
           ),
           const SizedBox(height: 10),
         ],
+      ),
+    );
+  }
+}
+
+/// Modal sheet for submitting or reviewing payment proof (UTR / Note / Screenshot).
+class PaymentProofSheet extends StatefulWidget {
+  final PaymentVerificationRequest request;
+  final bool isPayer;
+  final VoidCallback? onHandled;
+
+  const PaymentProofSheet({
+    super.key,
+    required this.request,
+    this.isPayer = true,
+    this.onHandled,
+  });
+
+  static Future<bool?> show(
+    BuildContext context, {
+    required PaymentVerificationRequest request,
+    bool isPayer = true,
+    VoidCallback? onHandled,
+  }) {
+    return showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => PaymentProofSheet(
+        request: request,
+        isPayer: isPayer,
+        onHandled: onHandled,
+      ),
+    );
+  }
+
+  @override
+  State<PaymentProofSheet> createState() => _PaymentProofSheetState();
+}
+
+class _PaymentProofSheetState extends State<PaymentProofSheet> {
+  final TextEditingController _refController = TextEditingController();
+  final TextEditingController _noteController = TextEditingController();
+  bool _isProcessing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _refController.text = widget.request.transactionRef ?? widget.request.paymentReference ?? '';
+    _noteController.text = widget.request.proofNote ?? widget.request.note ?? '';
+  }
+
+  @override
+  void dispose() {
+    _refController.dispose();
+    _noteController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleSubmitProof() async {
+    final ref = _refController.text.trim();
+    if (ref.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a Transaction Reference / UTR number')),
+      );
+      HapticHelper.heavy();
+      return;
+    }
+
+    setState(() => _isProcessing = true);
+    HapticHelper.success();
+
+    final expenseRepo = context.read<ExpenseRepository>();
+    final notifService = context.read<NotificationService>();
+    final tripDetailVm = Provider.of<TripDetailViewModel?>(context, listen: false);
+    final authVm = Provider.of<AuthViewModel?>(context, listen: false);
+    final currentUserId = authVm?.currentUser?.id ?? '';
+
+    try {
+      await expenseRepo.submitSettlementProof(
+        tripId: widget.request.tripId,
+        verificationId: widget.request.id,
+        settlementId: widget.request.settlementId,
+        receiverName: widget.request.receiverName,
+        payerName: widget.request.payerName,
+        amountInPaise: widget.request.amountInPaise,
+        transactionRef: ref,
+        proofNote: _noteController.text.trim(),
+      );
+
+      await notifService.notifyPaymentProofSubmitted(
+        tripName: widget.request.tripName,
+        payerName: widget.request.payerName,
+        receiverName: widget.request.receiverName,
+        amountInPaise: widget.request.amountInPaise,
+        tripId: widget.request.tripId,
+        transactionRef: ref,
+      );
+
+      if (tripDetailVm != null && tripDetailVm.trip?.id == widget.request.tripId) {
+        await tripDetailVm.refresh(currentUserId);
+      }
+
+      if (mounted) {
+        Navigator.pop(context, true);
+        widget.onHandled?.call();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Payment proof submitted to ${widget.request.receiverName} ✓'),
+            backgroundColor: const Color(0xFF14B8A6),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to submit proof: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleReceiverConfirm() async {
+    setState(() => _isProcessing = true);
+    HapticHelper.success();
+
+    final expenseRepo = context.read<ExpenseRepository>();
+    final notifService = context.read<NotificationService>();
+    final tripDetailVm = Provider.of<TripDetailViewModel?>(context, listen: false);
+    final authVm = Provider.of<AuthViewModel?>(context, listen: false);
+    final currentUserId = authVm?.currentUser?.id ?? '';
+
+    try {
+      await expenseRepo.confirmSettlementVerification(
+        tripId: widget.request.tripId,
+        verificationId: widget.request.id,
+        settlementId: widget.request.settlementId,
+        receiverName: widget.request.receiverName,
+        payerName: widget.request.payerName,
+        amountInPaise: widget.request.amountInPaise,
+      );
+
+      await notifService.notifyPaymentConfirmed(
+        tripName: widget.request.tripName,
+        payerName: widget.request.payerName,
+        receiverName: widget.request.receiverName,
+        amountInPaise: widget.request.amountInPaise,
+        tripId: widget.request.tripId,
+      );
+
+      if (tripDetailVm != null && tripDetailVm.trip?.id == widget.request.tripId) {
+        await tripDetailVm.refresh(currentUserId);
+      }
+
+      if (mounted) {
+        Navigator.pop(context, true);
+        widget.onHandled?.call();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Payment of ₹${widget.request.amountInRupees.toStringAsFixed(widget.request.amountInPaise % 100 == 0 ? 0 : 2)} confirmed and settled ✓'),
+            backgroundColor: const Color(0xFF14B8A6),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to confirm settlement: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleReceiverDispute() async {
+    setState(() => _isProcessing = true);
+    HapticHelper.heavy();
+
+    final expenseRepo = context.read<ExpenseRepository>();
+    final notifService = context.read<NotificationService>();
+    final tripDetailVm = Provider.of<TripDetailViewModel?>(context, listen: false);
+    final authVm = Provider.of<AuthViewModel?>(context, listen: false);
+    final currentUserId = authVm?.currentUser?.id ?? '';
+
+    try {
+      await expenseRepo.disputeSettlementVerification(
+        tripId: widget.request.tripId,
+        verificationId: widget.request.id,
+        settlementId: widget.request.settlementId,
+        receiverName: widget.request.receiverName,
+        payerName: widget.request.payerName,
+        amountInPaise: widget.request.amountInPaise,
+        reason: 'Proof reviewed but payment not found in account',
+      );
+
+      await notifService.notifyPaymentDisputed(
+        tripName: widget.request.tripName,
+        payerName: widget.request.payerName,
+        receiverName: widget.request.receiverName,
+        amountInPaise: widget.request.amountInPaise,
+        tripId: widget.request.tripId,
+      );
+
+      if (tripDetailVm != null && tripDetailVm.trip?.id == widget.request.tripId) {
+        await tripDetailVm.refresh(currentUserId);
+      }
+
+      if (mounted) {
+        Navigator.pop(context, false);
+        widget.onHandled?.call();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${widget.request.payerName} notified that payment is still not received.'),
+            backgroundColor: Colors.orange.shade800,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update: $e')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final formattedAmt = CurrencyFormatter.formatPaise(widget.request.amountInPaise, currencyCode: 'INR');
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF0F1418) : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+          border: Border.all(color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0)),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white24 : Colors.black12,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF14B8A6).withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.receipt_long_rounded, color: Color(0xFF14B8A6), size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.isPayer ? 'Submit Payment Proof' : 'Review Payment Proof',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
+                        ),
+                      ),
+                      Text(
+                        '$formattedAmt for "${widget.request.tripName}"',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            if (widget.isPayer) ...[
+              Text(
+                'Transaction Reference / UTR (12 digits)',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? AppColors.darkTextSecondary : const Color(0xFF475569),
+                ),
+              ),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _refController,
+                style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+                decoration: InputDecoration(
+                  hintText: 'e.g. 423589123456 or UPI ref',
+                  filled: true,
+                  fillColor: isDark ? const Color(0xFF161D24) : const Color(0xFFF1F5F9),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                  prefixIcon: const Icon(Icons.numbers_rounded, size: 20),
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              Text(
+                'Note / Bank Remarks (Optional)',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? AppColors.darkTextSecondary : const Color(0xFF475569),
+                ),
+              ),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _noteController,
+                maxLines: 2,
+                style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+                decoration: InputDecoration(
+                  hintText: 'e.g. Sent via Google Pay at 10:15 PM',
+                  filled: true,
+                  fillColor: isDark ? const Color(0xFF161D24) : const Color(0xFFF1F5F9),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              AppButton(
+                text: 'Submit Proof to ${widget.request.receiverName}',
+                icon: Icons.check_circle_outline_rounded,
+                isFullWidth: true,
+                isLoading: _isProcessing,
+                onPressed: _handleSubmitProof,
+              ),
+            ] else ...[
+              // Receiver view
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF161D24) : const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Payer', style: TextStyle(fontSize: 12, color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B))),
+                        Text(widget.request.payerName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                      ],
+                    ),
+                    const Divider(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Amount', style: TextStyle(fontSize: 12, color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B))),
+                        Text(formattedAmt, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF14B8A6))),
+                      ],
+                    ),
+                    if (widget.request.transactionRef != null && widget.request.transactionRef!.isNotEmpty) ...[
+                      const Divider(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Ref / UTR', style: TextStyle(fontSize: 12, color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B))),
+                          SelectableText(
+                            widget.request.transactionRef!,
+                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, fontFamily: 'monospace'),
+                          ),
+                        ],
+                      ),
+                    ],
+                    if (widget.request.proofNote != null && widget.request.proofNote!.isNotEmpty) ...[
+                      const Divider(height: 16),
+                      Text('Payer Note:', style: TextStyle(fontSize: 12, color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B))),
+                      const SizedBox(height: 4),
+                      Text(widget.request.proofNote!, style: const TextStyle(fontSize: 13, fontStyle: FontStyle.italic)),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              AppButton(
+                text: 'Yes, Received ✓',
+                icon: Icons.check_circle_rounded,
+                isFullWidth: true,
+                isLoading: _isProcessing,
+                onPressed: _handleReceiverConfirm,
+              ),
+              const SizedBox(height: 10),
+
+              AppButton(
+                text: 'Still Not Received',
+                variant: AppButtonVariant.secondary,
+                isFullWidth: true,
+                onPressed: _isProcessing ? null : _handleReceiverDispute,
+              ),
+            ],
+            const SizedBox(height: 10),
+          ],
+        ),
       ),
     );
   }
@@ -496,7 +935,11 @@ class PaymentVerificationManager {
       if (pendingReceiver.isNotEmpty) {
         final req = PaymentVerificationRequest.fromJson(pendingReceiver.first);
         if (context.mounted) {
-          await PaymentVerificationSheet.show(context, request: req);
+          if (req.isProofSubmitted) {
+            await PaymentProofSheet.show(context, request: req, isPayer: false);
+          } else {
+            await PaymentVerificationSheet.show(context, request: req);
+          }
           return;
         }
       }

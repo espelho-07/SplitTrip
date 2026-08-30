@@ -213,4 +213,65 @@ router.get('/upi/:userId', authMiddleware, (req, res, next) => {
   }
 });
 
+// POST /api/auth/fcm-token — Register/update FCM token for push notifications
+router.post('/fcm-token', authMiddleware, (req, res, next) => {
+  try {
+    const { token, deviceId, platform } = req.body;
+    if (!token) return res.status(400).json({ error: { code: 'MISSING_TOKEN', message: 'FCM token required' } });
+
+    const db = require('../db/database').db;
+    const userId = req.user.id;
+    const now = new Date().toISOString();
+
+    // Upsert: update existing token for this device or insert new one
+    const existing = db.findOne('user_fcm_tokens', (r) => r.userId === userId && r.deviceId === deviceId);
+    if (existing) {
+      db.update('user_fcm_tokens', existing.id, { token, updatedAt: now, deleted: false });
+    } else {
+      const { v4: uuidv4 } = require('uuid');
+      db.insert('user_fcm_tokens', {
+        id: uuidv4(),
+        userId,
+        token,
+        deviceId: deviceId || `device_${Date.now()}`,
+        platform: platform || 'android',
+        createdAt: now,
+        updatedAt: now,
+        deleted: false,
+      });
+    }
+
+    res.status(200).json({ data: { registered: true } });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// POST /api/auth/fcm-token/delete — Unregister FCM token (on logout)
+router.post('/fcm-token/delete', authMiddleware, (req, res, next) => {
+  try {
+    const { token } = req.body;
+    const db = require('../db/database').db;
+    const userId = req.user.id;
+
+    if (token) {
+      const record = db.findOne('user_fcm_tokens', (r) => r.userId === userId && r.token === token);
+      if (record) {
+        db.update('user_fcm_tokens', record.id, { deleted: true, deletedAt: new Date().toISOString() });
+      }
+    } else {
+      // Remove all tokens for this user on explicit logout
+      const records = db.find('user_fcm_tokens', (r) => r.userId === userId && !r.deleted);
+      const now = new Date().toISOString();
+      for (const record of records) {
+        db.update('user_fcm_tokens', record.id, { deleted: true, deletedAt: now });
+      }
+    }
+
+    res.status(200).json({ data: { unregistered: true } });
+  } catch (e) {
+    next(e);
+  }
+});
+
 module.exports = router;

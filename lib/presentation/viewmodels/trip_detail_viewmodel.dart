@@ -28,6 +28,7 @@ class TripDetailViewModel extends ChangeNotifier {
   List<JourneyMoment> _journeyMoments = [];
   bool _isLoading = false;
   bool _isLoadingActivity = false;
+  bool _isCompleting = false;
   String? _errorMessage;
   String? _currentUserId;
 
@@ -58,6 +59,7 @@ class TripDetailViewModel extends ChangeNotifier {
   List<JourneyMoment> get journeyMoments => _journeyMoments;
   bool get isLoading => _isLoading;
   bool get isLoadingActivity => _isLoadingActivity;
+  bool get isCompleting => _isCompleting;
   String? get errorMessage => _errorMessage;
   String get searchQuery => _searchQuery;
   String? get selectedCategory => _selectedCategory;
@@ -105,16 +107,97 @@ class TripDetailViewModel extends ChangeNotifier {
     _realtimeSubscription = realtimeClient!.events.listen((event) {
       if (_trip == null || event.tripId != _trip!.id) return;
 
-      // 1. Settlement recipient notification
-      if (event.type == 'settlement_recorded' && event.data['notification'] is Map<String, dynamic>) {
-        final notif = event.data['notification'] as Map<String, dynamic>;
-        final recipientUserId = notif['recipientUserId'] as String?;
-        if (recipientUserId != null && recipientUserId == _currentUserId) {
-          _notificationEventController.add(notif);
+      // ── Settlement lifecycle events (Bug 1 fix) ─────────────────────────────
+      // Each event carries a 'notification' sub-map with recipientUserId.
+      // Only emit to the notification stream when the current user IS the recipient.
+
+      if (event.type == 'settlement_marked_paid' ||
+          event.type == 'settlement_recorded') {
+        // Receiver (toUser) must confirm the payment
+        final notifData = _extractNotifData(event);
+        if (notifData != null) {
+          final recipientUserId = notifData['recipientUserId'] as String?;
+          if (recipientUserId != null && recipientUserId == _currentUserId) {
+            _notificationEventController.add({
+              ...notifData,
+              'eventType': event.type,
+            });
+          }
+        }
+        _recomputeLocalBalances();
+        _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
+        notifyListeners();
+        return;
+      }
+
+      if (event.type == 'settlement_confirmed') {
+        // Payer (fromUser) gets notified that receiver confirmed
+        final notifData = _extractNotifData(event);
+        if (notifData != null) {
+          final recipientUserId = notifData['payerUserId'] as String? ??
+              notifData['recipientUserId'] as String?;
+          if (recipientUserId != null && recipientUserId == _currentUserId) {
+            _notificationEventController.add({
+              ...notifData,
+              'eventType': event.type,
+            });
+          }
+        }
+        _recomputeLocalBalances();
+        _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
+        notifyListeners();
+        return;
+      }
+
+      if (event.type == 'settlement_disputed') {
+        // Payer (fromUser) gets notified that receiver disputed
+        final notifData = _extractNotifData(event);
+        if (notifData != null) {
+          final recipientUserId = notifData['payerUserId'] as String? ??
+              notifData['recipientUserId'] as String?;
+          if (recipientUserId != null && recipientUserId == _currentUserId) {
+            _notificationEventController.add({
+              ...notifData,
+              'eventType': event.type,
+            });
+          }
+        }
+        _recomputeLocalBalances();
+        _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
+        notifyListeners();
+        return;
+      }
+
+      if (event.type == 'payment_proof_submitted') {
+        // Receiver gets notified that payer submitted proof
+        final notifData = _extractNotifData(event);
+        if (notifData != null) {
+          final recipientUserId = notifData['recipientUserId'] as String?;
+          if (recipientUserId != null && recipientUserId == _currentUserId) {
+            _notificationEventController.add({
+              ...notifData,
+              'eventType': event.type,
+            });
+          }
+        }
+        notifyListeners();
+        return;
+      }
+
+      // ── Trip lifecycle events ───────────────────────────────────────────────
+      if (event.type == 'trip_completed' || event.type == 'lifecycle_updated') {
+        if (event.data['trip'] is Map<String, dynamic>) {
+          _trip = Trip.fromJson(event.data['trip'] as Map<String, dynamic>);
+          // Also persist to local cache so it survives app restart
+          tripRepo.getTripById(_trip!.id); // triggers cache update
+          _recomputeLocalBalances();
+          _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
+          notifyListeners();
+          return;
         }
       }
 
-      // 2. Direct In-Memory Delta Application (< 1ms, 0 extra network calls)
+      // ── Expense delta events (in-memory instant apply) ──────────────────────
       if (event.type == 'expense_added') {
         if (event.data['expense'] is Map<String, dynamic>) {
           final expense = Expense.fromJson(event.data['expense'] as Map<String, dynamic>);
@@ -148,7 +231,7 @@ class TripDetailViewModel extends ChangeNotifier {
           notifyListeners();
           return;
         }
-      } else if (event.type == 'member_joined' || event.type == 'lifecycle_updated') {
+      } else if (event.type == 'member_joined') {
         if (event.data['trip'] is Map<String, dynamic>) {
           _trip = Trip.fromJson(event.data['trip'] as Map<String, dynamic>);
           _recomputeLocalBalances();
@@ -156,11 +239,6 @@ class TripDetailViewModel extends ChangeNotifier {
           notifyListeners();
           return;
         }
-      } else if (event.type == 'settlement_recorded') {
-        _recomputeLocalBalances();
-        _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
-        notifyListeners();
-        return;
       }
 
       if (_currentUserId != null) {
@@ -168,6 +246,20 @@ class TripDetailViewModel extends ChangeNotifier {
         notifyListeners();
       }
     });
+  }
+
+  /// Extracts the notification payload from a realtime event.
+  /// Supports both flat data and nested 'notification' sub-maps.
+  Map<String, dynamic>? _extractNotifData(RealtimeTripEvent event) {
+    if (event.data['notification'] is Map<String, dynamic>) {
+      return event.data['notification'] as Map<String, dynamic>;
+    }
+    // Fallback: treat the top-level data as the notification payload
+    if (event.data.containsKey('recipientUserId') ||
+        event.data.containsKey('payerName')) {
+      return event.data;
+    }
+    return null;
   }
 
   void _recomputeLocalBalances() {
@@ -353,21 +445,31 @@ class TripDetailViewModel extends ChangeNotifier {
     }
   }
 
+  /// Atomically completes the trip via direct server call.
+  /// Uses the /complete endpoint (not the sync queue) so the server persists
+  /// lifecycleState: 'completed' immediately — survives app restarts.
   Future<void> completeTrip(String currentUserId) async {
     if (_trip == null) return;
+    _isCompleting = true;
+    _errorMessage = null;
+    notifyListeners();
+
     try {
-      _trip = await tripRepo.updateLifecycle(
+      // Call the atomic server completion endpoint directly (not via sync queue)
+      final completedTrip = await tripRepo.completeTrip(
         tripId: _trip!.id,
-        newLifecycle: TripLifecycle.completed,
+        completionMode: 'NORMAL',
       );
+      _trip = completedTrip;
       _balanceSummary = await expenseRepo.getBalanceSummary(
-        trip: _trip!,
+        trip: completedTrip,
         currentUserId: currentUserId,
       );
       _activityLogs = tripRepo.getCachedActivityLogs(_trip!.id);
-      notifyListeners();
     } catch (e) {
       _errorMessage = KithErrorFormatter.format(e);
+    } finally {
+      _isCompleting = false;
       notifyListeners();
     }
   }

@@ -15,10 +15,13 @@ class PaymentVerificationRequest {
   final String? paymentReference;
   final String? recipientUpiId;
   final String? note;
-  final String status; // 'pending_verification', 'confirmed', 'disputed', 'cancelled'
+  final String status; // 'pending_verification', 'confirmed', 'disputed', 'proof_submitted', 'cancelled'
   final DateTime markedAt;
   final DateTime? respondedAt;
   final String? disputeReason;
+  final String? transactionRef;
+  final String? proofImageUrl;
+  final String? proofNote;
 
   const PaymentVerificationRequest({
     required this.id,
@@ -40,11 +43,15 @@ class PaymentVerificationRequest {
     required this.markedAt,
     this.respondedAt,
     this.disputeReason,
+    this.transactionRef,
+    this.proofImageUrl,
+    this.proofNote,
   });
 
-  bool get isPending => status == 'pending_verification';
-  bool get isConfirmed => status == 'confirmed';
-  bool get isDisputed => status == 'disputed';
+  bool get isPending => status == 'pending_verification' || status == 'marked_paid';
+  bool get isConfirmed => status == 'confirmed' || status == 'paid' || status == 'settled';
+  bool get isDisputed => status == 'disputed' || status == 'not_received';
+  bool get isProofSubmitted => status == 'proof_submitted';
   bool get isCancelled => status == 'cancelled';
 
   double get amountInRupees => amountInPaise / 100.0;
@@ -69,6 +76,9 @@ class PaymentVerificationRequest {
     DateTime? markedAt,
     DateTime? respondedAt,
     String? disputeReason,
+    String? transactionRef,
+    String? proofImageUrl,
+    String? proofNote,
   }) {
     return PaymentVerificationRequest(
       id: id ?? this.id,
@@ -90,6 +100,9 @@ class PaymentVerificationRequest {
       markedAt: markedAt ?? this.markedAt,
       respondedAt: respondedAt ?? this.respondedAt,
       disputeReason: disputeReason ?? this.disputeReason,
+      transactionRef: transactionRef ?? this.transactionRef,
+      proofImageUrl: proofImageUrl ?? this.proofImageUrl,
+      proofNote: proofNote ?? this.proofNote,
     );
   }
 
@@ -113,6 +126,9 @@ class PaymentVerificationRequest {
     'markedAt': markedAt.toIso8601String(),
     'respondedAt': respondedAt?.toIso8601String(),
     'disputeReason': disputeReason,
+    'transactionRef': transactionRef,
+    'proofImageUrl': proofImageUrl,
+    'proofNote': proofNote,
   };
 
   factory PaymentVerificationRequest.fromJson(Map<String, dynamic> json) {
@@ -140,6 +156,9 @@ class PaymentVerificationRequest {
           ? DateTime.tryParse(json['respondedAt'] as String)
           : null,
       disputeReason: json['disputeReason'] as String?,
+      transactionRef: json['transactionRef'] as String?,
+      proofImageUrl: json['proofImageUrl'] as String?,
+      proofNote: json['proofNote'] as String?,
     );
   }
 }

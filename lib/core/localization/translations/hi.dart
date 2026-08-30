@@ -1135,5 +1135,12 @@ const Map<String, String> hiTranslations = {
   'lang_category_indic': 'भारतीय भाषाएं',
   'lang_category_east_asian': 'पूर्वी एशियाई भाषाएं',
   'lang_search_hint': 'भाषा या लिपि खोजें...',
+  'settlement_awaiting_confirmation': 'भुगतान भेजा गया • पुष्टि की प्रतीक्षा है',
+  'settlement_not_received_btn': 'प्राप्त नहीं हुआ',
+  'settlement_send_proof_btn': 'भुगतान प्रमाण भेजें',
+  'settlement_review_proof_btn': 'प्रमाण की समीक्षा करें',
+  'settlement_proof_submitted_badge': 'प्रमाण प्रस्तुत किया गया',
+  'settlement_disputed_badge': 'भुगतान विवादित',
+  'settlement_history_title': 'निपटान इतिहास',
 };
 

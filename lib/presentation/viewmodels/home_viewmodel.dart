@@ -47,15 +47,26 @@ class HomeViewModel extends ChangeNotifier {
           final trip = Trip.fromJson(event.data['trip'] as Map<String, dynamic>);
           addTripLocally(trip, _currentUserId!);
         }
-      } else if (event.type == 'member_joined' || event.type == 'lifecycle_updated') {
+      } else if (event.type == 'member_joined' ||
+          event.type == 'lifecycle_updated' ||
+          event.type == 'trip_completed') {
+        // trip_completed carries the fully updated trip object — update in place
+        // so the UI immediately moves the trip to "All Trips / Completed" section.
         if (event.data['trip'] is Map<String, dynamic>) {
           final trip = Trip.fromJson(event.data['trip'] as Map<String, dynamic>);
           _updateTripInPlace(trip, _currentUserId!);
+        } else {
+          // No trip object in payload — do a background refresh
+          _computeLocalBalances(_trips, _currentUserId!);
+          notifyListeners();
         }
       } else if (event.type == 'expense_added' ||
           event.type == 'expense_updated' ||
           event.type == 'expense_deleted' ||
-          event.type == 'settlement_recorded') {
+          event.type == 'settlement_recorded' ||
+          event.type == 'settlement_marked_paid' ||
+          event.type == 'settlement_confirmed' ||
+          event.type == 'settlement_disputed') {
         // Recompute balances locally from updated cache
         _computeLocalBalances(_trips, _currentUserId!);
         notifyListeners();

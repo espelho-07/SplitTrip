@@ -1011,4 +1011,11 @@ const Map<String, String> knTranslations = {
   'lang_category_indic': 'ಭಾರತೀಯ ಭಾಷೆಗಳು',
   'lang_category_east_asian': 'ಪೂರ್ವ ಏಷ್ಯಾದ ಭಾಷೆಗಳು',
   'lang_search_hint': 'ಭಾಷೆ ಅಥವಾ ಲಿಪಿಯನ್ನು ಹುಡುಕಿ...',
+  'settlement_awaiting_confirmation': 'ಪಾವತಿ ಕಳುಹಿಸಲಾಗಿದೆ • ದೃಢೀಕರಣಕ್ಕಾಗಿ ಕಾಯಲಾಗುತ್ತಿದೆ',
+  'settlement_not_received_btn': 'ಸ್ವೀಕರಿಸಲಾಗಿಲ್ಲ',
+  'settlement_send_proof_btn': 'ಪಾವತಿ ಪುರಾವೆ ಕಳುಹಿಸಿ',
+  'settlement_review_proof_btn': 'ಪುರಾವೆ ಪರಿಶೀಲಿಸಿ',
+  'settlement_proof_submitted_badge': 'ಪುರಾವೆ ಸಲ್ಲಿಸಲಾಗಿದೆ',
+  'settlement_disputed_badge': 'ಪಾವತಿ ವಿವಾದದಲ್ಲಿದೆ',
+  'settlement_history_title': 'ಇತ್ಯರ್ಥ ಇತಿಹಾಸ',
 };

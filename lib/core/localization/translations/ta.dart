@@ -1011,4 +1011,11 @@ const Map<String, String> taTranslations = {
   'lang_category_indic': 'இந்திய மொழிகள்',
   'lang_category_east_asian': 'கிழக்கு ஆசிய மொழிகள்',
   'lang_search_hint': 'மொழி அல்லது எழுத்துருவைத் தேடுங்கள்...',
+  'settlement_awaiting_confirmation': 'பணம் அனுப்பப்பட்டது • உறுதிப்படுத்தல் நிலுவையில் உள்ளது',
+  'settlement_not_received_btn': 'பெறவில்லை',
+  'settlement_send_proof_btn': 'பணம் செலுத்திய சான்றை அனுப்புக',
+  'settlement_review_proof_btn': 'சான்றை மதிப்பாய்வு செய்க',
+  'settlement_proof_submitted_badge': 'சான்று சமர்ப்பிக்கப்பட்டது',
+  'settlement_disputed_badge': 'பணம் செலுத்துவதில் சர்ச்சை',
+  'settlement_history_title': 'செட்டில்மென்ட் வரலாறு',
 };

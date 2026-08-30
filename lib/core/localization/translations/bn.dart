@@ -1011,4 +1011,11 @@ const Map<String, String> bnTranslations = {
   'lang_category_indic': 'ভারতীয় ভাষা',
   'lang_category_east_asian': 'পূর্ব এশীয় ভাষা',
   'lang_search_hint': 'ভাষা বা লিপি অনুসন্ধান করুন...',
+  'settlement_awaiting_confirmation': 'টাকা পাঠানো হয়েছে • নিশ্চিতকরণের অপেক্ষায়',
+  'settlement_not_received_btn': 'পাইনি',
+  'settlement_send_proof_btn': 'পেমেন্টের প্রমাণ পাঠান',
+  'settlement_review_proof_btn': 'প্রমাণ পর্যালোচনা করুন',
+  'settlement_proof_submitted_badge': 'প্রমাণ জমা দেওয়া হয়েছে',
+  'settlement_disputed_badge': 'পেমেন্ট বিরোধপূর্ণ',
+  'settlement_history_title': 'নিষ্পত্তির ইতিহাস',
 };

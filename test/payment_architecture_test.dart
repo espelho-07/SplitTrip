@@ -346,9 +346,20 @@ void main() {
         ],
       );
 
+      final apiClient = ApiClient();
+      final syncService = SyncService(storage);
+      final expenseRepo = ExpenseRepository(
+        storage: storage,
+        syncService: syncService,
+        apiClient: apiClient,
+      );
+
       await tester.pumpWidget(
-        Provider<LocalStorageService>.value(
-          value: storage,
+        MultiProvider(
+          providers: [
+            Provider<LocalStorageService>.value(value: storage),
+            Provider<ExpenseRepository>.value(value: expenseRepo),
+          ],
           child: MaterialApp(
             localizationsDelegates: const [
               AppLocalizations.delegate,
@@ -410,7 +421,7 @@ void main() {
       // Verify activity logged
       final activities = storage.getSavedActivityLogs('trip_100');
       expect(activities.length, 1);
-      expect(activities.first['description'], 'Darpan paid ₹1250.00 to Rohan');
+      expect(activities.first['description'], contains('Darpan marked ₹1250.00 as paid to Rohan'));
 
       // Re-recording with SAME ID does NOT duplicate (Idempotency)
       await expenseRepo.recordSettlement(

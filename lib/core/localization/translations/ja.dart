@@ -1011,4 +1011,11 @@ const Map<String, String> jaTranslations = {
   'lang_category_indic': 'インドの言語',
   'lang_category_east_asian': '東アジアの言語',
   'lang_search_hint': '言語または文字を検索...',
+  'settlement_awaiting_confirmation': '送金済み • 承認待ち',
+  'settlement_not_received_btn': '未受取',
+  'settlement_send_proof_btn': '送金証明を送信',
+  'settlement_review_proof_btn': '証明を確認',
+  'settlement_proof_submitted_badge': '証明提出済み',
+  'settlement_disputed_badge': '未着報告あり',
+  'settlement_history_title': '精算履歴',
 };

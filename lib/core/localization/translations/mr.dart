@@ -1011,4 +1011,11 @@ const Map<String, String> mrTranslations = {
   'lang_category_indic': 'भारतीय भाषा',
   'lang_category_east_asian': 'पूर्व आशियाई भाषा',
   'lang_search_hint': 'भाषा किंवा लिपी शोधा...',
+  'settlement_awaiting_confirmation': 'पैसे पाठवले • पुष्टीकरणाची प्रतीक्षा',
+  'settlement_not_received_btn': 'मिळाले नाही',
+  'settlement_send_proof_btn': 'पेमेंट पुरावा पाठवा',
+  'settlement_review_proof_btn': 'पुराव्याची पडताळणी करा',
+  'settlement_proof_submitted_badge': 'पुरावा सादर केला',
+  'settlement_disputed_badge': 'पेमेंट विवादित',
+  'settlement_history_title': 'पेमेंट इतिहास',
 };

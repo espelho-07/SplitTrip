@@ -519,14 +519,26 @@ class LocalStorageService {
     String id,
     String status, {
     String? reason,
+    String? transactionRef,
+    String? proofImageUrl,
+    String? proofNote,
   }) async {
     final current = getSavedPaymentVerifications();
-    final idx = current.indexWhere((item) => item['id'] == id);
+    final idx = current.indexWhere((item) => item['id'] == id || item['settlementId'] == id);
     if (idx != -1) {
       current[idx]['status'] = status;
       current[idx]['respondedAt'] = DateTime.now().toIso8601String();
       if (reason != null) {
         current[idx]['disputeReason'] = reason;
+      }
+      if (transactionRef != null) {
+        current[idx]['transactionRef'] = transactionRef;
+      }
+      if (proofImageUrl != null) {
+        current[idx]['proofImageUrl'] = proofImageUrl;
+      }
+      if (proofNote != null) {
+        current[idx]['proofNote'] = proofNote;
       }
       await savePaymentVerifications(current);
     }
@@ -540,7 +552,8 @@ class LocalStorageService {
     final current = getSavedPaymentVerifications();
     final cleanName = name?.trim().toLowerCase();
     return current.where((item) {
-      if (item['status'] != 'pending_verification') return false;
+      final st = item['status'];
+      if (st != 'pending_verification' && st != 'marked_paid' && st != 'proof_submitted') return false;
       final rUserId = item['receiverUserId'] as String?;
       final rMemberId = item['receiverMemberId'] as String?;
       final rName = (item['receiverName'] as String?)?.trim().toLowerCase();
@@ -560,7 +573,8 @@ class LocalStorageService {
     final current = getSavedPaymentVerifications();
     final cleanName = name?.trim().toLowerCase();
     return current.where((item) {
-      if (item['status'] != 'disputed') return false;
+      final st = item['status'];
+      if (st != 'disputed' && st != 'not_received') return false;
       final pUserId = item['payerUserId'] as String?;
       final pMemberId = item['payerMemberId'] as String?;
       final pName = (item['payerName'] as String?)?.trim().toLowerCase();

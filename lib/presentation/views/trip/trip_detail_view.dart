@@ -72,7 +72,7 @@ class _TripDetailViewState extends State<TripDetailView> {
   void initState() {
     super.initState();
     final vm = context.read<TripDetailViewModel>();
-    _notifSubscription = vm.notificationEvents.listen((notif) {
+    _notifSubscription = vm.notificationEvents.listen((notif) async {
       if (mounted) {
         final payerName = notif['payerName'] as String? ?? 'A friend';
         final amountInPaise = notif['amountInPaise'] as int? ?? 0;
@@ -97,6 +97,7 @@ class _TripDetailViewState extends State<TripDetailView> {
             duration: const Duration(seconds: 4),
           ),
         );
+        await PaymentVerificationManager.checkAndPrompt(context);
       }
     });
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -12,6 +13,7 @@ import 'core/localization/app_language.dart';
 import 'core/localization/app_localizations.dart';
 import 'core/payment/payment_service.dart';
 import 'core/services/app_version_service.dart';
+import 'core/services/fcm_service.dart';
 import 'core/services/kith_widget_service.dart';
 import 'core/services/security_lock_service.dart';
 import 'core/theme/app_theme.dart';
@@ -39,6 +41,12 @@ import 'presentation/views/security/app_lock_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase (required for FCM push notifications)
+  await Firebase.initializeApp();
+
+  // Register FCM background handler — must be called before runApp
+  FcmService.registerBackgroundHandler();
 
   // Set immersive system overlays
   SystemChrome.setSystemUIOverlayStyle(
@@ -142,11 +150,25 @@ void main() async {
   final notificationService = NotificationService(storageService);
   await notificationService.init();
 
+  // Initialize Firebase Cloud Messaging service for background/terminated push delivery
+  final fcmService = FcmService(
+    apiClient: apiClient,
+    storage: storageService,
+    notificationService: notificationService,
+  );
+  // Wire up deep-link navigation from notification taps
+  fcmService.onNavigate = (route) {
+    AppRouter.router.go(route);
+  };
+  // Non-blocking: FCM init failure must not prevent app from launching
+  unawaited(fcmService.init());
+
   runApp(
     MultiProvider(
       providers: [
         Provider<LocalStorageService>.value(value: storageService),
         Provider<NotificationService>.value(value: notificationService),
+        Provider<FcmService>.value(value: fcmService),
         Provider<ApiClient>.value(value: apiClient),
         Provider<SyncService>.value(value: syncService),
         Provider<LocalMigrationRunner>.value(value: migrationRunner),

@@ -1135,5 +1135,12 @@ const Map<String, String> enTranslations = {
   'lang_category_indic': 'Indian Languages',
   'lang_category_east_asian': 'East Asian Languages',
   'lang_search_hint': 'Search language or script...',
+  'settlement_awaiting_confirmation': 'Payment Sent • Awaiting Confirmation',
+  'settlement_not_received_btn': 'Not Received',
+  'settlement_send_proof_btn': 'Send Payment Proof',
+  'settlement_review_proof_btn': 'Review Payment Proof',
+  'settlement_proof_submitted_badge': 'Proof Submitted',
+  'settlement_disputed_badge': 'Payment Disputed',
+  'settlement_history_title': 'Settlement History',
 };
 

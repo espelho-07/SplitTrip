@@ -161,7 +161,7 @@ describe('Settlement Service Ledger & Reduction Tests', () => {
     let broadcastPayload = null;
     const mockRealtimeHub = {
       broadcastToTrip: (tId, event, data) => {
-        if (event === 'settlement_recorded') {
+        if (event === 'settlement_marked_paid') {
           broadcastPayload = data;
         }
       },

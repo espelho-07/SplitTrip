@@ -162,7 +162,7 @@ void main() {
       );
 
       final updatedSettlements = expenseRepo.getCachedSettlements('trip_girnar');
-      expect(updatedSettlements.first['status'], 'paid');
+      expect(updatedSettlements.first['status'], 'confirmed');
       expect(updatedSettlements.first['isSettled'], isTrue);
 
       // Activity logs should record confirmation
@@ -314,6 +314,96 @@ void main() {
       // Balances should now be completely 0 and trip marked as settled
       expect(vm.trip?.lifecycleState, TripLifecycle.settled);
       expect(vm.balanceSummary.simplifiedSettlements.isEmpty, isTrue);
+    });
+  });
+
+  group('Complete Payment Lifecycle & Proof Submission Tests', () {
+    test('7. Complete 4-step lifecycle: marked_paid -> disputed -> proof_submitted -> confirmed', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final storage = LocalStorageService(prefs);
+      final syncService = SyncService(storage);
+      final apiClient = ApiClient();
+      final expenseRepo = ExpenseRepository(apiClient: apiClient, storage: storage, syncService: syncService);
+
+      final trip = Trip(
+        id: 'trip_goa',
+        name: 'Goa Trip',
+        currencyCode: 'INR',
+        creatorId: 'u_x',
+        inviteCode: 'GOA123',
+        members: [
+          TripMember(id: 'm_x', userId: 'u_x', displayName: 'X (Payer)', joinedAt: DateTime.now()),
+          TripMember(id: 'm_y', userId: 'u_y', displayName: 'Y (Receiver)', joinedAt: DateTime.now()),
+        ],
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+        lifecycleState: TripLifecycle.active,
+      );
+      await storage.saveTrips([trip.toJson()]);
+
+      // Step 1: Payer X records settlement of Rs. 300 (marked_paid)
+      await expenseRepo.recordSettlement(
+        tripId: 'trip_goa',
+        fromMemberId: 'm_x',
+        toMemberId: 'm_y',
+        amountInPaise: 30000,
+        fromName: 'X (Payer)',
+        toName: 'Y (Receiver)',
+      );
+
+      final settlements1 = expenseRepo.getCachedSettlements('trip_goa');
+      expect(settlements1.length, 1);
+      final stlId = settlements1.first['id'] as String;
+      final verifId = 'pvr_$stlId';
+      expect(settlements1.first['status'], 'marked_paid');
+      expect(settlements1.first['isSettled'], isFalse);
+
+      // Step 2: Receiver Y disputes (not received)
+      await expenseRepo.disputeSettlementVerification(
+        tripId: 'trip_goa',
+        verificationId: verifId,
+        settlementId: stlId,
+        receiverName: 'Y (Receiver)',
+        payerName: 'X (Payer)',
+        amountInPaise: 30000,
+        reason: 'Did not arrive in HDFC bank account',
+      );
+
+      final settlements2 = expenseRepo.getCachedSettlements('trip_goa');
+      expect(settlements2.first['status'], 'disputed');
+      expect(settlements2.first['disputeReason'], 'Did not arrive in HDFC bank account');
+      expect(settlements2.first['isSettled'], isFalse);
+
+      // Step 3: Payer X submits payment proof (UTR / Ref ID)
+      await expenseRepo.submitSettlementProof(
+        tripId: 'trip_goa',
+        settlementId: stlId,
+        verificationId: verifId,
+        transactionRef: 'UPI/382910482910',
+        proofNote: 'Paid via GPay at 10:45 AM, please check statement',
+      );
+
+      final settlements3 = expenseRepo.getCachedSettlements('trip_goa');
+      expect(settlements3.first['status'], 'proof_submitted');
+      expect(settlements3.first['transactionRef'], 'UPI/382910482910');
+      expect(settlements3.first['proofNote'], contains('GPay'));
+      expect(settlements3.first['isSettled'], isFalse);
+
+      // Step 4: Receiver Y reviews proof and confirms receipt
+      await expenseRepo.confirmSettlementVerification(
+        tripId: 'trip_goa',
+        verificationId: verifId,
+        settlementId: stlId,
+        receiverName: 'Y (Receiver)',
+        payerName: 'X (Payer)',
+        amountInPaise: 30000,
+      );
+
+      final settlements4 = expenseRepo.getCachedSettlements('trip_goa');
+      expect(settlements4.first['status'], 'confirmed');
+      expect(settlements4.first['isSettled'], isTrue);
+      expect(settlements4.first['confirmedAt'], isNotNull);
     });
   });
 }

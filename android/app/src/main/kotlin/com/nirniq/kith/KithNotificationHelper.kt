@@ -13,18 +13,29 @@ import androidx.core.app.NotificationManagerCompat
 object KithNotificationHelper {
     const val CHANNEL_ID = "kith_alerts"
     const val CHANNEL_NAME = "Kith Alerts & Settlements"
+    const val CHANNEL_ID_PAYMENTS = "kith_payments"
+    const val CHANNEL_NAME_PAYMENTS = "Kith Payments"
 
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val importance = NotificationManager.IMPORTANCE_HIGH
-            val channel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, importance).apply {
+            val notificationManager: NotificationManager =
+                context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+            // General alerts channel
+            val alertsChannel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "Trip updates, member invites, payments and settlement alerts"
                 enableLights(true)
                 enableVibration(true)
             }
-            val notificationManager: NotificationManager =
-                context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.createNotificationChannel(channel)
+            notificationManager.createNotificationChannel(alertsChannel)
+
+            // Dedicated payments channel — used by FCM for background/terminated push delivery
+            val paymentsChannel = NotificationChannel(CHANNEL_ID_PAYMENTS, CHANNEL_NAME_PAYMENTS, NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Payment confirmations, settlement requests, and payment proof notifications"
+                enableLights(true)
+                enableVibration(true)
+            }
+            notificationManager.createNotificationChannel(paymentsChannel)
         }
     }
 
