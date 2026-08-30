@@ -169,7 +169,7 @@ class TripService {
     return activity;
   }
 
-  getActivityLogs(tripId, userId) {
+  getActivityLogs(tripId, userId, { limit = 100, offset = 0 } = {}) {
     const trip = db.get('trips', tripId);
     if (!trip) throw AppError.notFound('Trip not found');
 
@@ -177,7 +177,10 @@ class TripService {
     if (!authMember) throw AppError.forbidden('Not authorized to view activity logs for this trip');
 
     const logs = db.find('activity_logs', (a) => a.tripId === tripId);
-    return logs.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const sorted = logs.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const safeLimit = Math.min(200, Math.max(1, parseInt(limit, 10) || 100));
+    const safeOffset = Math.max(0, parseInt(offset, 10) || 0);
+    return sorted.slice(safeOffset, safeOffset + safeLimit);
   }
 
   getTripById(tripId, userId) {

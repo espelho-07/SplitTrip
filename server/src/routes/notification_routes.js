@@ -4,10 +4,11 @@ const { authMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
 
-// GET /api/notifications - Get all notifications for the authenticated user
+// GET /api/notifications - Get all notifications for the authenticated user with optional pagination
 router.get('/', authMiddleware, (req, res, next) => {
   try {
-    const notifications = notificationService.getNotificationsForUser(req.user.id);
+    const { limit, offset } = req.query;
+    const notifications = notificationService.getNotificationsForUser(req.user.id, { limit, offset });
     const unreadCount = notificationService.getUnreadCount(req.user.id);
     res.status(200).json({ data: notifications, unreadCount });
   } catch (e) {

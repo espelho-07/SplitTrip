@@ -305,10 +305,11 @@ router.get('/:id/settlements', (req, res, next) => {
   }
 });
 
-// GET /api/trips/:id/activity - Get chronological activity logs
+// GET /api/trips/:id/activity - Get chronological activity logs with optional pagination
 router.get('/:id/activity', (req, res, next) => {
   try {
-    const logs = tripService.getActivityLogs(req.params.id, req.user.id);
+    const { limit, offset } = req.query;
+    const logs = tripService.getActivityLogs(req.params.id, req.user.id, { limit, offset });
     res.status(200).json({ data: logs });
   } catch (e) {
     next(e);

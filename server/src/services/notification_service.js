@@ -272,10 +272,13 @@ class NotificationService {
   /**
    * Retrieves all notifications for a specific user, newest first.
    */
-  getNotificationsForUser(userId) {
+  getNotificationsForUser(userId, { limit = 100, offset = 0 } = {}) {
     if (!userId) return [];
     const notifs = db.find('notifications', (r) => r.recipientUserId === userId && !r.deleted);
-    return notifs.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const sorted = notifs.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const safeLimit = Math.min(200, Math.max(1, parseInt(limit, 10) || 100));
+    const safeOffset = Math.max(0, parseInt(offset, 10) || 0);
+    return sorted.slice(safeOffset, safeOffset + safeLimit);
   }
 
   /**

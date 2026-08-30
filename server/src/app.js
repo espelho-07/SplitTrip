@@ -4,10 +4,13 @@ const authRoutes = require('./routes/auth_routes');
 const tripRoutes = require('./routes/trip_routes');
 const expenseRoutes = require('./routes/expense_routes');
 const personalRoutes = require('./routes/personal_routes');
+const notificationRoutes = require('./routes/notification_routes');
 const versionRoutes = require('./routes/version_routes');
 const webRoutes = require('./routes/web_routes');
 const { errorHandler } = require('./middleware/error_handler');
+const { authLimiter, mutationLimiter, syncLimiter, readLimiter } = require('./middleware/rate_limiter');
 const { dbManager } = require('./db/db_manager');
+const { storageRetentionService } = require('./services/storage_retention_service');
 const env = require('./config/env');
 
 const app = express();
@@ -47,11 +50,14 @@ const corsOptions = {
     ? (process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : false)
     : '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'X-Test-Rate-Limit'],
 };
 
 app.use(cors(corsOptions));
-app.use(express.json());
+
+// Explicit Request Body & Payload Protection (Prevents memory exhaustion attacks)
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // Structured Request Logging (omitted during unit tests to keep test output clean)
 if (env.NODE_ENV !== 'test') {
@@ -95,15 +101,25 @@ app.get('/ready', async (req, res) => {
   }
 });
 
-const notificationRoutes = require('./routes/notification_routes');
+// Periodic Storage Retention & Compaction (Every 12 hours)
+if (env.NODE_ENV !== 'test') {
+  setInterval(() => {
+    try {
+      const summary = storageRetentionService.runRetentionCycle();
+      console.log('[StorageRetention] Maintenance cycle completed:', summary);
+    } catch (e) {
+      console.error('[StorageRetention] Maintenance error:', e.message);
+    }
+  }, 12 * 60 * 60 * 1000).unref?.();
+}
 
-// Mount Routes
+// Mount Routes with Tiered Rate Limiting
 app.use('/', webRoutes);
-app.use('/api/auth', authRoutes);
-app.use('/api/trips', tripRoutes);
-app.use('/api/trips/:tripId/expenses', expenseRoutes);
-app.use('/api/personal', personalRoutes);
-app.use('/api/notifications', notificationRoutes);
+app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/trips', mutationLimiter, tripRoutes);
+app.use('/api/trips/:tripId/expenses', mutationLimiter, expenseRoutes);
+app.use('/api/personal', mutationLimiter, personalRoutes);
+app.use('/api/notifications', readLimiter, notificationRoutes);
 app.use('/api/app/version', versionRoutes);
 app.use('/api/version', versionRoutes);
 
