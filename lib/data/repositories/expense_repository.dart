@@ -28,19 +28,43 @@ class ExpenseRepository {
   }
 
   /// Loads all expenses recorded for a specific trip.
+  /// Uses local-first two-way reconciliation to ensure zero data loss:
+  /// Local un-synced expenses are never wiped by empty or partial server responses.
   Future<List<Expense>> getExpenses(String tripId) async {
+    final localExpenses = getCachedExpenses(tripId);
     try {
       final res = await apiClient.get('/trips/$tripId/expenses');
       if (res is List) {
-        final expenses = res.map((j) => Expense.fromJson(j as Map<String, dynamic>)).toList();
-        await storage.saveExpenses(tripId, expenses.map((e) => e.toJson()).toList());
-        return expenses;
+        final serverExpenses = res.map((j) => Expense.fromJson(j as Map<String, dynamic>)).toList();
+
+        final mergedMap = <String, Expense>{};
+        // 1. First add all local expenses to preserve local/offline created records
+        for (final local in localExpenses) {
+          if (!local.isDeleted) {
+            mergedMap[local.id] = local;
+          }
+        }
+
+        // 2. Merge or override with authoritative server responses
+        for (final server in serverExpenses) {
+          if (!server.isDeleted) {
+            mergedMap[server.id] = server;
+          } else {
+            mergedMap.remove(server.id);
+          }
+        }
+
+        final mergedList = mergedMap.values.toList();
+        mergedList.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+        await storage.saveExpenses(tripId, mergedList.map((e) => e.toJson()).toList());
+        return mergedList;
       }
     } catch (_) {
-      // Offline fallback
+      // Offline fallback: return durable local cache
     }
 
-    return getCachedExpenses(tripId);
+    return localExpenses;
   }
 
   /// Adds a new expense to the trip after verifying deterministic zero-sum split equality.

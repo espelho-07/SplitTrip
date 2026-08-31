@@ -35,6 +35,7 @@ import 'presentation/viewmodels/home_viewmodel.dart';
 import 'presentation/viewmodels/join_trip_viewmodel.dart';
 import 'presentation/viewmodels/locale_viewmodel.dart';
 import 'presentation/viewmodels/personal_expense_viewmodel.dart';
+import 'presentation/viewmodels/person_ledger_viewmodel.dart';
 import 'presentation/viewmodels/theme_viewmodel.dart';
 import 'presentation/viewmodels/trip_detail_viewmodel.dart';
 import 'presentation/viewmodels/version_viewmodel.dart';
@@ -204,6 +205,13 @@ void main() async {
             personalRepo: personalRepo,
             tripRepo: tripRepo,
             expenseRepo: expenseRepo,
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => PersonLedgerViewModel(
+            personalRepo: personalRepo,
+            expenseRepo: expenseRepo,
+            tripRepo: tripRepo,
           ),
         ),
         ChangeNotifierProvider(

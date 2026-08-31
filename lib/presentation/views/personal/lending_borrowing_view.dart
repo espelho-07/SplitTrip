@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
@@ -404,6 +405,24 @@ class _LendingBorrowingViewState extends State<LendingBorrowingView> {
                             ),
                             Row(
                               children: [
+                                OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    minimumSize: Size.zero,
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    side: BorderSide(
+                                      color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+                                      width: 0.8,
+                                    ),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                  ),
+                                  icon: const Icon(Icons.chat_bubble_outline_rounded, size: 13),
+                                  label: const Text('Ledger', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                                  onPressed: () {
+                                    context.push('/person-ledger?name=${Uri.encodeComponent(d.personName)}');
+                                  },
+                                ),
+                                const SizedBox(width: 6),
                                 if (!isSettled)
                                   ElevatedButton.icon(
                                     style: ElevatedButton.styleFrom(
@@ -415,7 +434,7 @@ class _LendingBorrowingViewState extends State<LendingBorrowingView> {
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                     ),
                                     icon: const Icon(Icons.check_rounded, size: 14),
-                                    label: const Text('Mark Paid / Settle', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+                                    label: const Text('Settle', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
                                     onPressed: () {
                                       RecordRepaymentSheet.show(context, debt: d);
                                     },

@@ -15,6 +15,7 @@ import '../views/personal/spend_analytics_view.dart';
 import '../views/personal/balances_overall_view.dart';
 import '../views/trip/settle_up_view.dart';
 import '../views/personal/lending_borrowing_view.dart';
+import '../views/personal/person_ledger_view.dart';
 import '../views/personal/widgets/add_personal_expense_sheet.dart';
 import '../views/splash/splash_view.dart';
 import '../views/trip/create_trip_view.dart';
@@ -193,13 +194,44 @@ class AppRouter {
         builder: (context, state) => const LendingBorrowingView(),
       ),
       GoRoute(
+        path: '/person-ledger',
+        builder: (context, state) {
+          final personName = state.uri.queryParameters['name'] ?? state.uri.queryParameters['person'] ?? 'Member';
+          final personUserId = state.uri.queryParameters['userId'];
+          return PersonLedgerView(
+            personName: personName,
+            personUserId: personUserId,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/person/:personName',
+        builder: (context, state) {
+          final personName = state.pathParameters['personName'] ?? 'Member';
+          final personUserId = state.uri.queryParameters['userId'];
+          return PersonLedgerView(
+            personName: Uri.decodeComponent(personName),
+            personUserId: personUserId,
+          );
+        },
+      ),
+      GoRoute(
         path: '/add-expense',
         builder: (context, state) {
           final tabStr = state.uri.queryParameters['tab'];
           final initialTab = tabStr != null ? (int.tryParse(tabStr) ?? 2) : 2;
+          final personName = state.uri.queryParameters['person'] ?? state.uri.queryParameters['personName'];
+          final memberId = state.uri.queryParameters['memberId'];
+          final title = state.uri.queryParameters['title'];
+          final amountStr = state.uri.queryParameters['amount'];
+          final amountInPaise = amountStr != null ? int.tryParse(amountStr) : null;
           return AddExpenseView(
             tripId: state.uri.queryParameters['tripId'] ?? '',
             initialTab: initialTab,
+            initialPersonName: personName,
+            initialMemberId: memberId,
+            initialTitle: title,
+            initialAmountInPaise: amountInPaise,
           );
         },
       ),
@@ -260,9 +292,18 @@ class AppRouter {
               final tripId = state.pathParameters['tripId']!;
               final tabStr = state.uri.queryParameters['tab'];
               final initialTab = tabStr != null ? (int.tryParse(tabStr) ?? 2) : 2;
+              final personName = state.uri.queryParameters['person'] ?? state.uri.queryParameters['personName'];
+              final memberId = state.uri.queryParameters['memberId'];
+              final title = state.uri.queryParameters['title'];
+              final amountStr = state.uri.queryParameters['amount'];
+              final amountInPaise = amountStr != null ? int.tryParse(amountStr) : null;
               return AddExpenseView(
                 tripId: tripId,
                 initialTab: initialTab,
+                initialPersonName: personName,
+                initialMemberId: memberId,
+                initialTitle: title,
+                initialAmountInPaise: amountInPaise,
               );
             },
           ),

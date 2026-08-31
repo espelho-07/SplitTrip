@@ -8,7 +8,9 @@ import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
+import '../../../core/utils/kith_calculator_engine.dart';
 import '../../../core/widgets/app_button.dart';
+import '../../../core/widgets/kith_amount_calculator_field.dart';
 import '../../../core/widgets/kith_components.dart';
 import '../../../core/widgets/member_avatar.dart';
 import '../../../domain/enums/expense_category.dart';
@@ -31,12 +33,20 @@ class AddExpenseView extends StatefulWidget {
   final String tripId;
   final Expense? existingExpense;
   final int initialTab;
+  final String? initialPersonName;
+  final String? initialMemberId;
+  final String? initialTitle;
+  final int? initialAmountInPaise;
 
   const AddExpenseView({
     super.key,
     required this.tripId,
     this.existingExpense,
     this.initialTab = 2,
+    this.initialPersonName,
+    this.initialMemberId,
+    this.initialTitle,
+    this.initialAmountInPaise,
   });
 
   @override
@@ -94,6 +104,29 @@ class _AddExpenseViewState extends State<AddExpenseView> {
           widget.existingExpense!.amountInPaise % 100 == 0 ? 0 : 2,
         );
         _selectedDate = widget.existingExpense!.createdAt;
+      } else if (widget.initialMemberId != null || widget.initialPersonName != null || widget.initialTitle != null || widget.initialAmountInPaise != null) {
+        // Resolve member id from person name if not provided
+        String? targetMemberId = widget.initialMemberId;
+        if (targetMemberId == null && widget.initialPersonName != null) {
+          final matched = trip.members.where((m) => m.displayName.toLowerCase() == widget.initialPersonName!.toLowerCase()).firstOrNull;
+          targetMemberId = matched?.id;
+        }
+
+        addVm.initFromContext(
+          trip: trip,
+          currentUserId: user.id,
+          preselectedMemberId: targetMemberId,
+          initialTitle: widget.initialTitle,
+          initialAmountInPaise: widget.initialAmountInPaise,
+        );
+
+        if (widget.initialTitle != null && widget.initialTitle!.isNotEmpty) {
+          _titleController.text = widget.initialTitle!;
+        }
+        if (widget.initialAmountInPaise != null && widget.initialAmountInPaise! > 0) {
+          final rupees = widget.initialAmountInPaise! / 100.0;
+          _amountController.text = rupees % 1 == 0 ? rupees.toInt().toString() : rupees.toStringAsFixed(2);
+        }
       } else {
         addVm.init(trip: trip, currentUserId: user.id);
       }
@@ -115,6 +148,12 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     final l10n = context.l10n;
     final trip = tripDetailVm.trip;
     if (trip == null || addVm.isSaving) return;
+
+    // Resolve any pending expression in the calculator field
+    final evaluatedPaise = KithCalculatorEngine.evaluateToPaise(_amountController.text);
+    if (evaluatedPaise > 0 && addVm.amountInPaise != evaluatedPaise) {
+      addVm.setAmountInPaise(evaluatedPaise);
+    }
 
     if (addVm.title.trim().isEmpty || addVm.amountInPaise <= 0 || addVm.selectedParticipantMemberIds.isEmpty) {
       HapticHelper.medium();
@@ -492,8 +531,6 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     String currency,
     AppLocalizations l10n,
   ) {
-    final curSymbol = currency == 'INR' ? '₹' : currency;
-
     return Container(
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurfaceCard : Colors.white,
@@ -506,62 +543,15 @@ class _AddExpenseViewState extends State<AddExpenseView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Amount Section
+          // Amount Section with Built-in Calculator Engine & '+' Operator
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Text(
-                  curSymbol,
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                    color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    controller: _amountController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.5,
-                      color: isDark ? Colors.white : const Color(0xFF0F172A),
-                    ),
-                    decoration: KithInputDecoration.borderless(
-                      hintText: '0.00',
-                      hintStyle: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w700,
-                        color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                      ),
-                    ),
-                    onChanged: (val) {
-                      final doubleVal = double.tryParse(val) ?? 0.0;
-                      addVm.setAmountInPaise((doubleVal * 100).round());
-                    },
-                  ),
-                ),
-                if (_amountController.text.isNotEmpty)
-                  GestureDetector(
-                    onTap: () {
-                      HapticHelper.light();
-                      _amountController.clear();
-                      addVm.setAmountInPaise(0);
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.close_rounded, size: 16),
-                    ),
-                  ),
-              ],
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            child: KithAmountCalculatorField(
+              controller: _amountController,
+              currencyCode: currency,
+              onAmountChanged: (evaluatedPaise) {
+                addVm.setAmountInPaise(evaluatedPaise);
+              },
             ),
           ),
 

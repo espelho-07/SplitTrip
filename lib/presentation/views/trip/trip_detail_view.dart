@@ -25,6 +25,7 @@ import '../../../domain/models/expense.dart';
 import '../../../domain/models/journey_moment.dart';
 import '../../../domain/models/payment_verification_request.dart';
 import '../../../domain/models/trip.dart';
+import '../../../domain/models/trip_member.dart';
 import '../../../domain/services/trip_export_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
@@ -2294,6 +2295,7 @@ class _TripDetailViewState extends State<TripDetailView> {
 
             return SurfaceCard(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              onTap: isSelf ? null : () => _showMemberOptions(context, member, trip),
               child: Row(
                 children: [
                   MemberAvatar(
@@ -2386,6 +2388,107 @@ class _TripDetailViewState extends State<TripDetailView> {
             onPressed: _showSettlementSheet,
           ),
       ],
+    );
+  }
+
+  void _showMemberOptions(BuildContext context, TripMember member, Trip trip) {
+    HapticHelper.light();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDark ? AppColors.darkSurfaceCard : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    MemberAvatar(name: member.displayName, avatarUrl: member.avatarUrl, size: 36),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            member.displayName,
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: isDark ? Colors.white : const Color(0xFF0F172A),
+                            ),
+                          ),
+                          Text(
+                            'Member in ${trip.name}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(Icons.chat_bubble_outline_rounded, color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary, size: 20),
+                  ),
+                  title: const Text('View Person Ledger & Chat', style: TextStyle(fontWeight: FontWeight.w700)),
+                  subtitle: Text('See all lends, borrows & splits with ${member.displayName}', style: const TextStyle(fontSize: 12)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    context.push('/person-ledger?name=${Uri.encodeComponent(member.displayName)}&userId=${member.userId}');
+                  },
+                ),
+                const SizedBox(height: 8),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.blueAccent.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.receipt_long_rounded, color: Colors.blueAccent, size: 20),
+                  ),
+                  title: Text('Add Expense with ${member.displayName}', style: TextStyle(fontWeight: FontWeight.w700)),
+                  subtitle: const Text('Pre-selects 1-on-1 split on this trip', style: TextStyle(fontSize: 12)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    context.push('/trip/${trip.id}/add-expense?memberId=${member.id}&person=${Uri.encodeComponent(member.displayName)}');
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 

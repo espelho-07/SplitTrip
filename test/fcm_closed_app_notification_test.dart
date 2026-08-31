@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
@@ -74,6 +74,7 @@ void main() {
         storage: storage,
         notificationService: notifService,
       );
+      expect(fcmService, isNotNull);
 
       // Verify registerToken calls server endpoint
       await storage.setString('kith_fcm_token', 'fcm_mock_token_xyz789');

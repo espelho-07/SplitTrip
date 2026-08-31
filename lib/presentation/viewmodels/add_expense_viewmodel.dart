@@ -121,6 +121,44 @@ class AddExpenseViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  void initFromContext({
+    required Trip trip,
+    required String currentUserId,
+    String? preselectedMemberId,
+    String? preselectedPayerId,
+    ExpenseCategory? category,
+    int? initialAmountInPaise,
+    String? initialTitle,
+    SplitType? splitType,
+  }) {
+    init(trip: trip, currentUserId: currentUserId);
+    if (initialTitle != null && initialTitle.isNotEmpty) {
+      _title = initialTitle;
+    }
+    if (initialAmountInPaise != null && initialAmountInPaise > 0) {
+      _amountInPaise = initialAmountInPaise;
+    }
+    if (category != null) {
+      _category = category;
+    }
+    if (splitType != null) {
+      _splitType = splitType;
+    }
+    if (preselectedPayerId != null && preselectedPayerId.isNotEmpty) {
+      _paidById = preselectedPayerId;
+    }
+
+    // If a specific member is pre-selected for a 1-on-1 split context:
+    if (preselectedMemberId != null && preselectedMemberId.isNotEmpty) {
+      final currentMember = trip.members.where((m) => m.userId == currentUserId).firstOrNull;
+      final currentMemberId = currentMember?.id ?? currentUserId;
+      _selectedParticipantMemberIds.clear();
+      _selectedParticipantMemberIds.add(currentMemberId);
+      _selectedParticipantMemberIds.add(preselectedMemberId);
+    }
+    notifyListeners();
+  }
+
   void initForEdit({
     required Expense expense,
     required Trip trip,
