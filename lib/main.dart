@@ -212,6 +212,7 @@ void main() async {
             personalRepo: personalRepo,
             expenseRepo: expenseRepo,
             tripRepo: tripRepo,
+            storage: storageService,
           ),
         ),
         ChangeNotifierProvider(

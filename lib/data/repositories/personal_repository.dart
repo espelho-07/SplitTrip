@@ -306,6 +306,24 @@ class PersonalRepository {
     return cachedDebts[index];
   }
 
+  Future<PersonalDebt> updatePersonalDebt(PersonalDebt debt) async {
+    final cached = getCachedPersonalDebts().debts;
+    final index = cached.indexWhere((d) => d.id == debt.id);
+    if (index != -1) {
+      cached[index] = debt;
+      await storage.savePersonalDebts(cached.map((d) => d.toJson()).toList());
+    }
+
+    await syncService.enqueueMutation(
+      MutationType.updatePersonalDebt,
+      debt.toJson(),
+      idempotencyKey: 'upd_pdebt_${debt.id}',
+      backgroundApiClient: apiClient,
+    );
+
+    return debt;
+  }
+
   Future<void> deletePersonalDebt(String debtId) async {
     // 1. Remove locally
     final cached = getCachedPersonalDebts().debts;

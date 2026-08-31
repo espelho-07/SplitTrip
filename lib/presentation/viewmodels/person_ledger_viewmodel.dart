@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../data/repositories/expense_repository.dart';
 import '../../data/repositories/personal_repository.dart';
 import '../../data/repositories/trip_repository.dart';
+import '../../data/services/local_storage_service.dart';
 import '../../domain/models/person_ledger_item.dart';
 import '../../domain/models/personal_debt.dart';
 
@@ -9,6 +10,7 @@ class PersonLedgerViewModel extends ChangeNotifier {
   final PersonalRepository personalRepo;
   final ExpenseRepository expenseRepo;
   final TripRepository tripRepo;
+  final LocalStorageService storage;
 
   String _personName = '';
   String? _personUserId;
@@ -19,21 +21,27 @@ class PersonLedgerViewModel extends ChangeNotifier {
   int _totalBorrowedPaise = 0;
   int _netBalancePaise = 0;
   bool _isLoading = false;
+  bool _isAutoBudgetingEnabled = false;
 
   PersonLedgerViewModel({
     required this.personalRepo,
     required this.expenseRepo,
     required this.tripRepo,
+    required this.storage,
   });
 
   String get personName => _personName;
   String? get personUserId => _personUserId;
   List<PersonLedgerItem> get items => _items;
   int get totalLentPaise => _totalLentPaise;
+  int get totalPaidPaise => _totalLentPaise;
   int get totalBorrowedPaise => _totalBorrowedPaise;
+  int get totalReceivedPaise => _totalBorrowedPaise;
   int get netBalancePaise => _netBalancePaise;
   bool get isLoading => _isLoading;
+  bool get isAutoBudgetingEnabled => _isAutoBudgetingEnabled;
 
+  /// Dynamic natural language status for the relationship balance
   String get runningBalanceStatusText {
     if (_netBalancePaise > 0) {
       return '$_personName owes you';
@@ -44,6 +52,23 @@ class PersonLedgerViewModel extends ChangeNotifier {
     }
   }
 
+  // --- "This Month" Dynamic Insights ---
+  int get thisMonthPaidPaise {
+    final now = DateTime.now();
+    return _items.where((item) {
+      return item.isCreditToUser && item.date.year == now.year && item.date.month == now.month;
+    }).fold<int>(0, (sum, item) => sum + item.amountInPaise);
+  }
+
+  int get thisMonthReceivedPaise {
+    final now = DateTime.now();
+    return _items.where((item) {
+      return !item.isCreditToUser && item.date.year == now.year && item.date.month == now.month;
+    }).fold<int>(0, (sum, item) => sum + item.amountInPaise);
+  }
+
+  int get thisMonthNetPaise => thisMonthPaidPaise - thisMonthReceivedPaise;
+
   Future<void> loadLedger({
     required String personName,
     String? personUserId,
@@ -53,11 +78,22 @@ class PersonLedgerViewModel extends ChangeNotifier {
     _personUserId = personUserId;
     _currentUserId = currentUserId;
     _isLoading = true;
+
+    // Load persisted Auto Budgeting toggle state (strictly defaults to OFF/false)
+    _isAutoBudgetingEnabled = storage.isAutoBudgetingEnabled(_personName);
+
     notifyListeners();
 
     await _aggregateTransactions();
 
     _isLoading = false;
+    notifyListeners();
+  }
+
+  /// Toggles and persists Auto Budgeting for this specific person relationship
+  Future<void> toggleAutoBudgeting(bool enabled) async {
+    _isAutoBudgetingEnabled = enabled;
+    await storage.setAutoBudgetingEnabled(_personName, enabled);
     notifyListeners();
   }
 
@@ -284,5 +320,72 @@ class PersonLedgerViewModel extends ChangeNotifier {
     );
     await _aggregateTransactions();
     notifyListeners();
+  }
+
+  /// Records a full or partial settlement transaction
+  Future<void> settleBalance({
+    required int amountInPaise,
+    String? note,
+    DateTime? date,
+  }) async {
+    if (_currentUserId == null || amountInPaise <= 0) return;
+
+    // If You owe Person (net < 0): you pay person -> creates a "lent" / payment from you
+    // If Person owes You (net > 0): person pays you -> creates a "borrowed" / payment received
+    if (_netBalancePaise < 0) {
+      await personalRepo.createPersonalDebt(
+        userId: _currentUserId!,
+        personName: _personName,
+        debtType: PersonalDebtType.lent,
+        amountInPaise: amountInPaise,
+        description: note?.isNotEmpty == true ? note : 'Settlement to $_personName',
+        date: date ?? DateTime.now(),
+      );
+    } else if (_netBalancePaise > 0) {
+      await personalRepo.createPersonalDebt(
+        userId: _currentUserId!,
+        personName: _personName,
+        debtType: PersonalDebtType.borrowed,
+        amountInPaise: amountInPaise,
+        description: note?.isNotEmpty == true ? note : 'Settlement from $_personName',
+        date: date ?? DateTime.now(),
+      );
+    }
+
+    await _aggregateTransactions();
+    notifyListeners();
+  }
+
+  /// Updates an existing debt transaction
+  Future<void> updateDebtTransaction(
+    String debtId, {
+    required int newAmountInPaise,
+    String? newNote,
+    DateTime? newDate,
+  }) async {
+    final cached = personalRepo.getCachedPersonalDebts().debts;
+    final index = cached.indexWhere((d) => d.id == debtId);
+    if (index != -1) {
+      final existing = cached[index];
+      final updated = existing.copyWith(
+        initialAmountInPaise: newAmountInPaise,
+        remainingAmountInPaise: newAmountInPaise,
+        description: newNote ?? existing.description,
+        date: newDate ?? existing.date,
+        updatedAt: DateTime.now(),
+      );
+      await personalRepo.updatePersonalDebt(updated);
+      await _aggregateTransactions();
+      notifyListeners();
+    }
+  }
+
+  /// Deletes a transaction from the relationship
+  Future<void> deleteTransaction(PersonLedgerItem item) async {
+    if (item.referenceId != null) {
+      await personalRepo.deletePersonalDebt(item.referenceId!);
+      await _aggregateTransactions();
+      notifyListeners();
+    }
   }
 }

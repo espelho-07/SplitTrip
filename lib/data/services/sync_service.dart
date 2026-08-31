@@ -18,6 +18,7 @@ enum MutationType {
   updatePersonalExpense,
   deletePersonalExpense,
   createPersonalDebt,
+  updatePersonalDebt,
   recordPersonalRepayment,
   deletePersonalDebt,
   setPersonalBudget,
@@ -502,6 +503,11 @@ class SyncService {
 
       case MutationType.createPersonalDebt:
         await apiClient.post('/personal/debts', body: payload);
+        break;
+
+      case MutationType.updatePersonalDebt:
+        final debtId = payload['debtId'] as String? ?? payload['id'] as String;
+        await apiClient.put('/personal/debts/$debtId', body: payload);
         break;
 
       case MutationType.recordPersonalRepayment:

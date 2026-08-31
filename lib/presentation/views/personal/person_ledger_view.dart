@@ -5,6 +5,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
+import '../../../core/utils/kith_calculator_engine.dart';
+import '../../../core/widgets/kith_amount_calculator_field.dart';
 import '../../../core/widgets/member_avatar.dart';
 import '../../../domain/models/person_ledger_item.dart';
 import '../../viewmodels/auth_viewmodel.dart';
@@ -83,7 +85,7 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Add with ${widget.personName}',
+                  'Record with ${widget.personName}',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
@@ -94,8 +96,8 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
                 _buildActionTile(
                   icon: Icons.arrow_outward_rounded,
                   iconColor: isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight,
-                  title: 'Lend Money',
-                  subtitle: 'You gave money to ${widget.personName}',
+                  title: 'You paid ${widget.personName}',
+                  subtitle: 'Money given or lent to ${widget.personName}',
                   onTap: () {
                     Navigator.pop(ctx);
                     _showAmountSheet(isLend: true);
@@ -106,8 +108,8 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
                 _buildActionTile(
                   icon: Icons.call_received_rounded,
                   iconColor: AppColors.emeraldPrimary,
-                  title: 'Borrow Money',
-                  subtitle: 'You borrowed money from ${widget.personName}',
+                  title: '${widget.personName} paid you',
+                  subtitle: 'Money received or borrowed from ${widget.personName}',
                   onTap: () {
                     Navigator.pop(ctx);
                     _showAmountSheet(isLend: false);
@@ -208,6 +210,7 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
     final amountController = TextEditingController();
     final noteController = TextEditingController();
     final vm = context.read<PersonLedgerViewModel>();
+    DateTime selectedDate = DateTime.now();
 
     showModalBottomSheet(
       context: context,
@@ -217,86 +220,546 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(ctx).viewInsets.bottom,
-            left: 20,
-            right: 20,
-            top: 20,
-          ),
-          child: SafeArea(
+        return StatefulBuilder(
+          builder: (sheetCtx, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom,
+                left: 20,
+                right: 20,
+                top: 20,
+              ),
+              child: SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          isLend ? 'You paid ${widget.personName}' : '${widget.personName} paid you',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded, size: 20),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    // Built-in Calculator Amount Field
+                    KithAmountCalculatorField(
+                      controller: amountController,
+                      currencyCode: 'INR',
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: noteController,
+                      decoration: InputDecoration(
+                        labelText: 'Note / Reason (Optional)',
+                        hintText: 'e.g. Dinner, Cab, Tickets',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    // Date selector
+                    InkWell(
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: selectedDate,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime.now().add(const Duration(days: 365)),
+                        );
+                        if (picked != null) {
+                          setSheetState(() {
+                            selectedDate = picked;
+                          });
+                        }
+                      },
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF141A21) : const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+                            width: 0.8,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.calendar_today_rounded, size: 16, color: AppColors.emeraldPrimary),
+                                const SizedBox(width: 8),
+                                Text(
+                                  DateFormatter.formatDate(selectedDate),
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Text(
+                              'Change',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isLend ? AppColors.emeraldPrimary : Colors.blueAccent,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () async {
+                          final evaluatedPaise = KithCalculatorEngine.evaluateToPaise(amountController.text.trim());
+                          if (evaluatedPaise <= 0) return;
+
+                          Navigator.pop(ctx);
+                          if (isLend) {
+                            await vm.addLendTransaction(
+                              amountInPaise: evaluatedPaise,
+                              note: noteController.text.trim(),
+                              date: selectedDate,
+                            );
+                          } else {
+                            await vm.addBorrowTransaction(
+                              amountInPaise: evaluatedPaise,
+                              note: noteController.text.trim(),
+                              date: selectedDate,
+                            );
+                          }
+                        },
+                        child: Text(
+                          isLend ? 'Save Payment' : 'Save Receipt',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showSettleUpSheet(BuildContext context, PersonLedgerViewModel vm, bool isDark) {
+    final net = vm.netBalancePaise;
+    if (net == 0) return;
+
+    final isYouPaying = net < 0; // You owe person
+    final remainingAbsolute = net.abs();
+    final rupees = remainingAbsolute / 100.0;
+    final amountController = TextEditingController(
+      text: rupees % 1 == 0 ? rupees.toInt().toString() : rupees.toStringAsFixed(2),
+    );
+    final noteController = TextEditingController();
+    DateTime selectedDate = DateTime.now();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: isDark ? AppColors.darkSurfaceCard : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (sheetCtx, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom,
+                left: 20,
+                right: 20,
+                top: 20,
+              ),
+              child: SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Settle Up with ${widget.personName}',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded, size: 20),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      isYouPaying
+                          ? 'You are recording a payment to ${widget.personName}'
+                          : '${widget.personName} is paying you back',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // Amount field with calculator support
+                    KithAmountCalculatorField(
+                      controller: amountController,
+                      currencyCode: 'INR',
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: noteController,
+                      decoration: InputDecoration(
+                        labelText: 'Note / Transfer Mode (Optional)',
+                        hintText: 'e.g. UPI, Cash, Bank Transfer',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    // Date selector
+                    InkWell(
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: selectedDate,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime.now().add(const Duration(days: 365)),
+                        );
+                        if (picked != null) {
+                          setSheetState(() {
+                            selectedDate = picked;
+                          });
+                        }
+                      },
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF141A21) : const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+                            width: 0.8,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.calendar_today_rounded, size: 16, color: AppColors.emeraldPrimary),
+                                const SizedBox(width: 8),
+                                Text(
+                                  DateFormatter.formatDate(selectedDate),
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Text(
+                              'Change',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                          foregroundColor: isDark ? AppColors.darkBackground : Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () async {
+                          final evaluatedPaise = KithCalculatorEngine.evaluateToPaise(amountController.text.trim());
+                          if (evaluatedPaise <= 0) return;
+
+                          Navigator.pop(ctx);
+                          await vm.settleBalance(
+                            amountInPaise: evaluatedPaise,
+                            note: noteController.text.trim(),
+                            date: selectedDate,
+                          );
+                        },
+                        child: const Text(
+                          'Record Settlement',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showTransactionOptions(BuildContext context, PersonLedgerItem item, PersonLedgerViewModel vm, bool isDark) {
+    if (item.referenceId == null) return; // Only direct debts can be edited/deleted here
+
+    HapticHelper.light();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDark ? AppColors.darkSurfaceCard : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
                 Text(
-                  isLend ? 'Lend to ' : 'Borrow from ',
+                  'Transaction Options',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
                     color: isDark ? Colors.white : const Color(0xFF0F172A),
                   ),
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: amountController,
-                  autofocus: true,
-                  keyboardType: TextInputType.number,
-                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
-                  decoration: InputDecoration(
-                    prefixText: '₹ ',
-                    labelText: 'Amount',
-                    hintText: '0',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: noteController,
-                  decoration: InputDecoration(
-                    labelText: 'Note / Reason (Optional)',
-                    hintText: 'e.g. Dinner, Cab, Tickets',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: isLend ? AppColors.emeraldPrimary : Colors.blueAccent,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    onPressed: () async {
-                      final parsedAmount = double.tryParse(amountController.text.trim()) ?? 0.0;
-                      final paise = (parsedAmount * 100).round();
-                      if (paise <= 0) return;
-
-                      Navigator.pop(ctx);
-                      if (isLend) {
-                        await vm.addLendTransaction(
-                          amountInPaise: paise,
-                          note: noteController.text.trim(),
-                        );
-                      } else {
-                        await vm.addBorrowTransaction(
-                          amountInPaise: paise,
-                          note: noteController.text.trim(),
-                        );
-                      }
-                    },
-                    child: Text(
-                      isLend ? 'Save Lend' : 'Save Borrow',
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                    ),
+                const SizedBox(height: 6),
+                Text(
+                  '${item.title} • ${CurrencyFormatter.formatPaise(item.amountInPaise, currencyCode: 'INR')}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                   ),
                 ),
                 const SizedBox(height: 16),
+                ListTile(
+                  leading: const Icon(Icons.edit_rounded, color: Colors.blueAccent),
+                  title: const Text('Edit Transaction', style: TextStyle(fontWeight: FontWeight.w700)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showEditTransactionSheet(context, item, vm, isDark);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                  title: const Text('Delete Transaction', style: TextStyle(fontWeight: FontWeight.w700, color: Colors.redAccent)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  onTap: () async {
+                    Navigator.pop(ctx);
+                    await vm.deleteTransaction(item);
+                  },
+                ),
               ],
             ),
           ),
+        );
+      },
+    );
+  }
+
+  void _showEditTransactionSheet(BuildContext context, PersonLedgerItem item, PersonLedgerViewModel vm, bool isDark) {
+    final rupees = item.amountInPaise / 100.0;
+    final amountController = TextEditingController(
+      text: rupees % 1 == 0 ? rupees.toInt().toString() : rupees.toStringAsFixed(2),
+    );
+    final noteController = TextEditingController(text: item.title);
+    DateTime selectedDate = item.date;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: isDark ? AppColors.darkSurfaceCard : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (sheetCtx, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom,
+                left: 20,
+                right: 20,
+                top: 20,
+              ),
+              child: SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Edit Transaction',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded, size: 20),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    KithAmountCalculatorField(
+                      controller: amountController,
+                      currencyCode: 'INR',
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: noteController,
+                      decoration: InputDecoration(
+                        labelText: 'Title / Note',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    InkWell(
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: selectedDate,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime.now().add(const Duration(days: 365)),
+                        );
+                        if (picked != null) {
+                          setSheetState(() {
+                            selectedDate = picked;
+                          });
+                        }
+                      },
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF141A21) : const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+                            width: 0.8,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.calendar_today_rounded, size: 16, color: AppColors.emeraldPrimary),
+                                const SizedBox(width: 8),
+                                Text(
+                                  DateFormatter.formatDate(selectedDate),
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Text(
+                              'Change',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                          foregroundColor: isDark ? AppColors.darkBackground : Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () async {
+                          final evaluatedPaise = KithCalculatorEngine.evaluateToPaise(amountController.text.trim());
+                          if (evaluatedPaise <= 0 || item.referenceId == null) return;
+
+                          Navigator.pop(ctx);
+                          await vm.updateDebtTransaction(
+                            item.referenceId!,
+                            newAmountInPaise: evaluatedPaise,
+                            newNote: noteController.text.trim(),
+                            newDate: selectedDate,
+                          );
+                        },
+                        child: const Text(
+                          'Save Changes',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
     );
@@ -340,10 +803,16 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
       ),
       body: Column(
         children: [
-          // 1. Running Balance Sticky Hero
-          _buildRunningBalanceHero(isDark, vm),
+          // 1. Auto Budgeting Toggle Bar
+          _buildAutoBudgetingToggleCard(isDark, vm),
 
-          // 2. Chat / Conversation Timeline
+          // 2. Dynamic Running Balance Hero (Shown when Auto Budgeting is ON)
+          if (vm.isAutoBudgetingEnabled)
+            _buildRunningBalanceHero(isDark, vm)
+          else
+            _buildAutoBudgetingOffBanner(isDark),
+
+          // 3. Chat / Conversation Timeline
           Expanded(
             child: vm.isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -352,11 +821,15 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
                     : ListView.builder(
                         controller: _scrollController,
                         physics: const BouncingScrollPhysics(),
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
                         itemCount: vm.items.length,
                         itemBuilder: (ctx, i) {
                           final item = vm.items[i];
-                          return _buildTimelineItem(item, isDark);
+                          return InkWell(
+                            onLongPress: () => _showTransactionOptions(context, item, vm, isDark),
+                            borderRadius: BorderRadius.circular(16),
+                            child: _buildTimelineItem(item, isDark),
+                          );
                         },
                       )),
           ),
@@ -376,6 +849,113 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
     );
   }
 
+  /// Compact, tactile toggle card for Auto Budgeting (Default: OFF)
+  Widget _buildAutoBudgetingToggleCard(bool isDark, PersonLedgerViewModel vm) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurfaceCard : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+          width: 0.8,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: (vm.isAutoBudgetingEnabled
+                      ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
+                      : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted))
+                  .withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              Icons.auto_graph_rounded,
+              size: 16,
+              color: vm.isAutoBudgetingEnabled
+                  ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
+                  : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Auto Budgeting',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                  ),
+                ),
+                Text(
+                  vm.isAutoBudgetingEnabled ? 'Active balance tracking' : 'Disabled (Tap to enable)',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Transform.scale(
+            scale: 0.85,
+            child: Switch.adaptive(
+              value: vm.isAutoBudgetingEnabled,
+              activeThumbColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+              onChanged: (val) {
+                HapticHelper.medium();
+                vm.toggleAutoBudgeting(val);
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Non-intrusive banner shown when Auto Budgeting is OFF
+  Widget _buildAutoBudgetingOffBanner(bool isDark) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF141A21) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+          width: 0.8,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.info_outline_rounded,
+            size: 16,
+            color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Auto Budgeting is OFF. Enable above to calculate net balances with ${widget.personName}.',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildRunningBalanceHero(bool isDark, PersonLedgerViewModel vm) {
     final net = vm.netBalancePaise;
     final isOwed = net > 0;
@@ -387,7 +967,7 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
         : (isYouOwe ? Colors.orangeAccent : AppColors.emeraldPrimary);
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurfaceCard : Colors.white,
@@ -402,63 +982,92 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    vm.runningBalanceStatusText,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    isSettled ? 'Even' : CurrencyFormatter.formatPaise(net.abs(), currencyCode: 'INR'),
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: -0.5,
-                      color: isSettled
-                          ? (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary)
-                          : badgeColor,
-                    ),
-                  ),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: badgeColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      isSettled
-                          ? Icons.check_circle_rounded
-                          : (isOwed ? Icons.call_received_rounded : Icons.call_made_rounded),
-                      size: 14,
-                      color: badgeColor,
-                    ),
-                    const SizedBox(width: 4),
                     Text(
-                      isSettled ? 'Settled' : (isOwed ? 'To Collect' : 'To Pay'),
+                      vm.runningBalanceStatusText,
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 13,
                         fontWeight: FontWeight.w700,
-                        color: badgeColor,
+                        color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      isSettled ? 'Settled' : CurrencyFormatter.formatPaise(net.abs(), currencyCode: 'INR'),
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.5,
+                        color: isSettled
+                            ? (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary)
+                            : badgeColor,
                       ),
                     ),
                   ],
                 ),
               ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: badgeColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          isSettled
+                              ? Icons.check_circle_rounded
+                              : (isOwed ? Icons.call_received_rounded : Icons.call_made_rounded),
+                          size: 14,
+                          color: badgeColor,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          isSettled ? 'Settled' : (isOwed ? 'To Collect' : 'To Pay'),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: badgeColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (!isSettled) ...[
+                    const SizedBox(height: 8),
+                    InkWell(
+                      onTap: () => _showSettleUpSheet(context, vm, isDark),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'Settle Up',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ],
           ),
           const SizedBox(height: 12),
-          // Total Lent & Total Borrowed Sub-metrics
+          // Total Paid & Total Received Lifetime Metrics
           Row(
             children: [
               Expanded(
@@ -472,7 +1081,7 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Total Lent / Paid',
+                        'Total Paid / Lent',
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
@@ -481,7 +1090,7 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        CurrencyFormatter.formatPaise(vm.totalLentPaise, currencyCode: 'INR'),
+                        CurrencyFormatter.formatPaise(vm.totalPaidPaise, currencyCode: 'INR'),
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
@@ -504,7 +1113,7 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Total Borrowed / Received',
+                        'Total Received / Borrowed',
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
@@ -513,7 +1122,7 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        CurrencyFormatter.formatPaise(vm.totalBorrowedPaise, currencyCode: 'INR'),
+                        CurrencyFormatter.formatPaise(vm.totalReceivedPaise, currencyCode: 'INR'),
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
@@ -526,6 +1135,37 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
               ),
             ],
           ),
+          // Optional "This Month" Compact Insight
+          if (vm.thisMonthPaidPaise > 0 || vm.thisMonthReceivedPaise > 0) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.03),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.calendar_month_outlined,
+                    size: 13,
+                    color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'This month • Gave: ${CurrencyFormatter.formatPaise(vm.thisMonthPaidPaise, currencyCode: 'INR')} • Got: ${CurrencyFormatter.formatPaise(vm.thisMonthReceivedPaise, currencyCode: 'INR')}',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );

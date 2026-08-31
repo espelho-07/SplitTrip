@@ -42,6 +42,7 @@ void main() {
         personalRepo: personalRepo,
         expenseRepo: expenseRepo,
         tripRepo: tripRepo,
+        storage: storage,
       );
     });
 

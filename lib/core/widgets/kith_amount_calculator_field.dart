@@ -9,7 +9,7 @@ import 'kith_components.dart';
 class KithAmountCalculatorField extends StatefulWidget {
   final TextEditingController controller;
   final String currencyCode;
-  final ValueChanged<int> onAmountChanged;
+  final ValueChanged<int>? onAmountChanged;
   final VoidCallback? onSubmitted;
   final bool autoFocus;
 
@@ -17,7 +17,7 @@ class KithAmountCalculatorField extends StatefulWidget {
     super.key,
     required this.controller,
     this.currencyCode = 'INR',
-    required this.onAmountChanged,
+    this.onAmountChanged,
     this.onSubmitted,
     this.autoFocus = false,
   });
@@ -53,7 +53,7 @@ class _KithAmountCalculatorFieldState extends State<KithAmountCalculatorField> {
       });
     }
 
-    widget.onAmountChanged(evaluatedPaise);
+    widget.onAmountChanged?.call(evaluatedPaise);
   }
 
   void _insertOperator(String op) {

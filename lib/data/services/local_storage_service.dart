@@ -658,6 +658,19 @@ class LocalStorageService {
     await _prefs.remove(_versionDismissedAtKey);
   }
 
+  // --- Auto Budgeting / Person Balance System ---
+  static const String _autoBudgetingPrefix = 'kith_auto_budgeting_';
+
+  bool isAutoBudgetingEnabled(String personKey) {
+    final cleanKey = personKey.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9_]'), '_');
+    return _prefs.getBool('$_autoBudgetingPrefix$cleanKey') ?? false;
+  }
+
+  Future<bool> setAutoBudgetingEnabled(String personKey, bool enabled) {
+    final cleanKey = personKey.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9_]'), '_');
+    return _prefs.setBool('$_autoBudgetingPrefix$cleanKey', enabled);
+  }
+
   // --- Local Database & Storage Schema Migration ---
   int getLocalSchemaVersion() => _prefs.getInt(_localSchemaVersionKey) ?? 0;
 
