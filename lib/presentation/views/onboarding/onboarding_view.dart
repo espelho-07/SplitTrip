@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../../core/config/app_config.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -154,66 +155,42 @@ class _OnboardingViewState extends State<OnboardingView> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            // Primary: Continue with Google
-                            KithGoogleAuthButton(
+                            // Primary: Continue as Guest
+                            AppButton(
+                              text: l10n.onboardingGuestBtn,
+                              variant: AppButtonVariant.primary,
+                              isFullWidth: true,
                               isLoading: authVm.isLoading,
-                              onPressed: _handleGoogleSignIn,
-                            ),
-
-                            const SizedBox(height: 10),
-
-                            // Ecosystem Subtitle
-                            Text(
-                              l10n.onboardingEcosystemNote,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w600,
-                                color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
-                                    .withValues(alpha: 0.9),
-                                letterSpacing: 0.2,
-                              ),
+                              onPressed: _handleExploreAsGuest,
                             ),
 
                             const SizedBox(height: 12),
 
-                            // Secondary: Explore as Guest
+                            // Secondary: Recover using Kith Recovery Key
                             AppButton(
-                              text: l10n.onboardingGuestBtn,
+                              text: l10n.onboardingRecoveryLink,
                               variant: AppButtonVariant.secondary,
                               isFullWidth: true,
-                              onPressed: _handleExploreAsGuest,
-                            ),
-
-                            const SizedBox(height: 14),
-
-                            // Tertiary: Restore with Recovery Key
-                            TextButton.icon(
-                              style: TextButton.styleFrom(
-                                foregroundColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              icon: const Icon(Icons.key_rounded, size: 14),
-                              label: Text(
-                                l10n.onboardingRecoveryLink,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: -0.1,
-                                ),
-                              ),
                               onPressed: () => RecoveryKeySheet.show(context),
                             ),
 
-                            const SizedBox(height: 14),
+                            // Preserved for future reactivation: Google Sign-In
+                            if (AppConfig.enableGoogleAuth) ...[
+                              const SizedBox(height: 12),
+                              KithGoogleAuthButton(
+                                isLoading: authVm.isLoading,
+                                onPressed: _handleGoogleSignIn,
+                              ),
+                            ],
+
+                            const SizedBox(height: 16),
 
                             // Trust & Privacy Note
                             Text(
                               l10n.onboardingTrustNote,
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                fontSize: 11,
+                                fontSize: 11.5,
                                 fontWeight: FontWeight.w500,
                                 color: (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted)
                                     .withValues(alpha: 0.8),

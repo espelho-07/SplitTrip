@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../../../core/config/app_config.dart';
 import '../../../../core/localization/app_localizations.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
@@ -442,24 +443,26 @@ class ProfileHomeTab extends StatelessWidget {
               isDark: isDark,
               onTap: () => context.push('/profile/edit'),
             ),
-            if (!isNirniqLinked)
-              _buildMenuItem(
-                icon: Icons.verified_user_rounded,
-                title: l10n.profileConnectNirniq,
-                subtitle: l10n.profileConnectNirniqDesc,
-                iconColor: AppColors.emeraldPrimary,
-                isDark: isDark,
-                onTap: () => _handleNirniqSignIn(context),
-              )
-            else
-              _buildMenuItem(
-                icon: Icons.hub_rounded,
-                title: l10n.profileConnectedApps,
-                subtitle: l10n.profileConnectedAppsDesc,
-                iconColor: const Color(0xFF0D9488),
-                isDark: isDark,
-                onTap: () => _showConnectedAppsSheet(context, isDark),
-              ),
+            if (AppConfig.enableGoogleAuth) ...[
+              if (!isNirniqLinked)
+                _buildMenuItem(
+                  icon: Icons.verified_user_rounded,
+                  title: l10n.profileConnectNirniq,
+                  subtitle: l10n.profileConnectNirniqDesc,
+                  iconColor: AppColors.emeraldPrimary,
+                  isDark: isDark,
+                  onTap: () => _handleNirniqSignIn(context),
+                )
+              else
+                _buildMenuItem(
+                  icon: Icons.hub_rounded,
+                  title: l10n.profileConnectedApps,
+                  subtitle: l10n.profileConnectedAppsDesc,
+                  iconColor: const Color(0xFF0D9488),
+                  isDark: isDark,
+                  onTap: () => _showConnectedAppsSheet(context, isDark),
+                ),
+            ],
             _buildMenuItem(
               icon: Icons.key_rounded,
               title: l10n.authRecoveryKey,

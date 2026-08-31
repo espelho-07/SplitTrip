@@ -186,7 +186,7 @@ void main() {
       expect(find.text('Priya Patel'), findsOneWidget);
       expect(find.text('Guest Account'), findsOneWidget);
       expect(find.text('Profile & Identity'), findsOneWidget);
-      expect(find.text('Sign in with Google'), findsOneWidget);
+      expect(find.text('Sign in with Google'), findsNothing);
 
       await tester.scrollUntilVisible(find.text('Restore Your Account'), 200);
       expect(find.text('Restore Your Account'), findsOneWidget);

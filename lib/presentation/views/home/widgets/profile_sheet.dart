@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../../../core/config/app_config.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
@@ -304,7 +305,7 @@ class ProfileSheet extends StatelessWidget {
                         const Icon(Icons.check_circle_rounded, size: 18, color: AppColors.emeraldPrimary),
                     ],
                   ),
-                  if (!isNirniqLinked) ...[
+                  if (AppConfig.enableGoogleAuth && !isNirniqLinked) ...[
                     Divider(height: 20, color: isDark ? Colors.white10 : Colors.black12),
                     InkWell(
                       onTap: () => _handleNirniqSignIn(context),

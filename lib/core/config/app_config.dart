@@ -6,6 +6,9 @@ class AppConfig {
   static const String appName = 'Kith';
   static const String appVersion = '1.0.0';
 
+  /// Feature flag: Temporarily disable Google Auth in user-facing flows
+  static const bool enableGoogleAuth = false;
+
   /// Deep link scheme for invitation sharing
   static const String deepLinkScheme = 'kith';
   static const String deepLinkHost = 'trip';

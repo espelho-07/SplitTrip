@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../../../core/config/app_config.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
@@ -102,9 +103,13 @@ class CloudSettingsView extends StatelessWidget {
                 Row(
                   children: [
                     Icon(
-                      user?.isGoogleLinked == true ? Icons.verified_user_rounded : Icons.person_outline_rounded,
+                      user?.isGoogleLinked == true && AppConfig.enableGoogleAuth
+                          ? Icons.verified_user_rounded
+                          : Icons.shield_rounded,
                       size: 24,
-                      color: user?.isGoogleLinked == true ? AppColors.emeraldPrimary : AppColors.indigoAccent,
+                      color: user?.isGoogleLinked == true && AppConfig.enableGoogleAuth
+                          ? AppColors.emeraldPrimary
+                          : AppColors.emeraldPrimary,
                     ),
                     const SizedBox(width: AppSpacing.md),
                     Expanded(
@@ -112,7 +117,9 @@ class CloudSettingsView extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            user?.isGoogleLinked == true ? 'Google Account' : 'Guest Account',
+                            user?.isGoogleLinked == true && AppConfig.enableGoogleAuth
+                                ? 'Google Account'
+                                : 'Kith Local-First Account',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
@@ -121,15 +128,15 @@ class CloudSettingsView extends StatelessWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            user?.email != null && user!.email!.isNotEmpty
-                                ? user.email!
-                                : 'Not connected to Google yet',
+                            user?.isGoogleLinked == true && AppConfig.enableGoogleAuth
+                                ? (user?.email ?? '')
+                                : 'Protected by Master Recovery Key',
                             style: AppTypography.bodySmall(isDark: isDark),
                           ),
                         ],
                       ),
                     ),
-                    if (user?.isGoogleLinked == true)
+                    if (user?.isGoogleLinked == true && AppConfig.enableGoogleAuth)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
@@ -149,9 +156,9 @@ class CloudSettingsView extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  user?.isGoogleLinked == true
+                  user?.isGoogleLinked == true && AppConfig.enableGoogleAuth
                       ? 'Your account is permanently linked to Google and backed up in Supabase PostgreSQL.'
-                      : 'Sign in with Google to sync your trips, expenses, and balances seamlessly across devices.',
+                      : 'Your ledger and financial records are secured locally and backed up across devices using your Recovery Key.',
                   style: TextStyle(
                     fontSize: 11,
                     color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,

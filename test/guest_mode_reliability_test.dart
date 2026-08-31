@@ -85,9 +85,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
 
       expect(authVm.isAuthenticated, isFalse);
-      expect(find.text('Explore as Guest'), findsOneWidget);
+      expect(find.text('Continue as Guest'), findsOneWidget);
 
-      await tester.tap(find.text('Explore as Guest'));
+      await tester.tap(find.text('Continue as Guest'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
 

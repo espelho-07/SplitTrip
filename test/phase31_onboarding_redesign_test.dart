@@ -73,7 +73,7 @@ void main() {
       expect(find.textContaining('Your money'), findsOneWidget);
     });
 
-    testWidgets('2. Renders Nirniq Auth button and Explore as Guest', (tester) async {
+    testWidgets('2. Renders Continue as Guest and Recover using Kith Recovery Key (Zero Google Auth)', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -82,12 +82,12 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 600));
 
-      expect(find.text('Continue with Google'), findsOneWidget);
-      expect(find.text('Explore as Guest'), findsOneWidget);
-      expect(find.text('Restore with Recovery Key'), findsOneWidget);
+      expect(find.text('Continue as Guest'), findsOneWidget);
+      expect(find.text('Recover using Kith Recovery Key'), findsOneWidget);
+      expect(find.text('Continue with Google'), findsNothing);
     });
 
-    testWidgets('3. Tapping Explore as Guest opens name input sheet and creates guest session', (tester) async {
+    testWidgets('3. Tapping Continue as Guest opens name input sheet and creates guest session', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -97,7 +97,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 600));
 
       expect(authVm.isAuthenticated, isFalse);
-      await tester.tap(find.text('Explore as Guest'));
+      await tester.tap(find.text('Continue as Guest'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 600));
 
