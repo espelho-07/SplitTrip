@@ -1,11 +1,14 @@
 ﻿/**
  * Supabase Edge Function: ipo-data
  *
- * Secure proxy for IPO market data (IPO Guru API).
- * Runs on Deno / Supabase Edge Network.
+ * Secure proxy for IPO market data.
+ * Architecture:
+ *   1. IPO Guru (PRIMARY) — Automatically becomes active when IPO_GURU_API_KEY is configured
+ *   2. FinAPI (BACKUP) — Active fallback when IPO Guru is unconfigured or unavailable
  *
  * Environment Secrets:
- * - IPO_GURU_API_KEY: Secret key provided by ipoguru.in
+ * - IPO_GURU_API_KEY: Primary secret from ipoguru.in
+ * - FINAPI_API_KEY: Backup secret from finapi.in
  */
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
@@ -18,7 +21,107 @@ const corsHeaders = {
 // In-memory cache per Edge worker isolate
 let cachedIpos: any[] | null = null;
 let cacheExpiry = 0;
-const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+let cachedSource = "none";
+let cacheLastUpdated: string | null = null;
+
+const CACHE_TTL_MS = 60 * 60 * 1000; // 60 minutes (~24 refreshes/day)
+
+function normalizeIpo(item: any, idx: number, source: string) {
+  const rawId = item.id ?? item.symbol ?? item.ticker ?? `ipo_${source}_${idx}`;
+  const id = String(rawId).toLowerCase().replace(/[^a-z0-9_-]/g, "_");
+  const name = item.company_name ?? item.name ?? item.ipo_name ?? "Unknown IPO";
+  const companyName = item.company_name ?? item.issuer ?? name;
+  const symbol = item.symbol ?? item.ticker ?? item.nse_code ?? item.bse_code ?? "";
+  const category = (item.category ?? item.market_type ?? item.type ?? "mainboard").toLowerCase();
+  const marketType = category.includes("sme") ? "sme" : "mainboard";
+
+  const statusStr = (item.status ?? item.ipo_status ?? "upcoming").toLowerCase();
+  let status = "upcoming";
+  if (statusStr.includes("open") || statusStr.includes("active") || statusStr.includes("live")) {
+    status = "open";
+  } else if (statusStr.includes("closed") || statusStr.includes("ended")) {
+    status = "closed";
+  } else if (statusStr.includes("allot") || statusStr.includes("basis")) {
+    status = "allotmentOut";
+  } else if (statusStr.includes("list") || statusStr.includes("trad")) {
+    status = "listed";
+  }
+
+  const minPrice = parseFloat(item.price_band_min ?? item.min_price ?? item.floor_price ?? 0) || 0;
+  const maxPrice = parseFloat(item.price_band_max ?? item.max_price ?? item.cap_price ?? minPrice) || minPrice;
+  const lotSize = parseInt(item.lot_size ?? item.market_lot ?? 1, 10) || 1;
+
+  const issueSizeCrores = parseFloat(item.issue_size ?? item.total_issue_size_cr ?? 0) || null;
+  const freshIssueCrores = parseFloat(item.fresh_issue ?? 0) || null;
+  const ofsCrores = parseFloat(item.ofs ?? 0) || null;
+  const gmp = parseFloat(item.gmp ?? item.grey_market_premium ?? 0) || null;
+
+  return {
+    id,
+    name,
+    companyName,
+    symbol,
+    marketType,
+    status,
+    openDate: item.open_date ?? item.bidding_start_date ?? item.openDate ?? null,
+    closeDate: item.close_date ?? item.bidding_end_date ?? item.closeDate ?? null,
+    allotmentDate: item.allotment_date ?? item.allotmentDate ?? null,
+    listingDate: item.listing_date ?? item.listingDate ?? null,
+    minPrice,
+    maxPrice: maxPrice > 0 ? maxPrice : minPrice,
+    lotSize,
+    issueSizeCrores,
+    freshIssueCrores,
+    ofsCrores,
+    gmp,
+    lastUpdated: new Date().toISOString(),
+    source,
+    isLive: true,
+  };
+}
+
+async function fetchFromIpoGuru(apiKey: string): Promise<any[] | null> {
+  try {
+    const res = await fetch("https://www.ipoguru.in/api/v1/ipos", {
+      method: "GET",
+      headers: {
+        "X-API-KEY": apiKey,
+        Accept: "application/json",
+      },
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const rawList = Array.isArray(json) ? json : json?.ipos ?? json?.data ?? null;
+    if (!Array.isArray(rawList) || rawList.length === 0) return null;
+    return rawList.map((item: any, idx: number) => normalizeIpo(item, idx, "ipo_guru"));
+  } catch {
+    return null;
+  }
+}
+
+async function fetchFromFinApi(apiKey: string): Promise<any[] | null> {
+  try {
+    const headers: Record<string, string> = { Accept: "application/json" };
+    if (apiKey.startsWith("Bearer ")) {
+      headers["Authorization"] = apiKey;
+    } else {
+      headers["Authorization"] = `Bearer ${apiKey}`;
+      headers["X-API-KEY"] = apiKey;
+    }
+
+    const res = await fetch("https://api.finapi.in/v1/ipos", {
+      method: "GET",
+      headers,
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const rawList = Array.isArray(json) ? json : json?.ipos ?? json?.data ?? json?.results ?? null;
+    if (!Array.isArray(rawList) || rawList.length === 0) return null;
+    return rawList.map((item: any, idx: number) => normalizeIpo(item, idx, "finapi"));
+  } catch {
+    return null;
+  }
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -28,14 +131,15 @@ serve(async (req) => {
   try {
     const now = Date.now();
 
-    // 1. Serve from isolate memory cache if fresh
-    if (cachedIpos && now < cacheExpiry) {
+    // 1. Return fresh isolate cache if valid
+    if (cachedIpos && now < cacheExpiry && cachedIpos.length > 0) {
       return new Response(
         JSON.stringify({
           data: cachedIpos,
           isLive: true,
           cached: true,
-          source: "edge_cache",
+          source: cachedSource,
+          lastUpdated: cacheLastUpdated,
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -44,14 +148,70 @@ serve(async (req) => {
       );
     }
 
-    const apiKey = Deno.env.get("IPO_GURU_API_KEY");
-    if (!apiKey || apiKey === "your_ipo_guru_api_key_here") {
+    const guruKey = Deno.env.get("IPO_GURU_API_KEY");
+    const finApiKey = Deno.env.get("FINAPI_API_KEY");
+
+    // 2. Try Primary: IPO Guru
+    if (guruKey && guruKey !== "your_ipo_guru_api_key_here") {
+      const guruData = await fetchFromIpoGuru(guruKey);
+      if (guruData && guruData.length > 0) {
+        cachedIpos = guruData;
+        cacheExpiry = now + CACHE_TTL_MS;
+        cachedSource = "ipo_guru";
+        cacheLastUpdated = new Date().toISOString();
+
+        return new Response(
+          JSON.stringify({
+            data: guruData,
+            isLive: true,
+            cached: false,
+            source: "ipo_guru",
+            lastUpdated: cacheLastUpdated,
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200,
+          }
+        );
+      }
+    }
+
+    // 3. Try Backup: FinAPI
+    if (finApiKey && finApiKey !== "your_finapi_api_key_here") {
+      const finData = await fetchFromFinApi(finApiKey);
+      if (finData && finData.length > 0) {
+        cachedIpos = finData;
+        cacheExpiry = now + CACHE_TTL_MS;
+        cachedSource = "finapi";
+        cacheLastUpdated = new Date().toISOString();
+
+        return new Response(
+          JSON.stringify({
+            data: finData,
+            isLive: true,
+            cached: false,
+            source: "finapi",
+            lastUpdated: cacheLastUpdated,
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200,
+          }
+        );
+      }
+    }
+
+    // 4. Stale cache fallback if available
+    if (cachedIpos && cachedIpos.length > 0) {
       return new Response(
         JSON.stringify({
-          data: cachedIpos ?? [],
+          data: cachedIpos,
           isLive: false,
-          status: "unavailable",
-          message: "IPO_GURU_API_KEY secret is not configured in Supabase.",
+          cached: true,
+          isStale: true,
+          source: cachedSource,
+          lastUpdated: cacheLastUpdated,
+          message: "Upstream providers temporarily unreachable. Showing latest cached market data.",
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -60,70 +220,13 @@ serve(async (req) => {
       );
     }
 
-    // 2. Fetch from IPO Guru
-    const response = await fetch("https://www.ipoguru.in/api/v1/ipos", {
-      method: "GET",
-      headers: {
-        "X-API-KEY": apiKey,
-        Accept: "application/json",
-      },
-    });
-
-    if (!response.ok) {
-      return new Response(
-        JSON.stringify({
-          data: cachedIpos ?? [],
-          isLive: false,
-          status: "error",
-          message: `Upstream returned status ${response.status}`,
-        }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 200,
-        }
-      );
-    }
-
-    const payload = await response.json();
-    const rawList = Array.isArray(payload) ? payload : payload?.ipos ?? payload?.data ?? [];
-
-    const normalized = rawList.map((item: any, idx: number) => {
-      const minPrice = parseFloat(item.price_band_min ?? item.min_price ?? 0) || 0;
-      const maxPrice = parseFloat(item.price_band_max ?? item.max_price ?? minPrice) || minPrice;
-      const category = (item.category ?? item.type ?? "mainboard").toLowerCase();
-
-      return {
-        id: String(item.id ?? item.symbol ?? `ipo_${idx}`).toLowerCase().replace(/[^a-z0-9_-]/g, "_"),
-        name: item.company_name ?? item.name ?? "Unknown IPO",
-        companyName: item.company_name ?? item.name ?? "Unknown Company",
-        symbol: item.symbol ?? "",
-        marketType: category.includes("sme") ? "sme" : "mainboard",
-        status: (item.status ?? "upcoming").toLowerCase(),
-        openDate: item.open_date ?? null,
-        closeDate: item.close_date ?? null,
-        allotmentDate: item.allotment_date ?? null,
-        listingDate: item.listing_date ?? null,
-        minPrice,
-        maxPrice: maxPrice > 0 ? maxPrice : minPrice,
-        lotSize: parseInt(item.lot_size ?? 1, 10) || 1,
-        issueSizeCrores: parseFloat(item.issue_size ?? 0) || null,
-        freshIssueCrores: parseFloat(item.fresh_issue ?? 0) || null,
-        ofsCrores: parseFloat(item.ofs ?? 0) || null,
-        gmp: parseFloat(item.gmp ?? 0) || null,
-        lastUpdated: new Date().toISOString(),
-        isLive: true,
-      };
-    });
-
-    cachedIpos = normalized;
-    cacheExpiry = now + CACHE_TTL_MS;
-
+    // 5. Zero fake data: return empty list if no provider configured/reachable
     return new Response(
       JSON.stringify({
-        data: normalized,
-        isLive: true,
-        cached: false,
-        source: "ipo_guru",
+        data: [],
+        isLive: false,
+        status: "unavailable",
+        message: "IPO market data is currently unavailable.",
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

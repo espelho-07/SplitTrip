@@ -1,4 +1,4 @@
-﻿/**
+/**
  * IPO Proxy Routes for Kith Backend
  *
  * Architecture:
@@ -13,11 +13,14 @@
 const express = require("express");
 const router = express.Router();
 const { IpoGuruProvider } = require("../services/ipo/ipo_guru_provider");
+const { FinApiProvider } = require("../services/ipo/finapi_provider");
 const { IpoAlertsProvider } = require("../services/ipo/ipo_alerts_provider");
 
+// Provider Orchestrator Pipeline (Strict Priority Order: IPO Guru Primary -> FinAPI Backup -> Alerts)
 const providers = [
-  new IpoGuruProvider(),
-  new IpoAlertsProvider(),
+  new IpoGuruProvider(),    // 1. PRIMARY: IPO Guru (Will activate automatically once key is added tomorrow)
+  new FinApiProvider(),     // 2. BACKUP: FinAPI
+  new IpoAlertsProvider(),  // 3. SECONDARY BACKUP: IPOAlerts
 ];
 
 // Backend Cache state
@@ -28,6 +31,9 @@ let _cache = {
   lastUpdated: null,
 };
 
+// In-flight refresh lock (Deduplicates simultaneous requests from multiple users)
+let _inFlightFetch = null;
+
 // Observability metrics (Never logs secrets, tokens, or PII)
 const metrics = {
   totalRequests: 0,
@@ -36,37 +42,53 @@ const metrics = {
   providerCalls: 0,
   providerErrors: 0,
   lastSuccessfulSync: null,
+  activeSource: "none",
 };
 
-const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes cache
+// Cache duration: 60 minutes target refresh rate (~24 calls/day to protect free limits)
+const CACHE_TTL_MS = 60 * 60 * 1000;
 
 /**
- * Executes the provider pipeline to fetch live market IPOs
+ * Executes the provider pipeline to fetch live market IPOs.
+ * Strict Rule: IPO Guru is PRIMARY. Only falls back to FinAPI if IPO Guru is unconfigured or fails.
  */
 async function fetchFromPipeline() {
-  for (const provider of providers) {
-    if (!provider.isConfigured) {
-      continue;
-    }
-
-    try {
-      metrics.providerCalls++;
-      const results = await provider.fetchIpos();
-      if (Array.isArray(results) && results.length > 0) {
-        metrics.lastSuccessfulSync = new Date().toISOString();
-        return {
-          data: results,
-          source: provider.id,
-          lastUpdated: metrics.lastSuccessfulSync,
-        };
-      }
-    } catch (e) {
-      metrics.providerErrors++;
-      console.warn(`[IpoRoutes] Error with provider ${provider.id}:`, e.message);
-    }
+  if (_inFlightFetch) {
+    return _inFlightFetch;
   }
 
-  return null;
+  _inFlightFetch = (async () => {
+    try {
+      for (const provider of providers) {
+        if (!provider.isConfigured) {
+          continue;
+        }
+
+        try {
+          metrics.providerCalls++;
+          const results = await provider.fetchIpos();
+          if (Array.isArray(results) && results.length > 0) {
+            metrics.lastSuccessfulSync = new Date().toISOString();
+            metrics.activeSource = provider.id;
+            console.log(`[IpoRoutes] Successfully synced ${results.length} IPOs using provider: ${provider.id}`);
+            return {
+              data: results,
+              source: provider.id,
+              lastUpdated: metrics.lastSuccessfulSync,
+            };
+          }
+        } catch (e) {
+          metrics.providerErrors++;
+          console.warn(`[IpoRoutes] Error with provider ${provider.id}:`, e.message);
+        }
+      }
+      return null;
+    } finally {
+      _inFlightFetch = null;
+    }
+  })();
+
+  return _inFlightFetch;
 }
 
 // GET /api/ipos — Returns real, current Indian IPOs (or cached live data)
