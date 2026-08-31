@@ -8,6 +8,17 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.reader(Charsets.UTF_8).use { reader ->
+        localProperties.load(reader)
+    }
+}
+
+val flutterVersionCode = localProperties.getProperty("flutter.versionCode")?.toInt() ?: 11
+val flutterVersionName = localProperties.getProperty("flutter.versionName") ?: "1.0.1"
+
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
 if (keystorePropertiesFile.exists()) {
@@ -28,8 +39,8 @@ android {
         applicationId = "com.nirniq.kith"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
+        versionCode = flutterVersionCode
+        versionName = flutterVersionName
 
         ndk {
             abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a"))
