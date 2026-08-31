@@ -636,7 +636,7 @@ class _IpoHomeViewState extends State<IpoHomeView> {
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
-                            'GMP: ~₹${ipo.gmp} (Indicative)',
+                            'GMP: ~₹${ipo.gmp} (Unofficial / Indicative)',
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w700,

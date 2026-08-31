@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../../domain/models/ipo/ipo.dart';
 import '../../domain/models/ipo/ipo_application.dart';
@@ -58,12 +58,14 @@ class IpoRepository {
       final freshIpos = await dataProvider.fetchIpos();
       final trackedIds = storage.getTrackedIpoIds();
 
-      _cachedIpos = freshIpos.map((ipo) {
-        return ipo.copyWith(isTracked: trackedIds.contains(ipo.id));
-      }).toList();
+      if (freshIpos.isNotEmpty) {
+        _cachedIpos = freshIpos.map((ipo) {
+          return ipo.copyWith(isTracked: trackedIds.contains(ipo.id));
+        }).toList();
 
-      await storage.saveIpos(_cachedIpos.map((i) => i.toJson()).toList());
-      await storage.setIposLastUpdated(DateTime.now());
+        await storage.saveIpos(_cachedIpos.map((i) => i.toJson()).toList());
+        await storage.setIposLastUpdated(DateTime.now());
+      }
       return _cachedIpos;
     } catch (e) {
       debugPrint('[IpoRepository] Error fetching fresh IPOs, using cached: $e');

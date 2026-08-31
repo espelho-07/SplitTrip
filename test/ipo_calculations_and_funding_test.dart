@@ -1,6 +1,4 @@
-﻿import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:kith_app/core/network/api_client.dart';
 import 'package:kith_app/data/repositories/expense_repository.dart';
@@ -17,15 +15,50 @@ import 'package:kith_app/domain/services/notification_service.dart';
 import 'package:kith_app/presentation/viewmodels/ipo_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/person_ledger_viewmodel.dart';
 
-class MockIpoHttpClient extends http.BaseClient {
+class TestIpoDataProvider implements IpoDataProvider {
   @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    final responsePayload = jsonEncode({'status': 'ok', 'data': {}});
-    return http.StreamedResponse(
-      Stream.value(utf8.encode(responsePayload)),
-      200,
-      headers: {'content-type': 'application/json; charset=utf-8'},
-    );
+  Future<List<Ipo>> fetchIpos() async {
+    final now = DateTime.now();
+    return [
+      Ipo(
+        id: 'ipo_krn_heat',
+        name: 'KRN Heat Exchanger IPO',
+        companyName: 'KRN Heat Exchanger and Refrigeration Limited',
+        symbol: 'KRN',
+        marketType: IpoMarketType.mainboard,
+        status: IpoStatus.open,
+        openDate: now.subtract(const Duration(days: 1)),
+        closeDate: now.add(const Duration(days: 2)),
+        allotmentDate: now.add(const Duration(days: 3)),
+        listingDate: now.add(const Duration(days: 6)),
+        minPrice: 209,
+        maxPrice: 220,
+        lotSize: 65,
+        issueSizeCrores: 342.0,
+        subscriptionOverall: 214.4,
+        gmp: 235,
+        lastUpdated: now,
+      ),
+      Ipo(
+        id: 'ipo_bajaj_housing',
+        name: 'Bajaj Housing Finance IPO',
+        companyName: 'Bajaj Housing Finance Limited',
+        symbol: 'BAJAJHFL',
+        marketType: IpoMarketType.mainboard,
+        status: IpoStatus.listed,
+        openDate: DateTime(2024, 9, 9),
+        closeDate: DateTime(2024, 9, 11),
+        allotmentDate: DateTime(2024, 9, 12),
+        listingDate: DateTime(2024, 9, 16),
+        minPrice: 66,
+        maxPrice: 70,
+        lotSize: 214,
+        issuePrice: 70,
+        listingPrice: 150,
+        currentPrice: 115,
+        lastUpdated: now,
+      ),
+    ];
   }
 }
 
@@ -49,7 +82,7 @@ void main() {
     prefs = await SharedPreferences.getInstance();
     storage = LocalStorageService(prefs);
     syncService = SyncService(storage);
-    apiClient = ApiClient(httpClient: MockIpoHttpClient());
+    apiClient = ApiClient();
     personalRepo = PersonalRepository(
       storage: storage,
       syncService: syncService,
@@ -65,7 +98,7 @@ void main() {
       syncService: syncService,
       apiClient: apiClient,
     );
-    dataProvider = LiveIpoDataProvider();
+    dataProvider = TestIpoDataProvider();
     ipoRepo = IpoRepository(
       storage: storage,
       dataProvider: dataProvider,

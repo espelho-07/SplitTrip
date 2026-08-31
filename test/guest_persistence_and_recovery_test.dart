@@ -1,9 +1,8 @@
-﻿import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:kith_app/core/network/api_client.dart';
 import 'package:kith_app/core/services/secure_id_service.dart';
 import 'package:kith_app/core/services/supabase_guest_sync.dart';
 import 'package:kith_app/data/repositories/trip_repository.dart';
-import 'package:kith_app/data/repositories/user_repository.dart';
 import 'package:kith_app/data/services/auth_service.dart';
 import 'package:kith_app/data/services/local_storage_service.dart';
 import 'package:kith_app/data/services/sync_service.dart';
@@ -76,7 +75,6 @@ void main() {
   late FakeSupabaseGuestSync fakeSupabaseSync;
   late ApiClient apiClient;
   late AuthService authService;
-  late UserRepository userRepo;
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
@@ -91,8 +89,6 @@ void main() {
       secureIdService: fakeSecureId,
       supabaseGuestSync: fakeSupabaseSync,
     );
-
-    userRepo = UserRepository(authService: authService);
   });
 
   group("Guest Account Multi-Layer Persistence & Reinstall Recovery Suite", () {
