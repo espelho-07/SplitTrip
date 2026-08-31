@@ -38,7 +38,7 @@ function initFirebaseAdmin() {
 
     // 2. Individual Environment Variables
     if (!credential) {
-      const projectId = process.env.FIREBASE_PROJECT_ID || 'amazing-pipe-484506-t8';
+      const projectId = process.env.FIREBASE_PROJECT_ID || 'kith-7c88f';
       const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
       const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
 
@@ -119,6 +119,7 @@ async function sendToUser(db, userId, payload) {
           sound: 'kith_notification',
           priority: 'high',
           defaultSound: false,
+          clickAction: 'FLUTTER_NOTIFICATION_CLICK',
         },
         priority: 'high',
       },

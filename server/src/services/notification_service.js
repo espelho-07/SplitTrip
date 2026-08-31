@@ -270,6 +270,131 @@ class NotificationService {
   }
 
   /**
+   * Dispatches notifications and push alerts when a member joins a trip.
+   */
+  async notifyMemberJoined({ trip, member, actor, realtimeHub = null }) {
+    if (!trip || !member || !actor) return;
+
+    const pushService = require('./push_notification_service');
+    const actorName = member.displayName || actor.displayName || 'A new member';
+    const tripName = trip.name || 'Trip';
+
+    // 1. Resolve eligible active members of the trip, excluding the newly joined user
+    const members = db.find('trip_members', (m) => m.tripId === trip.id && m.status !== 'merged');
+    const recipientUserIds = new Set();
+
+    for (const m of members) {
+      if (m.userId && !m.userId.startsWith('unclaimed_') && m.userId !== actor.id) {
+        recipientUserIds.add(m.userId);
+      }
+    }
+
+    console.info(`[NotificationService] MEMBER JOINED DISPATCH: trip=${trip.id}, member=${member.id}, recipients=${recipientUserIds.size}`);
+
+    for (const recipientUserId of recipientUserIds) {
+      const existing = db.findOne('notifications', (n) =>
+        n.recipientUserId === recipientUserId &&
+        n.tripId === trip.id &&
+        n.actorUserId === actor.id &&
+        n.type === 'MEMBER_JOINED' &&
+        !n.deleted
+      );
+      if (existing) continue;
+
+      const title = 'Member joined trip';
+      const body = `${actorName} joined "${tripName}".`;
+      const route = `/trip/${trip.id}`;
+
+      this.createNotification({
+        recipientUserId,
+        actorUserId: actor.id,
+        actorName,
+        tripId: trip.id,
+        tripName,
+        type: 'MEMBER_JOINED',
+        title,
+        body,
+        route,
+        metadata: {
+          memberId: member.id,
+          tripId: trip.id,
+        },
+      });
+
+      pushService.sendToUser(db, recipientUserId, {
+        title,
+        body,
+        data: {
+          type: 'member_joined',
+          tripId: trip.id,
+          tripName,
+          actorUserId: actor.id,
+          actorName,
+          route,
+          channelId: 'kith_activity',
+        },
+      });
+    }
+  }
+
+  /**
+   * Dispatches notifications and push alerts when a trip is completed / settled.
+   */
+  async notifyTripCompleted({ trip, actor, realtimeHub = null }) {
+    if (!trip || !actor) return;
+
+    const pushService = require('./push_notification_service');
+    const actorName = actor.displayName || 'Creator';
+    const tripName = trip.name || 'Trip';
+
+    const members = db.find('trip_members', (m) => m.tripId === trip.id && m.status !== 'merged');
+    const recipientUserIds = new Set();
+
+    for (const m of members) {
+      if (m.userId && !m.userId.startsWith('unclaimed_') && m.userId !== actor.id) {
+        recipientUserIds.add(m.userId);
+      }
+    }
+
+    console.info(`[NotificationService] TRIP COMPLETED DISPATCH: trip=${trip.id}, recipients=${recipientUserIds.size}`);
+
+    for (const recipientUserId of recipientUserIds) {
+      const title = 'Trip completed 🎉';
+      const body = `"${tripName}" was marked completed by ${actorName}.`;
+      const route = `/trip/${trip.id}`;
+
+      this.createNotification({
+        recipientUserId,
+        actorUserId: actor.id,
+        actorName,
+        tripId: trip.id,
+        tripName,
+        type: 'TRIP_COMPLETED',
+        title,
+        body,
+        route,
+        metadata: {
+          tripId: trip.id,
+        },
+      });
+
+      pushService.sendToUser(db, recipientUserId, {
+        title,
+        body,
+        data: {
+          type: 'trip_completed',
+          tripId: trip.id,
+          tripName,
+          actorUserId: actor.id,
+          actorName,
+          route,
+          channelId: 'kith_activity',
+        },
+      });
+    }
+  }
+
+  /**
    * Retrieves all notifications for a specific user, newest first.
    */
   getNotificationsForUser(userId, { limit = 100, offset = 0 } = {}) {

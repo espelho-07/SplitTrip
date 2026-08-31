@@ -4,7 +4,9 @@ import 'package:provider/provider.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/realtime_client.dart';
+import '../../../core/services/fcm_service.dart';
 import '../../../core/services/kith_widget_service.dart';
+import '../../../core/services/permission_service.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../data/repositories/expense_repository.dart';
@@ -248,11 +250,20 @@ class _HomeViewState extends State<HomeView> {
         final syncService = context.read<SyncService>();
         final storage = context.read<LocalStorageService>();
         final notifService = context.read<NotificationService>();
+        final fcmService = context.read<FcmService>();
 
         await syncService.flushQueue(apiClient);
         await homeVm.loadTrips(user.id);
         await personalVm.loadData(user.id);
         await personalVm.syncTripExpenses(user.id);
+
+        // Ensure Android 13+ notification permissions and FCM push registration
+        try {
+          final permGranted = await PermissionService.requestNotificationPermission();
+          if (permGranted) {
+            await fcmService.registerToken();
+          }
+        } catch (_) {}
 
         // Check if user has not configured payment receiving method
         if (!storage.hasPaymentMethodConfigured()) {

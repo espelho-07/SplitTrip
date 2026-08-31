@@ -56,26 +56,29 @@ test('Expense Activity Notification Pipeline Test Suite', async (t) => {
     createdExpenseId = expense.id;
     assert.ok(createdExpenseId);
 
-    // Member A should have 1 notification
+    // Member A should have 1 expense notification
     const notifsA = notificationService.getNotificationsForUser(userA.id);
-    assert.strictEqual(notifsA.length, 1);
-    assert.strictEqual(notifsA[0].type, 'EXPENSE_CREATED');
-    assert.strictEqual(notifsA[0].actorUserId, hardevUser.id);
-    assert.strictEqual(notifsA[0].tripId, tripA.id);
-    assert.strictEqual(notifsA[0].expenseId, expense.id);
-    assert.strictEqual(notifsA[0].amountInPaise, 240000);
-    assert.ok(notifsA[0].body.includes('Hardev added') && notifsA[0].body.includes('Goa Trip'));
-    assert.strictEqual(notifsA[0].route, '/trip/' + tripA.id + '?expenseId=' + expense.id);
+    const expNotifsA = notifsA.filter(n => n.type.startsWith('EXPENSE_'));
+    assert.strictEqual(expNotifsA.length, 1);
+    assert.strictEqual(expNotifsA[0].type, 'EXPENSE_CREATED');
+    assert.strictEqual(expNotifsA[0].actorUserId, hardevUser.id);
+    assert.strictEqual(expNotifsA[0].tripId, tripA.id);
+    assert.strictEqual(expNotifsA[0].expenseId, expense.id);
+    assert.strictEqual(expNotifsA[0].amountInPaise, 240000);
+    assert.ok(expNotifsA[0].body.includes('Hardev added') && expNotifsA[0].body.includes('Goa Trip'));
+    assert.strictEqual(expNotifsA[0].route, '/trip/' + tripA.id + '?expenseId=' + expense.id);
 
-    // Member B should also have 1 notification
+    // Member B should also have 1 expense notification
     const notifsB = notificationService.getNotificationsForUser(userB.id);
-    assert.strictEqual(notifsB.length, 1);
-    assert.strictEqual(notifsB[0].type, 'EXPENSE_CREATED');
-    assert.strictEqual(notifsB[0].expenseId, expense.id);
+    const expNotifsB = notifsB.filter(n => n.type.startsWith('EXPENSE_'));
+    assert.strictEqual(expNotifsB.length, 1);
+    assert.strictEqual(expNotifsB[0].type, 'EXPENSE_CREATED');
+    assert.strictEqual(expNotifsB[0].expenseId, expense.id);
 
-    // Hardev (creator/actor) should have 0 notifications (No self-notification rule)
+    // Hardev (creator/actor) should have 0 expense notifications (No self-notification rule)
     const notifsHardev = notificationService.getNotificationsForUser(hardevUser.id);
-    assert.strictEqual(notifsHardev.length, 0);
+    const expNotifsHardev = notifsHardev.filter(n => n.type.startsWith('EXPENSE_'));
+    assert.strictEqual(expNotifsHardev.length, 0);
 
     // User C in Trip B should receive 0 notifications (Security & Trip Isolation)
     const notifsC = notificationService.getNotificationsForUser(userC.id);
@@ -96,9 +99,10 @@ test('Expense Activity Notification Pipeline Test Suite', async (t) => {
       ],
     });
 
-    // Member A should STILL only have 1 notification total
+    // Member A should STILL only have 1 expense notification total
     const notifsA = notificationService.getNotificationsForUser(userA.id);
-    assert.strictEqual(notifsA.length, 1);
+    const expNotifsA = notifsA.filter(n => n.type.startsWith('EXPENSE_'));
+    assert.strictEqual(expNotifsA.length, 1);
   });
 
   await t.test('3. Hardev edits Dinner: Rs 2,400 -> Rs 2,800 -> dispatches EXPENSE_UPDATED notice to members', async () => {
@@ -114,8 +118,9 @@ test('Expense Activity Notification Pipeline Test Suite', async (t) => {
     });
 
     const notifsA = notificationService.getNotificationsForUser(userA.id);
-    assert.strictEqual(notifsA.length, 2);
-    const updateNotif = notifsA[0]; // Newest first
+    const expNotifsA = notifsA.filter(n => n.type.startsWith('EXPENSE_'));
+    assert.strictEqual(expNotifsA.length, 2);
+    const updateNotif = expNotifsA[0]; // Newest first
     assert.strictEqual(updateNotif.type, 'EXPENSE_UPDATED');
     assert.strictEqual(updateNotif.amountInPaise, 280000);
     assert.ok(updateNotif.body.includes('Hardev updated Dinner at Fishermans Wharf from ₹2,400 to ₹2,800.'));
@@ -126,8 +131,9 @@ test('Expense Activity Notification Pipeline Test Suite', async (t) => {
     expenseService.deleteExpense(tripA.id, createdExpenseId, hardevUser);
 
     const notifsA = notificationService.getNotificationsForUser(userA.id);
-    assert.strictEqual(notifsA.length, 3);
-    const deleteNotif = notifsA[0];
+    const expNotifsA = notifsA.filter(n => n.type.startsWith('EXPENSE_'));
+    assert.strictEqual(expNotifsA.length, 3);
+    const deleteNotif = expNotifsA[0];
     assert.strictEqual(deleteNotif.type, 'EXPENSE_DELETED');
     assert.strictEqual(deleteNotif.route, '/trip/' + tripA.id); // Not broken expense detail
   });

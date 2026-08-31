@@ -84,6 +84,10 @@ class UserRepository {
     return authService.restoreSupabaseSession();
   }
 
+  Future<void> syncSession([GuestUser? user]) {
+    return authService.syncLocalGuestSession(user);
+  }
+
   Future<void> logout() {
     return authService.logout();
   }

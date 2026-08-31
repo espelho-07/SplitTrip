@@ -93,7 +93,7 @@ class FcmService {
 
     final notifType = eventType.contains('expense')
         ? NotificationType.expense
-        : eventType.contains('trip')
+        : (eventType.contains('trip') || eventType.contains('member'))
             ? NotificationType.trip
             : NotificationType.settlement;
 
@@ -124,15 +124,16 @@ class FcmService {
       type: notifType,
       route: targetRoute,
       actionLabel: _actionLabelForType(eventType),
-      idempotencyKey: idempotencyKey ?? (expenseId != null ? '${expenseId}_$eventType' : null),
+      idempotencyKey: idempotencyKey ?? (expenseId != null ? '${expenseId}_$eventType' : (settlementId != null ? '${settlementId}_$eventType' : null)),
     );
   }
 
   void _handleNotificationTap(RemoteMessage message) {
-    final route = message.data['route'] as String?;
-    final tripId = message.data['tripId'] as String?;
-    final settlementId = message.data['settlementId'] as String?;
-    final expenseId = message.data['expenseId'] as String?;
+    final data = message.data;
+    final route = data['route'] as String?;
+    final tripId = data['tripId'] as String?;
+    final settlementId = data['settlementId'] as String?;
+    final expenseId = data['expenseId'] as String?;
     final targetRoute = route ?? (tripId != null ? (expenseId != null ? '/trip/$tripId?expenseId=$expenseId' : (settlementId != null ? '/trip/$tripId?settlementId=$settlementId' : '/trip/$tripId')) : null);
 
     if (targetRoute != null && targetRoute.isNotEmpty && onNavigate != null) {
@@ -156,6 +157,8 @@ class FcmService {
       case 'expense_updated':
         return 'View Expense';
       case 'expense_deleted':
+      case 'member_joined':
+      case 'trip_completed':
         return 'View Trip';
       default:
         return 'Open';

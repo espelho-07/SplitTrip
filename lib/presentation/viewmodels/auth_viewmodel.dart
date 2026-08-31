@@ -40,6 +40,9 @@ class AuthViewModel extends ChangeNotifier {
       _currentUser = userRepo.getCurrentUser();
       _appExperienceMode = AppExperienceMode.fromKey(userRepo.getAppExperienceMode());
       _authState = _currentUser != null ? AuthState.authenticated : AuthState.signedOut;
+      if (_currentUser != null) {
+        userRepo.syncSession(_currentUser);
+      }
     } catch (e) {
       _errorMessage = e.toString();
       _authState = AuthState.signedOut;
@@ -68,6 +71,7 @@ class AuthViewModel extends ChangeNotifier {
       final user = await userRepo.createGuestUser(displayName: displayName);
       _currentUser = user;
       _authState = AuthState.authenticated;
+      userRepo.syncSession(user);
       return user;
     } catch (e) {
       _errorMessage = e.toString();
@@ -88,6 +92,7 @@ class AuthViewModel extends ChangeNotifier {
       _currentUser = user;
       if (user != null) {
         _authState = AuthState.authenticated;
+        userRepo.syncSession(user);
       }
       return user;
     } catch (e) {

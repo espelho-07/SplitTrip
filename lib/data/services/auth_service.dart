@@ -90,6 +90,7 @@ class AuthService {
         apiClient.setAuthToken(token);
         realtimeClient?.setAuthToken(token);
         await storage.saveUser(user.toJson());
+        syncLocalGuestSession(user);
         return user;
       }
     } catch (_) {
@@ -169,6 +170,7 @@ class AuthService {
         apiClient.setAuthToken(token);
         realtimeClient?.setAuthToken(token);
         await storage.saveUser(user.toJson());
+        syncLocalGuestSession(user);
         return user;
       }
     } catch (_) {
@@ -182,6 +184,7 @@ class AuthService {
       apiClient.setAuthToken(user.anonymousToken);
       realtimeClient?.setAuthToken(user.anonymousToken);
       await storage.saveUser(user.toJson());
+      syncLocalGuestSession(user);
       return user;
     }
 

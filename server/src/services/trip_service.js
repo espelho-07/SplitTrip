@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { db } = require('../db/database');
 const { AppError } = require('../middleware/error_handler');
+const notificationService = require('./notification_service');
 
 class TripService {
   _generateInviteCode() {
@@ -357,6 +358,14 @@ class TripService {
         trip: enriched,
       });
     }
+
+    // Dispatch member joined notifications and push alerts
+    notificationService.notifyMemberJoined({
+      trip: enriched,
+      member: activeMember,
+      actor: user,
+      realtimeHub,
+    });
 
     return enriched;
   }
@@ -946,6 +955,13 @@ class TripService {
         trip: enriched,
       });
     }
+
+    // Dispatch trip completed notifications and push alerts
+    notificationService.notifyTripCompleted({
+      trip: enriched,
+      actor: { id: currentUserId, displayName: authMember.displayName },
+      realtimeHub,
+    });
 
     return enriched;
   }
