@@ -383,6 +383,167 @@ const deleteAccountHtml = `<!DOCTYPE html>
 </body>
 </html>`;
 
+const termsHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terms of Service — Kith</title>
+  <style>
+    :root {
+      --bg: #0F172A;
+      --card-bg: #1E293B;
+      --text: #F8FAFC;
+      --text-muted: #94A3B8;
+      --primary: #10B981;
+      --border: rgba(255, 255, 255, 0.1);
+      --indigo: #6366F1;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      margin: 0;
+      padding: 24px 16px;
+    }
+    .container {
+      max-width: 760px;
+      margin: 0 auto;
+    }
+    .header {
+      padding: 32px 24px;
+      background: var(--card-bg);
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      margin-bottom: 24px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      background: rgba(99, 102, 241, 0.15);
+      color: var(--indigo);
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+    }
+    h1 {
+      margin: 0 0 8px 0;
+      font-size: 28px;
+      font-weight: 800;
+    }
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+    .section {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+    h2 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-top: 0;
+      margin-bottom: 12px;
+      color: var(--text);
+    }
+    p, ul {
+      color: #CBD5E1;
+      font-size: 14.5px;
+      margin: 0 0 12px 0;
+    }
+    ul {
+      padding-left: 20px;
+    }
+    li {
+      margin-bottom: 6px;
+    }
+    a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    .footer-links {
+      text-align: center;
+      margin-top: 32px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="badge">Legal Agreement</div>
+      <h1>Terms of Service</h1>
+      <div class="subtitle">Effective Date: August 31, 2026 · App: Kith Expense &amp; Trip Ledger</div>
+    </div>
+
+    <div class="section">
+      <h2>1. Acceptance of Terms</h2>
+      <p>By downloading, accessing, or using <strong>Kith</strong> (&quot;the Application&quot;, &quot;Service&quot;), provided by <strong>Darpan Parmar</strong> (&quot;Developer&quot;, &quot;we&quot;, &quot;us&quot;), you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use the Application.</p>
+    </div>
+
+    <div class="section">
+      <h2>2. Description of Service &amp; Financial Disclaimer</h2>
+      <p>Kith is a local-first group travel expense tracker, personal finance manager, and debt simplification calculation tool. Please note:</p>
+      <ul>
+        <li><strong>Calculation Utility Only:</strong> Kith is not a bank, payment gateway, custodian, or financial institution. Kith calculates mathematical debt balances and transaction splits between friends and groups.</li>
+        <li><strong>No Direct Fund Holding:</strong> Kith does not hold, transmit, custody, or manage monetary funds or bank accounts.</li>
+        <li><strong>Peer-to-Peer Payments:</strong> Any financial settlements initiated via UPI or external payment links occur entirely outside Kith via third-party payment applications chosen by the users.</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h2>3. User Accounts &amp; Data Responsibility</h2>
+      <ul>
+        <li><strong>Guest Mode:</strong> You may use Kith anonymously as a Guest without providing personal identification. Guest records are secured locally on your device with a cryptographically generated Recovery Key. You are solely responsible for saving your Recovery Key.</li>
+        <li><strong>Google Sign-In:</strong> You may link your Google Account to back up and synchronize your trips and budgets across devices.</li>
+        <li><strong>User Content:</strong> You retain ownership of all expense names, trip titles, categories, and receipts you enter into the Application. You agree not to upload abusive, unlawful, or infringing content.</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h2>4. Intellectual Property</h2>
+      <p>The Kith software, algorithms (including the debt simplification engine), visual designs, logos, and documentation are the intellectual property of Darpan Parmar. You are granted a personal, revocable, non-exclusive, non-transferable license to use the app for personal, non-commercial expense tracking.</p>
+    </div>
+
+    <div class="section">
+      <h2>5. Termination &amp; Data Deletion</h2>
+      <p>You may terminate your relationship with Kith at any time by uninstalling the application and/or purging your data:</p>
+      <ul>
+        <li><strong>In-App Deletion:</strong> Profile &rarr; Delete Account &amp; Cloud Data permanently deletes your profile, expenses, and cloud backups.</li>
+        <li><strong>Web Data Deletion Portal:</strong> If you uninstalled the app, you may request permanent data deletion via our <a href="/delete-account">Web Data Deletion Portal</a>.</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h2>6. Limitation of Liability</h2>
+      <p>To the maximum extent permitted by applicable law, Kith is provided on an &quot;AS IS&quot; and &quot;AS AVAILABLE&quot; basis without warranties of any kind. The developer shall not be liable for indirect, incidental, special, consequential, or punitive damages arising from the use or inability to use the Service.</p>
+    </div>
+
+    <div class="section">
+      <h2>7. Contact Information</h2>
+      <p>Developer: <strong>Darpan Parmar</strong><br>
+      Email: <a href="mailto:hello.nirniq@gmail.com">hello.nirniq@gmail.com</a><br>
+      Website: <a href="https://darpanparmar.me" target="_blank">https://darpanparmar.me</a></p>
+    </div>
+
+    <div class="footer-links">
+      <a href="/privacy">Privacy Policy</a> · <a href="/delete-account">Data Deletion Portal</a> · <a href="mailto:hello.nirniq@gmail.com">Contact Developer</a>
+    </div>
+  </div>
+</body>
+</html>`;
+
 router.get('/privacy', (req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(privacyHtml);
@@ -391,6 +552,21 @@ router.get('/privacy', (req, res) => {
 router.get('/privacy-policy', (req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(privacyHtml);
+});
+
+router.get('/terms', (req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(termsHtml);
+});
+
+router.get('/terms-of-service', (req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(termsHtml);
+});
+
+router.get('/tos', (req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(termsHtml);
 });
 
 router.get('/delete-account', (req, res) => {
