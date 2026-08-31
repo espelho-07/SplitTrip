@@ -115,18 +115,23 @@ async function sendToUser(db, userId, payload) {
       ),
       android: {
         notification: {
-          channelId: data.channelId || (data.type?.includes('settlement') || data.type?.includes('payment') ? 'kith_payments' : 'kith_activity'),
+          channelId: data.channelId || (data.type?.includes('settlement') || data.type?.includes('payment') ? 'kith_payments' : (data.type?.includes('ipo') ? 'kith_ipo' : 'kith_activity')),
           sound: 'kith_notification',
           priority: 'high',
-          defaultSound: false,
+          defaultSound: true,
+          defaultVibrateTimings: true,
+          visibility: 'public',
           clickAction: 'FLUTTER_NOTIFICATION_CLICK',
         },
         priority: 'high',
+        ttl: 86400 * 1000, // 24 hours delivery window
       },
       apns: {
         payload: {
           aps: {
             sound: 'kith_notification.wav',
+            badge: 1,
+            contentAvailable: true,
           },
         },
       },

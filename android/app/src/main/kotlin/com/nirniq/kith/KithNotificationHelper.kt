@@ -17,6 +17,8 @@ object KithNotificationHelper {
     const val CHANNEL_NAME = "Kith Activity"
     const val CHANNEL_ID_PAYMENTS = "kith_payments"
     const val CHANNEL_NAME_PAYMENTS = "Kith Payments & Settlements"
+    const val CHANNEL_ID_IPO = "kith_ipo"
+    const val CHANNEL_NAME_IPO = "Kith IPO Alerts & Milestones"
 
     fun getSoundUri(context: Context): Uri {
         return Uri.parse("${ContentResolver.SCHEME_ANDROID_RESOURCE}://${context.packageName}/${R.raw.kith_notification}")
@@ -54,6 +56,16 @@ object KithNotificationHelper {
                 setSound(soundUri, audioAttributes)
             }
             notificationManager.createNotificationChannel(paymentsChannel)
+
+            // 3. IPO channel (IPO Bidding, Allotment Out, Listing Milestones)
+            val ipoChannel = NotificationChannel(CHANNEL_ID_IPO, CHANNEL_NAME_IPO, NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "IPO bidding reminders, allotment status, and listing alerts"
+                enableLights(true)
+                enableVibration(true)
+                vibrationPattern = subtleVibrationPattern
+                setSound(soundUri, audioAttributes)
+            }
+            notificationManager.createNotificationChannel(ipoChannel)
         }
     }
 
