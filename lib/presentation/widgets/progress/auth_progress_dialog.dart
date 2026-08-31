@@ -55,7 +55,7 @@ class _AuthProgressDialogState extends State<AuthProgressDialog> with SingleTick
   late final AnimationController _pulseController;
 
   double _progress = 0.05;
-  String _statusTitle = 'Connecting to Nirniq Account…';
+  String _statusTitle = 'Connecting to Google…';
   String _statusSubtitle = 'Opening account authentication';
   int _activeStepIndex = 0;
   String? _errorMessage;
@@ -64,13 +64,13 @@ class _AuthProgressDialogState extends State<AuthProgressDialog> with SingleTick
 
   static const List<AuthProgressStep> _steps = [
     AuthProgressStep(
-      title: 'Nirniq Account',
-      description: 'Selecting identity & verifying Nirniq credentials',
+      title: 'Google Account',
+      description: 'Selecting identity & verifying Google credentials',
       targetPercentage: 0.25,
     ),
     AuthProgressStep(
       title: 'Authenticating Identity',
-      description: 'Connecting to Nirniq & Kith Cloud Ledger',
+      description: 'Connecting to Kith Cloud Ledger',
       targetPercentage: 0.50,
     ),
     AuthProgressStep(
@@ -127,11 +127,11 @@ class _AuthProgressDialogState extends State<AuthProgressDialog> with SingleTick
       await Future.delayed(const Duration(milliseconds: 200));
       if (!mounted) return;
 
-      // Step 1: Nirniq Account Authentication
+      // Step 1: Google Account Authentication
       _updateProgress(
         0.15,
-        'Connecting to Nirniq…',
-        'Please select your account from the prompt',
+        'Connecting to Google…',
+        'Please select your Google account from the prompt',
         0,
       );
 
@@ -148,7 +148,7 @@ class _AuthProgressDialogState extends State<AuthProgressDialog> with SingleTick
       _updateProgress(
         0.40,
         'Verifying Identity…',
-        'Linking canonical Nirniq profile for ${identity.email}',
+        'Linking Google profile for ${identity.email}',
         1,
       );
 

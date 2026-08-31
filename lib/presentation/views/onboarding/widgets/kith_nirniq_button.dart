@@ -4,23 +4,26 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/utils/haptic_feedback_helper.dart';
 
-/// Premium Nirniq Ecosystem Sign-In button with custom Nirniq brand mark,
+/// Premium Google Sign-In button with iconic Google G logo,
 /// tactile press response, spring physics, and inline loading indicator.
-class KithNirniqAuthButton extends StatefulWidget {
+class KithGoogleAuthButton extends StatefulWidget {
   final VoidCallback? onPressed;
   final bool isLoading;
 
-  const KithNirniqAuthButton({
+  const KithGoogleAuthButton({
     super.key,
     required this.onPressed,
     this.isLoading = false,
   });
 
   @override
-  State<KithNirniqAuthButton> createState() => _KithNirniqAuthButtonState();
+  State<KithGoogleAuthButton> createState() => _KithGoogleAuthButtonState();
 }
 
-class _KithNirniqAuthButtonState extends State<KithNirniqAuthButton> {
+/// Backward compatibility alias
+typedef KithNirniqAuthButton = KithGoogleAuthButton;
+
+class _KithGoogleAuthButtonState extends State<KithGoogleAuthButton> {
   bool _isPressed = false;
 
   @override
@@ -30,7 +33,7 @@ class _KithNirniqAuthButtonState extends State<KithNirniqAuthButton> {
 
     return Semantics(
       button: true,
-      label: l10n.onboardingNirniqBtn,
+      label: l10n.onboardingGoogleBtn,
       child: GestureDetector(
         onTapDown: widget.isLoading ? null : (_) => setState(() => _isPressed = true),
         onTapUp: widget.isLoading
@@ -63,14 +66,14 @@ class _KithNirniqAuthButtonState extends State<KithNirniqAuthButton> {
               borderRadius: AppRadius.mdBorder,
               border: Border.all(
                 color: isDark
-                    ? AppColors.emeraldPrimary.withValues(alpha: 0.35)
-                    : const Color(0xFF0F766E).withValues(alpha: 0.25),
+                    ? Colors.white.withValues(alpha: 0.18)
+                    : const Color(0xFFCBD5E1),
                 width: 1.4,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: (isDark ? AppColors.emeraldPrimary : const Color(0xFF0F766E))
-                      .withValues(alpha: isDark ? 0.18 : 0.08),
+                  color: (isDark ? Colors.black : const Color(0xFF64748B))
+                      .withValues(alpha: isDark ? 0.28 : 0.08),
                   blurRadius: 18,
                   offset: const Offset(0, 4),
                 ),
@@ -110,12 +113,12 @@ class _KithNirniqAuthButtonState extends State<KithNirniqAuthButton> {
                           width: 24,
                           height: 24,
                           child: CustomPaint(
-                            painter: _NirniqBrandEmblemPainter(),
+                            painter: _GoogleBrandGLogoPainter(),
                           ),
                         ),
                         const SizedBox(width: 12),
                         Text(
-                          l10n.onboardingNirniqBtn,
+                          l10n.onboardingGoogleBtn,
                           style: TextStyle(
                             fontSize: 15.5,
                             fontWeight: FontWeight.w800,
@@ -133,50 +136,64 @@ class _KithNirniqAuthButtonState extends State<KithNirniqAuthButton> {
   }
 }
 
-/// Custom painter rendering the sleek Nirniq Ecosystem Emblem.
-class _NirniqBrandEmblemPainter extends CustomPainter {
-  const _NirniqBrandEmblemPainter();
+/// Custom painter rendering the iconic Google 4-color 'G' brand mark.
+class _GoogleBrandGLogoPainter extends CustomPainter {
+  const _GoogleBrandGLogoPainter();
 
   @override
   void paint(Canvas canvas, Size size) {
     final double s = size.width;
-    final r = s * 0.24;
+    final center = Offset(s / 2, s / 2);
+    final radius = s * 0.44;
+    final strokeW = s * 0.20;
 
-    // Branded Nirniq gradient container
-    final bgPaint = Paint()
-      ..shader = const LinearGradient(
-        colors: [Color(0xFF0D9488), Color(0xFF047857), Color(0xFF1E293B)],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ).createShader(Rect.fromLTWH(0, 0, s, s));
+    final rect = Rect.fromCircle(center: center, radius: radius);
 
-    final rrect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(0, 0, s, s),
-      Radius.circular(r),
+    // 1. Red Arc (Top Left & Top Right: 210° to 330°)
+    final redPaint = Paint()
+      ..color = const Color(0xFFEA4335)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeW
+      ..strokeCap = StrokeCap.butt;
+    canvas.drawArc(rect, -2.6, 1.9, false, redPaint);
+
+    // 2. Yellow Arc (Bottom Left: 140° to 220°)
+    final yellowPaint = Paint()
+      ..color = const Color(0xFFFBBC05)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeW
+      ..strokeCap = StrokeCap.butt;
+    canvas.drawArc(rect, 2.1, 1.6, false, yellowPaint);
+
+    // 3. Green Arc (Bottom Right & Bottom Left: 30° to 150°)
+    final greenPaint = Paint()
+      ..color = const Color(0xFF34A853)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeW
+      ..strokeCap = StrokeCap.butt;
+    canvas.drawArc(rect, 0.5, 1.8, false, greenPaint);
+
+    // 4. Blue Arc & Crossbar
+    final bluePaint = Paint()
+      ..color = const Color(0xFF4285F4)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeW
+      ..strokeCap = StrokeCap.butt;
+    canvas.drawArc(rect, -0.6, 1.2, false, bluePaint);
+
+    // Blue horizontal crossbar
+    final barPaint = Paint()
+      ..color = const Color(0xFF4285F4)
+      ..style = PaintingStyle.fill;
+    final barRect = Rect.fromLTWH(
+      center.dx - strokeW * 0.2,
+      center.dy - strokeW / 2,
+      radius + strokeW * 0.6,
+      strokeW,
     );
-    canvas.drawRRect(rrect, bgPaint);
-
-    // Glowing Nirniq 'N' / Portal Geometry
-    final strokePaint = Paint()
-      ..color = Colors.white
-      ..strokeWidth = s * 0.12
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
-      ..style = PaintingStyle.stroke;
-
-    final path = Path();
-    path.moveTo(s * 0.28, s * 0.72);
-    path.lineTo(s * 0.28, s * 0.28);
-    path.lineTo(s * 0.72, s * 0.72);
-    path.lineTo(s * 0.72, s * 0.28);
-
-    canvas.drawPath(path, strokePaint);
-
-    // Orbiting Ecosystem Spark
-    final sparkPaint = Paint()..color = const Color(0xFFF59E0B);
-    canvas.drawCircle(Offset(s * 0.76, s * 0.24), s * 0.08, sparkPaint);
+    canvas.drawRect(barRect, barPaint);
   }
 
   @override
-  bool shouldRepaint(_NirniqBrandEmblemPainter oldDelegate) => false;
+  bool shouldRepaint(_GoogleBrandGLogoPainter oldDelegate) => false;
 }

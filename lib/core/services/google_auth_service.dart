@@ -47,19 +47,11 @@ class GoogleAuthService {
   ///
   /// This is the Web client ID (not the Android client) — that is correct.
   /// The Android client ID is embedded in google-services.json for the
-  /// native SDK; the Web client ID here identifies the token audience.
-  static const String _webClientId =
-      '752190461758-m6ikshjbood33faqfacgfnvkdjrp7vj2.apps.googleusercontent.com';
+  static final GoogleSignIn _googleSignIn = GoogleSignIn(
+    scopes: const ['email', 'profile'],
+  );
 
-  static GoogleSignIn _createGoogleSignIn({bool withServerClientId = false}) {
-    return GoogleSignIn(
-      scopes: const ['email', 'profile'],
-      serverClientId: (withServerClientId && SupabaseConfig.isConfigured) ? _webClientId : null,
-    );
-  }
-
-  /// Triggers the native Google account picker, verifies identity via Supabase,
-  /// and returns a [GoogleAuthResult] on success.
+  /// Triggers the native Google account picker and returns a [GoogleAuthResult] on success.
   ///
   /// Returns `null` if the user cancelled.
   /// Throws [GoogleSignInException] with a [GoogleSignInFailure] reason on error.
@@ -67,27 +59,12 @@ class GoogleAuthService {
     GoogleSignInAccount? account;
 
     try {
-      final googleSignIn = _createGoogleSignIn(withServerClientId: SupabaseConfig.isConfigured);
-      // Force account picker to appear even if a session was previously cached
+      // Force account picker to appear cleanly
       try {
-        await googleSignIn.signOut();
+        await _googleSignIn.signOut();
       } catch (_) {}
 
-      try {
-        account = await googleSignIn.signIn();
-      } on PlatformException catch (pErr) {
-        final msg = pErr.message ?? '';
-        if (pErr.code == 'sign_in_failed' || msg.contains('10') || msg.contains('DEVELOPER_ERROR') || msg.contains('12500')) {
-          debugPrint('[GoogleAuthService] Primary sign-in error ($pErr). Retrying with pure native GoogleSignIn...');
-          final pureNative = GoogleSignIn(scopes: const ['email', 'profile']);
-          try {
-            await pureNative.signOut();
-          } catch (_) {}
-          account = await pureNative.signIn();
-        } else {
-          rethrow;
-        }
-      }
+      account = await _googleSignIn.signIn();
       if (account == null) return null; // User cancelled
     } on PlatformException catch (e) {
       debugPrint('[GoogleAuthService] PlatformException: ${e.code} — ${e.message}');
@@ -100,16 +77,9 @@ class GoogleAuthService {
           message: 'No internet connection. Please check your network and try again.',
         );
       }
-      final msg = e.message ?? '';
-      if (msg.contains('10') || msg.contains('12500') || msg.contains('404') || msg.contains('DEVELOPER_ERROR') || e.code == 'sign_in_failed') {
-        throw GoogleSignInException(
-          failure: GoogleSignInFailure.signInFailed,
-          message: 'Google Sign-In setup: Please re-download google-services.json from Firebase Console after adding SHA-1. (${e.code}: ${e.message ?? ""})',
-        );
-      }
       throw GoogleSignInException(
         failure: GoogleSignInFailure.signInFailed,
-        message: 'Google Sign-In error: ${e.message ?? e.code}',
+        message: 'Google Sign-In: ${e.message ?? e.code}',
       );
     } catch (e) {
       debugPrint('[GoogleAuthService] Unexpected signIn error: $e');
@@ -165,7 +135,7 @@ class GoogleAuthService {
   /// Signs the user out of both Google and Supabase.
   static Future<void> signOut() async {
     try {
-      await _createGoogleSignIn().signOut();
+      await _googleSignIn.signOut();
     } catch (_) {}
     if (SupabaseConfig.isConfigured) {
       try {
@@ -179,7 +149,11 @@ class GoogleAuthService {
   /// Returns the active Supabase session if one exists.
   static Session? get currentSession {
     if (!SupabaseConfig.isConfigured) return null;
-    return Supabase.instance.client.auth.currentSession;
+    try {
+      return Supabase.instance.client.auth.currentSession;
+    } catch (_) {
+      return null;
+    }
   }
 
   static String _resolveDisplayName(String? name, String email) {

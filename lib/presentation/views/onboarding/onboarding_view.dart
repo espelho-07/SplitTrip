@@ -30,7 +30,7 @@ class OnboardingView extends StatefulWidget {
 }
 
 class _OnboardingViewState extends State<OnboardingView> {
-  Future<void> _handleNirniqSignIn() async {
+  Future<void> _handleGoogleSignIn() async {
     final localeVm = context.read<LocaleViewModel>();
     if (!localeVm.hasSelectedInitialLanguage) {
       context.push('/language-select');
@@ -41,7 +41,7 @@ class _OnboardingViewState extends State<OnboardingView> {
     if (authVm.isLoading) return;
 
     HapticHelper.medium();
-    final success = await AuthProgressDialog.startNirniqSignIn(context);
+    final success = await AuthProgressDialog.startGoogleSignIn(context);
     if (success == true && mounted) {
       context.go('/home');
     }
@@ -154,10 +154,10 @@ class _OnboardingViewState extends State<OnboardingView> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            // Primary: Continue with Nirniq
-                            KithNirniqAuthButton(
+                            // Primary: Continue with Google
+                            KithGoogleAuthButton(
                               isLoading: authVm.isLoading,
-                              onPressed: _handleNirniqSignIn,
+                              onPressed: _handleGoogleSignIn,
                             ),
 
                             const SizedBox(height: 10),

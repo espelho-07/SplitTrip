@@ -82,7 +82,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 600));
 
-      expect(find.text('Continue with Nirniq'), findsOneWidget);
+      expect(find.text('Continue with Google'), findsOneWidget);
       expect(find.text('Explore as Guest'), findsOneWidget);
       expect(find.text('Restore with Recovery Key'), findsOneWidget);
     });

@@ -109,7 +109,7 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(find.text('Traveler'), findsOneWidget);
-      expect(find.text('Sign in with Nirniq'), findsWidgets);
+      expect(find.text('Sign in with Google'), findsWidgets);
     });
 
     test('CreateTripViewModel resetForm clears state completely', () {
