@@ -60,3 +60,5 @@ google-services.json
 GoogleService-Info.plist
 service-account*.json
 server/data_storage/
+*.pem
+/android/build/

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -25,6 +26,8 @@ class SplashView extends StatefulWidget {
 class _SplashViewState extends State<SplashView> with SingleTickerProviderStateMixin {
   bool _showStatus = false;
   String _statusText = '';
+  Timer? _statusTimer;
+  Timer? _delayTimer;
 
   // Minimum time the splash is shown — ensures user enjoys the full opening animation
   static const _minSplashMs = 2100;
@@ -36,13 +39,18 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
     _run();
   }
 
+  @override
+  void dispose() {
+    _statusTimer?.cancel();
+    _delayTimer?.cancel();
+    super.dispose();
+  }
+
   Future<void> _run() async {
     final authVm = context.read<AuthViewModel>();
     final stopwatch = Stopwatch()..start();
 
-    final statusTimer = Future<void>.delayed(
-      const Duration(milliseconds: _statusTriggerMs),
-    ).then((_) {
+    _statusTimer = Timer(const Duration(milliseconds: _statusTriggerMs), () {
       if (mounted && authVm.isLoading) {
         setState(() {
           _showStatus = true;
@@ -57,11 +65,15 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
       // Fallback: proceed to onboarding
     }
 
-    unawaited(statusTimer);
+    if (!mounted) return;
 
     final elapsed = stopwatch.elapsedMilliseconds;
     if (elapsed < _minSplashMs) {
-      await Future<void>.delayed(Duration(milliseconds: _minSplashMs - elapsed));
+      final completer = Completer<void>();
+      _delayTimer = Timer(Duration(milliseconds: _minSplashMs - elapsed), () {
+        if (!completer.isCompleted) completer.complete();
+      });
+      await completer.future;
     }
 
     if (!mounted) return;

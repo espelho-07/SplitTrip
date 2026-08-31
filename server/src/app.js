@@ -7,6 +7,7 @@ const personalRoutes = require('./routes/personal_routes');
 const notificationRoutes = require('./routes/notification_routes');
 const versionRoutes = require('./routes/version_routes');
 const webRoutes = require('./routes/web_routes');
+const ipoRoutes = require('./routes/ipo_routes');
 const { errorHandler } = require('./middleware/error_handler');
 const { authLimiter, mutationLimiter, syncLimiter, readLimiter } = require('./middleware/rate_limiter');
 const { dbManager } = require('./db/db_manager');
@@ -118,6 +119,7 @@ app.use('/api/trips', mutationLimiter, tripRoutes);
 app.use('/api/trips/:tripId/expenses', mutationLimiter, expenseRoutes);
 app.use('/api/personal', mutationLimiter, personalRoutes);
 app.use('/api/notifications', readLimiter, notificationRoutes);
+app.use('/api/ipos', readLimiter, ipoRoutes);
 app.use('/api/app/version', versionRoutes);
 app.use('/api/version', versionRoutes);
 

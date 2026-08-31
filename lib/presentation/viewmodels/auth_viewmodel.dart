@@ -37,7 +37,9 @@ class AuthViewModel extends ChangeNotifier {
     await Future<void>.value();
 
     try {
-      _currentUser = userRepo.getCurrentUser();
+      // restoreGuestIfNeeded() checks SharedPreferences first (fast path),
+      // then falls back to Keystore → Supabase to recover after reinstall.
+      _currentUser = await userRepo.restoreGuestIfNeeded();
       _appExperienceMode = AppExperienceMode.fromKey(userRepo.getAppExperienceMode());
       _authState = _currentUser != null ? AuthState.authenticated : AuthState.signedOut;
       if (_currentUser != null) {

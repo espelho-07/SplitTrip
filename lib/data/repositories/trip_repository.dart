@@ -46,7 +46,10 @@ class TripRepository {
   Future<List<Trip>> getTrips() async {
     try {
       final res = await apiClient.get('/trips');
-      if (res is List) {
+      if (res is List && res.isNotEmpty) {
+        // Only overwrite local cache when server returns actual trips.
+        // An empty server response (e.g. new guest ID after reinstall) must NOT
+        // wipe the locally cached trips — they may not have synced yet.
         final trips = res.map((j) => Trip.fromJson(j as Map<String, dynamic>)).toList();
         await storage.saveTrips(trips.map((t) => t.toJson()).toList());
         return trips;

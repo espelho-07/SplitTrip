@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android Auto Backup Rules (Android 6.0-11, API 23-31)
+  Backs up SharedPreferences (guest user data, trips cache, etc.)
+  to Google's Android Backup Service across app reinstalls.
+-->
+<full-backup-content>
+    <include domain="sharedpref" path="." />
+    <exclude domain="sharedpref" path="kith_fcm_token" />
+</full-backup-content>

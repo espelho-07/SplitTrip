@@ -88,6 +88,12 @@ class UserRepository {
     return authService.syncLocalGuestSession(user);
   }
 
+  /// Checks for reinstall scenario and restores guest session from Keystore/Supabase.
+  /// Returns the restored user, or null if this is a genuine first install.
+  Future<GuestUser?> restoreGuestIfNeeded() {
+    return authService.restoreGuestIfNeeded();
+  }
+
   Future<void> logout() {
     return authService.logout();
   }

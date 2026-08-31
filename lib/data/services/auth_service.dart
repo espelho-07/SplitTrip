@@ -1,23 +1,36 @@
+import 'dart:async';
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/network/api_client.dart';
 import '../../core/network/realtime_client.dart';
 import '../../core/services/google_auth_service.dart';
+import '../../core/services/secure_id_service.dart';
+import '../../core/services/supabase_guest_sync.dart';
 import '../../domain/models/guest_user.dart';
 import 'local_storage_service.dart';
 
 /// Manages Guest Anonymous identities, cryptographic recovery keys, and account linking.
+/// Implements a three-layer persistence strategy:
+///   Layer 0: SharedPreferences (fast, normal operation)
+///   Layer 1: Android Keystore via flutter_secure_storage (survives reinstall)
+///   Layer 2: Supabase guest_sessions table (survives device change via recovery key)
 class AuthService {
   final LocalStorageService storage;
   final ApiClient apiClient;
   final RealtimeClient? realtimeClient;
+  final SecureIdService _secureId;
+  final SupabaseGuestSync _supabaseSync;
   final Uuid _uuid = const Uuid();
 
   AuthService({
     required this.storage,
     required this.apiClient,
     this.realtimeClient,
-  }) {
+    SecureIdService? secureIdService,
+    SupabaseGuestSync? supabaseGuestSync,
+  })  : _secureId = secureIdService ?? SecureIdService(),
+        _supabaseSync = supabaseGuestSync ?? SupabaseGuestSync() {
     // Re-hydrate session token on startup and sync identity non-blocking
     final user = getCurrentUser();
     if (user != null && user.anonymousToken.isNotEmpty) {
@@ -27,7 +40,7 @@ class AuthService {
     }
   }
 
-  /// Syncs local guest user registration, recovery key, and FCM token to server
+  /// Syncs local guest user registration, recovery key, and FCM token to server and Supabase.
   Future<void> syncLocalGuestSession([GuestUser? targetUser]) async {
     final user = targetUser ?? getCurrentUser();
     if (user == null) return;
@@ -55,8 +68,17 @@ class AuthService {
         });
       }
     } catch (_) {
-      // Non-blocking background sync
+      // Non-blocking background sync to Kith backend
     }
+
+    // Layer 2: Also sync to Supabase guest_sessions
+    try {
+      await _supabaseSync.upsertGuestSession(user);
+    } catch (_) {}
+    // Layer 1: Anchor identity in Android Keystore
+    try {
+      await _secureId.persistGuestIdentity(user.id, user.recoveryKey);
+    } catch (_) {}
   }
 
   /// Retrieves the existing cached session if present.
@@ -64,6 +86,60 @@ class AuthService {
     final json = storage.getSavedUser();
     if (json == null) return null;
     return GuestUser.fromJson(json);
+  }
+
+  /// Detects reinstall scenario and restores guest session from secure/Supabase storage.
+  ///
+  /// Returns the restored user if found via Keystore→Supabase lookup.
+  /// Returns null if this is a genuine first install (no anchored identity).
+  ///
+  /// Call this in initSession() BEFORE deciding to show onboarding.
+  Future<GuestUser?> restoreGuestIfNeeded() async {
+    // Fast path: SharedPreferences has a valid user — no reinstall detected
+    final cached = getCurrentUser();
+    if (cached != null) return cached;
+
+    // Slow path: SharedPreferences is empty — check if Keystore has an anchor
+    final secureId = await _secureId.getPersistedGuestId();
+    if (secureId == null || secureId.isEmpty) {
+      // True fresh install — no identity anywhere
+      return null;
+    }
+
+    // Reinstall detected: Keystore has guest ID but SharedPreferences is empty.
+    // Attempt to restore from Supabase by guest ID.
+    final supabaseRow = await _supabaseSync.recoverById(secureId);
+    if (supabaseRow != null) {
+      final userJson = SupabaseGuestSync.rowToUserJson(supabaseRow);
+      final user = GuestUser.fromJson(userJson);
+      // Restore to SharedPreferences (and recovery vault)
+      await storage.saveUser(user.toJson());
+      apiClient.setAuthToken(user.anonymousToken);
+      realtimeClient?.setAuthToken(user.anonymousToken);
+      // Re-anchor the recovery key in Keystore
+      await _secureId.persistGuestIdentity(user.id, user.recoveryKey);
+      debugPrint('[AuthService] Reinstall detected — guest restored from Supabase: ${user.id}');
+      return user;
+    }
+
+    // Supabase lookup failed (offline) — try recovery key from Keystore
+    final secureKey = await _secureId.getPersistedRecoveryKey();
+    if (secureKey != null && secureKey.isNotEmpty) {
+      // Try backend recovery
+      try {
+        final backendUser = await recoverUser(secureKey);
+        if (backendUser != null) {
+          debugPrint('[AuthService] Reinstall detected — guest restored from backend: ${backendUser.id}');
+          return backendUser;
+        }
+      } catch (_) {}
+    }
+
+    // Could not restore — true data loss scenario (factory reset / no network)
+    // Clear stale Keystore entry so user gets a fresh account
+    await _secureId.clearSecureIdentity();
+    debugPrint('[AuthService] Reinstall: could not restore identity. Fresh account needed.');
+    return null;
   }
 
   /// Creates a new guest anonymous user with server-side persistence and recovery key.
@@ -90,7 +166,7 @@ class AuthService {
         apiClient.setAuthToken(token);
         realtimeClient?.setAuthToken(token);
         await storage.saveUser(user.toJson());
-        syncLocalGuestSession(user);
+        await syncLocalGuestSession(user);
         return user;
       }
     } catch (_) {
@@ -114,7 +190,7 @@ class AuthService {
     apiClient.setAuthToken(token);
     realtimeClient?.setAuthToken(token);
     await storage.saveUser(user.toJson());
-    syncLocalGuestSession(user);
+    await syncLocalGuestSession(user);
     return user;
   }
 
@@ -184,8 +260,26 @@ class AuthService {
       apiClient.setAuthToken(user.anonymousToken);
       realtimeClient?.setAuthToken(user.anonymousToken);
       await storage.saveUser(user.toJson());
+      unawaited(_secureId.persistGuestIdentity(user.id, user.recoveryKey));
       syncLocalGuestSession(user);
       return user;
+    }
+
+    // 4. Final fallback: Supabase guest_sessions table (cross-device/reinstall recovery)
+    try {
+      final supabaseRow = await _supabaseSync.recoverByRecoveryKey(cleanKey);
+      if (supabaseRow != null) {
+        final userJson = SupabaseGuestSync.rowToUserJson(supabaseRow);
+        final user = GuestUser.fromJson(userJson);
+        apiClient.setAuthToken(user.anonymousToken);
+        realtimeClient?.setAuthToken(user.anonymousToken);
+        await storage.saveUser(user.toJson());
+        unawaited(_secureId.persistGuestIdentity(user.id, user.recoveryKey));
+        syncLocalGuestSession(user);
+        return user;
+      }
+    } catch (_) {
+      // Non-fatal: Supabase recovery failed (offline or table not yet created)
     }
 
     return null;
@@ -515,6 +609,8 @@ class AuthService {
       await GoogleAuthService.signOut();
     } catch (_) {}
     await storage.clearAllUserData();
+    // Clear Keystore anchor so reinstall after logout doesn't auto-restore
+    await _secureId.clearSecureIdentity();
   }
 
   /// Permanently deletes the user account, associated personal records,
@@ -544,6 +640,8 @@ class AuthService {
       await GoogleAuthService.signOut();
     } catch (_) {}
     await storage.clearAllUserData();
+    // Clear Keystore anchor permanently on account deletion
+    await _secureId.clearSecureIdentity();
   }
 
 
