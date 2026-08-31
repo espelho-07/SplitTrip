@@ -31,6 +31,11 @@ import '../views/notifications/notifications_view.dart';
 import '../views/payment/payment_methods_view.dart';
 import '../views/trip/trip_preview_view.dart';
 import '../views/version/update_required_view.dart';
+import '../views/ipo/ipo_home_view.dart';
+import '../views/ipo/ipo_detail_view.dart';
+import '../views/ipo/ipo_apply_view.dart';
+import '../viewmodels/ipo_viewmodel.dart';
+import 'package:provider/provider.dart';
 
 class AppRouter {
   AppRouter._();
@@ -254,6 +259,33 @@ class AppRouter {
       GoRoute(
         path: '/personal/categories',
         builder: (context, state) => const CategoryBreakdownView(),
+      ),
+      GoRoute(
+        path: '/ipos',
+        builder: (context, state) => const IpoHomeView(),
+      ),
+      GoRoute(
+        path: '/ipo/:id',
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          return IpoDetailView(ipoId: id);
+        },
+      ),
+      GoRoute(
+        path: '/ipo/:id/apply',
+        builder: (context, state) {
+          final id = state.pathParameters['id']!;
+          final ipoVm = context.read<IpoViewModel>();
+          final ipo = ipoVm.getIpoById(id);
+          if (ipo == null) {
+            return const IpoHomeView();
+          }
+          final app = ipoVm.getApplicationForIpo(id);
+          return IpoApplyView(
+            ipo: ipo,
+            existingApplication: app,
+          );
+        },
       ),
       GoRoute(
         path: '/create-trip',

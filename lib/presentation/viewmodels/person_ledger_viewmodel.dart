@@ -112,6 +112,9 @@ class PersonLedgerViewModel extends ChangeNotifier {
 
     for (final d in matchingDebts) {
       final isLent = d.debtType == PersonalDebtType.lent;
+      final isIpo = d.description?.contains('(IPO Funding)') == true || d.description?.toLowerCase().contains('ipo') == true;
+      final ipoTitle = isIpo ? (d.description?.replaceAll('(IPO Funding)', '').trim() ?? 'IPO') : null;
+
       if (isLent) {
         lentSum += d.initialAmountInPaise;
         aggregated.add(PersonLedgerItem(
@@ -122,6 +125,7 @@ class PersonLedgerViewModel extends ChangeNotifier {
           date: d.date,
           title: d.description?.isNotEmpty == true ? d.description! : 'Direct Loan',
           note: d.description,
+          ipoName: ipoTitle,
           isSettled: d.isSettled,
           referenceId: d.id,
         ));
@@ -151,6 +155,7 @@ class PersonLedgerViewModel extends ChangeNotifier {
           date: d.date,
           title: d.description?.isNotEmpty == true ? d.description! : 'Borrowed from $_personName',
           note: d.description,
+          ipoName: ipoTitle,
           isSettled: d.isSettled,
           referenceId: d.id,
         ));

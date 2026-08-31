@@ -18,10 +18,12 @@ import 'core/services/kith_widget_service.dart';
 import 'core/services/security_lock_service.dart';
 import 'core/theme/app_theme.dart';
 import 'data/repositories/expense_repository.dart';
+import 'data/repositories/ipo_repository.dart';
 import 'data/repositories/personal_repository.dart';
 import 'data/repositories/trip_repository.dart';
 import 'data/repositories/user_repository.dart';
 import 'data/services/auth_service.dart';
+import 'data/services/ipo_data_provider.dart';
 import 'data/services/local_migration_runner.dart';
 import 'data/services/local_storage_service.dart';
 import 'data/services/p2p_sync_service.dart';
@@ -32,6 +34,7 @@ import 'presentation/viewmodels/add_expense_viewmodel.dart';
 import 'presentation/viewmodels/auth_viewmodel.dart';
 import 'presentation/viewmodels/create_trip_viewmodel.dart';
 import 'presentation/viewmodels/home_viewmodel.dart';
+import 'presentation/viewmodels/ipo_viewmodel.dart';
 import 'presentation/viewmodels/join_trip_viewmodel.dart';
 import 'presentation/viewmodels/locale_viewmodel.dart';
 import 'presentation/viewmodels/personal_expense_viewmodel.dart';
@@ -123,6 +126,12 @@ void main() async {
     syncService: syncService,
     apiClient: apiClient,
   );
+  final ipoDataProvider = LiveIpoDataProvider();
+  final ipoRepo = IpoRepository(
+    storage: storageService,
+    dataProvider: ipoDataProvider,
+    personalRepo: personalRepo,
+  );
 
   final widgetService = KithWidgetService(storage: storageService);
   widgetService.onDeepLinkReceived = (deepLinkUri) {
@@ -183,6 +192,8 @@ void main() async {
         Provider<TripRepository>.value(value: tripRepo),
         Provider<ExpenseRepository>.value(value: expenseRepo),
         Provider<PersonalRepository>.value(value: personalRepo),
+        Provider<IpoDataProvider>.value(value: ipoDataProvider),
+        Provider<IpoRepository>.value(value: ipoRepo),
         ChangeNotifierProvider<SecurityLockService>.value(value: securityLockService),
         ChangeNotifierProvider<KithWidgetService>.value(value: widgetService),
         ChangeNotifierProvider(create: (_) => PaymentService()),
@@ -214,6 +225,9 @@ void main() async {
             tripRepo: tripRepo,
             storage: storageService,
           ),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => IpoViewModel(ipoRepo: ipoRepo),
         ),
         ChangeNotifierProvider(
           create: (_) => TripDetailViewModel(

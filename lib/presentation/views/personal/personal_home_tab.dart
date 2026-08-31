@@ -541,7 +541,7 @@ class _PersonalHomeTabState extends State<PersonalHomeTab> {
           const Divider(height: 1, thickness: 1, color: Color(0x14000000)),
           const SizedBox(height: 14),
 
-          // 3 Quick Navigation Analytics Pills
+          // 4 Quick Navigation Analytics Pills
           Row(
             children: [
               Expanded(
@@ -554,7 +554,16 @@ class _PersonalHomeTabState extends State<PersonalHomeTab> {
                   onTap: () => context.push('/personal/debts'),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
+              Expanded(
+                child: _buildHeroPill(
+                  icon: Icons.show_chart_rounded,
+                  label: 'IPOs',
+                  isDark: isDark,
+                  onTap: () => context.push('/ipos'),
+                ),
+              ),
+              const SizedBox(width: 6),
               Expanded(
                 child: _buildHeroPill(
                   icon: Icons.pie_chart_outline_rounded,
@@ -563,7 +572,7 @@ class _PersonalHomeTabState extends State<PersonalHomeTab> {
                   onTap: () => context.push('/personal/categories'),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
               Expanded(
                 child: _buildHeroPill(
                   icon: Icons.tune_rounded,

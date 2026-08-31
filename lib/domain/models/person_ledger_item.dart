@@ -1,4 +1,4 @@
-﻿enum PersonLedgerType {
+enum PersonLedgerType {
   lent,
   borrowed,
   repaymentReceived,
@@ -21,6 +21,9 @@ class PersonLedgerItem {
   final String? note;
   final String? tripId;
   final String? tripName;
+  final String? ipoId;
+  final String? ipoName;
+  final String? ipoApplicationId;
   final bool isSettled;
   final String? referenceId;
 
@@ -36,9 +39,14 @@ class PersonLedgerItem {
     this.note,
     this.tripId,
     this.tripName,
+    this.ipoId,
+    this.ipoName,
+    this.ipoApplicationId,
     this.isSettled = false,
     this.referenceId,
   });
+
+  bool get isIpoFunding => ipoId != null || (title.toLowerCase().contains('ipo') || (note?.toLowerCase().contains('ipo') ?? false));
 
   /// True if this transaction represents money going out from you / owed to you
   bool get isCreditToUser {

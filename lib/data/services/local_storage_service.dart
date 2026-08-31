@@ -671,6 +671,68 @@ class LocalStorageService {
     return _prefs.setBool('$_autoBudgetingPrefix$cleanKey', enabled);
   }
 
+  // --- IPO Money Manager Persistence ---
+  static const String _iposCacheKey = 'kith_ipos_cache_v1';
+  static const String _ipoApplicationsKey = 'kith_ipo_applications_v1';
+  static const String _iposLastUpdatedKey = 'kith_ipos_last_updated';
+  static const String _trackedIposKey = 'kith_tracked_ipos_v1';
+
+  List<Map<String, dynamic>> getSavedIpos() {
+    final raw = _prefs.getString(_iposCacheKey);
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  Future<void> saveIpos(List<Map<String, dynamic>> ipos) async {
+    await _prefs.setString(_iposCacheKey, jsonEncode(ipos));
+  }
+
+  List<Map<String, dynamic>> getSavedIpoApplications() {
+    final raw = _prefs.getString(_ipoApplicationsKey);
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  Future<void> saveIpoApplications(List<Map<String, dynamic>> apps) async {
+    await _prefs.setString(_ipoApplicationsKey, jsonEncode(apps));
+  }
+
+  Set<String> getTrackedIpoIds() {
+    final list = _prefs.getStringList(_trackedIposKey);
+    return list != null ? list.toSet() : <String>{};
+  }
+
+  Future<void> setIpoTracked(String ipoId, bool isTracked) async {
+    final tracked = getTrackedIpoIds();
+    if (isTracked) {
+      tracked.add(ipoId);
+    } else {
+      tracked.remove(ipoId);
+    }
+    await _prefs.setStringList(_trackedIposKey, tracked.toList());
+  }
+
+  DateTime? getIposLastUpdated() {
+    final raw = _prefs.getString(_iposLastUpdatedKey);
+    return raw != null ? DateTime.tryParse(raw) : null;
+  }
+
+  Future<void> setIposLastUpdated(DateTime time) async {
+    await _prefs.setString(_iposLastUpdatedKey, time.toIso8601String());
+  }
+
   // --- Local Database & Storage Schema Migration ---
   int getLocalSchemaVersion() => _prefs.getInt(_localSchemaVersionKey) ?? 0;
 

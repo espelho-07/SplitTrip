@@ -1258,6 +1258,39 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
                   ),
                 ),
               ],
+              if (item.isIpoFunding) ...[
+                const SizedBox(height: 6),
+                InkWell(
+                  onTap: () {
+                    context.push('/ipos');
+                  },
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.show_chart_rounded, size: 12, color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary),
+                        const SizedBox(width: 4),
+                        Text(
+                          item.ipoName ?? 'IPO Details',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                          ),
+                        ),
+                        const SizedBox(width: 2),
+                        Icon(Icons.chevron_right_rounded, size: 12, color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 6),
               // Date
               Text(
