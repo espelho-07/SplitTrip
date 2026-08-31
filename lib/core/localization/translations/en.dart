@@ -663,7 +663,7 @@ const Map<String, String> enTranslations = {
   'faq_support_desc': 'Our engineering & support team is active and happy to help you with anything.',
   'faq_support_email_btn': 'Email Support',
   'faq_support_guide_btn': 'Open Setup Guide',
-  'faq_copied_email': 'Support email (support@nirniq.com) copied to clipboard ✓',
+  'faq_copied_email': 'Support email (hello.nirniq@gmail.com) copied to clipboard ✓',
   // Master Add Trip Keys
   'create_trip_hero_title': 'Design Your Trip',
   'create_trip_hero_sub': 'Create a shared financial ledger and collaborative journey timeline for your crew.',

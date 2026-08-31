@@ -1306,7 +1306,7 @@ class _HelpFaqViewState extends State<HelpFaqView> {
                 child: InkWell(
                   onTap: () {
                     HapticHelper.medium();
-                    Clipboard.setData(const ClipboardData(text: 'support@nirniq.com'));
+                    Clipboard.setData(const ClipboardData(text: 'hello.nirniq@gmail.com'));
                     KithSuccessToast.show(context, l10n.faqCopiedEmail);
                   },
                   borderRadius: BorderRadius.circular(10),

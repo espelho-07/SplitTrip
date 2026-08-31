@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const authService = require('../services/auth_service');
 
 const router = express.Router();
@@ -157,14 +157,14 @@ const privacyHtml = `<!DOCTYPE html>
 
     <div class="section">
       <h2>6. Contact & Developer Details</h2>
-      <p>Developer: <strong>Nirniq Technologies</strong><br>
+      <p>Developer: <strong>Darpan Parmar</strong><br>
       Product: Kith Expense & Trip Ledger<br>
-      Email: <a href="mailto:support@kith.app">support@kith.app</a> / <a href="mailto:contact@nirniq.dev">contact@nirniq.dev</a><br>
-      Website: <a href="https://kith.app">https://kith.app</a></p>
+      Email: <a href="mailto:hello.nirniq@gmail.com">hello.nirniq@gmail.com</a><br>
+      Website: <a href="https://darpanparmar.me" target="_blank">https://darpanparmar.me</a></p>
     </div>
 
     <div class="footer-links">
-      <a href="/delete-account">Account Deletion Portal</a> · <a href="mailto:support@kith.app">Contact Support</a>
+      <a href="/delete-account">Account Deletion Portal</a> · <a href="mailto:hello.nirniq@gmail.com">Contact Support</a>
     </div>
   </div>
 </body>
@@ -330,7 +330,7 @@ const deleteAccountHtml = `<!DOCTYPE html>
     </div>
 
     <div class="footer-links">
-      <a href="/privacy">Read Privacy Policy</a> · <a href="mailto:support@kith.app">Contact Developer</a>
+      <a href="/privacy">Read Privacy Policy</a> · <a href="mailto:hello.nirniq@gmail.com">Contact Developer</a>
     </div>
   </div>
 
@@ -367,12 +367,12 @@ const deleteAccountHtml = `<!DOCTYPE html>
           form.reset();
         } else {
           alertBox.className = 'alert alert-error';
-          alertBox.textContent = (data.error && data.error.message) || 'Failed to process deletion request. Please contact support@kith.app.';
+          alertBox.textContent = (data.error && data.error.message) || 'Failed to process deletion request. Please contact hello.nirniq@gmail.com.';
           alertBox.style.display = 'block';
         }
       } catch (err) {
         alertBox.className = 'alert alert-error';
-        alertBox.textContent = 'Network error. Please try again or email support@kith.app.';
+        alertBox.textContent = 'Network error. Please try again or email hello.nirniq@gmail.com.';
         alertBox.style.display = 'block';
       } finally {
         submitBtn.disabled = false;

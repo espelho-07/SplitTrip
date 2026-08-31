@@ -663,7 +663,7 @@ const Map<String, String> hiTranslations = {
   'faq_support_desc': 'हमारी तकनीकी टीम आपकी सहायता के लिए सदैव उपलब्ध है।',
   'faq_support_email_btn': 'सपोर्ट को ईमेल करें',
   'faq_support_guide_btn': 'गाइड खोलें',
-  'faq_copied_email': 'सपोर्ट ईमेल (support@nirniq.com) कॉपी कर लिया गया ✓',
+  'faq_copied_email': 'सपोर्ट ईमेल (hello.nirniq@gmail.com) कॉपी कर लिया गया ✓',
   // Master Add Trip Keys
   'create_trip_hero_title': 'अपनी यात्रा डिज़ाइन करें',
   'create_trip_hero_sub': 'अपने दोस्तों के लिए साझा वित्तीय खाता और यात्रा की यादें बनाएं।',

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
@@ -166,7 +166,7 @@ class PrivacyPolicyView extends StatelessWidget {
               highlightColor: Colors.redAccent,
               items: [
                 'In-App Immediate Deletion: You can permanently delete your account, trips, expenses, and cloud backups at any time directly from Profile → Delete Account & Cloud Data.',
-                'Web Deletion Request: You may also request complete data purging by emailing support@kith.app with your registered email or recovery key.',
+                'Web Deletion Request: You may also request complete data purging by emailing hello.nirniq@gmail.com with your registered email or recovery key.',
                 'Instant Purge: When an account is deleted, all cloud sessions, personal expenses, debts, repayments, and group memberships are immediately purged from our servers.',
               ],
             ),
@@ -205,10 +205,10 @@ class PrivacyPolicyView extends StatelessWidget {
               icon: Icons.mail_outline_rounded,
               isDark: isDark,
               items: [
-                'Developer: Nirniq Technologies',
+                'Developer: Darpan Parmar',
                 'Product: Kith Expense & Trip Ledger',
-                'Email: support@kith.app / contact@nirniq.dev',
-                'Website: https://kith.app',
+                'Email: hello.nirniq@gmail.com',
+                'Website: https://darpanparmar.me',
               ],
             ),
 
