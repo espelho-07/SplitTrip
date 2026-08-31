@@ -20,16 +20,22 @@ enum IpoStatus {
   static IpoStatus fromString(String? val) {
     switch (val?.toLowerCase()) {
       case 'open':
+      case 'active':
+      case 'open_now':
         return IpoStatus.open;
       case 'upcoming':
+      case 'future':
         return IpoStatus.upcoming;
       case 'closed':
+      case 'bidding_closed':
         return IpoStatus.closed;
       case 'allotmentout':
       case 'allotment_out':
       case 'allotment':
+      case 'allotted':
         return IpoStatus.allotmentOut;
       case 'listed':
+      case 'trading':
         return IpoStatus.listed;
       default:
         return IpoStatus.upcoming;
@@ -52,6 +58,55 @@ enum IpoStatus {
   }
 }
 
+/// Granular, category-wise subscription data
+class IpoSubscription {
+  final double? qib; // Qualified Institutional Buyers (e.g. 143.58x)
+  final double? nii; // Non-Institutional / HNI (e.g. 71.23x)
+  final double? retail; // Retail Individual Investors (e.g. 17.84x)
+  final double? employee; // Employee reservation (e.g. 2.1x)
+  final double? shareholder; // Shareholder quota (e.g. 4.5x)
+  final double? total; // Overall subscription multiple (e.g. 63.6x)
+
+  const IpoSubscription({
+    this.qib,
+    this.nii,
+    this.retail,
+    this.employee,
+    this.shareholder,
+    this.total,
+  });
+
+  bool get hasAnyData =>
+      qib != null ||
+      nii != null ||
+      retail != null ||
+      employee != null ||
+      shareholder != null ||
+      total != null;
+
+  factory IpoSubscription.fromJson(Map<String, dynamic> json) {
+    return IpoSubscription(
+      qib: (json['qib'] as num?)?.toDouble() ?? (json['qib_x'] as num?)?.toDouble(),
+      nii: (json['nii'] as num?)?.toDouble() ?? (json['hni_x'] as num?)?.toDouble() ?? (json['nii_x'] as num?)?.toDouble(),
+      retail: (json['retail'] as num?)?.toDouble() ?? (json['rii_x'] as num?)?.toDouble() ?? (json['retail_x'] as num?)?.toDouble(),
+      employee: (json['employee'] as num?)?.toDouble() ?? (json['emp_x'] as num?)?.toDouble(),
+      shareholder: (json['shareholder'] as num?)?.toDouble() ?? (json['sh_x'] as num?)?.toDouble(),
+      total: (json['total'] as num?)?.toDouble() ?? (json['overall'] as num?)?.toDouble() ?? (json['total_x'] as num?)?.toDouble(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (qib != null) 'qib': qib,
+      if (nii != null) 'nii': nii,
+      if (retail != null) 'retail': retail,
+      if (employee != null) 'employee': employee,
+      if (shareholder != null) 'shareholder': shareholder,
+      if (total != null) 'total': total,
+    };
+  }
+}
+
 class Ipo {
   final String id;
   final String name;
@@ -69,6 +124,7 @@ class Ipo {
   final double? issueSizeCrores; // e.g. 6560.0 Cr
   final double? freshIssueCrores;
   final double? ofsCrores;
+  final IpoSubscription? subscription;
   final double? subscriptionOverall; // e.g. 63.6x
   final int? gmp; // Unofficial GMP in Rupees (e.g. 75)
   final int? issuePrice; // Final issue/cutoff price in Rupees (e.g. 475)
@@ -94,6 +150,7 @@ class Ipo {
     this.issueSizeCrores,
     this.freshIssueCrores,
     this.ofsCrores,
+    this.subscription,
     this.subscriptionOverall,
     this.gmp,
     this.issuePrice,
@@ -104,7 +161,7 @@ class Ipo {
   });
 
   /// Minimum investment in Rupees for 1 lot at cutoff (max price)
-  int get minInvestmentRupees => lotSize * maxPrice;
+  int get minInvestmentRupees => lotSize * (maxPrice > 0 ? maxPrice : minPrice);
 
   /// Price band formatted string e.g. "₹450 – ₹475" or "₹475"
   String get priceBandFormatted {
@@ -114,13 +171,88 @@ class Ipo {
     return '₹$minPrice – ₹$maxPrice';
   }
 
-  /// True if bidding is active today
-  bool get isBiddingActive {
+  /// Evaluates real-time dynamic status based on calendar dates to avoid stale cached "Open" states
+  IpoStatus get dynamicStatus {
+    if (status == IpoStatus.listed) return IpoStatus.listed;
+
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final open = DateTime(openDate.year, openDate.month, openDate.day);
-    final close = DateTime(closeDate.year, closeDate.month, closeDate.day, 23, 59, 59);
-    return !today.isBefore(open) && !now.isAfter(close);
+    final close = DateTime(closeDate.year, closeDate.month, closeDate.day);
+
+    if (listingDate != null) {
+      final list = DateTime(listingDate!.year, listingDate!.month, listingDate!.day);
+      if (!today.isBefore(list)) {
+        return IpoStatus.listed;
+      }
+    }
+
+    if (allotmentDate != null) {
+      final allot = DateTime(allotmentDate!.year, allotmentDate!.month, allotmentDate!.day);
+      if (!today.isBefore(allot) && today.isAfter(close)) {
+        return IpoStatus.allotmentOut;
+      }
+    }
+
+    if (today.isBefore(open)) {
+      return IpoStatus.upcoming;
+    }
+
+    if (!today.isBefore(open) && !today.isAfter(close)) {
+      return IpoStatus.open;
+    }
+
+    if (today.isAfter(close)) {
+      return IpoStatus.closed;
+    }
+
+    return status;
+  }
+
+  /// True if bidding is active today
+  bool get isBiddingActive {
+    return dynamicStatus == IpoStatus.open;
+  }
+
+  /// Timezone-safe calendar date parser (preserves exact day without UTC shifting)
+  static DateTime parseIpoDate(dynamic value, [DateTime? fallback]) {
+    if (value == null) return fallback ?? DateTime.now();
+    if (value is DateTime) return DateTime(value.year, value.month, value.day);
+    final str = value.toString().trim();
+    if (str.isEmpty) return fallback ?? DateTime.now();
+
+    // Format: YYYY-MM-DD
+    final ymdMatch = RegExp(r'^(\d{4})-(\d{1,2})-(\d{1,2})').firstMatch(str);
+    if (ymdMatch != null) {
+      final year = int.parse(ymdMatch.group(1)!);
+      final month = int.parse(ymdMatch.group(2)!);
+      final day = int.parse(ymdMatch.group(3)!);
+      return DateTime(year, month, day);
+    }
+
+    // Format: DD-MM-YYYY or DD/MM/YYYY
+    final dmyMatch = RegExp(r'^(\d{1,2})[-/](\d{1,2})[-/](\d{4})').firstMatch(str);
+    if (dmyMatch != null) {
+      final day = int.parse(dmyMatch.group(1)!);
+      final month = int.parse(dmyMatch.group(2)!);
+      final year = int.parse(dmyMatch.group(3)!);
+      return DateTime(year, month, day);
+    }
+
+    try {
+      final parsed = DateTime.parse(str);
+      return DateTime(parsed.year, parsed.month, parsed.day);
+    } catch (_) {
+      return fallback ?? DateTime.now();
+    }
+  }
+
+  static DateTime? parseOptionalIpoDate(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return DateTime(value.year, value.month, value.day);
+    final str = value.toString().trim();
+    if (str.isEmpty || str.toLowerCase() == 'null' || str.toLowerCase() == 'tbd') return null;
+    return parseIpoDate(value);
   }
 
   Ipo copyWith({
@@ -140,6 +272,7 @@ class Ipo {
     double? issueSizeCrores,
     double? freshIssueCrores,
     double? ofsCrores,
+    IpoSubscription? subscription,
     double? subscriptionOverall,
     int? gmp,
     int? issuePrice,
@@ -165,6 +298,7 @@ class Ipo {
       issueSizeCrores: issueSizeCrores ?? this.issueSizeCrores,
       freshIssueCrores: freshIssueCrores ?? this.freshIssueCrores,
       ofsCrores: ofsCrores ?? this.ofsCrores,
+      subscription: subscription ?? this.subscription,
       subscriptionOverall: subscriptionOverall ?? this.subscriptionOverall,
       gmp: gmp ?? this.gmp,
       issuePrice: issuePrice ?? this.issuePrice,
@@ -176,29 +310,56 @@ class Ipo {
   }
 
   factory Ipo.fromJson(Map<String, dynamic> json) {
+    // Robust Price parsing (handles "450 - 475" strings or direct numbers)
+    int minP = (json['minPrice'] ?? json['min_price'] ?? json['price_band_min'] as num?)?.toInt() ?? 0;
+    int maxP = (json['maxPrice'] ?? json['max_price'] ?? json['price_band_max'] ?? json['issuePrice'] ?? json['issue_price'] as num?)?.toInt() ?? 0;
+
+    final priceBandStr = json['priceBand'] as String? ?? json['price_band'] as String?;
+    if (priceBandStr != null && (minP == 0 && maxP == 0)) {
+      final numbers = RegExp(r'(\d+)').allMatches(priceBandStr).map((m) => int.parse(m.group(0)!)).toList();
+      if (numbers.length >= 2) {
+        minP = numbers[0];
+        maxP = numbers[1];
+      } else if (numbers.length == 1) {
+        minP = numbers[0];
+        maxP = numbers[0];
+      }
+    }
+
+    final rawSub = json['subscription'];
+    IpoSubscription? sub;
+    if (rawSub is Map<String, dynamic>) {
+      sub = IpoSubscription.fromJson(rawSub);
+    } else if (json['qib'] != null || json['nii'] != null || json['retail'] != null) {
+      sub = IpoSubscription.fromJson(json);
+    }
+
+    final totalSub = (json['subscriptionOverall'] ?? json['subscription_overall'] ?? json['total_subscription'] ?? sub?.total as num?)?.toDouble();
+
     return Ipo(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      companyName: json['companyName'] as String? ?? json['name'] as String,
-      symbol: json['symbol'] as String? ?? '',
-      marketType: IpoMarketType.fromString(json['marketType'] as String?),
-      status: IpoStatus.fromString(json['status'] as String?),
-      openDate: json['openDate'] != null ? DateTime.parse(json['openDate'] as String) : DateTime.now(),
-      closeDate: json['closeDate'] != null ? DateTime.parse(json['closeDate'] as String) : DateTime.now(),
-      allotmentDate: json['allotmentDate'] != null ? DateTime.tryParse(json['allotmentDate'] as String) : null,
-      listingDate: json['listingDate'] != null ? DateTime.tryParse(json['listingDate'] as String) : null,
-      minPrice: (json['minPrice'] as num?)?.toInt() ?? 0,
-      maxPrice: (json['maxPrice'] as num?)?.toInt() ?? 0,
-      lotSize: (json['lotSize'] as num?)?.toInt() ?? 1,
-      issueSizeCrores: (json['issueSizeCrores'] as num?)?.toDouble(),
-      freshIssueCrores: (json['freshIssueCrores'] as num?)?.toDouble(),
-      ofsCrores: (json['ofsCrores'] as num?)?.toDouble(),
-      subscriptionOverall: (json['subscriptionOverall'] as num?)?.toDouble(),
-      gmp: (json['gmp'] as num?)?.toInt(),
-      issuePrice: (json['issuePrice'] as num?)?.toInt(),
-      listingPrice: (json['listingPrice'] as num?)?.toInt(),
-      currentPrice: (json['currentPrice'] as num?)?.toInt(),
-      lastUpdated: json['lastUpdated'] != null ? DateTime.parse(json['lastUpdated'] as String) : DateTime.now(),
+      id: json['id'] as String? ?? 'ipo_${json['symbol'] ?? DateTime.now().millisecondsSinceEpoch}',
+      name: json['name'] as String? ?? json['ipoName'] as String? ?? json['company_name'] as String? ?? 'IPO',
+      companyName: json['companyName'] as String? ?? json['company_name'] as String? ?? json['name'] as String? ?? 'Company',
+      symbol: json['symbol'] as String? ?? json['ticker'] as String? ?? '',
+      marketType: IpoMarketType.fromString(json['marketType'] as String? ?? json['market_type'] as String? ?? json['category'] as String?),
+      status: IpoStatus.fromString(json['status'] as String? ?? json['ipo_status'] as String?),
+      openDate: parseIpoDate(json['openDate'] ?? json['open_date'] ?? json['bidding_start_date']),
+      closeDate: parseIpoDate(json['closeDate'] ?? json['close_date'] ?? json['bidding_end_date']),
+      allotmentDate: parseOptionalIpoDate(json['allotmentDate'] ?? json['allotment_date']),
+      listingDate: parseOptionalIpoDate(json['listingDate'] ?? json['listing_date']),
+      minPrice: minP,
+      maxPrice: maxP > 0 ? maxP : minP,
+      lotSize: (json['lotSize'] ?? json['lot_size'] ?? json['market_lot'] as num?)?.toInt() ?? 1,
+      issueSizeCrores: (json['issueSizeCrores'] ?? json['issue_size_crores'] ?? json['issue_size'] as num?)?.toDouble(),
+      freshIssueCrores: (json['freshIssueCrores'] ?? json['fresh_issue_crores'] ?? json['fresh_issue'] as num?)?.toDouble(),
+      ofsCrores: (json['ofsCrores'] ?? json['ofs_crores'] ?? json['ofs'] as num?)?.toDouble(),
+      subscription: sub,
+      subscriptionOverall: totalSub,
+      gmp: (json['gmp'] ?? json['grey_market_premium'] as num?)?.toInt(),
+      issuePrice: (json['issuePrice'] ?? json['issue_price'] as num?)?.toInt(),
+      listingPrice: (json['listingPrice'] ?? json['listing_price'] as num?)?.toInt(),
+      currentPrice: (json['currentPrice'] ?? json['current_price'] as num?)?.toInt(),
+      lastUpdated: json['lastUpdated'] != null ? DateTime.tryParse(json['lastUpdated'] as String) ?? DateTime.now() : DateTime.now(),
       isTracked: json['isTracked'] as bool? ?? false,
     );
   }
@@ -221,6 +382,7 @@ class Ipo {
       'issueSizeCrores': issueSizeCrores,
       'freshIssueCrores': freshIssueCrores,
       'ofsCrores': ofsCrores,
+      'subscription': subscription?.toJson(),
       'subscriptionOverall': subscriptionOverall,
       'gmp': gmp,
       'issuePrice': issuePrice,

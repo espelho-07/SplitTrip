@@ -25,6 +25,7 @@ class _NotificationsViewState extends State<NotificationsView> {
   bool _expenseAlerts = true;
   bool _settleAlerts = true;
   bool _tripAlerts = true;
+  bool _ipoAlerts = true;
 
   List<AppNotificationItem> _notifications = [];
 
@@ -44,6 +45,7 @@ class _NotificationsViewState extends State<NotificationsView> {
       _expenseAlerts = storage.getBool('notif_pref_expense') ?? true;
       _settleAlerts = storage.getBool('notif_pref_settlement') ?? true;
       _tripAlerts = storage.getBool('notif_pref_trip') ?? true;
+      _ipoAlerts = storage.getBool('notif_pref_ipo') ?? true;
 
       _notifications = raw.map((json) => AppNotificationItem.fromJson(json)).toList();
     });
@@ -193,6 +195,20 @@ class _NotificationsViewState extends State<NotificationsView> {
                   setState(() => _tripAlerts = v);
                 },
               ),
+              _buildPrefSwitch(
+                title: 'IPO Reminders & Status Alerts',
+                subtitle: 'Timely reminders for IPO opening, closing, allotment & listing',
+                value: _ipoAlerts,
+                isDark: isDark,
+                onChanged: (v) {
+                  final storage = context.read<LocalStorageService>();
+                  final notifService = context.read<NotificationService>();
+                  storage.setBool('notif_pref_ipo', v);
+                  notifService.setPreference(NotificationCategory.ipoActivity, v);
+                  setSheetState(() => _ipoAlerts = v);
+                  setState(() => _ipoAlerts = v);
+                },
+              ),
               const SizedBox(height: 24),
             ],
           ),
@@ -257,6 +273,9 @@ class _NotificationsViewState extends State<NotificationsView> {
     }
     if (_selectedFilter == 'trips') {
       return _notifications.where((n) => n.type == NotificationType.trip).toList();
+    }
+    if (_selectedFilter == 'ipos') {
+      return _notifications.where((n) => n.type == NotificationType.ipo).toList();
     }
     return _notifications;
   }
@@ -329,6 +348,7 @@ class _NotificationsViewState extends State<NotificationsView> {
                 _buildFilterChip('expenses', l10n.notificationsTabExpenses, isDark),
                 _buildFilterChip('settlements', l10n.notificationsTabSettlements, isDark),
                 _buildFilterChip('trips', l10n.notificationsTabTrips, isDark),
+                _buildFilterChip('ipos', 'IPOs', isDark),
               ],
             ),
           ),
@@ -400,6 +420,11 @@ class _NotificationsViewState extends State<NotificationsView> {
         icon = Icons.flight_takeoff_rounded;
         iconColor = AppColors.indigoAccent;
         iconBg = AppColors.indigoAccent.withValues(alpha: 0.15);
+        break;
+      case NotificationType.ipo:
+        icon = Icons.show_chart_rounded;
+        iconColor = isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary;
+        iconBg = (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.15);
         break;
       case NotificationType.system:
         icon = Icons.auto_awesome_rounded;

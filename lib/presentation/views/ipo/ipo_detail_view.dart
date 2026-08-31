@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
@@ -184,7 +184,7 @@ class IpoDetailView extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  ipo.status.displayName,
+                  ipo.dynamicStatus.displayName,
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
@@ -384,6 +384,11 @@ class IpoDetailView extends StatelessWidget {
   }
 
   Widget _buildMarketInsightsCard(BuildContext context, Ipo ipo, bool isDark) {
+    final sub = ipo.subscription;
+    final hasSubCategories = sub != null && sub.hasAnyData;
+    final maxP = ipo.maxPrice > 0 ? ipo.maxPrice : (ipo.minPrice > 0 ? ipo.minPrice : 1);
+    final estGainPct = ipo.gmp != null && maxP > 0 ? ((ipo.gmp! / maxP) * 100).toStringAsFixed(1) : null;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -401,7 +406,7 @@ class IpoDetailView extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'MARKET INSIGHTS',
+                'MARKET INSIGHTS & SUBSCRIPTION',
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
@@ -432,19 +437,41 @@ class IpoDetailView extends StatelessWidget {
                         style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: 2),
-                      Text(
-                        '₹${ipo.gmp} / share',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w900,
-                          color: isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight,
-                        ),
+                      Row(
+                        children: [
+                          Text(
+                            '₹${ipo.gmp}',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                              color: isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight,
+                            ),
+                          ),
+                          if (estGainPct != null) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: (isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight).withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                '+$estGainPct%',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  color: isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ],
                   ),
                 ),
               ],
-              if (ipo.subscriptionOverall != null) ...[
+              if (ipo.subscriptionOverall != null || sub?.total != null) ...[
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -455,9 +482,9 @@ class IpoDetailView extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${ipo.subscriptionOverall}x',
+                        '${ipo.subscriptionOverall ?? sub?.total}x',
                         style: TextStyle(
-                          fontSize: 15,
+                          fontSize: 16,
                           fontWeight: FontWeight.w900,
                           color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
                         ),
@@ -467,6 +494,82 @@ class IpoDetailView extends StatelessWidget {
                 ),
               ],
             ],
+          ),
+
+          // Detailed category breakdown if available
+          if (hasSubCategories) ...[
+            const SizedBox(height: 14),
+            const Divider(height: 1),
+            const SizedBox(height: 10),
+            Text(
+              'CATEGORY-WISE SUBSCRIPTION',
+              style: TextStyle(
+                fontSize: 9.5,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.5,
+                color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              children: [
+                if (sub.qib != null) _buildSubscriptionChip('QIB (Institutions)', '${sub.qib}x', isDark),
+                if (sub.nii != null) _buildSubscriptionChip('NII / HNI', '${sub.nii}x', isDark),
+                if (sub.retail != null) _buildSubscriptionChip('Retail (RII)', '${sub.retail}x', isDark),
+                if (sub.employee != null) _buildSubscriptionChip('Employee', '${sub.employee}x', isDark),
+                if (sub.shareholder != null) _buildSubscriptionChip('Shareholder', '${sub.shareholder}x', isDark),
+              ],
+            ),
+          ],
+
+          if (ipo.gmp != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              '* GMP (Grey Market Premium) is unofficial indicative pricing from dealers for informational purposes only.',
+              style: TextStyle(
+                fontSize: 9,
+                fontStyle: FontStyle.italic,
+                color: isDark ? AppColors.darkTextMuted.withValues(alpha: 0.7) : AppColors.lightTextMuted.withValues(alpha: 0.7),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSubscriptionChip(String label, String value, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurfaceCard : Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+          width: 0.6,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w600,
+              color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: isDark ? Colors.white : const Color(0xFF0F172A),
+            ),
           ),
         ],
       ),

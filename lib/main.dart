@@ -227,7 +227,10 @@ void main() async {
           ),
         ),
         ChangeNotifierProvider(
-          create: (_) => IpoViewModel(ipoRepo: ipoRepo),
+          create: (_) => IpoViewModel(
+            ipoRepo: ipoRepo,
+            notificationService: notificationService,
+          ),
         ),
         ChangeNotifierProvider(
           create: (_) => TripDetailViewModel(

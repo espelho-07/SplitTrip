@@ -13,6 +13,7 @@ import 'package:kith_app/data/services/sync_service.dart';
 import 'package:kith_app/domain/models/ipo/ipo.dart';
 import 'package:kith_app/domain/models/ipo/ipo_application.dart';
 import 'package:kith_app/domain/models/personal_debt.dart';
+import 'package:kith_app/domain/services/notification_service.dart';
 import 'package:kith_app/presentation/viewmodels/ipo_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/person_ledger_viewmodel.dart';
 
@@ -40,6 +41,7 @@ void main() {
   late TripRepository tripRepo;
   late IpoDataProvider dataProvider;
   late IpoRepository ipoRepo;
+  late NotificationService notificationService;
   late IpoViewModel ipoViewModel;
 
   setUp(() async {
@@ -69,12 +71,27 @@ void main() {
       dataProvider: dataProvider,
       personalRepo: personalRepo,
     );
-    ipoViewModel = IpoViewModel(ipoRepo: ipoRepo);
+    notificationService = NotificationService(storage);
+    await notificationService.init();
+
+    ipoViewModel = IpoViewModel(
+      ipoRepo: ipoRepo,
+      notificationService: notificationService,
+    );
   });
 
-  group('IPO Application Mathematical Calculations', () {
-    test('calculateApplicationAmountPaise calculates exact lots * lotSize * bidPrice', () {
-      // 3 lots * 30 shares * Rs 475 = Rs 42,750 = 4,275,000 paise
+  group('IPO Application Mathematical Calculations & Specifications', () {
+    test('30 shares * Rs 475 = Rs 14,250 minimum investment', () {
+      final amountPaise = IpoApplication.calculateApplicationAmountPaise(
+        lots: 1,
+        lotSize: 30,
+        bidPriceRupees: 475,
+      );
+      expect(amountPaise, equals(1425000));
+      expect(amountPaise / 100, equals(14250));
+    });
+
+    test('3 lots * 30 shares * Rs 475 = Rs 42,750 (4,275,000 paise)', () {
       final amountPaise = IpoApplication.calculateApplicationAmountPaise(
         lots: 3,
         lotSize: 30,
@@ -119,11 +136,8 @@ void main() {
   });
 
   group('IPO Funding Allocation & Person Ledger Integration', () {
-    test('Validates multi-funder allocation and creates linked peer debts', () async {
+    test('Me (20,000) + Rohit (15,000) + Priya (7,900) == 42,900 exact match', () async {
       // Total amount: Rs 42,900 (4,290,000 paise)
-      // Me: Rs 20,000 (2,000,000 paise)
-      // Rohit: Rs 15,000 (1,500,000 paise)
-      // Priya: Rs 7,900 (790,000 paise)
       const totalAmountPaise = 4290000;
 
       final fundings = [
@@ -131,21 +145,21 @@ void main() {
           id: 'fund_1',
           applicationId: 'app_123',
           funderType: IpoFunderType.self,
-          amountInPaise: 2000000,
+          amountInPaise: 2000000, // 20,000
         ),
         const IpoFunding(
           id: 'fund_2',
           applicationId: 'app_123',
           funderType: IpoFunderType.person,
           personName: 'Rohit',
-          amountInPaise: 1500000,
+          amountInPaise: 1500000, // 15,000
         ),
         const IpoFunding(
           id: 'fund_3',
           applicationId: 'app_123',
           funderType: IpoFunderType.person,
           personName: 'Priya',
-          amountInPaise: 790000,
+          amountInPaise: 790000, // 7,900
         ),
       ];
 
@@ -282,6 +296,173 @@ void main() {
       expect(restartedVm.applications.length, equals(1));
       expect(restartedVm.applications.first.ipoId, equals(openIpo.id));
       expect(restartedVm.totalAppliedPaise, equals(openIpo.lotSize * openIpo.maxPrice * 100));
+    });
+  });
+
+  group('IPO Date & Timezone Integrity', () {
+    test('parseIpoDate correctly parses calendar dates without UTC shift', () {
+      final d1 = Ipo.parseIpoDate('2026-09-01');
+      expect(d1.year, equals(2026));
+      expect(d1.month, equals(9));
+      expect(d1.day, equals(1));
+
+      final d2 = Ipo.parseIpoDate('01-09-2026');
+      expect(d2.year, equals(2026));
+      expect(d2.month, equals(9));
+      expect(d2.day, equals(1));
+
+      final d3 = Ipo.parseIpoDate('2026-09-01T00:00:00.000Z');
+      expect(d3.year, equals(2026));
+      expect(d3.month, equals(9));
+      expect(d3.day, equals(1));
+    });
+
+    test('dynamicStatus transitions correctly based on dates', () {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+
+      // Future IPO
+      final upcomingIpo = Ipo(
+        id: 'upcoming_1',
+        name: 'Future IPO',
+        companyName: 'Future Ltd',
+        symbol: 'FUT',
+        marketType: IpoMarketType.mainboard,
+        status: IpoStatus.upcoming,
+        openDate: today.add(const Duration(days: 3)),
+        closeDate: today.add(const Duration(days: 5)),
+        minPrice: 100,
+        maxPrice: 110,
+        lotSize: 50,
+        lastUpdated: now,
+      );
+      expect(upcomingIpo.dynamicStatus, equals(IpoStatus.upcoming));
+
+      // Open IPO
+      final openIpo = Ipo(
+        id: 'open_1',
+        name: 'Open IPO',
+        companyName: 'Open Ltd',
+        symbol: 'OPN',
+        marketType: IpoMarketType.mainboard,
+        status: IpoStatus.open,
+        openDate: today,
+        closeDate: today.add(const Duration(days: 2)),
+        minPrice: 100,
+        maxPrice: 110,
+        lotSize: 50,
+        lastUpdated: now,
+      );
+      expect(openIpo.dynamicStatus, equals(IpoStatus.open));
+
+      // Past close date IPO (should dynamically become closed even if raw status is open)
+      final closedIpo = Ipo(
+        id: 'closed_1',
+        name: 'Past IPO',
+        companyName: 'Past Ltd',
+        symbol: 'PST',
+        marketType: IpoMarketType.mainboard,
+        status: IpoStatus.open, // Stale raw status
+        openDate: today.subtract(const Duration(days: 4)),
+        closeDate: today.subtract(const Duration(days: 1)),
+        minPrice: 100,
+        maxPrice: 110,
+        lotSize: 50,
+        lastUpdated: now,
+      );
+      expect(closedIpo.dynamicStatus, equals(IpoStatus.closed));
+    });
+  });
+
+  group('IPO Notifications & Reminders', () {
+    test('IPO Notifications are enabled by default and dispatch milestone reminders', () async {
+      expect(notificationService.ipoNotificationsEnabled, isTrue);
+
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+
+      final ipos = [
+        Ipo(
+          id: 'ipo_today_open',
+          name: 'Apex Solar IPO',
+          companyName: 'Apex Solar Limited',
+          symbol: 'APEX',
+          marketType: IpoMarketType.mainboard,
+          status: IpoStatus.open,
+          openDate: today,
+          closeDate: today.add(const Duration(days: 2)),
+          minPrice: 200,
+          maxPrice: 210,
+          lotSize: 70,
+          lastUpdated: now,
+        ),
+        Ipo(
+          id: 'ipo_today_close',
+          name: 'Nova Biotech IPO',
+          companyName: 'Nova Biotech Limited',
+          symbol: 'NOVA',
+          marketType: IpoMarketType.mainboard,
+          status: IpoStatus.open,
+          openDate: today.subtract(const Duration(days: 2)),
+          closeDate: today,
+          minPrice: 300,
+          maxPrice: 315,
+          lotSize: 45,
+          lastUpdated: now,
+        ),
+      ];
+
+      await notificationService.checkAndDispatchIpoReminders(ipos: ipos);
+
+      final notifs = notificationService.getNotifications();
+      expect(notifs.isNotEmpty, isTrue);
+
+      // Verify Open Today reminder
+      final openNotif = notifs.firstWhere((n) => n.title.contains('Apex Solar'));
+      expect(openNotif.type, equals(NotificationType.ipo));
+      expect(openNotif.route, equals('/ipo/ipo_today_open'));
+
+      // Verify Last Day to Apply reminder
+      final closeNotif = notifs.firstWhere((n) => n.title.contains('Nova Biotech'));
+      expect(closeNotif.title, contains('Last Day to Apply'));
+      expect(closeNotif.route, equals('/ipo/ipo_today_close'));
+
+      // Test Idempotency: running again should not duplicate notifications
+      final initialCount = notifs.length;
+      await notificationService.checkAndDispatchIpoReminders(ipos: ipos);
+      final afterCount = notificationService.getNotifications().length;
+      expect(afterCount, equals(initialCount));
+    });
+
+    test('Disabling IPO notification preference suppresses alerts', () async {
+      await notificationService.setPreference(NotificationCategory.ipoActivity, false);
+      expect(notificationService.ipoNotificationsEnabled, isFalse);
+
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+
+      final ipos = [
+        Ipo(
+          id: 'ipo_test',
+          name: 'Test IPO',
+          companyName: 'Test Limited',
+          symbol: 'TEST',
+          marketType: IpoMarketType.mainboard,
+          status: IpoStatus.open,
+          openDate: today,
+          closeDate: today.add(const Duration(days: 2)),
+          minPrice: 100,
+          maxPrice: 100,
+          lotSize: 10,
+          lastUpdated: now,
+        ),
+      ];
+
+      final beforeCount = notificationService.getNotifications().length;
+      await notificationService.checkAndDispatchIpoReminders(ipos: ipos);
+      final afterCount = notificationService.getNotifications().length;
+
+      expect(afterCount, equals(beforeCount));
     });
   });
 }

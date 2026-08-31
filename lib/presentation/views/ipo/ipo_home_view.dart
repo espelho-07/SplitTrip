@@ -503,7 +503,7 @@ class _IpoHomeViewState extends State<IpoHomeView> {
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        ipo.status.displayName,
+                        ipo.dynamicStatus.displayName,
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w800,

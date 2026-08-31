@@ -7,6 +7,7 @@ enum NotificationCategory {
   expenseActivity,
   tripActivity,
   settlementActivity,
+  ipoActivity,
   systemActivity,
 }
 
@@ -14,6 +15,7 @@ enum NotificationType {
   expense,
   settlement,
   trip,
+  ipo,
   system,
 }
 
@@ -116,6 +118,7 @@ class NotificationService {
   static const String _prefExpenseKey = 'notif_pref_expense';
   static const String _prefTripKey = 'notif_pref_trip';
   static const String _prefSettlementKey = 'notif_pref_settlement';
+  static const String _prefIpoKey = 'notif_pref_ipo';
 
   final LocalStorageService? _storage;
   final StreamController<AppNotificationItem> _notificationStreamController =
@@ -128,15 +131,18 @@ class NotificationService {
   bool _expenseNotificationsEnabled = true;
   bool _tripNotificationsEnabled = true;
   bool _settlementNotificationsEnabled = true;
+  bool _ipoNotificationsEnabled = true;
 
   bool get expenseNotificationsEnabled => _expenseNotificationsEnabled;
   bool get tripNotificationsEnabled => _tripNotificationsEnabled;
   bool get settlementNotificationsEnabled => _settlementNotificationsEnabled;
+  bool get ipoNotificationsEnabled => _ipoNotificationsEnabled;
 
   Future<void> init() async {
     _expenseNotificationsEnabled = _storage?.getBool(_prefExpenseKey) ?? true;
     _tripNotificationsEnabled = _storage?.getBool(_prefTripKey) ?? true;
     _settlementNotificationsEnabled = _storage?.getBool(_prefSettlementKey) ?? true;
+    _ipoNotificationsEnabled = _storage?.getBool(_prefIpoKey) ?? true;
   }
 
   Future<void> setPreference(NotificationCategory category, bool enabled) async {
@@ -153,6 +159,10 @@ class NotificationService {
         _settlementNotificationsEnabled = enabled;
         await _storage?.setBool(_prefSettlementKey, enabled);
         break;
+      case NotificationCategory.ipoActivity:
+        _ipoNotificationsEnabled = enabled;
+        await _storage?.setBool(_prefIpoKey, enabled);
+        break;
       case NotificationCategory.systemActivity:
         break;
     }
@@ -168,6 +178,9 @@ class NotificationService {
         break;
       case NotificationCategory.settlementActivity:
         if (!_settlementNotificationsEnabled) return false;
+        break;
+      case NotificationCategory.ipoActivity:
+        if (!_ipoNotificationsEnabled) return false;
         break;
       case NotificationCategory.systemActivity:
         break;
@@ -194,6 +207,7 @@ class NotificationService {
     if (type == NotificationType.expense && !_expenseNotificationsEnabled) return;
     if (type == NotificationType.trip && !_tripNotificationsEnabled) return;
     if (type == NotificationType.settlement && !_settlementNotificationsEnabled) return;
+    if (type == NotificationType.ipo && !_ipoNotificationsEnabled) return;
 
     // Idempotency: skip if a notification with this key already exists
     if (idempotencyKey != null && idempotencyKey.isNotEmpty) {
@@ -366,6 +380,119 @@ class NotificationService {
 
   Future<void> markAsRead(String id) async {
     await _storage?.markNotificationAsRead(id);
+  }
+
+  /// Checks milestones for given IPOs and dispatches idempotent notifications
+  Future<void> checkAndDispatchIpoReminders({
+    required List<dynamic> ipos,
+    List<dynamic>? applications,
+  }) async {
+    if (!_ipoNotificationsEnabled) return;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+    final todayStr = '${now.year}_${now.month}_${now.day}';
+
+    for (final rawIpo in ipos) {
+      try {
+        final ipoId = rawIpo.id as String;
+        final ipoName = rawIpo.name as String;
+        final symbol = rawIpo.symbol as String?;
+        final symbolTag = symbol?.isNotEmpty == true ? ' ($symbol)' : '';
+        final priceBandFormatted = rawIpo.priceBandFormatted as String? ?? 'Cutoff Price';
+        final minInvestment = rawIpo.minInvestmentRupees as int? ?? 0;
+        final openDate = rawIpo.openDate as DateTime;
+        final closeDate = rawIpo.closeDate as DateTime;
+        final allotmentDate = rawIpo.allotmentDate as DateTime?;
+        final listingDate = rawIpo.listingDate as DateTime?;
+
+        final open = DateTime(openDate.year, openDate.month, openDate.day);
+        final close = DateTime(closeDate.year, closeDate.month, closeDate.day);
+
+        // 1. Opens today
+        if (open.isAtSameMomentAs(today)) {
+          await addNotification(
+            title: 'IPO Opens Today • $ipoName$symbolTag',
+            description: '$ipoName is now open for bidding ($priceBandFormatted, min ₹$minInvestment).',
+            type: NotificationType.ipo,
+            route: '/ipo/$ipoId',
+            actionLabel: 'View IPO',
+            idempotencyKey: 'ipo_open_${ipoId}_$todayStr',
+          );
+        }
+
+        // 2. Closes tomorrow
+        if (close.isAtSameMomentAs(tomorrow)) {
+          await addNotification(
+            title: 'IPO Closes Tomorrow ⚠️ • $ipoName',
+            description: 'Bidding for $ipoName closes tomorrow. Don\'t miss applying if interested.',
+            type: NotificationType.ipo,
+            route: '/ipo/$ipoId',
+            actionLabel: 'Apply Now',
+            idempotencyKey: 'ipo_close_tomorrow_${ipoId}_$todayStr',
+          );
+        }
+
+        // 3. Last day to apply (Closes today)
+        if (close.isAtSameMomentAs(today)) {
+          await addNotification(
+            title: 'Last Day to Apply ⏳ • $ipoName',
+            description: 'Today is the final day to submit your bid for $ipoName (closes by 5:00 PM).',
+            type: NotificationType.ipo,
+            route: '/ipo/$ipoId',
+            actionLabel: 'Apply Now',
+            idempotencyKey: 'ipo_close_today_${ipoId}_$todayStr',
+          );
+        }
+
+        // 4. Allotment expected today
+        if (allotmentDate != null) {
+          final allot = DateTime(allotmentDate.year, allotmentDate.month, allotmentDate.day);
+          if (allot.isAtSameMomentAs(today)) {
+            await addNotification(
+              title: 'Allotment Expected Today 🎯 • $ipoName',
+              description: 'Allotment status for $ipoName is scheduled to be finalized today.',
+              type: NotificationType.ipo,
+              route: '/ipo/$ipoId',
+              actionLabel: 'Check Status',
+              idempotencyKey: 'ipo_allotment_${ipoId}_$todayStr',
+            );
+          }
+        }
+
+        // 5. Listing today
+        if (listingDate != null) {
+          final list = DateTime(listingDate.year, listingDate.month, listingDate.day);
+          if (list.isAtSameMomentAs(today)) {
+            await addNotification(
+              title: 'IPO Listing Today 🚀 • $ipoName',
+              description: '$ipoName$symbolTag is scheduled to list on the stock exchanges today.',
+              type: NotificationType.ipo,
+              route: '/ipo/$ipoId',
+              actionLabel: 'View Listing',
+              idempotencyKey: 'ipo_listing_${ipoId}_$todayStr',
+            );
+          }
+        }
+      } catch (_) {}
+    }
+  }
+
+  /// Dispatches an application status update notification
+  Future<void> notifyIpoApplicationUpdated({
+    required String ipoId,
+    required String ipoName,
+    required String statusDisplayName,
+    required String applicationId,
+  }) async {
+    await addNotification(
+      title: 'IPO Application: $ipoName',
+      description: 'Your application status for $ipoName was updated to $statusDisplayName.',
+      type: NotificationType.ipo,
+      route: '/ipo/$ipoId',
+      actionLabel: 'View Application',
+      idempotencyKey: 'ipo_app_${applicationId}_${statusDisplayName}_${DateTime.now().day}_${DateTime.now().hour}',
+    );
   }
 
   void dispose() {

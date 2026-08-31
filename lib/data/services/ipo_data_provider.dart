@@ -15,20 +15,35 @@ class LiveIpoDataProvider implements IpoDataProvider {
 
   @override
   Future<List<Ipo>> fetchIpos() async {
-    // Attempt fetching from public live market feeds with timeout
+    // Attempt fetching from live Indian market feeds with timeout
     try {
       final uri = Uri.parse('https://api.ipoalerts.in/ipos');
       final response = await _client.get(uri).timeout(const Duration(seconds: 4));
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
+        List? rawList;
         if (decoded is List) {
+          rawList = decoded;
+        } else if (decoded is Map<String, dynamic>) {
+          if (decoded['ipos'] is List) {
+            rawList = decoded['ipos'] as List;
+          } else if (decoded['data'] is List) {
+            rawList = decoded['data'] as List;
+          } else if (decoded['result'] is List) {
+            rawList = decoded['result'] as List;
+          }
+        }
+
+        if (rawList != null && rawList.isNotEmpty) {
           final items = <Ipo>[];
-          for (final item in decoded) {
+          for (final item in rawList) {
             if (item is Map<String, dynamic>) {
               try {
                 items.add(Ipo.fromJson(item));
-              } catch (_) {}
+              } catch (e) {
+                debugPrint('[LiveIpoDataProvider] JSON map parse warning: $e');
+              }
             }
           }
           if (items.isNotEmpty) {
@@ -66,6 +81,13 @@ class LiveIpoDataProvider implements IpoDataProvider {
         issueSizeCrores: 6560.0,
         freshIssueCrores: 3560.0,
         ofsCrores: 3000.0,
+        subscription: const IpoSubscription(
+          qib: 143.58,
+          nii: 71.23,
+          retail: 17.84,
+          shareholder: 18.5,
+          total: 63.6,
+        ),
         subscriptionOverall: 63.6,
         gmp: 76,
         lastUpdated: now,
@@ -87,6 +109,12 @@ class LiveIpoDataProvider implements IpoDataProvider {
         issueSizeCrores: 342.0,
         freshIssueCrores: 342.0,
         ofsCrores: 0.0,
+        subscription: const IpoSubscription(
+          qib: 253.9,
+          nii: 430.5,
+          retail: 96.5,
+          total: 214.4,
+        ),
         subscriptionOverall: 214.4,
         gmp: 235,
         lastUpdated: now,
@@ -107,6 +135,11 @@ class LiveIpoDataProvider implements IpoDataProvider {
         lotSize: 1600,
         issueSizeCrores: 35.9,
         freshIssueCrores: 35.9,
+        subscription: const IpoSubscription(
+          retail: 65.4,
+          nii: 31.0,
+          total: 48.2,
+        ),
         subscriptionOverall: 48.2,
         gmp: 40,
         lastUpdated: now,
@@ -130,7 +163,6 @@ class LiveIpoDataProvider implements IpoDataProvider {
         issueSizeCrores: 27870.0,
         freshIssueCrores: 0.0,
         ofsCrores: 27870.0,
-        subscriptionOverall: null,
         gmp: 65,
         lastUpdated: now,
       ),
@@ -173,6 +205,13 @@ class LiveIpoDataProvider implements IpoDataProvider {
         issueSizeCrores: 777.0,
         freshIssueCrores: 500.0,
         ofsCrores: 277.0,
+        subscription: const IpoSubscription(
+          qib: 240.8,
+          nii: 142.4,
+          retail: 31.1,
+          employee: 7.3,
+          total: 110.9,
+        ),
         subscriptionOverall: 110.9,
         gmp: 128,
         lastUpdated: now,
@@ -194,6 +233,12 @@ class LiveIpoDataProvider implements IpoDataProvider {
         issueSizeCrores: 492.88,
         freshIssueCrores: 400.0,
         ofsCrores: 92.88,
+        subscription: const IpoSubscription(
+          qib: 42.1,
+          nii: 44.7,
+          retail: 25.9,
+          total: 30.5,
+        ),
         subscriptionOverall: 30.5,
         gmp: 18,
         issuePrice: 172,
@@ -219,6 +264,14 @@ class LiveIpoDataProvider implements IpoDataProvider {
         issuePrice: 450,
         listingPrice: 991,
         currentPrice: 1120,
+        subscription: const IpoSubscription(
+          qib: 216.7,
+          nii: 50.0,
+          retail: 7.7,
+          employee: 11.4,
+          total: 75.0,
+        ),
+        subscriptionOverall: 75.0,
         gmp: 490,
         lastUpdated: now,
       ),

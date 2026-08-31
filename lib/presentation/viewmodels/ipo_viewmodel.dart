@@ -2,9 +2,11 @@
 import '../../data/repositories/ipo_repository.dart';
 import '../../domain/models/ipo/ipo.dart';
 import '../../domain/models/ipo/ipo_application.dart';
+import '../../domain/services/notification_service.dart';
 
 class IpoViewModel extends ChangeNotifier {
   final IpoRepository ipoRepo;
+  final NotificationService? notificationService;
 
   List<Ipo> _ipos = [];
   List<IpoApplication> _applications = [];
@@ -13,7 +15,10 @@ class IpoViewModel extends ChangeNotifier {
   IpoMarketType? _selectedMarketFilter; // null for All
   String _searchQuery = '';
 
-  IpoViewModel({required this.ipoRepo}) {
+  IpoViewModel({
+    required this.ipoRepo,
+    this.notificationService,
+  }) {
     _loadFromCache();
   }
 
@@ -30,27 +35,27 @@ class IpoViewModel extends ChangeNotifier {
   String get searchQuery => _searchQuery;
   DateTime? get lastUpdated => ipoRepo.getLastUpdated();
 
-  // --- Filtered Listings ---
+  // --- Filtered Listings (Uses dynamic status) ---
   List<Ipo> get filteredIpos {
     var list = _ipos;
 
     // Filter by Tab
     switch (_selectedTab) {
       case 'open':
-        list = list.where((i) => i.status == IpoStatus.open).toList();
+        list = list.where((i) => i.dynamicStatus == IpoStatus.open).toList();
         break;
       case 'upcoming':
-        list = list.where((i) => i.status == IpoStatus.upcoming).toList();
+        list = list.where((i) => i.dynamicStatus == IpoStatus.upcoming).toList();
         break;
       case 'closed':
-        list = list.where((i) => i.status == IpoStatus.closed || i.status == IpoStatus.allotmentOut).toList();
+        list = list.where((i) => i.dynamicStatus == IpoStatus.closed || i.dynamicStatus == IpoStatus.allotmentOut).toList();
         break;
       case 'my_ipos':
         final appliedIpoIds = _applications.map((a) => a.ipoId).toSet();
         list = list.where((i) => i.isTracked || appliedIpoIds.contains(i.id)).toList();
         break;
       case 'listed':
-        list = list.where((i) => i.status == IpoStatus.listed).toList();
+        list = list.where((i) => i.dynamicStatus == IpoStatus.listed).toList();
         break;
     }
 
@@ -73,14 +78,14 @@ class IpoViewModel extends ChangeNotifier {
   }
 
   // --- Dynamic Counts ---
-  int get openCount => _ipos.where((i) => i.status == IpoStatus.open).length;
-  int get upcomingCount => _ipos.where((i) => i.status == IpoStatus.upcoming).length;
-  int get closedCount => _ipos.where((i) => i.status == IpoStatus.closed || i.status == IpoStatus.allotmentOut).length;
+  int get openCount => _ipos.where((i) => i.dynamicStatus == IpoStatus.open).length;
+  int get upcomingCount => _ipos.where((i) => i.dynamicStatus == IpoStatus.upcoming).length;
+  int get closedCount => _ipos.where((i) => i.dynamicStatus == IpoStatus.closed || i.dynamicStatus == IpoStatus.allotmentOut).length;
   int get myIposCount {
     final appliedIds = _applications.map((a) => a.ipoId).toSet();
     return _ipos.where((i) => i.isTracked || appliedIds.contains(i.id)).length;
   }
-  int get listedCount => _ipos.where((i) => i.status == IpoStatus.listed).length;
+  int get listedCount => _ipos.where((i) => i.dynamicStatus == IpoStatus.listed).length;
 
   // --- My IPOs Summary Metrics ---
   int get totalAppliedPaise {
@@ -128,6 +133,14 @@ class IpoViewModel extends ChangeNotifier {
 
     _isLoading = false;
     notifyListeners();
+
+    // Check and trigger notifications for milestone reminders
+    if (notificationService != null && _ipos.isNotEmpty) {
+      await notificationService!.checkAndDispatchIpoReminders(
+        ipos: _ipos,
+        applications: _applications,
+      );
+    }
   }
 
   void setTab(String tab) {
@@ -164,6 +177,17 @@ class IpoViewModel extends ChangeNotifier {
     final saved = await ipoRepo.recordApplication(application);
     _applications = ipoRepo.getCachedApplications();
     notifyListeners();
+
+    // Notify user of application tracking
+    if (notificationService != null) {
+      await notificationService!.notifyIpoApplicationUpdated(
+        ipoId: saved.ipoId,
+        ipoName: saved.ipoName,
+        statusDisplayName: saved.status.displayName,
+        applicationId: saved.id,
+      );
+    }
+
     return saved;
   }
 
@@ -183,6 +207,16 @@ class IpoViewModel extends ChangeNotifier {
     );
     _applications = ipoRepo.getCachedApplications();
     notifyListeners();
+
+    final app = _applications.firstWhere((a) => a.id == applicationId, orElse: () => _applications.first);
+    if (notificationService != null) {
+      await notificationService!.notifyIpoApplicationUpdated(
+        ipoId: app.ipoId,
+        ipoName: app.ipoName,
+        statusDisplayName: status.displayName,
+        applicationId: applicationId,
+      );
+    }
   }
 
   Future<void> deleteApplication(String applicationId) async {
