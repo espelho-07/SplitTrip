@@ -1,4 +1,4 @@
-﻿const { test, describe, beforeEach } = require('node:test');
+const { test, describe, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const authService = require('../src/services/auth_service');
 const { db } = require('../src/db/database');

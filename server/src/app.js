@@ -39,10 +39,8 @@ app.get('/health', healthHandler);
 app.get('/healthz', healthHandler);
 app.get('/api/health', healthHandler);
 app.get('/api/healthz', healthHandler);
-app.get('/', healthHandler);
 app.head('/health', healthHandler);
 app.head('/healthz', healthHandler);
-app.head('/', healthHandler);
 
 // Environment-aware CORS configuration
 const corsOptions = {
