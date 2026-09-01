@@ -28,8 +28,9 @@ class ExpenseRepository {
   }
 
   /// Loads all expenses recorded for a specific trip.
-  /// Uses local-first two-way reconciliation to ensure zero data loss:
-  /// Local un-synced expenses are never wiped by empty or partial server responses.
+  /// Uses local-first two-way reconciliation with pending outbox mutation preservation:
+  /// Local un-synced expenses and edits are never wiped by older server data,
+  /// and locally deleted expenses are never resurrected.
   Future<List<Expense>> getExpenses(String tripId) async {
     final localExpenses = getCachedExpenses(tripId);
     try {
@@ -37,16 +38,39 @@ class ExpenseRepository {
       if (res is List) {
         final serverExpenses = res.map((j) => Expense.fromJson(j as Map<String, dynamic>)).toList();
 
+        // 1. Inspect local pending outbox mutations
+        final pendingMutations = syncService.getPendingMutationsForTrip(tripId);
+        final pendingDeletedIds = pendingMutations
+            .where((m) => m.type == MutationType.deleteExpense)
+            .map((m) => (m.payload['id'] ?? m.payload['expenseId']).toString())
+            .toSet();
+        final pendingUpdateMap = {
+          for (final m in pendingMutations.where((m) => m.type == MutationType.updateExpense))
+            (m.payload['id'] ?? m.payload['expenseId']).toString(): Expense.fromJson(m.payload)
+        };
+
         final mergedMap = <String, Expense>{};
-        // 1. First add all local expenses to preserve local/offline created records
+        // 2. Populate local expenses, skipping locally deleted items
         for (final local in localExpenses) {
-          if (!local.isDeleted) {
+          if (!local.isDeleted && !pendingDeletedIds.contains(local.id)) {
             mergedMap[local.id] = local;
           }
         }
 
-        // 2. Merge or override with authoritative server responses
+        // 3. Merge server expenses safely
         for (final server in serverExpenses) {
+          // Never resurrect an expense marked for deletion in the local outbox
+          if (pendingDeletedIds.contains(server.id)) {
+            continue;
+          }
+          // Never overwrite a local unpushed edit with older server data
+          if (pendingUpdateMap.containsKey(server.id)) {
+            final pendingEdit = pendingUpdateMap[server.id]!;
+            if (pendingEdit.updatedAt.isAfter(server.updatedAt)) {
+              mergedMap[server.id] = pendingEdit;
+              continue;
+            }
+          }
           if (!server.isDeleted) {
             mergedMap[server.id] = server;
           } else {
@@ -177,24 +201,15 @@ class ExpenseRepository {
   }
 
   /// Computes the live balance summary for a trip.
+  /// Always derives balances from local canonical expenses and settlements
+  /// to guarantee 100% deterministic agreement with the displayed expense list.
   Future<BalanceSummary> getBalanceSummary({
     required Trip trip,
     required String currentUserId,
   }) async {
     final savedSettlements = storage.getSavedTripSettlements(trip.id);
-    try {
-      final res = await apiClient.get('/trips/${trip.id}/expenses/balance/summary');
-      if (res is Map<String, dynamic>) {
-        final serverSummary = BalanceSummary.fromJson(res);
-        if (savedSettlements.isEmpty) {
-          return serverSummary;
-        }
-      }
-    } catch (_) {
-      // Offline fallback
-    }
-
     final expenses = getCachedExpenses(trip.id);
+
     return BalanceEngine.calculateBalances(
       members: trip.members,
       expenses: expenses,
@@ -215,8 +230,33 @@ class ExpenseRepository {
       final res = await apiClient.get('/trips/$tripId/settlements');
       if (res is List) {
         final serverList = res.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-        await storage.saveTripSettlements(tripId, serverList);
-        return serverList;
+
+        // Inspect pending settlement mutations to avoid dropping offline recorded settlements
+        final pendingMutations = syncService.getPendingMutationsForTrip(tripId);
+        final pendingSettlementIds = pendingMutations
+            .where((m) => m.type == MutationType.recordTripSettlement)
+            .map((m) => (m.payload['id'] ?? m.payload['settlementId']).toString())
+            .toSet();
+
+        final mergedMap = <String, Map<String, dynamic>>{};
+        for (final c in cached) {
+          final id = c['id']?.toString() ?? '';
+          if (id.isNotEmpty) mergedMap[id] = c;
+        }
+        for (final s in serverList) {
+          final id = s['id']?.toString() ?? '';
+          if (id.isNotEmpty) {
+            // Keep local version if pending unpushed update
+            if (pendingSettlementIds.contains(id) && mergedMap.containsKey(id)) {
+              continue;
+            }
+            mergedMap[id] = s;
+          }
+        }
+
+        final mergedList = mergedMap.values.toList();
+        await storage.saveTripSettlements(tripId, mergedList);
+        return mergedList;
       }
     } catch (_) {
       // Offline fallback to cached settlements

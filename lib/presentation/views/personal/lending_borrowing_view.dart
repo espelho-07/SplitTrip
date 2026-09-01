@@ -10,9 +10,12 @@ import '../../../core/utils/date_formatter.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/widgets/empty_state_view.dart';
 import '../../../core/widgets/surface_card.dart';
+import '../../../data/services/p2p_sync_service.dart';
+import '../../../data/services/sync_service.dart';
 import '../../../domain/models/personal_debt.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/personal_expense_viewmodel.dart';
+import '../trip/widgets/nearby_sync_sheet.dart';
 import 'widgets/add_personal_expense_sheet.dart';
 import 'widgets/record_repayment_sheet.dart';
 
@@ -90,6 +93,17 @@ class _LendingBorrowingViewState extends State<LendingBorrowingView> {
       appBar: AppBar(
         title: const Text('Lending & Borrowing', style: TextStyle(fontWeight: FontWeight.w700)),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.wifi_tethering_rounded, size: 22),
+            tooltip: 'Sync Nearby (Offline)',
+            onPressed: () {
+              NearbySyncSheet.show(
+                context,
+                p2pService: context.read<P2PSyncService>(),
+                syncService: context.read<SyncService>(),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.add_circle_outline_rounded, size: 24),
             tooltip: 'Add Loan / Borrow',

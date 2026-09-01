@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
@@ -33,8 +35,8 @@ class IpoDetailView extends StatelessWidget {
       );
     }
 
-    final application = ipoVm.getApplicationForIpo(ipo.id);
-    final isApplied = application != null;
+    final applications = ipoVm.getAllApplicationsForIpo(ipo.id);
+    final isApplied = applications.isNotEmpty;
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
@@ -93,14 +95,27 @@ class IpoDetailView extends StatelessWidget {
 
           const SizedBox(height: 20),
 
-          // 5. User's Application & Funding Breakdown (if applied)
+          // 5. User's Applications & Funding Breakdowns (All Accounts)
           if (isApplied) ...[
-            _buildApplicationSection(context, ipo, application, isDark, ipoVm),
-            const SizedBox(height: 16),
+            Text(
+              '${applications.length} APPLICATION${applications.length > 1 ? 'S' : ''} RECORDED',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.6,
+                color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+              ),
+            ),
+            const SizedBox(height: 10),
+            for (final app in applications) ...[
+              _buildApplicationSection(context, ipo, app, isDark, ipoVm),
+              const SizedBox(height: 14),
+            ],
+            const SizedBox(height: 6),
           ],
 
           // 6. Context Action Buttons (Add from context, Edit, etc.)
-          _buildContextualActions(context, ipo, application, isDark),
+          _buildContextualActions(context, ipo, applications.firstOrNull, isDark),
         ],
       ),
       bottomNavigationBar: SafeArea(
@@ -750,9 +765,63 @@ class IpoDetailView extends StatelessWidget {
             );
           }),
 
+          // Payment Breakdown (Paid vs Remaining)
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF141A21) : const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+                width: 0.8,
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Already Paid', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 2),
+                      Text(
+                        CurrencyFormatter.formatPaise(app.effectivePaidPaise, currencyCode: 'INR'),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Remaining Due', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 2),
+                      Text(
+                        CurrencyFormatter.formatPaise(app.effectiveRemainingPaise, currencyCode: 'INR'),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: app.effectiveRemainingPaise > 0
+                              ? (isDark ? Colors.amberAccent : Colors.amber.shade800)
+                              : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
           const SizedBox(height: 12),
 
-          // Allotment & Performance Section
+          // Action Buttons: Allotment, Mark Received & WhatsApp Request
           Row(
             children: [
               Expanded(
@@ -762,8 +831,42 @@ class IpoDetailView extends StatelessWidget {
                   label: const Text('Update Allotment', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
                 ),
               ),
+              if (app.effectiveRemainingPaise > 0) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.emeraldPrimary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                    onPressed: () => _markIpoPaymentReceived(context, app, ipoVm),
+                    icon: const Icon(Icons.check_circle_outline_rounded, size: 16),
+                    label: const Text('Mark Received', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ],
             ],
           ),
+
+          if (app.effectiveRemainingPaise > 0 && !app.accountName.toLowerCase().startsWith('me')) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF25D366),
+                  side: const BorderSide(color: Color(0xFF25D366), width: 1),
+                ),
+                onPressed: () => _sendWhatsAppIpoPaymentRequest(context, app, ipo),
+                icon: const Icon(Icons.share_rounded, size: 16),
+                label: Text(
+                  'Request ${CurrencyFormatter.formatPaise(app.effectiveRemainingPaise, currencyCode: 'INR')} via WhatsApp',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+          ],
 
           if (app.status == IpoApplicationStatus.allotted ||
               app.status == IpoApplicationStatus.partiallyAllotted ||
@@ -793,7 +896,7 @@ class IpoDetailView extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Released/Refunded', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
+                        const Text('Released / Refunded', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
                         Text(
                           CurrencyFormatter.formatPaise(app.releasedAmountInPaise ?? 0, currencyCode: 'INR'),
                           style: TextStyle(
@@ -812,6 +915,69 @@ class IpoDetailView extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _markIpoPaymentReceived(BuildContext context, IpoApplication app, IpoViewModel ipoVm) async {
+    HapticHelper.medium();
+    final remaining = app.effectiveRemainingPaise;
+    if (remaining <= 0) return;
+
+    await ipoVm.recordPayment(
+      applicationId: app.id,
+      amountInPaise: remaining,
+      note: 'Payment received for ${app.ipoName} (${app.accountName})',
+    );
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Marked ${CurrencyFormatter.formatPaise(remaining, currencyCode: 'INR')} received for ${app.accountName}!'),
+          backgroundColor: AppColors.emeraldPrimary,
+        ),
+      );
+    }
+  }
+
+  Future<void> _sendWhatsAppIpoPaymentRequest(BuildContext context, IpoApplication app, Ipo ipo) async {
+    HapticHelper.medium();
+    final totalFormatted = CurrencyFormatter.formatPaise(app.applicationAmountInPaise, currencyCode: 'INR');
+    final paidFormatted = CurrencyFormatter.formatPaise(app.effectivePaidPaise, currencyCode: 'INR');
+    final remainingFormatted = CurrencyFormatter.formatPaise(app.effectiveRemainingPaise, currencyCode: 'INR');
+
+    final message = '''*Kith — IPO Payment Request*
+*IPO:* ${ipo.name}
+*Account:* ${app.accountName}
+*Application Amount:* $totalFormatted
+*Already Paid:* $paidFormatted
+*Remaining:* $remainingFormatted
+*Application Status:* ${app.status.displayName}
+
+Please send the remaining $remainingFormatted.
+— Sent via Kith''';
+
+    final encoded = Uri.encodeComponent(message);
+    final waUri = Uri.parse('whatsapp://send?text=$encoded');
+    final webWaUri = Uri.parse('https://wa.me/?text=$encoded');
+
+    try {
+      if (await canLaunchUrl(waUri)) {
+        await launchUrl(waUri, mode: LaunchMode.externalApplication);
+        return;
+      } else if (await canLaunchUrl(webWaUri)) {
+        await launchUrl(webWaUri, mode: LaunchMode.externalApplication);
+        return;
+      }
+    } catch (_) {}
+
+    await Clipboard.setData(ClipboardData(text: message));
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Payment request copied to clipboard! Paste in WhatsApp or SMS.'),
+          backgroundColor: AppColors.emeraldPrimary,
+        ),
+      );
+    }
   }
 
   Widget _buildContextualActions(

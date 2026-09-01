@@ -1,4 +1,84 @@
-﻿const { IpoProvider } = require("./ipo_provider_interface");
+const { IpoProvider } = require("./ipo_provider_interface");
+
+const MONTH_MAP = {
+  jan: 1, january: 1,
+  feb: 2, february: 2,
+  mar: 3, march: 3,
+  apr: 4, april: 4,
+  may: 5,
+  jun: 6, june: 6,
+  jul: 7, july: 7,
+  aug: 8, august: 8,
+  sep: 9, sept: 9, september: 9,
+  oct: 10, october: 10,
+  nov: 11, november: 11,
+  dec: 12, december: 12,
+};
+
+function normalizeDateStr(raw) {
+  if (!raw) return null;
+  const str = String(raw).trim();
+  if (!str || str.toLowerCase() === "null" || str.toLowerCase() === "tbd") return null;
+
+  // 1. YYYY-MM-DD
+  const ymd = str.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if (ymd) {
+    const y = ymd[1];
+    const m = String(parseInt(ymd[2], 10)).padStart(2, "0");
+    const d = String(parseInt(ymd[3], 10)).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+
+  // 2. DD-MonthName-YYYY (e.g. "28-Aug-2026", "28 Aug 2026")
+  const dmyAlpha = str.match(/^(\d{1,2})[- \/.]([A-Za-z]+)(?:[- \/.](\d{2,4}))?/);
+  if (dmyAlpha) {
+    const d = String(parseInt(dmyAlpha[1], 10)).padStart(2, "0");
+    const mNum = MONTH_MAP[dmyAlpha[2].toLowerCase()] ?? 1;
+    const m = String(mNum).padStart(2, "0");
+    let y = new Date().getFullYear();
+    if (dmyAlpha[3]) {
+      const parsedYear = parseInt(dmyAlpha[3], 10);
+      y = parsedYear < 100 ? (2000 + parsedYear) : parsedYear;
+    }
+    return `${y}-${m}-${d}`;
+  }
+
+  // 3. MonthName DD, YYYY
+  const mdyAlpha = str.match(/^([A-Za-z]+)[- \/.](\d{1,2})(?:,?\s*(\d{2,4}))?/);
+  if (mdyAlpha) {
+    const mNum = MONTH_MAP[mdyAlpha[1].toLowerCase()] ?? 1;
+    const m = String(mNum).padStart(2, "0");
+    const d = String(parseInt(mdyAlpha[2], 10)).padStart(2, "0");
+    let y = new Date().getFullYear();
+    if (mdyAlpha[3]) {
+      const parsedYear = parseInt(mdyAlpha[3], 10);
+      y = parsedYear < 100 ? (2000 + parsedYear) : parsedYear;
+    }
+    return `${y}-${m}-${d}`;
+  }
+
+  // 4. DD-MM-YYYY or DD/MM/YYYY
+  const dmy = str.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})/);
+  if (dmy) {
+    const d = String(parseInt(dmy[1], 10)).padStart(2, "0");
+    const m = String(parseInt(dmy[2], 10)).padStart(2, "0");
+    const parsedYear = parseInt(dmy[3], 10);
+    const y = parsedYear < 100 ? (2000 + parsedYear) : parsedYear;
+    return `${y}-${m}-${d}`;
+  }
+
+  return str;
+}
+
+function getTodayIstString() {
+  const now = new Date();
+  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const ist = new Date(utc + (330 * 60000)); // +5:30
+  const y = ist.getFullYear();
+  const m = String(ist.getMonth() + 1).padStart(2, "0");
+  const d = String(ist.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
 
 /**
  * Primary Provider: IPO Guru API (ipoguru.in)
@@ -91,16 +171,33 @@ class IpoGuruProvider extends IpoProvider {
     const category = (item.category ?? item.type ?? "mainboard").toLowerCase();
     const marketType = category.includes("sme") ? "sme" : "mainboard";
 
+    const openDate = normalizeDateStr(item.open_date ?? item.bidding_start_date ?? item.openDate);
+    const closeDate = normalizeDateStr(item.close_date ?? item.bidding_end_date ?? item.closeDate);
+    const allotmentDate = normalizeDateStr(item.allotment_date ?? item.allotmentDate);
+    const listingDate = normalizeDateStr(item.listing_date ?? item.listingDate);
+
+    const todayIst = getTodayIstString();
+
     const statusStr = (item.status ?? item.ipo_status ?? "upcoming").toLowerCase();
     let status = "upcoming";
-    if (statusStr.includes("open") || statusStr.includes("active")) {
+    if (statusStr.includes("list") || statusStr.includes("trad")) {
+      status = "listed";
+    } else if (listingDate && todayIst >= listingDate) {
+      status = "listed";
+    } else if (statusStr.includes("allot") || statusStr.includes("out")) {
+      status = "allotmentOut";
+    } else if (allotmentDate && closeDate && todayIst >= allotmentDate && todayIst > closeDate) {
+      status = "allotmentOut";
+    } else if (closeDate && todayIst > closeDate) {
+      status = "closed";
+    } else if (openDate && todayIst < openDate) {
+      status = "upcoming";
+    } else if (openDate && closeDate && todayIst >= openDate && todayIst <= closeDate) {
+      status = "open";
+    } else if (statusStr.includes("open") || statusStr.includes("active")) {
       status = "open";
     } else if (statusStr.includes("closed")) {
       status = "closed";
-    } else if (statusStr.includes("allot") || statusStr.includes("out")) {
-      status = "allotmentOut";
-    } else if (statusStr.includes("list") || statusStr.includes("trad")) {
-      status = "listed";
     }
 
     const minPrice = parseFloat(item.price_band_min ?? item.min_price ?? item.floor_price ?? 0) || 0;
@@ -136,10 +233,10 @@ class IpoGuruProvider extends IpoProvider {
       symbol,
       marketType,
       status,
-      openDate: item.open_date ?? item.bidding_start_date ?? item.openDate ?? null,
-      closeDate: item.close_date ?? item.bidding_end_date ?? item.closeDate ?? null,
-      allotmentDate: item.allotment_date ?? item.allotmentDate ?? null,
-      listingDate: item.listing_date ?? item.listingDate ?? null,
+      openDate,
+      closeDate,
+      allotmentDate,
+      listingDate,
       minPrice,
       maxPrice: maxPrice > 0 ? maxPrice : minPrice,
       lotSize,

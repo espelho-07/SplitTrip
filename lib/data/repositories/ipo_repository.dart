@@ -240,4 +240,113 @@ class IpoRepository {
     _cachedApplications.removeAt(idx);
     await storage.saveIpoApplications(_cachedApplications.map((a) => a.toJson()).toList());
   }
+
+  /// Calculates available unutilized released funds for an account
+  /// Released funds occur when an application is marked Not Allotted, Partially Allotted, or Refunded.
+  int getAccountAvailableBalance(String accountId) {
+    final apps = getApplicationsForAccount(accountId);
+    int totalReleased = 0;
+    for (final app in apps) {
+      if (app.status == IpoApplicationStatus.notAllotted ||
+          app.status == IpoApplicationStatus.refunded ||
+          app.status == IpoApplicationStatus.partiallyAllotted) {
+        totalReleased += (app.releasedAmountInPaise ?? (app.status == IpoApplicationStatus.notAllotted || app.status == IpoApplicationStatus.refunded ? app.applicationAmountInPaise : 0));
+      }
+    }
+    return totalReleased;
+  }
+
+  /// Derives complete financial metrics for an account
+  Map<String, int> getAccountFinancialSummary(String accountId) {
+    final apps = getApplicationsForAccount(accountId);
+    int totalApplied = 0;
+    int totalPaid = 0;
+    int totalPending = 0;
+    int moneyBlocked = 0;
+    int moneyReleased = 0;
+    int moneyInvested = 0;
+
+    for (final app in apps) {
+      totalApplied += app.applicationAmountInPaise;
+      totalPaid += (app.paidAmountInPaise ?? app.totalFundingAllocatedPaise);
+      totalPending += app.effectiveRemainingPaise;
+
+      switch (app.status) {
+        case IpoApplicationStatus.applied:
+        case IpoApplicationStatus.fundsBlocked:
+        case IpoApplicationStatus.refundPending:
+          moneyBlocked += app.applicationAmountInPaise;
+          break;
+        case IpoApplicationStatus.allotted:
+        case IpoApplicationStatus.listed:
+          moneyInvested += (app.actualInvestedAmountInPaise ?? app.applicationAmountInPaise);
+          if (app.releasedAmountInPaise != null && app.releasedAmountInPaise! > 0) {
+            moneyReleased += app.releasedAmountInPaise!;
+          }
+          break;
+        case IpoApplicationStatus.partiallyAllotted:
+          moneyInvested += (app.actualInvestedAmountInPaise ?? 0);
+          moneyReleased += (app.releasedAmountInPaise ?? (app.applicationAmountInPaise - (app.actualInvestedAmountInPaise ?? 0)));
+          break;
+        case IpoApplicationStatus.notAllotted:
+        case IpoApplicationStatus.refunded:
+          moneyReleased += (app.releasedAmountInPaise ?? app.applicationAmountInPaise);
+          break;
+      }
+    }
+
+    return {
+      'totalAppliedPaise': totalApplied,
+      'totalPaidPaise': totalPaid,
+      'totalPendingPaise': totalPending,
+      'moneyBlockedPaise': moneyBlocked,
+      'moneyReleasedPaise': moneyReleased,
+      'moneyInvestedPaise': moneyInvested,
+      'availableBalancePaise': moneyReleased,
+    };
+  }
+
+  /// Records a canonical payment against an IPO application and reconciles Person Ledger
+  Future<IpoApplication?> recordIpoPayment({
+    required String applicationId,
+    required int amountInPaise,
+    String? note,
+    DateTime? date,
+  }) async {
+    final idx = _cachedApplications.indexWhere((a) => a.id == applicationId);
+    if (idx == -1 || amountInPaise <= 0) return null;
+
+    final app = _cachedApplications[idx];
+    final currentPaid = app.paidAmountInPaise ?? app.totalFundingAllocatedPaise;
+    final newPaid = currentPaid + amountInPaise;
+    final newRemaining = (app.applicationAmountInPaise - newPaid).clamp(0, app.applicationAmountInPaise);
+
+    // If there is an associated person / peer funding, record payment in PersonalDebt ledger
+    for (final funding in app.fundings) {
+      if (!funding.isSelf && funding.personName?.isNotEmpty == true) {
+        try {
+          await personalRepo.createPersonalDebt(
+            userId: app.userId,
+            personName: funding.personName!,
+            debtType: PersonalDebtType.lent, // Person repayment recorded
+            amountInPaise: amountInPaise,
+            description: '${app.ipoName} (${app.accountName} IPO Payment Received)',
+            date: date ?? DateTime.now(),
+          );
+        } catch (e) {
+          debugPrint('[IpoRepository] Error updating person ledger for payment: $e');
+        }
+      }
+    }
+
+    final updated = app.copyWith(
+      paidAmountInPaise: newPaid,
+      remainingAmountInPaise: newRemaining,
+      updatedAt: DateTime.now(),
+    );
+
+    _cachedApplications[idx] = updated;
+    await storage.saveIpoApplications(_cachedApplications.map((a) => a.toJson()).toList());
+    return updated;
+  }
 }

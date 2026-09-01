@@ -175,12 +175,12 @@ class Ipo {
     return '₹$minPrice – ₹$maxPrice';
   }
 
-  /// Evaluates real-time dynamic status based on calendar dates to avoid stale cached "Open" states
+  /// Evaluates real-time dynamic status based on calendar dates in Indian Standard Time (IST)
+  /// Strict Invariant: Upcoming IPOs (openDate > today) NEVER appear in Open Now.
   IpoStatus get dynamicStatus {
     if (status == IpoStatus.listed) return IpoStatus.listed;
 
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+    final today = todayIst;
     final open = DateTime(openDate.year, openDate.month, openDate.day);
     final close = DateTime(closeDate.year, closeDate.month, closeDate.day);
 
@@ -198,35 +198,59 @@ class Ipo {
       }
     }
 
+    // 1. If today is before openDate -> strictly UPCOMING
     if (today.isBefore(open)) {
       return IpoStatus.upcoming;
     }
 
-    if (!today.isBefore(open) && !today.isAfter(close)) {
-      return IpoStatus.open;
-    }
-
+    // 2. If today is after closeDate -> strictly CLOSED
     if (today.isAfter(close)) {
       return IpoStatus.closed;
     }
 
-    return status;
+    // 3. If openDate <= today <= closeDate -> OPEN NOW
+    return IpoStatus.open;
   }
 
-  /// True if bidding is active today
+  /// True if bidding is active today in IST
   bool get isBiddingActive {
     return dynamicStatus == IpoStatus.open;
   }
 
-  /// Timezone-safe calendar date parser (preserves exact day without UTC shifting)
+  /// Indian Standard Time (IST, UTC+5:30) today calendar date
+  static DateTime get todayIst {
+    final utc = DateTime.now().toUtc();
+    final ist = utc.add(const Duration(hours: 5, minutes: 30));
+    return DateTime(ist.year, ist.month, ist.day);
+  }
+
+  static const Map<String, int> _monthMap = {
+    'jan': 1, 'january': 1,
+    'feb': 2, 'february': 2,
+    'mar': 3, 'march': 3,
+    'apr': 4, 'april': 4,
+    'may': 5,
+    'jun': 6, 'june': 6,
+    'jul': 7, 'july': 7,
+    'aug': 8, 'august': 8,
+    'sep': 9, 'sept': 9, 'september': 9,
+    'oct': 10, 'october': 10,
+    'nov': 11, 'november': 11,
+    'dec': 12, 'december': 12,
+  };
+
+  /// Timezone-safe calendar date parser supporting ISO, DD-MM-YYYY, and month name strings
+  /// Prevents false fallbacks to today that cause upcoming IPOs to appear as Open.
   static DateTime parseIpoDate(dynamic value, [DateTime? fallback]) {
-    if (value == null) return fallback ?? DateTime.now();
+    if (value == null) return fallback ?? todayIst;
     if (value is DateTime) return DateTime(value.year, value.month, value.day);
     final str = value.toString().trim();
-    if (str.isEmpty) return fallback ?? DateTime.now();
+    if (str.isEmpty || str.toLowerCase() == 'null' || str.toLowerCase() == 'tbd') {
+      return fallback ?? todayIst;
+    }
 
-    // Format: YYYY-MM-DD
-    final ymdMatch = RegExp(r'^(\d{4})-(\d{1,2})-(\d{1,2})').firstMatch(str);
+    // 1. Format: YYYY-MM-DD
+    final ymdMatch = RegExp(r'^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})').firstMatch(str);
     if (ymdMatch != null) {
       final year = int.parse(ymdMatch.group(1)!);
       final month = int.parse(ymdMatch.group(2)!);
@@ -234,12 +258,43 @@ class Ipo {
       return DateTime(year, month, day);
     }
 
-    // Format: DD-MM-YYYY or DD/MM/YYYY
-    final dmyMatch = RegExp(r'^(\d{1,2})[-/](\d{1,2})[-/](\d{4})').firstMatch(str);
+    // 2. Format: DD-MonthName-YYYY (e.g. "28-Aug-2026", "28 Aug 2026", "01-September-2026")
+    final dMonthYMatch = RegExp(r'^(\d{1,2})[- \/.]([A-Za-z]+)(?:[- \/.](\d{2,4}))?').firstMatch(str);
+    if (dMonthYMatch != null) {
+      final day = int.parse(dMonthYMatch.group(1)!);
+      final monthName = dMonthYMatch.group(2)!.toLowerCase();
+      final yearStr = dMonthYMatch.group(3);
+      final month = _monthMap[monthName] ?? 1;
+      int year = todayIst.year;
+      if (yearStr != null && yearStr.isNotEmpty) {
+        final parsedYear = int.parse(yearStr);
+        year = parsedYear < 100 ? (2000 + parsedYear) : parsedYear;
+      }
+      return DateTime(year, month, day);
+    }
+
+    // 3. Format: MonthName DD, YYYY (e.g. "Aug 28, 2026", "August 28 2026")
+    final monthDYMatch = RegExp(r'^([A-Za-z]+)[- \/.](\d{1,2})(?:,?\s*(\d{2,4}))?').firstMatch(str);
+    if (monthDYMatch != null) {
+      final monthName = monthDYMatch.group(1)!.toLowerCase();
+      final day = int.parse(monthDYMatch.group(2)!);
+      final yearStr = monthDYMatch.group(3);
+      final month = _monthMap[monthName] ?? 1;
+      int year = todayIst.year;
+      if (yearStr != null && yearStr.isNotEmpty) {
+        final parsedYear = int.parse(yearStr);
+        year = parsedYear < 100 ? (2000 + parsedYear) : parsedYear;
+      }
+      return DateTime(year, month, day);
+    }
+
+    // 4. Format: DD-MM-YYYY or DD/MM/YYYY
+    final dmyMatch = RegExp(r'^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})').firstMatch(str);
     if (dmyMatch != null) {
       final day = int.parse(dmyMatch.group(1)!);
       final month = int.parse(dmyMatch.group(2)!);
-      final year = int.parse(dmyMatch.group(3)!);
+      final parsedYear = int.parse(dmyMatch.group(3)!);
+      final year = parsedYear < 100 ? (2000 + parsedYear) : parsedYear;
       return DateTime(year, month, day);
     }
 
@@ -247,7 +302,7 @@ class Ipo {
       final parsed = DateTime.parse(str);
       return DateTime(parsed.year, parsed.month, parsed.day);
     } catch (_) {
-      return fallback ?? DateTime.now();
+      return fallback ?? todayIst;
     }
   }
 

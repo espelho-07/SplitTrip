@@ -63,3 +63,5 @@ service-account*.json
 server/data_storage/
 *.pem
 /android/build/
+*.aab
+*.apk

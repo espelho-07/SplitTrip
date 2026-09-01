@@ -189,5 +189,43 @@ void main() {
       expect(deserializedOnPeer.id, equals(opA.id));
       expect(deserializedOnPeer.syncState, equals(SyncState.p2pShared));
     });
+
+    test('8. derivePairingCode produces identical 6-digit code regardless of device order (Symmetry)', () {
+      final code1 = P2PSyncService.derivePairingCode('dev_phone_alice_123', 'dev_phone_bob_456');
+      final code2 = P2PSyncService.derivePairingCode('dev_phone_bob_456', 'dev_phone_alice_123');
+
+      expect(code1, equals(code2), reason: 'Pairing code must match on both Alice and Bob screens');
+      expect(code1.length, equals(7)); // Format: "123 456"
+      expect(code1.contains(' '), isTrue);
+    });
+
+    test('9. P2P Settlement and Tombstone Deletion Sync', () async {
+      await storage.saveTrips([
+        {'id': 'trip_goa_001', 'name': 'Goa Trip'}
+      ]);
+
+      // Add settlement via P2P
+      final settlementOp = SyncMutation(
+        id: 'op_stl_p2p_1',
+        type: MutationType.recordTripSettlement,
+        payload: {
+          'tripId': 'trip_goa_001',
+          'id': 'stl_p2p_1',
+          'fromMemberId': 'mem_1',
+          'toMemberId': 'mem_2',
+          'amountInPaise': 50000,
+          'status': 'marked_paid',
+        },
+        createdAt: DateTime.now(),
+      );
+
+      final appliedStl = await syncService.applyRemoteP2PMutation(settlementOp, storage);
+      expect(appliedStl, isTrue);
+
+      final settlements = storage.getSavedTripSettlements('trip_goa_001');
+      expect(settlements.length, equals(1));
+      expect(settlements.first['id'], equals('stl_p2p_1'));
+      expect(settlements.first['amountInPaise'], equals(50000));
+    });
   });
 }

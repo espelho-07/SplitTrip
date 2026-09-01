@@ -23,6 +23,8 @@ class PersonLedgerViewModel extends ChangeNotifier {
   bool _isLoading = false;
   bool _isAutoBudgetingEnabled = false;
 
+  String _selectedCategoryFilter = 'all'; // 'all', 'ipo', 'lending', 'trips', 'personal'
+
   PersonLedgerViewModel({
     required this.personalRepo,
     required this.expenseRepo,
@@ -33,6 +35,31 @@ class PersonLedgerViewModel extends ChangeNotifier {
   String get personName => _personName;
   String? get personUserId => _personUserId;
   List<PersonLedgerItem> get items => _items;
+  String get selectedCategoryFilter => _selectedCategoryFilter;
+
+  List<PersonLedgerItem> get filteredItems {
+    switch (_selectedCategoryFilter) {
+      case 'ipo':
+        return _items.where((i) => i.isIpoFunding).toList();
+      case 'lending':
+        return _items.where((i) => !i.isIpoFunding && i.tripId == null).toList();
+      case 'trips':
+        return _items.where((i) => i.tripId != null).toList();
+      case 'personal':
+        return _items.where((i) => i.tripId == null).toList();
+      case 'all':
+      default:
+        return _items;
+    }
+  }
+
+  void setCategoryFilter(String filter) {
+    if (_selectedCategoryFilter != filter) {
+      _selectedCategoryFilter = filter;
+      notifyListeners();
+    }
+  }
+
   int get totalLentPaise => _totalLentPaise;
   int get totalPaidPaise => _totalLentPaise;
   int get totalBorrowedPaise => _totalBorrowedPaise;

@@ -12,10 +12,14 @@ import 'package:kith_app/data/repositories/user_repository.dart';
 import 'package:kith_app/data/services/auth_service.dart';
 import 'package:kith_app/data/services/local_storage_service.dart';
 import 'package:kith_app/data/services/sync_service.dart';
+import 'package:kith_app/data/repositories/ipo_repository.dart';
+import 'package:kith_app/data/services/ipo_data_provider.dart';
 import 'package:kith_app/domain/enums/app_experience_mode.dart';
 import 'package:kith_app/domain/models/guest_user.dart';
+import 'package:kith_app/domain/services/notification_service.dart';
 import 'package:kith_app/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/home_viewmodel.dart';
+import 'package:kith_app/presentation/viewmodels/ipo_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/personal_expense_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/theme_viewmodel.dart';
 import 'package:kith_app/presentation/views/home/home_view.dart';
@@ -41,9 +45,12 @@ void main() {
   late ThemeViewModel themeVm;
   late GuestUser testUser;
 
+  late NotificationService notificationService;
+
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     storage = await LocalStorageService.init();
+    notificationService = NotificationService(storage);
     securityService = SecurityLockService(storage);
     apiClient = ApiClient();
     final authService = AuthService(apiClient: apiClient, storage: storage);
@@ -89,20 +96,30 @@ void main() {
   });
 
   Widget wrapWithProviders(Widget child) {
+    final ipoRepo = IpoRepository(
+      storage: storage,
+      dataProvider: LiveIpoDataProvider(),
+      personalRepo: personalRepo,
+    );
+    final ipoVm = IpoViewModel(ipoRepo: ipoRepo);
+
     return MultiProvider(
       providers: [
+        Provider<NotificationService>.value(value: notificationService),
         ChangeNotifierProvider.value(value: securityService),
         ChangeNotifierProvider.value(value: authVm),
         ChangeNotifierProvider.value(value: homeVm),
         ChangeNotifierProvider.value(value: personalVm),
         ChangeNotifierProvider.value(value: themeVm),
         ChangeNotifierProvider.value(value: widgetService),
+        ChangeNotifierProvider.value(value: ipoVm),
         Provider.value(value: storage),
         Provider.value(value: apiClient),
         Provider.value(value: syncService),
         Provider.value(value: tripRepo),
         Provider.value(value: expenseRepo),
         Provider.value(value: personalRepo),
+        Provider.value(value: ipoRepo),
       ],
       child: MaterialApp(
         locale: const Locale('en'),
@@ -133,25 +150,38 @@ void main() {
       expect(authVm.appExperienceMode, AppExperienceMode.all);
     });
 
-    testWidgets('2. HomeView dynamically renders 3 tabs in Trips Only mode and 4 tabs in All mode',
+    testWidgets('2. HomeView dynamically renders destinations based on Experience Mode',
         (tester) async {
       await tester.pumpWidget(wrapWithProviders(const HomeView()));
       await tester.pumpAndSettle();
 
-      // Default: All mode -> 4 tabs: Home, Trips, Expenses, Profile
+      // Default: All mode -> 5 tabs: Home, Trips, Expenses, IPO, Profile
       expect(find.text('Home'), findsOneWidget);
       expect(find.text('Trips'), findsOneWidget);
       expect(find.text('Expenses'), findsOneWidget);
+      expect(find.text('IPO'), findsOneWidget);
       expect(find.text('Profile'), findsOneWidget);
 
       // Switch to Trips Only mode
       await authVm.setAppExperienceMode(AppExperienceMode.tripsOnly);
       await tester.pumpAndSettle();
 
-      // Trips Only mode -> 3 tabs: Home, Trips, Profile (Expenses hidden)
+      // Trips Only mode -> 3 tabs: Home, Trips, Profile (Expenses and IPO hidden)
       expect(find.text('Home'), findsOneWidget);
       expect(find.text('Trips'), findsOneWidget);
       expect(find.text('Expenses'), findsNothing);
+      expect(find.text('IPO'), findsNothing);
+      expect(find.text('Profile'), findsOneWidget);
+
+      // Switch to Trips + IPO mode
+      await authVm.setAppExperienceMode(AppExperienceMode.tripsAndIpo);
+      await tester.pumpAndSettle();
+
+      // Trips + IPO mode -> 4 tabs: Home, Trips, IPO, Profile (Expenses hidden)
+      expect(find.text('Home'), findsOneWidget);
+      expect(find.text('Trips'), findsOneWidget);
+      expect(find.text('Expenses'), findsNothing);
+      expect(find.text('IPO'), findsOneWidget);
       expect(find.text('Profile'), findsOneWidget);
     });
 

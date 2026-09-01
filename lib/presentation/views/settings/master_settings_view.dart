@@ -572,26 +572,8 @@ class _MasterSettingsViewState extends State<MasterSettingsView> {
               ),
               const SizedBox(height: 20),
               _buildExperienceOption(
-                title: l10n.settingsExpTripsTitle,
-                subtitle: l10n.settingsExpTripsDesc,
-                icon: Icons.pie_chart_outline_rounded,
-                isSelected: authVm.appExperienceMode == AppExperienceMode.all,
-                isDark: isDark,
-                onTap: () async {
-                  HapticHelper.selection();
-                  await authVm.setAppExperienceMode(AppExperienceMode.all);
-                  if (bCtx.mounted) Navigator.pop(bCtx);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('${l10n.settingsExpTripsTitle} ✓'), behavior: SnackBarBehavior.floating),
-                    );
-                  }
-                },
-              ),
-              const SizedBox(height: 10),
-              _buildExperienceOption(
-                title: l10n.settingsExpTripsOnlyTitle,
-                subtitle: l10n.settingsExpTripsOnlyDesc,
+                title: 'Trips Only',
+                subtitle: 'Streamlined UI focused purely on group trips, splits, and instant settlements',
                 icon: Icons.flight_takeoff_rounded,
                 isSelected: authVm.appExperienceMode == AppExperienceMode.tripsOnly,
                 isDark: isDark,
@@ -601,7 +583,61 @@ class _MasterSettingsViewState extends State<MasterSettingsView> {
                   if (bCtx.mounted) Navigator.pop(bCtx);
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('${l10n.settingsExpTripsOnlyTitle} ✓'), behavior: SnackBarBehavior.floating),
+                      const SnackBar(content: Text('Switched to Trips Only mode ✓'), behavior: SnackBarBehavior.floating),
+                    );
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+              _buildExperienceOption(
+                title: 'Trips + Expenses',
+                subtitle: 'Group trips plus personal expense ledger, analytics, and lending/borrowing',
+                icon: Icons.receipt_long_rounded,
+                isSelected: authVm.appExperienceMode == AppExperienceMode.tripsAndExpenses,
+                isDark: isDark,
+                onTap: () async {
+                  HapticHelper.selection();
+                  await authVm.setAppExperienceMode(AppExperienceMode.tripsAndExpenses);
+                  if (bCtx.mounted) Navigator.pop(bCtx);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Switched to Trips + Expenses mode ✓'), behavior: SnackBarBehavior.floating),
+                    );
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+              _buildExperienceOption(
+                title: 'Trips + IPO Manager',
+                subtitle: 'Group trips plus dedicated IPO applications, accounts, allotments & released money tracking',
+                icon: Icons.candlestick_chart_rounded,
+                isSelected: authVm.appExperienceMode == AppExperienceMode.tripsAndIpo,
+                isDark: isDark,
+                onTap: () async {
+                  HapticHelper.selection();
+                  await authVm.setAppExperienceMode(AppExperienceMode.tripsAndIpo);
+                  if (bCtx.mounted) Navigator.pop(bCtx);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Switched to Trips + IPO Manager mode ✓'), behavior: SnackBarBehavior.floating),
+                    );
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+              _buildExperienceOption(
+                title: 'All Features',
+                subtitle: 'Complete Kith experience with trips, personal expenses, and IPO manager',
+                icon: Icons.auto_awesome_mosaic_rounded,
+                isSelected: authVm.appExperienceMode == AppExperienceMode.all,
+                isDark: isDark,
+                onTap: () async {
+                  HapticHelper.selection();
+                  await authVm.setAppExperienceMode(AppExperienceMode.all);
+                  if (bCtx.mounted) Navigator.pop(bCtx);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Switched to All Features mode ✓'), behavior: SnackBarBehavior.floating),
                     );
                   }
                 },

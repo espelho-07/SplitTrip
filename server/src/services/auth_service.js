@@ -152,7 +152,7 @@ class AuthService {
     };
   }
 
-  syncGuest({ id, displayName, recoveryKey, token, avatarUrl }) {
+  syncGuest({ id, displayName, recoveryKey, token, avatarUrl, fcmToken, deviceId, platform = 'android' }) {
     if (!id || !displayName) {
       throw AppError.badRequest('User ID and display name are required');
     }
@@ -202,14 +202,38 @@ class AuthService {
       }
     }
 
+    // Register active FCM Token for this user & device
+    if (fcmToken) {
+      const staleTokens = db.find('user_fcm_tokens', (r) => (r.token === fcmToken || (deviceId && r.deviceId === deviceId)) && r.userId !== id && !r.deleted);
+      for (const stale of staleTokens) {
+        db.update('user_fcm_tokens', stale.id, { deleted: true, deletedAt: now });
+      }
+      const existingToken = db.findOne('user_fcm_tokens', (r) => r.userId === id && (r.deviceId === deviceId || r.token === fcmToken));
+      if (existingToken) {
+        db.update('user_fcm_tokens', existingToken.id, { token: fcmToken, deviceId: deviceId || existingToken.deviceId, platform: platform || existingToken.platform, updatedAt: now, deleted: false, deletedAt: null });
+      } else {
+        db.insert('user_fcm_tokens', {
+          id: crypto.randomUUID(),
+          userId: id,
+          token: fcmToken,
+          deviceId: deviceId || `device_${Date.now()}`,
+          platform: platform || 'android',
+          createdAt: now,
+          updatedAt: now,
+          deleted: false,
+        });
+      }
+    }
+
     return {
       success: true,
       user: {
         id: user.id,
         displayName: user.displayName,
         avatarUrl: user.avatarUrl,
-        recoveryKey: normalizedKey,
+        recoveryKey: user.recoveryKey || normalizedKey,
         isGuest: user.isGuest,
+        email: user.email,
         createdAt: user.createdAt,
       },
     };

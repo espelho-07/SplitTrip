@@ -82,6 +82,7 @@ enum IpoApplicationStatus {
   allotted,
   notAllotted,
   partiallyAllotted,
+  refundPending,
   refunded,
   listed;
 
@@ -100,6 +101,9 @@ enum IpoApplicationStatus {
       case 'partiallyallotted':
       case 'partially_allotted':
         return IpoApplicationStatus.partiallyAllotted;
+      case 'refundpending':
+      case 'refund_pending':
+        return IpoApplicationStatus.refundPending;
       case 'refunded':
         return IpoApplicationStatus.refunded;
       case 'listed':
@@ -121,6 +125,8 @@ enum IpoApplicationStatus {
         return 'Not Allotted';
       case IpoApplicationStatus.partiallyAllotted:
         return 'Partially Allotted';
+      case IpoApplicationStatus.refundPending:
+        return 'Refund Pending';
       case IpoApplicationStatus.refunded:
         return 'Refunded / Released';
       case IpoApplicationStatus.listed:
@@ -210,6 +216,15 @@ class IpoApplication {
     required int bidPriceRupees,
   }) {
     return lots * lotSize * bidPriceRupees * 100;
+  }
+
+  /// Calculates additional amount required given available unutilized balance
+  static int calculateAdditionalRequiredPaise({
+    required int applicationAmountPaise,
+    required int availableReleasedBalancePaise,
+  }) {
+    if (availableReleasedBalancePaise >= applicationAmountPaise) return 0;
+    return applicationAmountPaise - availableReleasedBalancePaise;
   }
 
   /// Calculates invested and released amounts upon allotment

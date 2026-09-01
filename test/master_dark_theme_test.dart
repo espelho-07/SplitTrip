@@ -17,6 +17,9 @@ import 'package:kith_app/presentation/viewmodels/home_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/locale_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/personal_expense_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/theme_viewmodel.dart';
+import 'package:kith_app/data/repositories/ipo_repository.dart';
+import 'package:kith_app/data/services/ipo_data_provider.dart';
+import 'package:kith_app/presentation/viewmodels/ipo_viewmodel.dart';
 import 'package:kith_app/domain/services/notification_service.dart';
 import 'package:kith_app/presentation/views/home/home_view.dart';
 import 'package:provider/provider.dart';
@@ -68,6 +71,13 @@ void main() {
   });
 
   Widget createDarkModeHomeScreen() {
+    final ipoRepo = IpoRepository(
+      storage: storage,
+      dataProvider: LiveIpoDataProvider(),
+      personalRepo: personalRepo,
+    );
+    final ipoVm = IpoViewModel(ipoRepo: ipoRepo);
+
     return MultiProvider(
       providers: [
         Provider<LocalStorageService>.value(value: storage),
@@ -77,11 +87,13 @@ void main() {
         ChangeNotifierProvider.value(value: personalVm),
         ChangeNotifierProvider.value(value: themeVm),
         ChangeNotifierProvider.value(value: localeVm),
+        ChangeNotifierProvider.value(value: ipoVm),
         Provider.value(value: apiClient),
         Provider.value(value: syncService),
         Provider.value(value: tripRepo),
         Provider.value(value: expenseRepo),
         Provider.value(value: personalRepo),
+        Provider.value(value: ipoRepo),
         ChangeNotifierProvider.value(value: widgetService),
       ],
       child: Consumer<ThemeViewModel>(
@@ -104,13 +116,14 @@ void main() {
   }
 
   group('Master OLED Obsidian Dark Theme Suite', () {
-    testWidgets('1. Renders 4-tab HomeView in Dark Mode cleanly', (tester) async {
+    testWidgets('1. Renders 5-tab HomeView in Dark Mode cleanly', (tester) async {
       await tester.pumpWidget(createDarkModeHomeScreen());
       await tester.pumpAndSettle();
 
       expect(find.text('Home'), findsOneWidget);
       expect(find.text('Trips'), findsOneWidget);
       expect(find.text('Expenses'), findsOneWidget);
+      expect(find.text('IPO'), findsOneWidget);
       expect(find.text('Profile'), findsOneWidget);
       expect(find.text('My Balances'), findsOneWidget);
       expect(find.text('Quick Actions'), findsOneWidget);

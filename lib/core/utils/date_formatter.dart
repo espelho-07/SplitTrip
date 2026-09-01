@@ -27,6 +27,14 @@ class DateFormatter {
     return DateFormat('d MMM yyyy').format(date);
   }
 
+  static String formatShortDate(DateTime date) {
+    final now = DateTime.now();
+    if (date.year == now.year) {
+      return DateFormat('d MMM').format(date);
+    }
+    return DateFormat('d MMM yyyy').format(date);
+  }
+
   static String formatTime(DateTime date) {
     return DateFormat('h:mm a').format(date);
   }

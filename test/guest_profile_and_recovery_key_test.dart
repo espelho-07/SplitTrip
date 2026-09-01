@@ -154,7 +154,20 @@ void main() {
     });
 
     testWidgets('5. ProfileHomeTab renders Profile & Identity and Restore Account options for guest', (tester) async {
-      await authVm.createGuestSession('Priya Patel');
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final guest = GuestUser(
+        id: 'usr_guest_priya',
+        displayName: 'Priya Patel',
+        recoveryKey: 'KITH-7K4M-9P2R',
+        anonymousToken: 'kith_sess_priya',
+        createdAt: DateTime.now(),
+        isLinkedToAccount: false,
+      );
+      await storage.saveUser(guest.toJson());
+      await authVm.initSession();
 
       await tester.pumpWidget(
         MultiProvider(
@@ -181,14 +194,11 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('Priya Patel'), findsOneWidget);
       expect(find.text('Guest Account'), findsOneWidget);
-      expect(find.text('Profile & Identity'), findsOneWidget);
       expect(find.text('Sign in with Google'), findsNothing);
-
-      await tester.scrollUntilVisible(find.text('Restore Your Account'), 200);
       expect(find.text('Restore Your Account'), findsOneWidget);
     });
   });

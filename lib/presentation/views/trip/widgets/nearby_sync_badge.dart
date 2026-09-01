@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../data/services/p2p_sync_service.dart';
 import '../../../../data/services/sync_service.dart';
+import 'trip_sync_sheet.dart';
 
 class NearbySyncBadge extends StatelessWidget {
   final P2PSyncService p2pService;
@@ -57,32 +58,42 @@ class NearbySyncBadge extends StatelessWidget {
               color = const Color(0xFFF59E0B);
             }
 
-            return AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: isDark ? color.withValues(alpha: 0.15) : color.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: color.withValues(alpha: 0.3),
-                  width: 1,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(icon, size: 13, color: color),
-                  const SizedBox(width: 5),
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: color,
-                      letterSpacing: 0.2,
-                    ),
+            return GestureDetector(
+              onTap: () {
+                TripSyncSheet.show(
+                  context,
+                  tripId: tripId,
+                  syncService: syncService,
+                  p2pService: p2pService,
+                );
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isDark ? color.withValues(alpha: 0.15) : color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: color.withValues(alpha: 0.3),
+                    width: 1,
                   ),
-                ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, size: 13, color: color),
+                    const SizedBox(width: 5),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: color,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             );
           },

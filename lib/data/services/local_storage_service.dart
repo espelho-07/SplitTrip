@@ -183,6 +183,22 @@ class LocalStorageService {
     return getProcessedP2POperationIds().contains(opId);
   }
 
+  // --- Device Identification ---
+  static const String _deviceIdKey = 'kith_device_id';
+
+  String getDeviceId() {
+    var id = _prefs.getString(_deviceIdKey);
+    if (id == null || id.isEmpty) {
+      id = 'dev_${DateTime.now().millisecondsSinceEpoch}_${(1000 + (DateTime.now().microsecond % 9000))}';
+      _prefs.setString(_deviceIdKey, id);
+    }
+    return id;
+  }
+
+  Future<bool> saveDeviceId(String id) async {
+    return _prefs.setString(_deviceIdKey, id);
+  }
+
   // --- Theme Mode ---
   String? getSavedThemeMode() {
     return _prefs.getString(_themeModeKey);
@@ -223,6 +239,8 @@ class LocalStorageService {
       return [];
     }
   }
+
+  List<Map<String, dynamic>> getPersonalDebts() => getSavedPersonalDebts();
 
   Future<bool> savePersonalDebts(List<Map<String, dynamic>> debtsJson) async {
     return _prefs.setString(_personalDebtsKey, jsonEncode(debtsJson));

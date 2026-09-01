@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
@@ -769,6 +771,7 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final vm = context.watch<PersonLedgerViewModel>();
+    final displayItems = vm.filteredItems;
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
@@ -800,6 +803,13 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
           ],
         ),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.share_rounded, size: 20, color: AppColors.emeraldPrimary),
+            tooltip: 'Request Payment via WhatsApp',
+            onPressed: () => _sendWhatsAppPaymentRequest(context, vm),
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -812,19 +822,22 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
           else
             _buildAutoBudgetingOffBanner(isDark),
 
-          // 3. Chat / Conversation Timeline
+          // 3. Category Filter Chips (All, IPO, Lending, Trips, Personal)
+          _buildContextFilterChips(isDark, vm),
+
+          // 4. Chat / Conversation Timeline
           Expanded(
             child: vm.isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : (vm.items.isEmpty
+                : (displayItems.isEmpty
                     ? _buildEmptyState(isDark)
                     : ListView.builder(
                         controller: _scrollController,
                         physics: const BouncingScrollPhysics(),
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-                        itemCount: vm.items.length,
+                        itemCount: displayItems.length,
                         itemBuilder: (ctx, i) {
-                          final item = vm.items[i];
+                          final item = displayItems[i];
                           return InkWell(
                             onLongPress: () => _showTransactionOptions(context, item, vm, isDark),
                             borderRadius: BorderRadius.circular(16),
@@ -845,6 +858,103 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
           'Add Transaction',
           style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
         ),
+      ),
+    );
+  }
+
+  Future<void> _sendWhatsAppPaymentRequest(BuildContext context, PersonLedgerViewModel vm) async {
+    HapticHelper.medium();
+    final remainingPaise = vm.netBalancePaise > 0 ? vm.netBalancePaise : 0;
+    final remainingFormatted = CurrencyFormatter.formatPaise(remainingPaise, currencyCode: 'INR');
+
+    final message = '''*Kith — Payment Request*
+*Person:* ${widget.personName}
+*Amount Due:* $remainingFormatted
+*Status:* Pending Settlement
+
+Please settle the pending balance of $remainingFormatted.
+— Sent via Kith''';
+
+    final encoded = Uri.encodeComponent(message);
+    final waUri = Uri.parse('whatsapp://send?text=$encoded');
+    final webWaUri = Uri.parse('https://wa.me/?text=$encoded');
+
+    try {
+      if (await canLaunchUrl(waUri)) {
+        await launchUrl(waUri, mode: LaunchMode.externalApplication);
+        return;
+      } else if (await canLaunchUrl(webWaUri)) {
+        await launchUrl(webWaUri, mode: LaunchMode.externalApplication);
+        return;
+      }
+    } catch (_) {}
+
+    await Clipboard.setData(ClipboardData(text: message));
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Payment request copied to clipboard! Paste in WhatsApp or SMS.'),
+          backgroundColor: AppColors.emeraldPrimary,
+        ),
+      );
+    }
+  }
+
+  Widget _buildContextFilterChips(bool isDark, PersonLedgerViewModel vm) {
+    final filters = [
+      {'id': 'all', 'label': 'All'},
+      {'id': 'ipo', 'label': 'IPO'},
+      {'id': 'lending', 'label': 'Lending'},
+      {'id': 'trips', 'label': 'Trips'},
+      {'id': 'personal', 'label': 'Personal'},
+    ];
+
+    return Container(
+      height: 36,
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: filters.length,
+        separatorBuilder: (context, index) => const SizedBox(width: 8),
+        itemBuilder: (ctx, i) {
+          final f = filters[i];
+          final isSelected = vm.selectedCategoryFilter == f['id'];
+
+          return InkWell(
+            onTap: () {
+              HapticHelper.selection();
+              vm.setCategoryFilter(f['id'] as String);
+            },
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
+                    : (isDark ? AppColors.darkSurfaceCard : Colors.white),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: isSelected
+                      ? Colors.transparent
+                      : (isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle),
+                  width: 0.8,
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  f['label'] as String,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: isSelected
+                        ? (isDark ? AppColors.darkBackground : Colors.white)
+                        : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

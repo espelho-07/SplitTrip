@@ -9,7 +9,8 @@ import '../../../domain/models/ipo/ipo.dart';
 import '../../viewmodels/ipo_viewmodel.dart';
 
 class IpoHomeView extends StatefulWidget {
-  const IpoHomeView({super.key});
+  final bool isEmbeddedTab;
+  const IpoHomeView({super.key, this.isEmbeddedTab = false});
 
   @override
   State<IpoHomeView> createState() => _IpoHomeViewState();
@@ -44,12 +45,15 @@ class _IpoHomeViewState extends State<IpoHomeView> {
       appBar: AppBar(
         backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => context.pop(),
-        ),
+        automaticallyImplyLeading: !widget.isEmbeddedTab,
+        leading: widget.isEmbeddedTab
+            ? null
+            : IconButton(
+                icon: const Icon(Icons.arrow_back_rounded),
+                onPressed: () => context.pop(),
+              ),
         title: Text(
-          'IPO Money Manager',
+          'IPO Manager',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w800,
@@ -58,16 +62,28 @@ class _IpoHomeViewState extends State<IpoHomeView> {
         ),
         centerTitle: true,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.account_balance_wallet_outlined, size: 22),
-            tooltip: 'IPO Accounts & Balances',
-            onPressed: () {
-              HapticHelper.light();
-              context.push('/ipo-accounts');
-            },
+          Padding(
+            padding: const EdgeInsets.only(right: 6.0),
+            child: TextButton.icon(
+              style: TextButton.styleFrom(
+                backgroundColor: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.12),
+                foregroundColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              ),
+              icon: const Icon(Icons.people_alt_outlined, size: 16),
+              label: const Text(
+                'Accounts',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+              ),
+              onPressed: () {
+                HapticHelper.light();
+                context.push('/ipo-accounts');
+              },
+            ),
           ),
           IconButton(
-            icon: Icon(_isSearchOpen ? Icons.close_rounded : Icons.search_rounded),
+            icon: Icon(_isSearchOpen ? Icons.close_rounded : Icons.search_rounded, size: 20),
             onPressed: () {
               HapticHelper.light();
               setState(() {
@@ -442,11 +458,20 @@ class _IpoHomeViewState extends State<IpoHomeView> {
   }
 
   Widget _buildIpoCard(BuildContext context, Ipo ipo, IpoViewModel ipoVm, bool isDark) {
-    final application = ipoVm.getApplicationForIpo(ipo.id);
-    final isApplied = application != null;
+    final applications = ipoVm.getAllApplicationsForIpo(ipo.id);
+    final isApplied = applications.isNotEmpty;
+
+    String dateText = '';
+    if (ipo.dynamicStatus == IpoStatus.open) {
+      dateText = 'Closes ${DateFormatter.formatShortDate(ipo.closeDate)}';
+    } else if (ipo.dynamicStatus == IpoStatus.upcoming) {
+      dateText = 'Opens ${DateFormatter.formatShortDate(ipo.openDate)}';
+    } else {
+      dateText = 'Closed ${DateFormatter.formatShortDate(ipo.closeDate)}';
+    }
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14.0),
+      padding: const EdgeInsets.only(bottom: 12.0),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -454,67 +479,76 @@ class _IpoHomeViewState extends State<IpoHomeView> {
             HapticHelper.light();
             context.push('/ipo/${ipo.id}');
           },
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(16),
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: isDark ? AppColors.darkSurfaceCard : Colors.white,
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: isApplied
-                    ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.5)
+                    ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.4)
                     : (isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle),
                 width: isApplied ? 1.2 : 0.8,
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Top Tags Row
+                // Top Row: Company Name + Status Pill
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            ipo.marketType.displayName,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            ipo.name,
                             style: TextStyle(
-                              fontSize: 10,
+                              fontSize: 15,
                               fontWeight: FontWeight.w800,
-                              color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                              color: isDark ? Colors.white : const Color(0xFF0F172A),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          ipo.symbol,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                          ),
-                        ),
-                      ],
+                          if (ipo.companyName.isNotEmpty && ipo.companyName != ipo.name)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text(
+                                ipo.companyName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
+                    const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
                         color: ipo.isBiddingActive
-                            ? (isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight).withValues(alpha: 0.15)
+                            ? (isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight).withValues(alpha: 0.12)
                             : (isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05)),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        ipo.dynamicStatus.displayName,
+                        ipo.dynamicStatus.displayName.toUpperCase(),
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w800,
+                          letterSpacing: 0.4,
                           color: ipo.isBiddingActive
                               ? (isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight)
                               : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
@@ -524,153 +558,102 @@ class _IpoHomeViewState extends State<IpoHomeView> {
                   ],
                 ),
 
-                const SizedBox(height: 10),
-
-                // Name & Company
-                Text(
-                  ipo.name,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: isDark ? Colors.white : const Color(0xFF0F172A),
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  ipo.companyName,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                  ),
-                ),
-
                 const SizedBox(height: 12),
 
-                // Numbers Grid
+                // Middle Row: Price Band & Dates
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Price Band',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                            ),
-                          ),
-                          Text(
-                            ipo.priceBandFormatted,
-                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
-                          ),
-                        ],
+                    Text(
+                      ipo.priceBandFormatted,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
                       ),
                     ),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Min. Investment',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                            ),
-                          ),
-                          Text(
-                            '₹${CurrencyFormatter.formatPaise(ipo.minInvestmentRupees * 100, currencyCode: 'INR')}',
-                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
-                          ),
-                        ],
+                    if (dateText.isNotEmpty)
+                      Text(
+                        dateText,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                        ),
                       ),
-                    ),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Lot Size',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                            ),
-                          ),
-                          Text(
-                            '${ipo.lotSize} Shares',
-                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
-                          ),
-                        ],
-                      ),
-                    ),
                   ],
                 ),
 
-                // Optional GMP / Subscription Pills Row
-                if (ipo.gmp != null || ipo.subscriptionOverall != null || isApplied) ...[
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    children: [
-                      if (isApplied)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.check_circle_rounded, size: 12, color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary),
-                              const SizedBox(width: 4),
-                              Text(
-                                'Applied • ${application.lotsApplied} Lots (${CurrencyFormatter.formatPaise(application.applicationAmountInPaise, currencyCode: 'INR')})',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w800,
-                                  color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-                                ),
+                // Bottom Row: GMP + Applied tag + Subtle View action
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        if (ipo.gmp != null && ipo.gmp! > 0)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: (isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight).withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              'GMP ₹${ipo.gmp}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight,
                               ),
-                            ],
-                          ),
-                        ),
-                      if (ipo.gmp != null)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: (isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight).withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            'GMP: ~₹${ipo.gmp} (Unofficial / Indicative)',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight,
                             ),
                           ),
-                        ),
-                      if (ipo.subscriptionOverall != null)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.blueAccent.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            '${ipo.subscriptionOverall}x Subscribed',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.blueAccent,
+                        if (isApplied)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.check_circle_rounded, size: 12, color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary),
+                                const SizedBox(width: 4),
+                                Text(
+                                  applications.length == 1
+                                      ? 'Applied · ${applications.first.accountName}'
+                                      : 'Applied · ${applications.length} accounts',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        Text(
+                          'View',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                          ),
                         ),
-                    ],
-                  ),
-                ],
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          size: 16,
+                          color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -680,33 +663,64 @@ class _IpoHomeViewState extends State<IpoHomeView> {
   }
 
   Widget _buildEmptyState(bool isDark, IpoViewModel ipoVm) {
+    String title = 'No IPOs found';
+    String message = 'Check back soon for new announcements.';
+
+    if (ipoVm.selectedTab == 'open') {
+      title = 'No Open IPOs';
+      message = 'No mainboard or SME IPOs are open right now.';
+    } else if (ipoVm.selectedTab == 'upcoming') {
+      title = 'No Upcoming IPOs';
+      message = 'New IPO announcements will appear here automatically.';
+    } else if (ipoVm.selectedTab == 'my_ipos') {
+      title = 'No Applications';
+      message = "You haven't recorded any IPO applications yet.";
+    }
+
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 48),
+      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 20),
       alignment: Alignment.center,
       child: Column(
         children: [
           Icon(
             Icons.show_chart_rounded,
-            size: 48,
+            size: 44,
             color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
           ),
           const SizedBox(height: 12),
           Text(
-            'No IPOs found in this category',
+            title,
             style: TextStyle(
-              fontSize: 15,
+              fontSize: 16,
               fontWeight: FontWeight.w700,
               color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
             ),
           ),
           const SizedBox(height: 4),
           Text(
-            'Pull down to refresh live market feeds',
+            message,
+            textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 13,
               color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
             ),
           ),
+          if (ipoVm.selectedTab == 'my_ipos') ...[
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                foregroundColor: isDark ? AppColors.darkBackground : Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () {
+                HapticHelper.selection();
+                ipoVm.setTab('open');
+              },
+              icon: const Icon(Icons.explore_outlined, size: 16),
+              label: const Text('Explore Open IPOs', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+            ),
+          ],
         ],
       ),
     );

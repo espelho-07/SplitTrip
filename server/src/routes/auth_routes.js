@@ -214,13 +214,27 @@ router.get('/upi/:userId', authMiddleware, (req, res, next) => {
 });
 
 // POST /api/auth/fcm-token — Register/update FCM token for push notifications
-router.post('/fcm-token', authMiddleware, (req, res, next) => {
+router.post('/fcm-token', (req, res, next) => {
   try {
-    const { token, deviceId, platform } = req.body;
+    const { token, deviceId, platform, userId: bodyUserId } = req.body || {};
     if (!token) return res.status(400).json({ error: { code: 'MISSING_TOKEN', message: 'FCM token required' } });
 
+    const authHeader = req.headers.authorization;
+    let userId = bodyUserId;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const tokenVal = authHeader.substring(7).trim();
+      const session = require('../db/database').db.findOne('sessions', (s) => s.token === tokenVal);
+      if (session) {
+        userId = session.userId;
+      }
+    }
+
+    if (!userId) {
+      return res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'User identification required' } });
+    }
+
     const db = require('../db/database').db;
-    const userId = req.user.id;
     const now = new Date().toISOString();
 
     // Account Switching / Isolation: Unbind this device / token from any other previous user accounts

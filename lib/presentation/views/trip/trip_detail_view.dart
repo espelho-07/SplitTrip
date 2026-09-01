@@ -45,6 +45,7 @@ import 'widgets/add_journey_moment_sheet.dart';
 import 'widgets/expense_detail_sheet.dart';
 import 'widgets/member_spend_breakdown_sheet.dart';
 import 'widgets/nearby_sync_badge.dart';
+import 'widgets/trip_sync_sheet.dart';
 import 'widgets/settlement_sheet.dart';
 import 'widgets/trip_completion_verification_sheet.dart';
 import 'widgets/trip_qr_sheet.dart';
@@ -590,7 +591,19 @@ class _TripDetailViewState extends State<TripDetailView> {
             tooltip: 'Trip Options',
             shape: const RoundedRectangleBorder(borderRadius: AppRadius.mdBorder),
             onSelected: (val) {
-              if (val == 'friend') {
+              if (val == 'sync_trip') {
+                TripSyncSheet.show(
+                  context,
+                  tripId: trip.id,
+                  syncService: context.read<SyncService>(),
+                  p2pService: context.read<P2PSyncService>(),
+                  onSyncCompleted: () {
+                    if (user != null) {
+                      tripDetailVm.loadTrip(trip.id, user.id);
+                    }
+                  },
+                );
+              } else if (val == 'friend') {
                 _showAddFriendDialog();
               } else if (val == 'activity') {
                 _showActivityLogsSheet();
@@ -599,6 +612,16 @@ class _TripDetailViewState extends State<TripDetailView> {
               }
             },
             itemBuilder: (ctx) => [
+              const PopupMenuItem(
+                value: 'sync_trip',
+                child: Row(
+                  children: [
+                    Icon(Icons.sync_rounded, size: 18, color: AppColors.emeraldPrimary),
+                    SizedBox(width: 10),
+                    Text('Sync Trip (Cloud & Nearby)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
               const PopupMenuItem(
                 value: 'friend',
                 child: Row(
@@ -809,6 +832,45 @@ class _TripDetailViewState extends State<TripDetailView> {
                     p2pService: context.read<P2PSyncService>(),
                     syncService: context.read<SyncService>(),
                     tripId: trip.id,
+                  ),
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: () {
+                      final authVm = context.read<AuthViewModel>();
+                      final tripVm = context.read<TripDetailViewModel>();
+                      final currentUser = authVm.currentUser;
+                      TripSyncSheet.show(
+                        context,
+                        tripId: trip.id,
+                        syncService: context.read<SyncService>(),
+                        p2pService: context.read<P2PSyncService>(),
+                        onSyncCompleted: () {
+                          if (currentUser != null) {
+                            tripVm.loadTrip(trip.id, currentUser.id);
+                          }
+                        },
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.white24),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.sync_rounded, size: 12, color: Colors.white),
+                          SizedBox(width: 4),
+                          Text(
+                            'Sync',
+                            style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),

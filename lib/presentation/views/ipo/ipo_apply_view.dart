@@ -549,7 +549,6 @@ class _IpoApplyViewState extends State<IpoApplyView> {
       final appId = const Uuid().v4();
       final totalAmountPaise = _calculateAccountAmountPaise(cfg.lots);
       final availableCreditPaise = ipoVm.getAccountAvailableCreditPaise(cfg.account.id);
-      final remainingNeededPaise = (totalAmountPaise - availableCreditPaise).clamp(0, totalAmountPaise);
 
       final fundings = <IpoFunding>[
         IpoFunding(
@@ -560,6 +559,9 @@ class _IpoApplyViewState extends State<IpoApplyView> {
           amountInPaise: totalAmountPaise,
         ),
       ];
+
+      final coveredFromCredit = availableCreditPaise >= totalAmountPaise ? totalAmountPaise : availableCreditPaise;
+      final remainingNeeded = totalAmountPaise - coveredFromCredit;
 
       final app = IpoApplication(
         id: appId,
@@ -574,8 +576,8 @@ class _IpoApplyViewState extends State<IpoApplyView> {
         lotSize: widget.ipo.lotSize,
         bidPriceInRupees: _bidPrice,
         applicationAmountInPaise: totalAmountPaise,
-        paidAmountInPaise: totalAmountPaise,
-        remainingAmountInPaise: remainingNeededPaise,
+        paidAmountInPaise: coveredFromCredit,
+        remainingAmountInPaise: remainingNeeded,
         fundings: fundings,
         status: IpoApplicationStatus.applied,
         notes: _notesController.text.trim(),

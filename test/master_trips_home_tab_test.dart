@@ -21,6 +21,9 @@ import 'package:kith_app/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/home_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/personal_expense_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/theme_viewmodel.dart';
+import 'package:kith_app/data/repositories/ipo_repository.dart';
+import 'package:kith_app/data/services/ipo_data_provider.dart';
+import 'package:kith_app/presentation/viewmodels/ipo_viewmodel.dart';
 import 'package:kith_app/presentation/views/home/home_view.dart';
 import 'package:kith_app/presentation/views/trip/trips_home_tab.dart';
 import 'package:provider/provider.dart';
@@ -92,6 +95,13 @@ void main() {
   });
 
   Widget createTripsHomeScreen({Widget? child}) {
+    final ipoRepo = IpoRepository(
+      storage: storage,
+      dataProvider: LiveIpoDataProvider(),
+      personalRepo: personalRepo,
+    );
+    final ipoVm = IpoViewModel(ipoRepo: ipoRepo);
+
     return MultiProvider(
       providers: [
         Provider<LocalStorageService>.value(value: storage),
@@ -101,8 +111,10 @@ void main() {
         ChangeNotifierProvider.value(value: personalVm),
         ChangeNotifierProvider.value(value: themeVm),
         ChangeNotifierProvider.value(value: widgetService),
+        ChangeNotifierProvider.value(value: ipoVm),
         Provider.value(value: apiClient),
         Provider.value(value: syncService),
+        Provider.value(value: ipoRepo),
       ],
       child: Consumer<ThemeViewModel>(
         builder: (context, theme, _) {
@@ -194,7 +206,7 @@ void main() {
       expect(find.text('Open Trip'), findsOneWidget);
     });
 
-    testWidgets('5. HomeView renders user greeting, notification bell, and 4 navigation destinations', (tester) async {
+    testWidgets('5. HomeView renders user greeting, notification bell, and navigation destinations', (tester) async {
       await tester.pumpWidget(createTripsHomeScreen(child: const HomeView()));
       await tester.pumpAndSettle();
 
@@ -204,6 +216,7 @@ void main() {
       expect(find.text('Home'), findsOneWidget);
       expect(find.text('Trips'), findsOneWidget);
       expect(find.text('Expenses'), findsOneWidget);
+      expect(find.text('IPO'), findsOneWidget);
       expect(find.text('Profile'), findsOneWidget);
     });
 

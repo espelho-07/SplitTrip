@@ -686,8 +686,12 @@ const termsHtml = `<!DOCTYPE html>
 </html>`;
 
 router.get('/', (req, res) => {
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.send(indexHtml);
+  const accept = req.headers.accept || '';
+  if (accept.includes('text/html') && !accept.includes('application/json')) {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.send(indexHtml);
+  }
+  return res.status(200).json({ status: 'ok', service: 'kith-backend', version: '1.0.0' });
 });
 
 router.get('/privacy', (req, res) => {

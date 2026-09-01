@@ -2,6 +2,9 @@
 import 'dart:convert';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../config/supabase_config.dart';
 import '../../data/services/local_storage_service.dart';
 import '../../domain/services/notification_service.dart';
 import '../network/api_client.dart';
@@ -10,8 +13,7 @@ import '../network/api_client.dart';
 @pragma('vm:entry-point')
 Future<void> kithFcmBackgroundHandler(RemoteMessage message) async {
   debugPrint('[FCM] Background message received: ${message.messageId}');
-  // Background/terminated notifications with a notification payload
-  // are displayed automatically by the FCM SDK.
+  // System-level notification payload with channelId is displayed natively by Android OS
 }
 
 /// Service that manages Firebase Cloud Messaging for Kith.
@@ -20,8 +22,8 @@ class FcmService {
   final LocalStorageService _storage;
   final NotificationService _notificationService;
 
-  /// Called when a notification tap should navigate to a route.
-  void Function(String route)? onNavigate;
+  void Function(String route)? _onNavigate;
+  String? _pendingRoute;
 
   FcmService({
     required ApiClient apiClient,
@@ -31,22 +33,49 @@ class FcmService {
         _storage = storage,
         _notificationService = notificationService;
 
-  static void registerBackgroundHandler() {
+  void setNavigationHandler(void Function(String route) handler) {
+    _onNavigate = handler;
+    if (_pendingRoute != null) {
+      final route = _pendingRoute!;
+      _pendingRoute = null;
+      Future.delayed(const Duration(milliseconds: 400), () {
+        handler(route);
+      });
+    }
+  }
 
+  void Function(String route)? get onNavigate => _onNavigate;
+  set onNavigate(void Function(String route)? handler) {
+    if (handler != null) {
+      setNavigationHandler(handler);
+    } else {
+      _onNavigate = null;
+    }
+  }
+
+  static void registerBackgroundHandler() {
     FirebaseMessaging.onBackgroundMessage(kithFcmBackgroundHandler);
   }
 
   Future<void> init() async {
     try {
+      // 1. Android 13+ runtime POST_NOTIFICATIONS permission
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+        final status = await Permission.notification.status;
+        if (!status.isGranted) {
+          await Permission.notification.request();
+        }
+      }
+
       final settings = await FirebaseMessaging.instance.requestPermission(
         alert: true,
         badge: true,
         sound: true,
         provisional: false,
       );
-      debugPrint('[FCM] Permission: ${settings.authorizationStatus}');
+      debugPrint('[FCM] Permission status: ${settings.authorizationStatus}');
 
-      // Suppress FCM auto-display in foreground — we render our own styled notification
+      // Suppress FCM auto-display in foreground — we render our own styled in-app notification
       await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
         alert: false,
         badge: true,
@@ -54,7 +83,7 @@ class FcmService {
       );
 
       final token = await FirebaseMessaging.instance.getToken();
-      if (token != null) {
+      if (token != null && token.isNotEmpty) {
         await _registerTokenWithServer(token);
       }
 
@@ -68,7 +97,7 @@ class FcmService {
       // Background tap (app was backgrounded)
       FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
 
-      // Terminated tap (app was killed)
+      // Terminated tap (app was killed/swiped from recents)
       final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
       if (initialMessage != null) {
         _handleNotificationTap(initialMessage);
@@ -167,10 +196,14 @@ class FcmService {
                     ? '/personal/person?name=${Uri.encodeComponent(personName)}'
                     : null)));
 
-    if (targetRoute != null && targetRoute.isNotEmpty && onNavigate != null) {
-      Future.delayed(const Duration(milliseconds: 300), () {
-        onNavigate?.call(targetRoute);
-      });
+    if (targetRoute != null && targetRoute.isNotEmpty) {
+      if (_onNavigate != null) {
+        Future.delayed(const Duration(milliseconds: 300), () {
+          _onNavigate?.call(targetRoute);
+        });
+      } else {
+        _pendingRoute = targetRoute;
+      }
     }
   }
 
@@ -227,12 +260,33 @@ class FcmService {
 
       final user = _storage.getSavedUser();
       if (user != null && user['id'] != null) {
+        final tokenStr = user['anonymousToken']?.toString() ?? user['token']?.toString();
+        if (tokenStr != null && tokenStr.isNotEmpty) {
+          _apiClient.setAuthToken(tokenStr);
+        }
+
         await _apiClient.post('/auth/fcm-token', body: {
           'token': token,
           'deviceId': deviceId,
           'platform': 'android',
+          'userId': user['id'],
         });
         debugPrint('[FCM] Token registered with server for user ${user['id']}');
+
+        // Layer 2: Sync to Supabase device_tokens / user_fcm_tokens table
+        if (SupabaseConfig.isConfigured) {
+          try {
+            await Supabase.instance.client.from('user_fcm_tokens').upsert({
+              'user_id': user['id'],
+              'device_id': deviceId,
+              'token': token,
+              'platform': 'android',
+              'updated_at': DateTime.now().toIso8601String(),
+            }, onConflict: 'user_id,device_id');
+          } catch (_) {
+            // Non-fatal if table not provisioned
+          }
+        }
       } else {
         debugPrint('[FCM] Token saved locally, will register once user session is active');
       }

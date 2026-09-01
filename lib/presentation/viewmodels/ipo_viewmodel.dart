@@ -131,43 +131,25 @@ class IpoViewModel extends ChangeNotifier {
 
   // --- Account-level Aggregations & Smart Payment Calculations ---
   Map<String, dynamic> getAccountMetrics(String accountId) {
+    final summary = ipoRepo.getAccountFinancialSummary(accountId);
     final accountApps = ipoRepo.getApplicationsForAccount(accountId);
-    int applied = 0;
-    int paid = 0;
-    int pending = 0;
-    int allotted = 0;
-    int refunded = 0;
-
-    for (final a in accountApps) {
-      applied += a.applicationAmountInPaise;
-      paid += a.effectivePaidPaise;
-      pending += a.effectiveRemainingPaise;
-
-      if (a.status == IpoApplicationStatus.allotted) {
-        allotted += (a.actualInvestedAmountInPaise ?? a.applicationAmountInPaise);
-      } else if (a.status == IpoApplicationStatus.notAllotted || a.status == IpoApplicationStatus.refunded) {
-        refunded += (a.releasedAmountInPaise ?? a.applicationAmountInPaise);
-      }
-    }
 
     return {
       'applicationCount': accountApps.length,
-      'totalAppliedPaise': applied,
-      'totalPaidPaise': paid,
-      'totalPendingPaise': pending,
-      'totalAllottedPaise': allotted,
-      'totalRefundedPaise': refunded,
+      'totalAppliedPaise': summary['totalAppliedPaise'] ?? 0,
+      'totalPaidPaise': summary['totalPaidPaise'] ?? 0,
+      'totalPendingPaise': summary['totalPendingPaise'] ?? 0,
+      'totalBlockedPaise': summary['moneyBlockedPaise'] ?? 0,
+      'totalReleasedPaise': summary['moneyReleasedPaise'] ?? 0,
+      'totalInvestedPaise': summary['moneyInvestedPaise'] ?? 0,
+      'availableBalancePaise': summary['availableBalancePaise'] ?? 0,
       'applications': accountApps,
     };
   }
 
   /// Checks if an account has eligible reusable credit from released/refunded non-allotments
   int getAccountAvailableCreditPaise(String accountId) {
-    final metrics = getAccountMetrics(accountId);
-    final totalRefunded = metrics['totalRefundedPaise'] as int? ?? 0;
-    final totalPending = metrics['totalPendingPaise'] as int? ?? 0;
-    final available = totalRefunded - totalPending;
-    return available > 0 ? available : 0;
+    return ipoRepo.getAccountAvailableBalance(accountId);
   }
 
   // --- Actions ---
@@ -310,6 +292,22 @@ class IpoViewModel extends ChangeNotifier {
         applicationId: applicationId,
       );
     }
+  }
+
+  Future<void> recordPayment({
+    required String applicationId,
+    required int amountInPaise,
+    String? note,
+    DateTime? date,
+  }) async {
+    await ipoRepo.recordIpoPayment(
+      applicationId: applicationId,
+      amountInPaise: amountInPaise,
+      note: note,
+      date: date,
+    );
+    _applications = ipoRepo.getCachedApplications();
+    notifyListeners();
   }
 
   Future<void> deleteApplication(String applicationId) async {

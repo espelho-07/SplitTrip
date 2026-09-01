@@ -12,36 +12,70 @@ enum P2PStatus {
   idle,
   listening,
   discovering,
+  pairing,
   syncing,
   synced,
+  timeout,
   error,
+}
+
+/// Result of a completed P2P sync session.
+class NearbySyncResult {
+  final bool success;
+  final int operationsSent;
+  final int operationsReceived;
+  final List<String> sharedTripIds;
+  final String? errorMessage;
+  final DateTime timestamp;
+
+  NearbySyncResult({
+    required this.success,
+    this.operationsSent = 0,
+    this.operationsReceived = 0,
+    this.sharedTripIds = const [],
+    this.errorMessage,
+    DateTime? timestamp,
+  }) : timestamp = timestamp ?? DateTime.now();
+
+  int get totalChanges => operationsSent + operationsReceived;
 }
 
 /// Represents a securely discovered nearby peer device sharing at least one trip.
 class NearbyPeer {
   final String deviceId;
+  final String displayName;
   final InternetAddress address;
   final int port;
   final Set<String> sharedTripIds;
+  final List<String> sharedTripNames;
+  final String pairingCode;
   final DateTime lastSeenAt;
 
   NearbyPeer({
     required this.deviceId,
+    required this.displayName,
     required this.address,
     required this.port,
     required this.sharedTripIds,
+    this.sharedTripNames = const [],
+    required this.pairingCode,
     required this.lastSeenAt,
   });
 
   NearbyPeer copyWith({
+    String? displayName,
     DateTime? lastSeenAt,
     Set<String>? sharedTripIds,
+    List<String>? sharedTripNames,
   }) =>
       NearbyPeer(
         deviceId: deviceId,
+        displayName: displayName ?? this.displayName,
         address: address,
         port: port,
         sharedTripIds: sharedTripIds ?? this.sharedTripIds,
+        sharedTripNames: sharedTripNames ?? this.sharedTripNames,
+        pairingCode: pairingCode,
         lastSeenAt: lastSeenAt ?? this.lastSeenAt,
       );
 }
@@ -61,6 +95,7 @@ class P2PSyncService {
   HttpServer? _httpServer;
   Timer? _beaconTimer;
   Timer? _cleanupTimer;
+  Timer? _sessionTimeoutTimer;
 
   final Map<String, NearbyPeer> _discoveredPeers = {};
   P2PStatus _status = P2PStatus.idle;
@@ -68,6 +103,8 @@ class P2PSyncService {
       StreamController<P2PStatus>.broadcast();
   final StreamController<int> _peerCountController =
       StreamController<int>.broadcast();
+  final StreamController<List<NearbyPeer>> _peersController =
+      StreamController<List<NearbyPeer>>.broadcast();
 
   bool _isStarted = false;
   int _lastSyncedOperationsCount = 0;
@@ -86,6 +123,7 @@ class P2PSyncService {
   DateTime? get lastSyncTimestamp => _lastSyncTimestamp;
   Stream<P2PStatus> get statusStream => _statusController.stream;
   Stream<int> get peerCountStream => _peerCountController.stream;
+  Stream<List<NearbyPeer>> get peersStream => _peersController.stream;
   List<NearbyPeer> get activePeers => _discoveredPeers.values.toList();
 
   void _setStatus(P2PStatus newStatus) {
@@ -97,10 +135,23 @@ class P2PSyncService {
     }
   }
 
-  void _updatePeerCount() {
+  void _notifyPeersChanged() {
     if (!_peerCountController.isClosed) {
       _peerCountController.add(_discoveredPeers.length);
     }
+    if (!_peersController.isClosed) {
+      _peersController.add(_discoveredPeers.values.toList());
+    }
+  }
+
+  /// Generates a deterministic 6-digit pairing code for two devices.
+  static String derivePairingCode(String deviceA, String deviceB) {
+    final sorted = [deviceA, deviceB]..sort();
+    final bytes = utf8.encode('kith_p2p_pair_${sorted[0]}_${sorted[1]}');
+    final digest = sha256.convert(bytes);
+    final num = digest.bytes.fold<int>(0, (prev, elem) => (prev * 31 + elem) & 0x7FFFFFFF);
+    final code = (num % 900000 + 100000).toString();
+    return '${code.substring(0, 3)} ${code.substring(3)}';
   }
 
   /// Derives an anonymous HMAC token for a trip to allow same-trip peer discovery without leaking names.
@@ -111,7 +162,19 @@ class P2PSyncService {
     return hmac.convert(bytes).toString().substring(0, 16);
   }
 
-  /// Starts automatic background P2P discovery and operation exchange server.
+  /// Starts an intentional, user-initiated P2P discovery session with battery-saving auto-timeout.
+  Future<void> startDiscoverySession({Duration timeout = const Duration(seconds: 45)}) async {
+    await start();
+    _sessionTimeoutTimer?.cancel();
+    _sessionTimeoutTimer = Timer(timeout, () {
+      if (_status == P2PStatus.discovering || _status == P2PStatus.listening) {
+        stop();
+        _setStatus(P2PStatus.timeout);
+      }
+    });
+  }
+
+  /// Starts automatic P2P discovery and operation exchange server.
   Future<void> start() async {
     if (_isStarted) return;
     _isStarted = true;
@@ -137,15 +200,14 @@ class P2PSyncService {
           debugPrint('[P2PSync] UDP socket error: $e');
         });
       } catch (e) {
-        // Fallback for systems that restrict reusePort/multicast
         debugPrint('[P2PSync] UDP bind notice: $e');
       }
 
-      // 3. Periodic beacon transmission every 5 seconds
-      _beaconTimer = Timer.periodic(const Duration(seconds: 5), (_) => broadcastBeacon());
+      // 3. Periodic beacon transmission every 3 seconds while searching
+      _beaconTimer = Timer.periodic(const Duration(seconds: 3), (_) => broadcastBeacon());
 
-      // 4. Periodic stale peer cleanup every 15 seconds
-      _cleanupTimer = Timer.periodic(const Duration(seconds: 15), (_) => _cleanupStalePeers());
+      // 4. Periodic stale peer cleanup every 10 seconds
+      _cleanupTimer = Timer.periodic(const Duration(seconds: 10), (_) => _cleanupStalePeers());
 
       // Immediate first beacon
       broadcastBeacon();
@@ -156,16 +218,19 @@ class P2PSyncService {
     }
   }
 
-  /// Stops all P2P network sockets and timers cleanly.
+  /// Stops all P2P network sockets and timers cleanly to conserve device battery.
   Future<void> stop() async {
     _isStarted = false;
+    _sessionTimeoutTimer?.cancel();
     _beaconTimer?.cancel();
     _cleanupTimer?.cancel();
     _udpSocket?.close();
+    _udpSocket = null;
     await _httpServer?.close(force: true);
+    _httpServer = null;
     _discoveredPeers.clear();
     _setStatus(P2PStatus.idle);
-    _updatePeerCount();
+    _notifyPeersChanged();
   }
 
   /// Broadcasts an anonymous discovery beacon over UDP to local network/hotspot peers.
@@ -174,6 +239,9 @@ class P2PSyncService {
 
     final trips = _storage.getSavedTrips();
     if (trips.isEmpty) return;
+
+    final user = _storage.getSavedUser();
+    final myDisplayName = user?['displayName']?.toString() ?? 'Kith Friend';
 
     final tokenMap = <String, String>{};
     for (final t in trips) {
@@ -187,6 +255,7 @@ class P2PSyncService {
     final beacon = {
       'p': protocolTag,
       'd': _deviceId,
+      'name': myDisplayName,
       'port': _httpServer!.port,
       't': tokenMap.values.toList(),
       'ts': DateTime.now().millisecondsSinceEpoch,
@@ -215,6 +284,7 @@ class P2PSyncService {
       final peerDeviceId = json['d'] as String?;
       if (peerDeviceId == null || peerDeviceId == _deviceId) return; // Ignore own beacon
 
+      final peerName = json['name'] as String? ?? 'Nearby Friend';
       final peerPort = json['port'] as int?;
       final peerTokens = (json['t'] as List<dynamic>?)?.map((e) => e.toString()).toSet() ?? {};
 
@@ -223,6 +293,7 @@ class P2PSyncService {
       // Find shared trips by comparing local tokens with peer tokens
       final localTrips = _storage.getSavedTrips();
       final sharedTripIds = <String>{};
+      final sharedTripNames = <String>[];
 
       for (final t in localTrips) {
         final id = t['id'] as String?;
@@ -231,6 +302,10 @@ class P2PSyncService {
           final localToken = deriveTripToken(id, code);
           if (peerTokens.contains(localToken)) {
             sharedTripIds.add(id);
+            final tripName = t['name']?.toString();
+            if (tripName != null && !sharedTripNames.contains(tripName)) {
+              sharedTripNames.add(tripName);
+            }
           }
         }
       }
@@ -239,30 +314,32 @@ class P2PSyncService {
       if (sharedTripIds.isEmpty) return;
 
       final now = DateTime.now();
+      final pairingCode = derivePairingCode(_deviceId, peerDeviceId);
+
       _discoveredPeers[peerDeviceId] = NearbyPeer(
         deviceId: peerDeviceId,
+        displayName: peerName,
         address: datagram.address,
         port: peerPort,
         sharedTripIds: sharedTripIds,
+        sharedTripNames: sharedTripNames,
+        pairingCode: pairingCode,
         lastSeenAt: now,
       );
 
-      _updatePeerCount();
-
-      // Trigger automatic operation exchange with this newly discovered or refreshed peer
-      unawaited(syncWithPeer(_discoveredPeers[peerDeviceId]!));
+      _notifyPeersChanged();
     } catch (_) {
       // Ignore malformed beacons
     }
   }
 
-  /// Removes peers that haven't broadcasted in the last 30 seconds.
+  /// Removes peers that haven't broadcasted in the last 20 seconds.
   void _cleanupStalePeers() {
     final now = DateTime.now();
     final staleIds = <String>[];
 
     for (final entry in _discoveredPeers.entries) {
-      if (now.difference(entry.value.lastSeenAt).inSeconds > 30) {
+      if (now.difference(entry.value.lastSeenAt).inSeconds > 20) {
         staleIds.add(entry.key);
       }
     }
@@ -271,18 +348,22 @@ class P2PSyncService {
       for (final id in staleIds) {
         _discoveredPeers.remove(id);
       }
-      _updatePeerCount();
+      _notifyPeersChanged();
     }
   }
 
   /// Synchronizes missing operations bidirectionally with a verified nearby peer.
-  Future<int> syncWithPeer(NearbyPeer peer) async {
-    if (peer.sharedTripIds.isEmpty) return 0;
+  Future<NearbySyncResult> syncWithPeer(NearbyPeer peer) async {
+    if (peer.sharedTripIds.isEmpty) {
+      return NearbySyncResult(success: false, errorMessage: 'No shared trips found');
+    }
+
     _setStatus(P2PStatus.syncing);
-    int totalExchanged = 0;
+    int sentCount = 0;
+    int receivedCount = 0;
 
     final client = HttpClient();
-    client.connectionTimeout = const Duration(seconds: 3);
+    client.connectionTimeout = const Duration(seconds: 4);
 
     try {
       for (final tripId in peer.sharedTripIds) {
@@ -310,46 +391,74 @@ class P2PSyncService {
         final localQueue = _syncService.getPendingMutationsForTrip(tripId);
         final missingOnPeer = localQueue.where((m) => !peerKnownOps.contains(m.id)).toList();
 
-        // 3. Push missing operations to peer
-        if (missingOnPeer.isNotEmpty) {
-          final pushUri = Uri(
-            scheme: 'http',
-            host: peer.address.address,
-            port: peer.port,
-            path: '/kith-p2p/operations',
-          );
+        // 3. Push missing operations to peer and receive any missing peer operations in the response
+        final pushUri = Uri(
+          scheme: 'http',
+          host: peer.address.address,
+          port: peer.port,
+          path: '/kith-p2p/operations',
+        );
 
-          final postReq = await client.postUrl(pushUri);
-          postReq.headers.contentType = ContentType.json;
-          final payload = {
-            'protocol': protocolTag,
-            'deviceId': _deviceId,
-            'tripId': tripId,
-            'operations': missingOnPeer.map((m) => m.toJson()).toList(),
-          };
+        final postReq = await client.postUrl(pushUri);
+        postReq.headers.contentType = ContentType.json;
+        final payload = {
+          'protocol': protocolTag,
+          'deviceId': _deviceId,
+          'tripId': tripId,
+          'operations': missingOnPeer.map((m) => m.toJson()).toList(),
+          'knownLocalOperations': localQueue.map((m) => m.id).toList(),
+        };
 
-          postReq.write(jsonEncode(payload));
-          final postRes = await postReq.close();
-          if (postRes.statusCode == 200) {
-            totalExchanged += missingOnPeer.length;
-            // Mark pushed mutations as P2P_SHARED locally
-            for (final m in missingOnPeer) {
-              await _syncService.markMutationP2PShared(m.id);
+        postReq.write(jsonEncode(payload));
+        final postRes = await postReq.close();
+        if (postRes.statusCode == 200) {
+          final resBody = await utf8.decoder.bind(postRes).join();
+          final resJson = jsonDecode(resBody) as Map<String, dynamic>;
+
+          sentCount += missingOnPeer.length;
+          for (final m in missingOnPeer) {
+            await _syncService.markMutationP2PShared(m.id);
+          }
+
+          // Apply returned peer mutations
+          final peerOps = resJson['returnOperations'] as List<dynamic>?;
+          if (peerOps != null) {
+            for (final rawOp in peerOps) {
+              if (rawOp is Map<String, dynamic>) {
+                final mutation = SyncMutation.fromJson(rawOp);
+                final applied = await _syncService.applyRemoteP2PMutation(mutation, _storage);
+                if (applied) {
+                  receivedCount++;
+                  await _storage.markP2POperationProcessed(mutation.id);
+                }
+              }
             }
           }
         }
       }
 
+      final totalExchanged = sentCount + receivedCount;
       if (totalExchanged > 0) {
         _lastSyncedOperationsCount = totalExchanged;
         _lastSyncTimestamp = DateTime.now();
       }
+
       _setStatus(P2PStatus.synced);
-      return totalExchanged;
+      return NearbySyncResult(
+        success: true,
+        operationsSent: sentCount,
+        operationsReceived: receivedCount,
+        sharedTripIds: peer.sharedTripIds.toList(),
+      );
     } catch (e) {
       debugPrint('[P2PSync] Error syncing with peer ${peer.deviceId}: $e');
-      _setStatus(P2PStatus.discovering);
-      return totalExchanged;
+      _setStatus(P2PStatus.error);
+      return NearbySyncResult(
+        success: false,
+        operationsSent: sentCount,
+        operationsReceived: receivedCount,
+        errorMessage: e.toString(),
+      );
     } finally {
       client.close();
     }
@@ -402,6 +511,7 @@ class P2PSyncService {
 
         final tripId = json['tripId'] as String?;
         final opsList = json['operations'] as List<dynamic>?;
+        final knownLocalOps = (json['knownLocalOperations'] as List<dynamic>?)?.map((e) => e.toString()).toSet() ?? {};
 
         if (tripId == null || opsList == null) {
           response.statusCode = HttpStatus.badRequest;
@@ -426,7 +536,6 @@ class P2PSyncService {
         for (final rawOp in opsList) {
           if (rawOp is Map<String, dynamic>) {
             final mutation = SyncMutation.fromJson(rawOp);
-            // Apply P2P mutation locally atomically and enqueue as P2P_SHARED with SAME operation ID
             final applied = await _syncService.applyRemoteP2PMutation(mutation, _storage);
             if (applied) {
               appliedCount++;
@@ -436,11 +545,16 @@ class P2PSyncService {
           }
         }
 
+        // Return local operations for this trip that the peer doesn't have yet
+        final localQueue = _syncService.getPendingMutationsForTrip(tripId);
+        final returnOps = localQueue.where((m) => !knownLocalOps.contains(m.id)).map((m) => m.toJson()).toList();
+
         response.statusCode = HttpStatus.ok;
         response.write(jsonEncode({
           'status': 'ACK',
           'appliedCount': appliedCount,
           'processedOperationIds': processedIds,
+          'returnOperations': returnOps,
           'timestamp': DateTime.now().toIso8601String(),
         }));
         await response.close();
