@@ -434,286 +434,157 @@ class _IpoAccountsViewState extends State<IpoAccountsView> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: isDark ? AppColors.darkSurfaceCard : Colors.white,
+      backgroundColor: isDark ? const Color(0xFF0B1117) : const Color(0xFFECE5DD),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
         return DraggableScrollableSheet(
-          initialChildSize: 0.8,
+          initialChildSize: 0.88,
           minChildSize: 0.5,
           maxChildSize: 0.95,
           expand: false,
           builder: (sheetCtx, scrollCtrl) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 36,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
+            return Column(
+              children: [
+                // ── WhatsApp-style header ──
+                Container(
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1F2C34) : const Color(0xFF075E54),
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                   ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+                  child: Row(
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            acc.displayName,
-                            style: TextStyle(
-                              fontSize: 19,
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Text(
+                            acc.displayName.isNotEmpty ? acc.displayName[0].toUpperCase() : '?',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
                               fontWeight: FontWeight.w900,
-                              letterSpacing: -0.3,
-                              color: isDark ? Colors.white : const Color(0xFF0F172A),
                             ),
                           ),
-                          if (acc.maskedPan.isNotEmpty)
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
                             Text(
-                              'PAN: ${acc.maskedPan}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                              acc.displayName,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
-                        ],
+                            if (acc.maskedPan.isNotEmpty)
+                              Text(
+                                'PAN: ${acc.maskedPan}',
+                                style: const TextStyle(color: Colors.white70, fontSize: 12),
+                              )
+                            else
+                              Text(
+                                '${apps.length} IPO application${apps.length != 1 ? "s" : ""}',
+                                style: const TextStyle(color: Colors.white70, fontSize: 12),
+                              ),
+                          ],
+                        ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.close_rounded),
+                        icon: const Icon(Icons.close_rounded, color: Colors.white),
                         onPressed: () => Navigator.pop(ctx),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 14),
+                ),
 
-                  // Top Hero Summary Box
+                // ── Released credit sticky banner ──
+                if (availableCreditPaise > 0)
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF141A21) : const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
-                        width: 0.8,
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    color: isDark ? const Color(0xFF0A3D26) : const Color(0xFF25D366).withValues(alpha: 0.15),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    child: Row(
                       children: [
-                        Text(
-                          pendingPaise > 0
-                              ? CurrencyFormatter.formatPaise(pendingPaise, currencyCode: 'INR')
-                              : (availableCreditPaise > 0
-                                  ? CurrencyFormatter.formatPaise(availableCreditPaise, currencyCode: 'INR')
-                                  : '₹0'),
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w900,
-                            color: pendingPaise > 0
-                                ? (isDark ? Colors.amberAccent : Colors.amber.shade800)
-                                : (availableCreditPaise > 0
-                                    ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
-                                    : (isDark ? Colors.white : const Color(0xFF0F172A))),
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          pendingPaise > 0
-                              ? 'Remaining due from ${acc.displayName}'
-                              : (availableCreditPaise > 0
-                                  ? 'Released / Available balance for new IPOs'
-                                  : 'All applications settled'),
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                          ),
-                        ),
-                        if (pendingPaise > 0 && !acc.isSelf) ...[
-                          const SizedBox(height: 14),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF25D366),
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(vertical: 10),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                  ),
-                                  onPressed: () => _sendWhatsAppAccountPaymentRequest(context, acc, pendingPaise),
-                                  icon: const Icon(Icons.share_rounded, size: 16),
-                                  label: const Text('Request Payment', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
-                                ),
+                        const Icon(Icons.recycling_rounded, size: 18, color: Color(0xFF25D366)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: RichText(
+                            text: TextSpan(
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: isDark ? Colors.white : const Color(0xFF075E54),
                               ),
-                            ],
+                              children: [
+                                TextSpan(
+                                  text: CurrencyFormatter.formatPaise(availableCreditPaise, currencyCode: 'INR'),
+                                  style: const TextStyle(fontWeight: FontWeight.w900),
+                                ),
+                                const TextSpan(text: ' released — available for next IPO'),
+                              ],
+                            ),
                           ),
-                        ],
+                        ),
                       ],
                     ),
                   ),
 
-                  const SizedBox(height: 18),
-
-                  Text(
-                    'APPLICATIONS (${apps.length})',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.6,
-                      color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-
-                  if (apps.isEmpty)
-                    Expanded(
-                      child: Center(
-                        child: Text(
-                          'No applications recorded for ${acc.displayName} yet.',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                // ── Chat feed ──
+                Expanded(
+                  child: apps.isEmpty
+                      ? Center(
+                          child: Text(
+                            'No applications yet for ${acc.displayName}',
+                            style: TextStyle(
+                              color: isDark ? Colors.white38 : Colors.black38,
+                              fontSize: 14,
+                            ),
                           ),
+                        )
+                      : ListView.builder(
+                          controller: scrollCtrl,
+                          padding: const EdgeInsets.fromLTRB(12, 16, 12, 24),
+                          itemCount: apps.length,
+                          itemBuilder: (ctx2, idx) {
+                            return _buildIpoChatThread(ctx2, apps[idx], acc, ipoVm, isDark);
+                          },
+                        ),
+                ),
+
+                // ── Bottom WhatsApp-style action bar ──
+                if (pendingPaise > 0 && !acc.isSelf)
+                  Container(
+                    color: isDark ? const Color(0xFF1F2C34) : Colors.white,
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 16),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF25D366),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        onPressed: () => _sendWhatsAppAccountPaymentRequest(context, acc, pendingPaise),
+                        icon: const Icon(Icons.send_rounded, size: 18),
+                        label: Text(
+                          'Request ${CurrencyFormatter.formatPaise(pendingPaise, currencyCode: 'INR')} via WhatsApp',
+                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
                         ),
                       ),
-                    )
-                  else
-                    Expanded(
-                      child: ListView.separated(
-                        controller: scrollCtrl,
-                        itemCount: apps.length,
-                        separatorBuilder: (ctx, i) => const SizedBox(height: 10),
-                        itemBuilder: (context, idx) {
-                          final app = apps[idx];
-                          return Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              onTap: () {
-                                Navigator.pop(ctx);
-                                context.push('/ipo/${app.ipoId}');
-                              },
-                              borderRadius: BorderRadius.circular(14),
-                              child: Container(
-                                padding: const EdgeInsets.all(14),
-                                decoration: BoxDecoration(
-                                  color: isDark ? const Color(0xFF141A21) : const Color(0xFFF8FAFC),
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
-                                    width: 0.8,
-                                  ),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            app.ipoName,
-                                            style: TextStyle(
-                                              fontSize: 15,
-                                              fontWeight: FontWeight.w800,
-                                              color: isDark ? Colors.white : const Color(0xFF0F172A),
-                                            ),
-                                          ),
-                                        ),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                          decoration: BoxDecoration(
-                                            color: _statusColor(app.status).withValues(alpha: 0.12),
-                                            borderRadius: BorderRadius.circular(6),
-                                          ),
-                                          child: Text(
-                                            app.status.displayName,
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w800,
-                                              color: _statusColor(app.status),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          '${app.lotsApplied} Lots (${app.totalSharesApplied} Shares)',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                                          ),
-                                        ),
-                                        Text(
-                                          CurrencyFormatter.formatPaise(app.applicationAmountInPaise, currencyCode: 'INR'),
-                                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          DateFormatter.formatDate(app.applicationDate),
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                                          ),
-                                        ),
-                                        if (app.status == IpoApplicationStatus.allotted)
-                                          Text(
-                                            'Invested: ${CurrencyFormatter.formatPaise(app.actualInvestedAmountInPaise ?? app.applicationAmountInPaise, currencyCode: 'INR')}',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w700,
-                                              color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-                                            ),
-                                          )
-                                        else if (app.status == IpoApplicationStatus.notAllotted || app.status == IpoApplicationStatus.refunded)
-                                          Text(
-                                            'Released: ${CurrencyFormatter.formatPaise(app.releasedAmountInPaise ?? app.applicationAmountInPaise, currencyCode: 'INR')}',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w700,
-                                              color: isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight,
-                                            ),
-                                          )
-                                        else if (app.effectiveRemainingPaise > 0)
-                                          Text(
-                                            'Remaining: ${CurrencyFormatter.formatPaise(app.effectiveRemainingPaise, currencyCode: 'INR')}',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w700,
-                                              color: isDark ? Colors.amberAccent : Colors.amber.shade800,
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
                     ),
-                ],
-              ),
+                  ),
+              ],
             );
           },
         );
@@ -721,17 +592,349 @@ class _IpoAccountsViewState extends State<IpoAccountsView> {
     );
   }
 
+  Widget _buildIpoChatThread(
+    BuildContext context,
+    IpoApplication app,
+    IpoAccount acc,
+    IpoViewModel ipoVm,
+    bool isDark,
+  ) {
+    final events = _buildChatEvents(app, acc, ipoVm, isDark, context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // IPO name separator — WhatsApp date-chip style
+        Center(
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF182229) : Colors.white.withValues(alpha: 0.85),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              app.ipoName,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: isDark ? Colors.white60 : const Color(0xFF54656F),
+              ),
+            ),
+          ),
+        ),
+        ...events,
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  List<Widget> _buildChatEvents(
+    IpoApplication app,
+    IpoAccount acc,
+    IpoViewModel ipoVm,
+    bool isDark,
+    BuildContext context,
+  ) {
+    final bubbles = <Widget>[];
+    final amt = CurrencyFormatter.formatPaise(app.applicationAmountInPaise, currencyCode: 'INR');
+    final paid = CurrencyFormatter.formatPaise(app.effectivePaidPaise, currencyCode: 'INR');
+    final remaining = CurrencyFormatter.formatPaise(app.effectiveRemainingPaise, currencyCode: 'INR');
+    final dateStr = DateFormatter.formatDate(app.applicationDate);
+
+    // 1. Applied bubble
+    bubbles.add(_chatBubble(
+      isDark: isDark,
+      isRight: false,
+      icon: Icons.check_circle_outline_rounded,
+      iconColor: Colors.blueAccent,
+      title: 'Applied for ${app.lotsApplied} lot${app.lotsApplied > 1 ? "s" : ""} (${app.totalSharesApplied} shares)',
+      subtitle: '$amt • $dateStr',
+      bubbleColor: isDark ? const Color(0xFF1F2C34) : Colors.white,
+      textColor: isDark ? Colors.white : const Color(0xFF111B21),
+    ));
+
+    // 2. Peer funding bubbles
+    for (final f in app.fundings.where((f) => !f.isSelf)) {
+      final fAmt = CurrencyFormatter.formatPaise(f.amountInPaise, currencyCode: 'INR');
+      bubbles.add(_chatBubble(
+        isDark: isDark,
+        isRight: false,
+        icon: Icons.person_pin_rounded,
+        iconColor: Colors.orangeAccent,
+        title: '${f.displayName} contributed $fAmt',
+        subtitle: 'Peer funding for this application',
+        bubbleColor: isDark ? const Color(0xFF1F2C34) : Colors.white,
+        textColor: isDark ? Colors.white : const Color(0xFF111B21),
+      ));
+    }
+
+    // 3. Payment pending bubble
+    final isPendingPayment = app.effectiveRemainingPaise > 0 &&
+        app.status != IpoApplicationStatus.allotted &&
+        app.status != IpoApplicationStatus.notAllotted &&
+        app.status != IpoApplicationStatus.refunded;
+    if (isPendingPayment) {
+      bubbles.add(_chatBubble(
+        isDark: isDark,
+        isRight: false,
+        icon: Icons.hourglass_top_rounded,
+        iconColor: Colors.amber.shade600,
+        title: '$remaining pending from ${acc.isSelf ? "you" : acc.displayName}',
+        subtitle: '$paid received of $amt total',
+        bubbleColor: isDark ? const Color(0xFF2A2000) : const Color(0xFFFFFBEB),
+        textColor: isDark ? Colors.amberAccent : Colors.amber.shade900,
+        action: _markReceivedAction(context, app, ipoVm),
+      ));
+    }
+
+    // 4. Payment received bubble
+    if (app.effectivePaidPaise > 0 &&
+        app.effectiveRemainingPaise == 0 &&
+        app.status != IpoApplicationStatus.notAllotted &&
+        app.status != IpoApplicationStatus.refunded) {
+      bubbles.add(_chatBubble(
+        isDark: isDark,
+        isRight: true,
+        icon: Icons.done_all_rounded,
+        iconColor: const Color(0xFF25D366),
+        title: '$paid received ✓',
+        subtitle: 'Payment settled',
+        bubbleColor: isDark ? const Color(0xFF005C4B) : const Color(0xFFDCF8C6),
+        textColor: isDark ? Colors.white : const Color(0xFF111B21),
+      ));
+    }
+
+    // 5. Allotment result
+    switch (app.status) {
+      case IpoApplicationStatus.allotted:
+        final invested = CurrencyFormatter.formatPaise(
+          app.actualInvestedAmountInPaise ?? app.applicationAmountInPaise,
+          currencyCode: 'INR',
+        );
+        bubbles.add(_chatBubble(
+          isDark: isDark,
+          isRight: true,
+          icon: Icons.verified_rounded,
+          iconColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+          title: '🎉 Allotted! ${app.allottedLots ?? 1} lot${(app.allottedLots ?? 1) > 1 ? "s" : ""}',
+          subtitle: '$invested invested',
+          bubbleColor: isDark ? const Color(0xFF003D2A) : const Color(0xFFD1FAE5),
+          textColor: isDark ? AppColors.emeraldLight : const Color(0xFF065F46),
+        ));
+        break;
+
+      case IpoApplicationStatus.notAllotted:
+      case IpoApplicationStatus.refunded:
+        final released = CurrencyFormatter.formatPaise(
+          app.releasedAmountInPaise ?? app.applicationAmountInPaise,
+          currencyCode: 'INR',
+        );
+        bubbles.add(_chatBubble(
+          isDark: isDark,
+          isRight: false,
+          icon: Icons.undo_rounded,
+          iconColor: Colors.purple.shade300,
+          title: 'Not allotted — $released released',
+          subtitle: 'Funds back in pool for next IPO',
+          bubbleColor: isDark ? const Color(0xFF1A0F2E) : const Color(0xFFF3E8FF),
+          textColor: isDark ? Colors.purple.shade200 : Colors.purple.shade800,
+        ));
+        break;
+
+      case IpoApplicationStatus.partiallyAllotted:
+        final invested = CurrencyFormatter.formatPaise(app.actualInvestedAmountInPaise ?? 0, currencyCode: 'INR');
+        final releasedP = CurrencyFormatter.formatPaise(app.releasedAmountInPaise ?? 0, currencyCode: 'INR');
+        bubbles.add(_chatBubble(
+          isDark: isDark,
+          isRight: true,
+          icon: Icons.pie_chart_rounded,
+          iconColor: Colors.amber.shade600,
+          title: 'Partially allotted — ${app.allottedLots ?? 1} lot${(app.allottedLots ?? 1) > 1 ? "s" : ""}',
+          subtitle: '$invested invested • $releasedP released',
+          bubbleColor: isDark ? const Color(0xFF2A1500) : const Color(0xFFFEF3C7),
+          textColor: isDark ? Colors.amberAccent : Colors.amber.shade900,
+        ));
+        break;
+
+      case IpoApplicationStatus.refundPending:
+        bubbles.add(_chatBubble(
+          isDark: isDark,
+          isRight: false,
+          icon: Icons.sync_rounded,
+          iconColor: Colors.blueGrey,
+          title: 'Refund in process',
+          subtitle: 'Funds credited within 2–3 business days',
+          bubbleColor: isDark ? const Color(0xFF1A2332) : const Color(0xFFE0F2FE),
+          textColor: isDark ? Colors.lightBlueAccent : Colors.blue.shade800,
+        ));
+        break;
+
+      default:
+        break;
+    }
+
+    // 6. Released credit reuse info pill
+    final credit = ipoVm.getAccountAvailableCreditPaise(acc.id);
+    if (credit > 0 &&
+        (app.status == IpoApplicationStatus.notAllotted || app.status == IpoApplicationStatus.refunded)) {
+      bubbles.add(
+        Center(
+          child: Container(
+            margin: const EdgeInsets.only(top: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF0A3D26) : const Color(0xFFD1FAE5),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.savings_rounded, size: 16, color: Color(0xFF25D366)),
+                const SizedBox(width: 6),
+                Text(
+                  '${CurrencyFormatter.formatPaise(credit, currencyCode: 'INR')} available — reuse for next IPO',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? AppColors.emeraldLight : const Color(0xFF065F46),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return bubbles;
+  }
+
+  Widget _chatBubble({
+    required bool isDark,
+    required bool isRight,
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required Color bubbleColor,
+    required Color textColor,
+    Widget? action,
+  }) {
+    return Align(
+      alignment: isRight ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 310),
+        margin: const EdgeInsets.only(bottom: 5),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        decoration: BoxDecoration(
+          color: bubbleColor,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
+            bottomLeft: Radius.circular(isRight ? 16 : 4),
+            bottomRight: Radius.circular(isRight ? 4 : 16),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.06),
+              blurRadius: 4,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(icon, size: 16, color: iconColor),
+                const SizedBox(width: 7),
+                Flexible(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                      color: textColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 3),
+            Padding(
+              padding: const EdgeInsets.only(left: 23),
+              child: Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: textColor.withValues(alpha: 0.65),
+                ),
+              ),
+            ),
+            if (action != null) ...[const SizedBox(height: 8), action],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _markReceivedAction(BuildContext context, IpoApplication app, IpoViewModel ipoVm) {
+    return GestureDetector(
+      onTap: () async {
+        HapticHelper.medium();
+        await ipoVm.recordPayment(
+          applicationId: app.id,
+          amountInPaise: app.effectiveRemainingPaise,
+          note: 'Marked received for ${app.ipoName} (${app.accountName})',
+        );
+        if (context.mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '${CurrencyFormatter.formatPaise(app.effectiveRemainingPaise, currencyCode: 'INR')} marked as received!',
+              ),
+              backgroundColor: const Color(0xFF25D366),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFF25D366),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.done_rounded, size: 14, color: Colors.white),
+            SizedBox(width: 5),
+            Text(
+              'Mark as Received',
+              style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _sendWhatsAppAccountPaymentRequest(BuildContext context, IpoAccount acc, int pendingPaise) async {
     HapticHelper.medium();
     final remainingFormatted = CurrencyFormatter.formatPaise(pendingPaise, currencyCode: 'INR');
 
-    final message = '''*Kith — IPO Payment Request*
-*Account:* ${acc.displayName}
-*Amount Due:* $remainingFormatted
-*Status:* Pending Settlement
-
-Please send the remaining balance of $remainingFormatted for your IPO applications.
-— Sent via Kith''';
+    final message = '*Kith — IPO Payment Request*\n'
+        '*Account:* ${acc.displayName}\n'
+        '*Amount Due:* $remainingFormatted\n'
+        '*Status:* Pending Settlement\n\n'
+        'Please send the remaining balance of $remainingFormatted for your IPO applications.\n'
+        '— Sent via Kith';
 
     final encoded = Uri.encodeComponent(message);
     final waUri = Uri.parse('whatsapp://send?text=$encoded');
@@ -758,21 +961,4 @@ Please send the remaining balance of $remainingFormatted for your IPO applicatio
     }
   }
 
-  Color _statusColor(IpoApplicationStatus status) {
-    switch (status) {
-      case IpoApplicationStatus.allotted:
-        return AppColors.emeraldPrimary;
-      case IpoApplicationStatus.applied:
-      case IpoApplicationStatus.fundsBlocked:
-        return Colors.blueAccent;
-      case IpoApplicationStatus.notAllotted:
-      case IpoApplicationStatus.refundPending:
-      case IpoApplicationStatus.refunded:
-        return Colors.purpleAccent;
-      case IpoApplicationStatus.partiallyAllotted:
-        return Colors.amber.shade700;
-      case IpoApplicationStatus.listed:
-        return Colors.teal;
-    }
-  }
 }
