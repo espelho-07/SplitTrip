@@ -159,4 +159,9 @@ class UserRepository {
   Future<bool> setAutoSyncEnabled(bool enabled) {
     return authService.storage.setAutoSyncEnabled(enabled);
   }
+
+  Future<String> rotateRecoveryKey() {
+    return authService.rotateRecoveryKey();
+  }
+
 }

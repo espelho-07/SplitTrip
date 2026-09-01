@@ -84,6 +84,26 @@ class AuthViewModel extends ChangeNotifier {
     }
   }
 
+  Future<String?> rotateRecoveryKey() async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final newKey = await userRepo.rotateRecoveryKey();
+      if (_currentUser != null) {
+        _currentUser = _currentUser!.copyWith(recoveryKey: newKey);
+      }
+      return newKey;
+    } catch (e) {
+      _errorMessage = 'Could not rotate recovery key: $e';
+      return null;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   Future<GuestUser?> recoverSession(String recoveryKey) async {
     _isLoading = true;
     _errorMessage = null;

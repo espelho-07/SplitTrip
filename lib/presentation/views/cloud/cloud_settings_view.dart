@@ -1,3 +1,4 @@
+import '../../../core/network/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -67,6 +68,63 @@ class CloudSettingsView extends StatelessWidget {
       final rootCtx = AppRouter.navigatorKey.currentContext;
       if (rootCtx != null && rootCtx.mounted) {
         KithSuccessToast.show(rootCtx, l10n.profileSignOutSuccess);
+      }
+    }
+  }
+
+
+  void _showRotateKeyDialog(BuildContext context) async {
+    final authVm = context.read<AuthViewModel>();
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
+        title: const Text('Rotate Recovery Key?'),
+        content: const Text(
+          'This will invalidate your old Recovery Key and generate a new one. Your cloud account and trips will remain intact.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.emeraldPrimary),
+            onPressed: () => Navigator.pop(dCtx, true),
+            child: const Text('Generate New Key'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final newKey = await authVm.rotateRecoveryKey();
+      if (context.mounted && newKey != null) {
+        Clipboard.setData(ClipboardData(text: newKey));
+        KithSuccessToast.show(context, 'New Recovery Key generated and copied!');
+      }
+    }
+  }
+
+  void _syncNow(BuildContext context) async {
+    final authVm = context.read<AuthViewModel>();
+    final syncService = context.read<SyncService>();
+    final apiClient = context.read<ApiClient>();
+    final user = authVm.currentUser;
+    if (user == null) return;
+
+    HapticHelper.medium();
+    final report = await syncService.reconcileWithCloud(user.effectiveAccountId, apiClient: apiClient);
+    if (context.mounted) {
+      if (report.isFullySynced) {
+        KithSuccessToast.show(context, 'All trips & expenses fully synced ✓');
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(report.errorMessage ?? 'Sync completed with updates'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
     }
   }
@@ -196,9 +254,24 @@ class CloudSettingsView extends StatelessWidget {
                         : 'Up to date (Last: ${_formatLastSync(lastSync, l10n)})',
                     style: AppTypography.bodySmall(isDark: isDark),
                   ),
-                  trailing: TextButton(
-                    onPressed: () => CloudSyncSheet.show(context),
-                    child: Text(l10n.cloudFlushQueue),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      FilledButton.tonal(
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        onPressed: () => _syncNow(context),
+                        child: const Text('Sync Now', style: TextStyle(fontSize: 12)),
+                      ),
+                      const SizedBox(width: 4),
+                      IconButton(
+                        icon: const Icon(Icons.queue_rounded, size: 18),
+                        tooltip: l10n.cloudFlushQueue,
+                        onPressed: () => CloudSyncSheet.show(context),
+                      ),
+                    ],
                   ),
                 ),
                 Divider(height: 1, color: isDark ? Colors.white10 : Colors.black12),
@@ -292,6 +365,19 @@ class CloudSettingsView extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 11,
                     color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    icon: const Icon(Icons.refresh_rounded, size: 16),
+                    label: const Text('Rotate Key', style: TextStyle(fontSize: 12)),
+                    onPressed: () => _showRotateKeyDialog(context),
                   ),
                 ),
               ],

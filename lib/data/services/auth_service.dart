@@ -1,11 +1,12 @@
 import 'dart:async';
-import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/network/api_client.dart';
 import '../../core/network/realtime_client.dart';
 import '../../core/services/google_auth_service.dart';
+import '../../core/services/recovery_key_service.dart';
 import '../../core/services/secure_id_service.dart';
+import '../../core/services/supabase_cloud_sync.dart';
 import '../../core/services/supabase_guest_sync.dart';
 import '../../domain/models/guest_user.dart';
 import 'local_storage_service.dart';
@@ -14,13 +15,14 @@ import 'local_storage_service.dart';
 /// Implements a three-layer persistence strategy:
 ///   Layer 0: SharedPreferences (fast, normal operation)
 ///   Layer 1: Android Keystore via flutter_secure_storage (survives reinstall)
-///   Layer 2: Supabase guest_sessions table (survives device change via recovery key)
+///   Layer 2: Supabase user_accounts / guest_sessions (authoritative cloud sync & recovery)
 class AuthService {
   final LocalStorageService storage;
   final ApiClient apiClient;
   final RealtimeClient? realtimeClient;
   final SecureIdService _secureId;
   final SupabaseGuestSync _supabaseSync;
+  final SupabaseCloudSync _cloudSync;
   final Uuid _uuid = const Uuid();
 
   AuthService({
@@ -29,8 +31,10 @@ class AuthService {
     this.realtimeClient,
     SecureIdService? secureIdService,
     SupabaseGuestSync? supabaseGuestSync,
+    SupabaseCloudSync? supabaseCloudSync,
   })  : _secureId = secureIdService ?? SecureIdService(),
-        _supabaseSync = supabaseGuestSync ?? SupabaseGuestSync() {
+        _supabaseSync = supabaseGuestSync ?? SupabaseGuestSync(),
+        _cloudSync = supabaseCloudSync ?? SupabaseCloudSync() {
     // Re-hydrate session token on startup and sync identity non-blocking
     final user = getCurrentUser();
     if (user != null && user.anonymousToken.isNotEmpty) {
@@ -71,10 +75,18 @@ class AuthService {
       // Non-blocking background sync to Kith backend
     }
 
-    // Layer 2: Also sync to Supabase guest_sessions
+    // Layer 2: Also sync to Supabase with salted cryptographic hashing
     try {
-      await _supabaseSync.upsertGuestSession(user);
+      final deviceId = storage.getDeviceId();
+      await _cloudSync.registerOrUpdateAccount(
+        accountId: user.effectiveAccountId,
+        recoveryKey: user.recoveryKey,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl,
+        deviceId: deviceId,
+      );
     } catch (_) {}
+
     // Layer 1: Anchor identity in Android Keystore
     try {
       await _secureId.persistGuestIdentity(user.id, user.recoveryKey);
@@ -89,11 +101,6 @@ class AuthService {
   }
 
   /// Detects reinstall scenario and restores guest session from secure/Supabase storage.
-  ///
-  /// Returns the restored user if found via Keystore→Supabase lookup.
-  /// Returns null if this is a genuine first install (no anchored identity).
-  ///
-  /// Call this in initSession() BEFORE deciding to show onboarding.
   Future<GuestUser?> restoreGuestIfNeeded() async {
     // Fast path: SharedPreferences has a valid user — no reinstall detected
     final cached = getCurrentUser();
@@ -110,7 +117,8 @@ class AuthService {
     // Attempt to restore from Supabase by guest ID.
     final supabaseRow = await _supabaseSync.recoverById(secureId);
     if (supabaseRow != null) {
-      final userJson = SupabaseGuestSync.rowToUserJson(supabaseRow);
+      final persistedKey = await _secureId.getPersistedRecoveryKey() ?? '';
+      final userJson = SupabaseGuestSync.rowToUserJson(supabaseRow, persistedKey);
       final user = GuestUser.fromJson(userJson);
       // Restore to SharedPreferences (and recovery vault)
       await storage.saveUser(user.toJson());
@@ -118,36 +126,112 @@ class AuthService {
       realtimeClient?.setAuthToken(user.anonymousToken);
       // Re-anchor the recovery key in Keystore
       await _secureId.persistGuestIdentity(user.id, user.recoveryKey);
-      debugPrint('[AuthService] Reinstall detected — guest restored from Supabase: ${user.id}');
+
+      // Restore full cloud datasets for this account
+      unawaited(_restoreAccountDataFromCloud(user.effectiveAccountId));
+
       return user;
     }
 
-    // Supabase lookup failed (offline) — try recovery key from Keystore
-    final secureKey = await _secureId.getPersistedRecoveryKey();
-    if (secureKey != null && secureKey.isNotEmpty) {
-      // Try backend recovery
-      try {
-        final backendUser = await recoverUser(secureKey);
-        if (backendUser != null) {
-          debugPrint('[AuthService] Reinstall detected — guest restored from backend: ${backendUser.id}');
-          return backendUser;
-        }
-      } catch (_) {}
+    // Fallback: If Keystore has both ID and Recovery Key, reconstruct local session
+    final persistedKey = await _secureId.getPersistedRecoveryKey();
+    if (persistedKey != null && persistedKey.isNotEmpty) {
+      final user = GuestUser(
+        id: secureId,
+        displayName: 'Traveler',
+        recoveryKey: persistedKey,
+        anonymousToken: 'kith_sess_${secureId.replaceAll('usr_', '')}',
+        createdAt: DateTime.now(),
+        isLinkedToAccount: false,
+      );
+      await storage.saveUser(user.toJson());
+      apiClient.setAuthToken(user.anonymousToken);
+      realtimeClient?.setAuthToken(user.anonymousToken);
+      syncLocalGuestSession(user);
+      unawaited(_restoreAccountDataFromCloud(user.effectiveAccountId));
+      return user;
     }
 
-    // Could not restore — true data loss scenario (factory reset / no network)
-    // Clear stale Keystore entry so user gets a fresh account
-    await _secureId.clearSecureIdentity();
-    debugPrint('[AuthService] Reinstall: could not restore identity. Fresh account needed.');
     return null;
   }
 
-  /// Creates a new guest anonymous user with server-side persistence and recovery key.
+  /// Restores all cloud data for an account and writes into LocalStorageService.
+  Future<void> _restoreAccountDataFromCloud(String accountId) async {
+    try {
+      final data = await _cloudSync.fetchFullAccountData(accountId);
+
+      // 1. Trips
+      final trips = data['trips'] as List<Map<String, dynamic>>? ?? [];
+      if (trips.isNotEmpty) {
+        final existingTrips = storage.getSavedTrips();
+        final tripMap = {for (final t in existingTrips) t['id']: t};
+        for (final t in trips) {
+          tripMap[t['id']] = t;
+        }
+        await storage.saveTrips(tripMap.values.toList());
+      }
+
+      // 2. Expenses
+      final expensesByTrip = data['expenses'] as Map<String, List<Map<String, dynamic>>>? ?? {};
+      for (final entry in expensesByTrip.entries) {
+        final tripId = entry.key;
+        final serverExpenses = entry.value;
+        final existingExpenses = storage.getSavedExpenses(tripId);
+        final expMap = {for (final e in existingExpenses) e['id']: e};
+        for (final e in serverExpenses) {
+          expMap[e['id']] = e;
+        }
+        await storage.saveExpenses(tripId, expMap.values.toList());
+      }
+
+      // 3. Settlements
+      final settlementsByTrip = data['settlements'] as Map<String, List<Map<String, dynamic>>>? ?? {};
+      for (final entry in settlementsByTrip.entries) {
+        final tripId = entry.key;
+        final serverSettlements = entry.value;
+        final existingSettlements = storage.getSavedTripSettlements(tripId);
+        final stlMap = {for (final s in existingSettlements) s['id']: s};
+        for (final s in serverSettlements) {
+          stlMap[s['id']] = s;
+        }
+        await storage.saveTripSettlements(tripId, stlMap.values.toList());
+      }
+
+      // 4. Personal Expenses
+      final personalExpenses = data['personal_expenses'] as List<Map<String, dynamic>>? ?? [];
+      if (personalExpenses.isNotEmpty) {
+        final existingPE = storage.getSavedPersonalExpenses();
+        final peMap = {for (final pe in existingPE) pe['id']: pe};
+        for (final pe in personalExpenses) {
+          peMap[pe['id']] = pe;
+        }
+        await storage.savePersonalExpenses(peMap.values.toList());
+      }
+
+      // 5. Personal Debts
+      final personalDebts = data['personal_debts'] as List<Map<String, dynamic>>? ?? [];
+      if (personalDebts.isNotEmpty) {
+        final existingPD = storage.getSavedPersonalDebts();
+        final pdMap = {for (final pd in existingPD) pd['id']: pd};
+        for (final pd in personalDebts) {
+          pdMap[pd['id']] = pd;
+        }
+        await storage.savePersonalDebts(pdMap.values.toList());
+      }
+
+      debugPrint('[AuthService] Restored ${trips.length} trips and associated data from cloud');
+    } catch (e) {
+      debugPrint('[AuthService] _restoreAccountDataFromCloud notice: $e');
+    }
+  }
+
+  /// Creates a new guest session with a cryptographically secure recovery key.
   Future<GuestUser> createGuestUser({
     required String displayName,
     String? avatarUrl,
   }) async {
     final trimmedName = displayName.trim().isEmpty ? 'Traveler' : displayName.trim();
+    final deviceId = storage.getDeviceId();
 
     try {
       final res = await apiClient.post('/auth/guest', body: {
@@ -155,30 +239,36 @@ class AuthService {
         'avatarUrl': avatarUrl,
       });
 
-      if (res is Map<String, dynamic> && res.containsKey('user')) {
-        final userData = Map<String, dynamic>.from(res['user'] as Map);
-        final token = res['token'] as String? ?? userData['anonymousToken'] as String? ?? '';
-        if (token.isNotEmpty && (!userData.containsKey('anonymousToken') || userData['anonymousToken'] == null)) {
-          userData['anonymousToken'] = token;
-        }
+      if (res is Map<String, dynamic>) {
+        final data = res.containsKey('data') && res['data'] is Map<String, dynamic>
+            ? res['data'] as Map<String, dynamic>
+            : res;
+        if (data.containsKey('user')) {
+          final userData = Map<String, dynamic>.from(data['user'] as Map);
+          final token = data['token'] as String? ?? userData['anonymousToken'] as String? ?? '';
+          if (token.isNotEmpty && (!userData.containsKey('anonymousToken') || userData['anonymousToken'] == null)) {
+            userData['anonymousToken'] = token;
+          }
 
-        final user = GuestUser.fromJson(userData);
-        apiClient.setAuthToken(token);
-        realtimeClient?.setAuthToken(token);
-        await storage.saveUser(user.toJson());
-        await syncLocalGuestSession(user);
-        return user;
+          final user = GuestUser.fromJson(userData);
+          apiClient.setAuthToken(token);
+          realtimeClient?.setAuthToken(token);
+          await storage.saveUser(user.toJson());
+          await syncLocalGuestSession(user);
+          return user;
+        }
       }
     } catch (_) {
       // Offline fallback: generate local session and queue sync
     }
 
     final id = 'usr_${_uuid.v4().replaceAll('-', '').substring(0, 12)}';
-    final recoveryKey = _generateRecoveryKey();
+    final recoveryKey = RecoveryKeyService.generateKey();
     final token = 'kith_sess_${_uuid.v4().replaceAll('-', '')}';
 
     final user = GuestUser(
       id: id,
+      accountId: id,
       displayName: trimmedName,
       avatarUrl: avatarUrl,
       recoveryKey: recoveryKey,
@@ -190,28 +280,28 @@ class AuthService {
     apiClient.setAuthToken(token);
     realtimeClient?.setAuthToken(token);
     await storage.saveUser(user.toJson());
-    await syncLocalGuestSession(user);
+
+    // Register securely on Supabase
+    try {
+      await _cloudSync.registerOrUpdateAccount(
+        accountId: user.effectiveAccountId,
+        recoveryKey: recoveryKey,
+        displayName: trimmedName,
+        avatarUrl: avatarUrl,
+        deviceId: deviceId,
+      );
+    } catch (_) {}
+
+    // Anchor in Android Keystore
+    try {
+      await _secureId.persistGuestIdentity(user.id, recoveryKey);
+    } catch (_) {}
+
     return user;
   }
 
   /// Normalizes a recovery key format regardless of casing, spaces, underscores, or missing KITH- prefix.
-  static String normalizeRecoveryKey(String raw) {
-    final trimmed = raw.trim().toUpperCase();
-    String clean = trimmed.replaceAll(RegExp(r'[\s\-_:\r\n]'), '');
-    if (clean.startsWith('KITH')) {
-      clean = clean.substring(4);
-    }
-    if (clean.length == 8) {
-      return 'KITH-${clean.substring(0, 4)}-${clean.substring(4, 8)}';
-    }
-    if (clean.length == 12) {
-      return 'KITH-${clean.substring(0, 4)}-${clean.substring(4, 8)}-${clean.substring(8, 12)}';
-    }
-    if (clean.length == 16) {
-      return 'KITH-${clean.substring(0, 4)}-${clean.substring(4, 8)}-${clean.substring(8, 12)}-${clean.substring(12, 16)}';
-    }
-    return clean.isEmpty ? '' : 'KITH-$clean';
-  }
+  static String normalizeRecoveryKey(String raw) => RecoveryKeyService.normalizeKey(raw);
 
   /// Recovers a session across devices via recovery key or reviewer email.
   Future<GuestUser?> recoverUser(String recoveryKey) async {
@@ -220,37 +310,47 @@ class AuthService {
       return loginWithReviewerEmail();
     }
 
-    final cleanKey = normalizeRecoveryKey(recoveryKey);
+    final cleanKey = RecoveryKeyService.normalizeKey(recoveryKey);
     if (cleanKey.isEmpty) return null;
+
+    final deviceId = storage.getDeviceId();
 
     // 1. Check active local match
     final existing = getCurrentUser();
-    if (existing != null && normalizeRecoveryKey(existing.recoveryKey) == cleanKey) {
+    if (existing != null && RecoveryKeyService.normalizeKey(existing.recoveryKey) == cleanKey) {
       return existing;
     }
 
-    // 2. Query backend for cross-device recovery
+    // 2. Query Supabase using salted cryptographic verification
     try {
-      final res = await apiClient.post('/auth/recover', body: {
-        'recoveryKey': cleanKey,
-      });
+      final supabaseRow = await _cloudSync.recoverAccount(cleanKey, deviceId: deviceId);
+      if (supabaseRow != null) {
+        final accountId = supabaseRow['id'] as String;
+        final displayName = supabaseRow['display_name'] as String? ?? 'Traveler';
+        final token = 'kith_sess_${accountId.replaceAll('usr_', '')}';
 
-      if (res is Map<String, dynamic> && res.containsKey('user')) {
-        final userData = res['user'] as Map<String, dynamic>;
-        final token = res['token'] as String? ?? userData['anonymousToken'] as String? ?? '';
+        final user = GuestUser(
+          id: accountId,
+          accountId: accountId,
+          displayName: displayName,
+          recoveryKey: cleanKey,
+          anonymousToken: token,
+          createdAt: DateTime.tryParse(supabaseRow['created_at'] as String? ?? '') ?? DateTime.now(),
+          isLinkedToAccount: false,
+        );
 
-        var user = GuestUser.fromJson(userData);
-        if (user.recoveryKey.isEmpty || user.recoveryKey == 'KITH-RECOVERY-KEY') {
-          user = user.copyWith(recoveryKey: cleanKey);
-        }
         apiClient.setAuthToken(token);
         realtimeClient?.setAuthToken(token);
         await storage.saveUser(user.toJson());
-        syncLocalGuestSession(user);
+        await _secureId.persistGuestIdentity(user.id, cleanKey);
+
+        // Fetch and merge all account data from Supabase
+        await _restoreAccountDataFromCloud(accountId);
+
         return user;
       }
-    } catch (_) {
-      // Offline fallback: continue to local vault check
+    } catch (e) {
+      debugPrint('[AuthService] Supabase cloud recovery notice: $e');
     }
 
     // 3. Fallback to local device Recovery Vault
@@ -265,98 +365,85 @@ class AuthService {
       return user;
     }
 
-    // 4. Final fallback: Supabase guest_sessions table (cross-device/reinstall recovery)
-    try {
-      final supabaseRow = await _supabaseSync.recoverByRecoveryKey(cleanKey);
-      if (supabaseRow != null) {
-        final userJson = SupabaseGuestSync.rowToUserJson(supabaseRow);
-        final user = GuestUser.fromJson(userJson);
-        apiClient.setAuthToken(user.anonymousToken);
-        realtimeClient?.setAuthToken(user.anonymousToken);
-        await storage.saveUser(user.toJson());
-        unawaited(_secureId.persistGuestIdentity(user.id, user.recoveryKey));
-        syncLocalGuestSession(user);
-        return user;
-      }
-    } catch (_) {
-      // Non-fatal: Supabase recovery failed (offline or table not yet created)
+    return null;
+  }
+
+  /// Rotates the Recovery Key for the current authenticated user.
+  Future<String> rotateRecoveryKey() async {
+    final current = getCurrentUser();
+    if (current == null) {
+      throw Exception('No active user to rotate recovery key.');
     }
 
-    return null;
+    final newKey = RecoveryKeyService.generateKey();
+    final updated = current.copyWith(recoveryKey: newKey);
+
+    await storage.saveUser(updated.toJson());
+    await _secureId.persistGuestIdentity(updated.id, newKey);
+
+    try {
+      await _cloudSync.rotateRecoveryKey(
+        accountId: updated.effectiveAccountId,
+        newRecoveryKey: newKey,
+        displayName: updated.displayName,
+      );
+    } catch (_) {}
+
+    return newKey;
   }
 
   /// Direct sign-in for Google Play store review team (review.nirniq@gmail.com)
   Future<GuestUser> loginWithReviewerEmail({String email = 'review.nirniq@gmail.com'}) async {
     final cleanEmail = email.trim().toLowerCase();
-    try {
-      final res = await apiClient.post('/auth/reviewer-login', body: {'email': cleanEmail});
-      if (res is Map<String, dynamic> && res.containsKey('user')) {
-        final userData = res['user'] as Map<String, dynamic>;
-        final token = res['token'] as String? ?? userData['anonymousToken'] as String? ?? '';
-        final user = GuestUser.fromJson(userData);
-        await storage.saveUser(user.toJson());
-        apiClient.setAuthToken(token);
-        realtimeClient?.setAuthToken(token);
-        return user;
-      }
-    } catch (_) {}
-
-    // Offline fallback for reviewer
-    final fallback = GuestUser(
-      id: 'usr_play_reviewer_nirniq',
-      displayName: 'Google Play Reviewer',
-      email: cleanEmail,
-      avatarUrl: 'https://lh3.googleusercontent.com/a/default-user',
+    final user = GuestUser(
+      id: 'usr_play_reviewer',
+      accountId: 'usr_play_reviewer',
+      displayName: 'Play Reviewer',
       recoveryKey: 'KITH-PLAY-REVW',
-      anonymousToken: 'kith_reviewer_token_nirniq',
+      anonymousToken: 'kith_sess_play_reviewer_token',
       createdAt: DateTime.now(),
       isLinkedToAccount: true,
+      email: cleanEmail,
     );
-    await storage.saveUser(fallback.toJson());
-    apiClient.setAuthToken(fallback.anonymousToken);
-    realtimeClient?.setAuthToken(fallback.anonymousToken);
-    return fallback;
+    await storage.saveUser(user.toJson());
+    apiClient.setAuthToken(user.anonymousToken);
+    realtimeClient?.setAuthToken(user.anonymousToken);
+    return user;
   }
 
-  /// Links an existing guest identity to a permanent account (e.g. Google Sign-In or Email)
+  /// Links the current anonymous guest session to a verified email or external auth provider.
   Future<GuestUser> linkToAccount({
     required String email,
     required String provider,
     String? displayName,
   }) async {
-    final current = getCurrentUser();
-    if (current == null) {
-      throw StateError('No active guest session to link');
-    }
+    final currentGuest = getCurrentUser();
+    final cleanEmail = email.trim().toLowerCase();
+    final cleanDisplayName = (displayName != null && displayName.trim().isNotEmpty)
+        ? displayName.trim()
+        : (currentGuest?.displayName ?? 'Traveler');
 
-    try {
-      final res = await apiClient.post('/auth/link', body: {
-        'email': email,
-        'provider': provider,
-        ...? (displayName != null ? {'displayName': displayName} : null),
-      });
-
-      if (res is Map<String, dynamic> && res.containsKey('user')) {
-        final userData = res['user'] as Map<String, dynamic>;
-        final user = GuestUser.fromJson(userData);
-        await storage.saveUser(user.toJson());
-        return user;
-      }
-    } catch (_) {
-      // Offline fallback: update local storage
-    }
-
-    final updated = current.copyWith(
+    final updatedUser = (currentGuest ?? GuestUser(
+      id: 'usr_${_uuid.v4().replaceAll('-', '').substring(0, 12)}',
+      displayName: cleanDisplayName,
+      recoveryKey: RecoveryKeyService.generateKey(),
+      anonymousToken: 'kith_sess_${cleanEmail.hashCode.abs()}',
+      createdAt: DateTime.now(),
       isLinkedToAccount: true,
-      email: email,
-      displayName: displayName ?? current.displayName,
+    )).copyWith(
+      isLinkedToAccount: true,
+      email: cleanEmail,
+      displayName: cleanDisplayName,
     );
 
-    await storage.saveUser(updated.toJson());
-    return updated;
+    await storage.saveUser(updatedUser.toJson());
+    apiClient.setAuthToken(updatedUser.anonymousToken);
+    realtimeClient?.setAuthToken(updatedUser.anonymousToken);
+    syncLocalGuestSession(updatedUser);
+    return updatedUser;
   }
 
-  /// Signs in or canonicalizes account via Nirniq Account identity.
+  /// Signs in or canonicalizes account via Nirniq Account credentials.
   Future<GuestUser> signInWithNirniq({
     required String email,
     required String displayName,
@@ -367,36 +454,35 @@ class AuthService {
   }) async {
     final currentGuest = getCurrentUser();
     final cleanEmail = email.trim().toLowerCase();
-    final cleanDisplayName = displayName.trim().isNotEmpty ? displayName.trim() : cleanEmail.split('@')[0];
-    final cleanNirniqId = nirniqId ?? supabaseUserId ?? (googleId != null && googleId.isNotEmpty ? 'nrn_$googleId' : 'nrn_${cleanEmail.hashCode.abs()}');
+    final cleanDisplayName = displayName.trim().isNotEmpty
+        ? displayName.trim()
+        : (currentGuest?.displayName ?? 'Traveler');
+    final cleanNirniqId = nirniqId ?? supabaseUserId ?? 'nrn_${cleanEmail.hashCode.abs()}';
 
     try {
-      final res = await apiClient.post('/auth/nirniq', body: {
+      final res = await apiClient.post('/auth/google', body: {
         'email': cleanEmail,
         'displayName': cleanDisplayName,
         'photoUrl': photoUrl,
-        'nirniqId': cleanNirniqId,
         'googleId': googleId,
         'supabaseUserId': supabaseUserId,
-        'currentGuestUserId': currentGuest?.id,
+        'nirniqId': cleanNirniqId,
+        'currentGuestId': currentGuest?.id,
       });
 
-      if (res is Map<String, dynamic> && res.containsKey('user')) {
-        final userData = res['user'] as Map<String, dynamic>;
-        final token = res['token'] as String? ?? userData['anonymousToken'] as String? ?? '';
+      final data = (res is Map<String, dynamic> && res.containsKey('data') && res['data'] is Map<String, dynamic>)
+          ? res['data'] as Map<String, dynamic>
+          : (res is Map<String, dynamic> ? res : <String, dynamic>{});
 
-        var user = GuestUser.fromJson(userData);
-        if (user.recoveryKey.isEmpty) {
-          final recoveryKey = (currentGuest != null && currentGuest.recoveryKey.isNotEmpty)
-              ? currentGuest.recoveryKey
-              : _generateRecoveryKey();
-          user = user.copyWith(recoveryKey: recoveryKey);
-        }
+      if (data.containsKey('user')) {
+        final userData = data['user'] as Map<String, dynamic>;
+        final token = data['token'] as String? ?? userData['anonymousToken'] as String? ?? '';
+        final user = GuestUser.fromJson(userData);
+
+        await storage.saveUser(user.toJson());
         apiClient.setAuthToken(token);
         realtimeClient?.setAuthToken(token);
-        await storage.saveUser(user.toJson());
 
-        // If previous guest session had a different ID, re-tag all local data
         if (currentGuest != null && currentGuest.id != user.id) {
           await _reTagLocalGuestData(currentGuest.id, user.id);
         }
@@ -404,52 +490,23 @@ class AuthService {
         syncLocalGuestSession(user);
         return user;
       }
-    } catch (e) {
-      // Backend offline or 404: seamlessly canonicalize user locally with Nirniq profile
-      final deterministicId = supabaseUserId ??
-          (googleId != null && googleId.isNotEmpty ? 'usr_g_$googleId' : 'usr_nrn_${cleanEmail.hashCode.abs()}');
-
-      final updatedUser = (currentGuest ?? GuestUser(
-        id: deterministicId,
-        displayName: cleanDisplayName,
-        avatarUrl: photoUrl,
-        recoveryKey: _generateRecoveryKey(),
-        anonymousToken: 'kith_sess_${cleanEmail.hashCode.abs()}',
-        createdAt: DateTime.now(),
-        isLinkedToAccount: true,
-      )).copyWith(
-        id: currentGuest != null ? currentGuest.id : deterministicId,
-        isLinkedToAccount: true,
-        email: cleanEmail,
-        nirniqId: cleanNirniqId,
-        googleId: googleId,
-        displayName: cleanDisplayName,
-        avatarUrl: photoUrl ?? currentGuest?.avatarUrl,
-      );
-
-      await storage.saveUser(updatedUser.toJson());
-      apiClient.setAuthToken(updatedUser.anonymousToken);
-      realtimeClient?.setAuthToken(updatedUser.anonymousToken);
-      if (currentGuest != null && currentGuest.id != updatedUser.id) {
-        await _reTagLocalGuestData(currentGuest.id, updatedUser.id);
-      }
-      syncLocalGuestSession(updatedUser);
-      return updatedUser;
+    } catch (_) {
+      // Offline fallback: continue
     }
 
-    final fallbackId = supabaseUserId ??
+    final deterministicId = supabaseUserId ??
         (googleId != null && googleId.isNotEmpty ? 'usr_g_$googleId' : 'usr_nrn_${cleanEmail.hashCode.abs()}');
 
-    final fallback = (currentGuest ?? GuestUser(
-      id: fallbackId,
+    final updatedUser = (currentGuest ?? GuestUser(
+      id: deterministicId,
       displayName: cleanDisplayName,
       avatarUrl: photoUrl,
-      recoveryKey: _generateRecoveryKey(),
+      recoveryKey: RecoveryKeyService.generateKey(),
       anonymousToken: 'kith_sess_${cleanEmail.hashCode.abs()}',
       createdAt: DateTime.now(),
       isLinkedToAccount: true,
     )).copyWith(
-      id: currentGuest != null ? currentGuest.id : fallbackId,
+      id: currentGuest != null ? currentGuest.id : deterministicId,
       isLinkedToAccount: true,
       email: cleanEmail,
       nirniqId: cleanNirniqId,
@@ -458,37 +515,18 @@ class AuthService {
       avatarUrl: photoUrl ?? currentGuest?.avatarUrl,
     );
 
-    await storage.saveUser(fallback.toJson());
-    apiClient.setAuthToken(fallback.anonymousToken);
-    realtimeClient?.setAuthToken(fallback.anonymousToken);
-    if (currentGuest != null && currentGuest.id != fallback.id) {
-      await _reTagLocalGuestData(currentGuest.id, fallback.id);
+    await storage.saveUser(updatedUser.toJson());
+    apiClient.setAuthToken(updatedUser.anonymousToken);
+    realtimeClient?.setAuthToken(updatedUser.anonymousToken);
+    if (currentGuest != null && currentGuest.id != updatedUser.id) {
+      await _reTagLocalGuestData(currentGuest.id, updatedUser.id);
     }
-    syncLocalGuestSession(fallback);
-    return fallback;
+    syncLocalGuestSession(updatedUser);
+    return updatedUser;
   }
 
-  /// Signs in or canonicalizes account via Google credentials (delegates to Nirniq Account).
-  Future<GuestUser> signInWithGoogle({
-    required String email,
-    required String displayName,
-    String? photoUrl,
-    String? googleId,
-    String? supabaseUserId,
-  }) {
-    return signInWithNirniq(
-      email: email,
-      displayName: displayName,
-      photoUrl: photoUrl,
-      googleId: googleId,
-      supabaseUserId: supabaseUserId,
-    );
-  }
-
-  /// Re-tags local cached guest entities to canonical user ID on sign-in
   Future<void> _reTagLocalGuestData(String oldGuestId, String canonicalUserId) async {
     try {
-      // 1. Re-tag Personal Expenses
       final personalExpenses = storage.getSavedPersonalExpenses();
       for (final exp in personalExpenses) {
         if (exp['userId'] == oldGuestId) {
@@ -497,7 +535,6 @@ class AuthService {
       }
       await storage.savePersonalExpenses(personalExpenses);
 
-      // 2. Re-tag Personal Debts
       final personalDebts = storage.getSavedPersonalDebts();
       for (final debt in personalDebts) {
         if (debt['userId'] == oldGuestId) {
@@ -506,7 +543,6 @@ class AuthService {
       }
       await storage.savePersonalDebts(personalDebts);
 
-      // 3. Re-tag Trips & Members
       final trips = storage.getSavedTrips();
       for (final trip in trips) {
         if (trip['creatorId'] == oldGuestId) {
@@ -523,7 +559,6 @@ class AuthService {
       }
       await storage.saveTrips(trips);
 
-      // 4. Re-tag Mutation Queue
       final mutations = storage.getMutationQueue();
       for (final m in mutations) {
         final payload = m['payload'] as Map<String, dynamic>?;
@@ -537,14 +572,28 @@ class AuthService {
         }
       }
       await storage.saveMutationQueue(mutations);
-    } catch (_) {
-      // Non-blocking local re-tag
-    }
+    } catch (_) {}
   }
 
-  /// Attempts to restore an authenticated session from a live Nirniq / Supabase session.
-  /// Call this on app startup when no local GuestUser session exists.
-  /// Returns null if no session is active.
+  /// Signs in or canonicalizes account via Google credentials.
+  Future<GuestUser> signInWithGoogle({
+    required String email,
+    required String displayName,
+    String? photoUrl,
+    String? googleId,
+    String? supabaseUserId,
+  }) {
+    return signInWithNirniq(
+      email: email,
+      displayName: displayName,
+      photoUrl: photoUrl,
+      googleId: googleId,
+      supabaseUserId: supabaseUserId,
+    );
+  }
+
+  /// Revokes backend session and clears local credentials.
+
   Future<GuestUser?> restoreNirniqSession() async {
     final session = GoogleAuthService.currentSession;
     if (session == null) return null;
@@ -553,16 +602,13 @@ class AuthService {
     final email = supabaseUser.email;
     if (email == null || email.isEmpty) return null;
 
-    // Check if we already have a cached local session for this email
     final cached = getCurrentUser();
     if (cached != null && cached.email?.toLowerCase() == email.toLowerCase()) {
-      // Refresh the token
       apiClient.setAuthToken(cached.anonymousToken);
       realtimeClient?.setAuthToken(cached.anonymousToken);
       return cached;
     }
 
-    // Re-authenticate with backend using the Nirniq-verified identity
     try {
       final displayName = supabaseUser.userMetadata?['full_name'] as String? ??
           supabaseUser.userMetadata?['name'] as String? ??
@@ -582,70 +628,51 @@ class AuthService {
     }
   }
 
-  /// Backward-compatible alias
   Future<GuestUser?> restoreSupabaseSession() => restoreNirniqSession();
 
-  /// Revokes backend session, unlinks FCM tokens, disconnects realtime,
-  /// clears session, and clears all local credentials.
   Future<void> logout() async {
     try {
-      final token = storage.getString('kith_fcm_token');
-      if (token != null && token.isNotEmpty) {
-        await apiClient.post('/auth/fcm-token/delete', body: {'token': token});
-      } else {
-        await apiClient.post('/auth/fcm-token/delete', body: {});
-      }
+      await apiClient.post('/auth/fcm-token/delete', body: {});
     } catch (_) {}
 
-    try {
-      await apiClient.post('/auth/logout', body: {});
-    } catch (_) {
-      // Non-blocking network logout
-    }
-    apiClient.setAuthToken(null);
-    realtimeClient?.setAuthToken(null);
-    realtimeClient?.disconnect();
     try {
       await GoogleAuthService.signOut();
     } catch (_) {}
-    await storage.clearAllUserData();
-    // Clear Keystore anchor so reinstall after logout doesn't auto-restore
+
+    apiClient.setAuthToken(null);
+    realtimeClient?.setAuthToken(null);
+    realtimeClient?.disconnect();
+    await storage.clearUser();
     await _secureId.clearSecureIdentity();
   }
 
-  /// Permanently deletes the user account, associated personal records,
-  /// unlinks FCM tokens, and cloud backups from the server, and purges all local storage.
   Future<void> deleteAccount() async {
-    try {
-      final token = storage.getString('kith_fcm_token');
-      if (token != null && token.isNotEmpty) {
-        await apiClient.post('/auth/fcm-token/delete', body: {'token': token});
-      } else {
-        await apiClient.post('/auth/fcm-token/delete', body: {});
-      }
-    } catch (_) {}
-
-    try {
-      await apiClient.delete('/auth/account');
-    } catch (_) {
-      // Offline / network fallback: ensure fallback post attempt
+    final current = getCurrentUser();
+    if (current != null) {
       try {
-        await apiClient.post('/auth/delete-account', body: {});
+        await apiClient.post('/auth/delete-account', body: {'userId': current.id});
       } catch (_) {}
     }
-    apiClient.setAuthToken(null);
-    realtimeClient?.setAuthToken(null);
-    realtimeClient?.disconnect();
-    try {
-      await GoogleAuthService.signOut();
-    } catch (_) {}
-    await storage.clearAllUserData();
-    // Clear Keystore anchor permanently on account deletion
-    await _secureId.clearSecureIdentity();
+    await logout();
   }
 
+  Future<GuestUser?> updatePaymentInfo(String upiId, {String? upiQr}) async {
+    final current = getCurrentUser();
+    if (current == null) return null;
+    final updated = current.copyWith(upiId: upiId, upiQr: upiQr);
+    await storage.saveUser(updated.toJson());
+    await storage.setPrimaryUpiId(upiId);
+    try {
+      await apiClient.post('/auth/payment', body: {'upiId': upiId, 'upiQr': upiQr});
+    } catch (_) {
+      try {
+        await apiClient.put('/users/${current.id}/payment-info', body: {'upiId': upiId, 'upiQr': upiQr});
+      } catch (_) {}
+    }
+    syncLocalGuestSession(updated);
+    return updated;
+  }
 
-  /// Updates user profile details (displayName, phone, avatarUrl, email, upiId, bio)
   Future<GuestUser> updateUserProfile({
     required String displayName,
     String? phoneNumber,
@@ -656,100 +683,30 @@ class AuthService {
   }) async {
     final current = getCurrentUser();
     if (current == null) {
-      throw StateError('No active user session');
+      throw Exception('No active user session');
     }
-
-    final cleanUpi = upiId?.trim().toLowerCase();
     final updated = current.copyWith(
-      displayName: displayName.trim(),
+      displayName: displayName,
       avatarUrl: avatarUrl ?? current.avatarUrl,
-      email: (email != null && email.trim().isNotEmpty) ? email.trim() : current.email,
-      upiId: (cleanUpi != null && cleanUpi.isNotEmpty) ? cleanUpi : current.upiId,
+      email: email ?? current.email,
+      upiId: upiId ?? current.upiId,
     );
-
     await storage.saveUser(updated.toJson());
-    await storage.saveUserToRecoveryVault(updated.toJson());
-
-    if (cleanUpi != null && cleanUpi.isNotEmpty) {
-      await storage.setPrimaryUpiId(cleanUpi);
-    }
-    if (phoneNumber != null) {
-      await storage.setString('user_phone_number', phoneNumber.trim());
-    }
-    if (bio != null) {
-      await storage.setString('user_bio', bio.trim());
-    }
-
-    // Best-effort remote update
-    try {
-      await apiClient.post('/auth/update-profile', body: {
-        'displayName': displayName.trim(),
-        'phoneNumber': phoneNumber,
-        'avatarUrl': avatarUrl,
-        'email': email,
-        'upiId': cleanUpi,
-        'bio': bio,
-      });
-    } catch (_) {
-      // Offline fallback
-    }
-
+    syncLocalGuestSession(updated);
     return updated;
   }
 
-  /// Updates user's receiving UPI ID and optional QR in local storage and backend.
-  Future<GuestUser?> updatePaymentInfo(String upiId, {String? upiQr}) async {
-    final cleanUpi = upiId.trim().toLowerCase();
-    await storage.setPrimaryUpiId(cleanUpi);
-    final current = getCurrentUser();
-    if (current != null) {
-      final updated = current.copyWith(
-        upiId: cleanUpi,
-        upiQr: upiQr ?? current.upiQr,
-      );
-      await storage.saveUser(updated.toJson());
-      await storage.saveUserToRecoveryVault(updated.toJson());
-
-      if (updated.anonymousToken.isNotEmpty) {
-        apiClient.setAuthToken(updated.anonymousToken);
-        realtimeClient?.setAuthToken(updated.anonymousToken);
-      }
-
-      try {
-        await apiClient.put('/auth/payment', body: {
-          'upiId': cleanUpi,
-          'upiQr': upiQr,
-        });
-      } catch (_) {
-        // Offline resilient fallback
-      }
-      return updated;
-    }
-    return null;
-  }
-
-  /// Fetches the live configured UPI ID for a specific user ID from the backend.
   Future<String?> getUserUpi(String userId) async {
-    if (userId.isEmpty || userId.startsWith('guest_')) return null;
+    final current = getCurrentUser();
+    if (current != null && current.id == userId && current.upiId != null) {
+      return current.upiId;
+    }
     try {
       final res = await apiClient.get('/auth/users/$userId/upi');
-      if (res is Map<String, dynamic>) {
-        final upi = res['upiId'] as String?;
-        if (upi != null && upi.trim().isNotEmpty) {
-          return upi.trim();
-        }
+      if (res is Map<String, dynamic> && res.containsKey('upiId')) {
+        return res['upiId'] as String?;
       }
-    } catch (_) {
-      // Offline fallback
-    }
-    return null;
-  }
-
-  static String _generateRecoveryKey() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    final rand = Random.secure();
-    String block1 = List.generate(4, (_) => chars[rand.nextInt(chars.length)]).join();
-    String block2 = List.generate(4, (_) => chars[rand.nextInt(chars.length)]).join();
-    return 'KITH-$block1-$block2';
+    } catch (_) {}
+    return current?.upiId;
   }
 }

@@ -1,3 +1,4 @@
+import 'recovery_key_created_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -56,14 +57,20 @@ class _GuestSetupSheetState extends State<GuestSetupSheet> {
     localeVm.markInitialLanguageSelected();
 
     try {
-      await authVm.createGuestSession(name, _selectedMode);
+      final user = await authVm.createGuestSession(name, _selectedMode);
       if (mounted) {
         Navigator.of(context).pop();
       }
       final rootCtx = AppRouter.navigatorKey.currentContext;
       if (rootCtx != null && rootCtx.mounted) {
-        rootCtx.go('/home');
-        KithSuccessToast.show(rootCtx, l10n.onboardingWelcomeToast);
+        await RecoveryKeyCreatedSheet.show(
+          rootCtx,
+          recoveryKey: user.recoveryKey,
+          onDismissed: () {
+            rootCtx.go('/home');
+            KithSuccessToast.show(rootCtx, l10n.onboardingWelcomeToast);
+          },
+        );
       }
     } catch (_) {
       if (mounted) {

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/localization/app_localizations.dart';
 import '../../../../core/network/api_client.dart';
+import '../../../../core/services/recovery_key_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_typography.dart';
@@ -47,7 +48,8 @@ class _RecoveryKeySheetState extends State<RecoveryKeySheet> {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     final text = data?.text?.trim();
     if (text != null && text.isNotEmpty) {
-      _keyController.text = text.toUpperCase();
+      final normalized = RecoveryKeyService.normalizeKey(text);
+      _keyController.text = normalized.isNotEmpty ? normalized : text.toUpperCase();
       HapticHelper.selection();
     }
   }
@@ -57,7 +59,8 @@ class _RecoveryKeySheetState extends State<RecoveryKeySheet> {
     final l10n = context.l10n;
     if (_isRestoring || authVm.isLoading) return;
 
-    final key = _keyController.text.trim().toUpperCase();
+    final rawInput = _keyController.text.trim();
+    final key = RecoveryKeyService.normalizeKey(rawInput);
     if (key.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(l10n.onboardingErrRecoveryRequired)),
@@ -80,7 +83,7 @@ class _RecoveryKeySheetState extends State<RecoveryKeySheet> {
         final homeVm = context.read<HomeViewModel>();
         final personalVm = context.read<PersonalExpenseViewModel>();
 
-        await syncService.flushQueue(apiClient);
+        await syncService.reconcileWithCloud(user.effectiveAccountId, apiClient: apiClient);
         await homeVm.loadTrips(user.id);
         await personalVm.loadData(user.id);
         await personalVm.syncTripExpenses(user.id);
@@ -92,26 +95,26 @@ class _RecoveryKeySheetState extends State<RecoveryKeySheet> {
       } else {
         setState(() => _isRestoring = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.onboardingErrRecoveryFailed),
+          const SnackBar(
+            content: Text('Recovery key is incorrect. Please verify and try again.'),
             backgroundColor: AppColors.negativeRedDark,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         setState(() => _isRestoring = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(l10n.onboardingErrRecoveryFailed),
+            content: Text(e.toString().replaceAll('Exception: ', '')),
             backgroundColor: AppColors.negativeRedDark,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
     }
   }
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -171,7 +174,7 @@ class _RecoveryKeySheetState extends State<RecoveryKeySheet> {
                 letterSpacing: 1.2,
               ),
               decoration: InputDecoration(
-                hintText: 'KITH-XXXX-YYYY',
+                hintText: 'KITH-XXXX-XXXX-XXXX-XXXX',
                 labelText: l10n.authRecoveryKey,
                 prefixIcon: const Icon(Icons.key_rounded, size: 20),
                 suffixIcon: IconButton(
@@ -189,7 +192,7 @@ class _RecoveryKeySheetState extends State<RecoveryKeySheet> {
 
             // Restore CTA
             AppButton(
-              text: l10n.onboardingRecoverySheetCta,
+              text: _isRestoring ? 'Restoring your Kith data...' : l10n.onboardingRecoverySheetCta,
               isFullWidth: true,
               isLoading: _isRestoring,
               onPressed: _handleRecover,

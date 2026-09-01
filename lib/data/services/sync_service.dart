@@ -1,3 +1,4 @@
+import '../../core/services/supabase_cloud_sync.dart';
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
@@ -248,6 +249,7 @@ class SyncMutation {
 /// and reconciles operations with the server with jittered backoff.
 class SyncService {
   final LocalStorageService _storage;
+  final SupabaseCloudSync _cloudSync = SupabaseCloudSync();
   final Uuid _uuid = const Uuid();
   bool _isProcessing = false;
   SyncStatus _currentStatus = SyncStatus.synced;
@@ -807,6 +809,151 @@ class SyncService {
     }
   }
 
+
+  /// Authoritative incremental Delta Cloud reconciliation using Supabase.
+  /// Fetches only changes that occurred after the last sync cursor to protect Supabase Free Tier.
+  Future<TripSyncReport> reconcileWithCloud(String accountId, {ApiClient? apiClient}) async {
+    _setStatus(SyncStatus.syncing);
+    final sources = <SyncSourceResult>[];
+    int totalSent = 0;
+    int totalReceived = 0;
+
+    try {
+      // 1. Flush pending mutations first
+      if (apiClient != null) {
+        await flushQueue(apiClient);
+      }
+
+      // 2. Fetch delta changes from Supabase
+      final rawCursor = _storage.getString('kith_last_sync_cursor_$accountId');
+      final cursor = rawCursor != null && rawCursor.isNotEmpty
+          ? (DateTime.tryParse(rawCursor) ?? DateTime.now().subtract(const Duration(days: 30)))
+          : DateTime.now().subtract(const Duration(days: 30));
+
+      final activeTrips = _storage.getSavedTrips().map((t) => t['id'] as String).toList();
+      final deltas = await _cloudSync.fetchDeltaChanges(
+        accountId: accountId,
+        sinceCursor: cursor,
+        activeTripIds: activeTrips,
+      );
+
+      // Reconcile modified trips
+      final modifiedTrips = deltas['modifiedTrips'] as List<Map<String, dynamic>>? ?? [];
+      if (modifiedTrips.isNotEmpty) {
+        final existingTrips = _storage.getSavedTrips();
+        final tripMap = {for (final t in existingTrips) t['id']: t};
+        for (final t in modifiedTrips) {
+          if (t['is_deleted'] == true) {
+            tripMap.remove(t['id']);
+          } else {
+            tripMap[t['id']] = t;
+          }
+        }
+        await _storage.saveTrips(tripMap.values.toList());
+        totalReceived += modifiedTrips.length;
+      }
+
+      // Reconcile modified expenses
+      final modifiedExpenses = deltas['modifiedExpenses'] as List<Map<String, dynamic>>? ?? [];
+      for (final exp in modifiedExpenses) {
+        final tripId = exp['trip_id'] as String? ?? exp['tripId'] as String?;
+        if (tripId != null && tripId.isNotEmpty) {
+          final existingExp = _storage.getSavedExpenses(tripId);
+          final expId = exp['id'] as String;
+          final isDeleted = exp['is_deleted'] == true || exp['isDeleted'] == true;
+          existingExp.removeWhere((e) => e['id'] == expId);
+          if (!isDeleted) {
+            existingExp.insert(0, exp);
+          }
+          await _storage.saveExpenses(tripId, existingExp);
+          totalReceived++;
+        }
+      }
+
+      // Reconcile modified settlements
+      final modifiedSettlements = deltas['modifiedSettlements'] as List<Map<String, dynamic>>? ?? [];
+      for (final stl in modifiedSettlements) {
+        final tripId = stl['trip_id'] as String? ?? stl['tripId'] as String?;
+        if (tripId != null && tripId.isNotEmpty) {
+          final existingStl = _storage.getSavedTripSettlements(tripId);
+          final stlId = stl['id'] as String;
+          final isDeleted = stl['is_deleted'] == true || stl['isDeleted'] == true;
+          existingStl.removeWhere((s) => s['id'] == stlId);
+          if (!isDeleted) {
+            existingStl.insert(0, stl);
+          }
+          await _storage.saveTripSettlements(tripId, existingStl);
+          totalReceived++;
+        }
+      }
+
+      // Reconcile modified personal expenses
+      final modifiedPE = deltas['modifiedPersonalExpenses'] as List<Map<String, dynamic>>? ?? [];
+      if (modifiedPE.isNotEmpty) {
+        final existingPE = _storage.getSavedPersonalExpenses();
+        final peMap = {for (final pe in existingPE) pe['id']: pe};
+        for (final pe in modifiedPE) {
+          if (pe['is_deleted'] == true) {
+            peMap.remove(pe['id']);
+          } else {
+            peMap[pe['id']] = pe;
+          }
+        }
+        await _storage.savePersonalExpenses(peMap.values.toList());
+        totalReceived += modifiedPE.length;
+      }
+
+      // Reconcile modified personal debts
+      final modifiedPD = deltas['modifiedPersonalDebts'] as List<Map<String, dynamic>>? ?? [];
+      if (modifiedPD.isNotEmpty) {
+        final existingPD = _storage.getSavedPersonalDebts();
+        final pdMap = {for (final pd in existingPD) pd['id']: pd};
+        for (final pd in modifiedPD) {
+          if (pd['is_deleted'] == true) {
+            pdMap.remove(pd['id']);
+          } else {
+            pdMap[pd['id']] = pd;
+          }
+        }
+        await _storage.savePersonalDebts(pdMap.values.toList());
+        totalReceived += modifiedPD.length;
+      }
+
+      // Update sync cursor
+      await _storage.setString('kith_last_sync_cursor_$accountId', DateTime.now().toIso8601String());
+      _setStatus(SyncStatus.synced);
+
+      sources.add(SyncSourceResult(
+        name: 'Kith Authoritative Cloud (Supabase)',
+        type: SyncSourceType.cloud,
+        status: 'synced',
+        changesSent: totalSent,
+        changesReceived: totalReceived,
+        isSuccess: true,
+      ));
+    } catch (e) {
+      debugPrint('[SyncService] Cloud reconciliation notice: $e');
+      _setStatus(SyncStatus.error);
+      sources.add(SyncSourceResult(
+        name: 'Kith Authoritative Cloud (Supabase)',
+        type: SyncSourceType.cloud,
+        status: 'failed',
+        errorMessage: e.toString(),
+        isSuccess: false,
+      ));
+    }
+
+    return TripSyncReport(
+      tripId: 'all_trips',
+      timestamp: DateTime.now(),
+      sources: sources,
+      totalChangesSent: totalSent,
+      totalChangesReceived: totalReceived,
+      pendingChangesCount: pendingCount,
+      isFullySynced: pendingCount == 0,
+    );
+  }
+
   void _promoteLocalTripLifecycle(String tripId, String targetLifecycle) {
     try {
       final trips = _storage.getSavedTrips();
@@ -826,6 +973,52 @@ class SyncService {
 
   Future<void> _executeMutation(ApiClient apiClient, SyncMutation mutation) async {
     final payload = mutation.payload;
+    final user = _storage.getSavedUser();
+    final accountId = user?['accountId'] as String? ?? user?['id'] as String? ?? 'guest_acc';
+
+    // 1. Authoritative Supabase Cloud Sync Direct Push
+    if (_cloudSync.isAvailable) {
+      try {
+        switch (mutation.type) {
+          case MutationType.createTrip:
+          case MutationType.joinTrip:
+            await _cloudSync.syncTrip(payload, accountId: accountId);
+            break;
+          case MutationType.addExpense:
+          case MutationType.updateExpense:
+            await _cloudSync.syncExpense(payload, accountId: accountId);
+            break;
+          case MutationType.deleteExpense:
+            final tripId = mutation.payload['tripId'] as String? ?? '';
+            final expenseId = payload['id'] as String? ?? payload['expenseId'] as String? ?? '';
+            if (expenseId.isNotEmpty) {
+              await _cloudSync.markExpenseDeleted(expenseId, tripId);
+            }
+            break;
+          case MutationType.recordTripSettlement:
+          case MutationType.confirmTripSettlement:
+          case MutationType.disputeTripSettlement:
+          case MutationType.submitSettlementProof:
+            await _cloudSync.syncSettlement(payload, accountId: accountId);
+            break;
+          case MutationType.createPersonalExpense:
+          case MutationType.updatePersonalExpense:
+            await _cloudSync.syncPersonalExpense(payload, accountId: accountId);
+            break;
+          case MutationType.createPersonalDebt:
+          case MutationType.updatePersonalDebt:
+          case MutationType.recordPersonalRepayment:
+            await _cloudSync.syncPersonalDebt(payload, accountId: accountId);
+            break;
+          default:
+            break;
+        }
+      } catch (e) {
+        debugPrint('[SyncService] Direct Supabase push notice: $e');
+      }
+    }
+
+    // 2. Secondary API Client fallback
 
     switch (mutation.type) {
       case MutationType.createTrip:

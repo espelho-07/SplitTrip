@@ -1,7 +1,8 @@
 /// Guest & Authenticated User entity.
-/// Supports server-side anonymous recovery and account-linking.
+/// Supports server-side anonymous recovery, logical account ownership, and account-linking.
 class GuestUser {
   final String id;
+  final String? accountId;
   final String displayName;
   final String? avatarUrl;
   final String recoveryKey;
@@ -13,6 +14,9 @@ class GuestUser {
   final String? googleId;
   final String? upiId;
   final String? upiQr;
+
+  /// Returns the canonical logical account ID (defaults to user ID if not explicitly partitioned)
+  String get effectiveAccountId => (accountId != null && accountId!.isNotEmpty) ? accountId! : id;
 
   bool get isNirniqLinked =>
       (nirniqId != null && nirniqId!.isNotEmpty) ||
@@ -26,6 +30,7 @@ class GuestUser {
 
   const GuestUser({
     required this.id,
+    this.accountId,
     required this.displayName,
     this.avatarUrl,
     required this.recoveryKey,
@@ -41,6 +46,7 @@ class GuestUser {
 
   GuestUser copyWith({
     String? id,
+    String? accountId,
     String? displayName,
     String? avatarUrl,
     String? recoveryKey,
@@ -55,6 +61,7 @@ class GuestUser {
   }) {
     return GuestUser(
       id: id ?? this.id,
+      accountId: accountId ?? this.accountId,
       displayName: displayName ?? this.displayName,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       recoveryKey: recoveryKey ?? this.recoveryKey,
@@ -71,6 +78,7 @@ class GuestUser {
 
   Map<String, dynamic> toJson() => {
     'id': id,
+    'accountId': accountId ?? effectiveAccountId,
     'displayName': displayName,
     'avatarUrl': avatarUrl,
     'recoveryKey': recoveryKey,
@@ -105,13 +113,14 @@ class GuestUser {
 
     return GuestUser(
       id: json['id'] as String,
-      displayName: json['displayName'] as String,
-      avatarUrl: json['avatarUrl'] as String?,
+      accountId: json['accountId'] as String? ?? json['account_id'] as String?,
+      displayName: json['displayName'] as String? ?? json['display_name'] as String? ?? 'Traveler',
+      avatarUrl: json['avatarUrl'] as String? ?? json['avatar_url'] as String?,
       recoveryKey: validKey,
       anonymousToken: json['anonymousToken'] as String? ?? json['token'] as String? ?? json['sessionToken'] as String? ?? 'anon_token',
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'] as String)
-          : DateTime.now(),
+          : (json['created_at'] != null ? DateTime.parse(json['created_at'] as String) : DateTime.now()),
       isLinkedToAccount: json['isLinkedToAccount'] as bool? ?? false,
       email: json['email'] as String?,
       nirniqId: nirniqId,
