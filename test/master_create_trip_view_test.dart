@@ -85,7 +85,7 @@ void main() {
   }
 
   group('Master CreateTripView Suite', () {
-    testWidgets('1. Renders clean New Trip top bar, experience mode, currency, and create button', (tester) async {
+    testWidgets('1. Renders clean minimal Create Trip top bar, Trip name, Who is coming, Currency, and Create Trip button', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -93,10 +93,11 @@ void main() {
       await tester.pumpWidget(buildCreateTripTestWidget());
       await tester.pumpAndSettle();
 
-      expect(find.text('Create New Trip'), findsOneWidget);
-      expect(find.text('EXPERIENCE MODE'), findsOneWidget);
-      expect(find.text('BASE CURRENCY'), findsOneWidget);
-      expect(find.text('Create Trip'), findsOneWidget);
+      expect(find.text('Create Trip'), findsNWidgets(2)); // AppBar title + button
+      expect(find.text('Trip name'), findsOneWidget);
+      expect(find.text("Who's coming?"), findsOneWidget);
+      expect(find.text('Currency'), findsOneWidget);
+      expect(find.text('₹ INR'), findsOneWidget);
     });
 
     testWidgets('2. Entering trip name and picking emoji reactively updates state', (tester) async {
@@ -125,22 +126,7 @@ void main() {
       expect(createVm.emoji, '🏖️');
     });
 
-    testWidgets('3. Selecting Experience Mode updates mode selection', (tester) async {
-      tester.view.physicalSize = const Size(1080, 2400);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-
-      await tester.pumpWidget(buildCreateTripTestWidget());
-      await tester.pumpAndSettle();
-
-      final splitOnly = find.text('Split Only').first;
-      await tester.tap(splitOnly);
-      await tester.pumpAndSettle();
-
-      expect(createVm.tripMode, 'split_only');
-    });
-
-    testWidgets('4. Selecting Currency updates currency code chip', (tester) async {
+    testWidgets('3. Selecting Currency updates currency code chip', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -155,7 +141,7 @@ void main() {
       expect(createVm.currencyCode, 'USD');
     });
 
-    testWidgets('5. Adding and removing friends updates crew list', (tester) async {
+    testWidgets('4. Adding and removing friends updates crew list', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -163,20 +149,16 @@ void main() {
       await tester.pumpWidget(buildCreateTripTestWidget());
       await tester.pumpAndSettle();
 
-      expect(find.text('Friends can scan your trip QR code right after creation to join instantly.'), findsOneWidget);
+      expect(find.text('You (Admin)'), findsOneWidget);
 
-      // Expand manual friends
-      await tester.tap(find.text('Add friend manually (offline/non-app member)'));
-      await tester.pumpAndSettle();
-
-      final friendField = find.widgetWithText(TextField, 'e.g. Rahul, Priya, Vikram...');
+      final friendField = find.widgetWithText(TextField, 'Add friend name (e.g. Rahul)');
       await tester.enterText(friendField, 'Ananya');
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
 
       expect(find.text('Ananya'), findsOneWidget);
 
-      final removeIcon = find.byIcon(Icons.close_rounded);
+      final removeIcon = find.byIcon(Icons.close_rounded).first;
       await tester.tap(removeIcon);
       await tester.pumpAndSettle();
 

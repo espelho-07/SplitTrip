@@ -13,6 +13,7 @@ class Expense {
   final String paidById;
   final List<ExpenseSplit> splits;
   final SplitType splitType;
+  final String? location;
   final String? receiptUrl;
   final String? voiceTranscript;
   final DateTime createdAt;
@@ -28,6 +29,7 @@ class Expense {
     required this.paidById,
     required this.splits,
     this.splitType = SplitType.equal,
+    this.location,
     this.receiptUrl,
     this.voiceTranscript,
     required this.createdAt,
@@ -44,6 +46,7 @@ class Expense {
     String? paidById,
     List<ExpenseSplit>? splits,
     SplitType? splitType,
+    String? location,
     String? receiptUrl,
     String? voiceTranscript,
     DateTime? createdAt,
@@ -59,6 +62,7 @@ class Expense {
       paidById: paidById ?? this.paidById,
       splits: splits ?? this.splits,
       splitType: splitType ?? this.splitType,
+      location: location ?? this.location,
       receiptUrl: receiptUrl ?? this.receiptUrl,
       voiceTranscript: voiceTranscript ?? this.voiceTranscript,
       createdAt: createdAt ?? this.createdAt,
@@ -76,6 +80,7 @@ class Expense {
     'paidById': paidById,
     'splits': splits.map((s) => s.toJson()).toList(),
     'splitType': splitType.name,
+    if (location != null && location!.isNotEmpty) 'location': location,
     'receiptUrl': receiptUrl,
     'voiceTranscript': voiceTranscript,
     'createdAt': createdAt.toIso8601String(),
@@ -95,13 +100,14 @@ class Expense {
             .toList() ??
         [],
     splitType: SplitType.fromString(json['splitType'] as String? ?? 'equal'),
+    location: json['location'] as String?,
     receiptUrl: json['receiptUrl'] as String?,
     voiceTranscript: json['voiceTranscript'] as String?,
     createdAt: json['createdAt'] != null
-        ? DateTime.parse(json['createdAt'] as String)
+        ? DateTime.tryParse(json['createdAt'] as String) ?? DateTime.now()
         : DateTime.now(),
     updatedAt: json['updatedAt'] != null
-        ? DateTime.parse(json['updatedAt'] as String)
+        ? DateTime.tryParse(json['updatedAt'] as String) ?? DateTime.now()
         : DateTime.now(),
     isDeleted: json['isDeleted'] as bool? ?? false,
   );

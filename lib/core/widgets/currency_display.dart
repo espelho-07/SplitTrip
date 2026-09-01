@@ -78,11 +78,14 @@ class CurrencyDisplay extends StatelessWidget {
         break;
     }
 
-    return Text(
-      formatted,
-      style: style,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Text(
+        formatted,
+        style: style,
+        maxLines: 1,
+      ),
     );
   }
 }

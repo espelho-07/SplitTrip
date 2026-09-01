@@ -57,7 +57,7 @@ enum ExpenseCategory {
       case ExpenseCategory.transport:
         return '🚆';
       case ExpenseCategory.food:
-        return '🍕';
+        return '🍔';
       case ExpenseCategory.stay:
         return '🏨';
       case ExpenseCategory.drinks:
@@ -76,7 +76,7 @@ enum ExpenseCategory {
   IconData get icon {
     switch (this) {
       case ExpenseCategory.transport:
-        return Icons.train_outlined;
+        return Icons.directions_car_outlined;
       case ExpenseCategory.food:
         return Icons.restaurant_outlined;
       case ExpenseCategory.stay:
@@ -113,6 +113,89 @@ enum ExpenseCategory {
       case ExpenseCategory.general:
         return const Color(0xFF6B7280); // Gray
     }
+  }
+
+  /// Intelligently predicts an appropriate ExpenseCategory based on title keywords.
+  static ExpenseCategory? predictFromTitle(String? title) {
+    if (title == null || title.trim().isEmpty) return null;
+    final lower = title.toLowerCase();
+
+    // Drinks / Cafe keywords (Checked first so cafe/chai/coffee takes priority over snacks)
+    if (_matches(lower, [
+      'drink', 'drinks', 'beer', 'wine', 'bar', 'cocktail', 'cocktails',
+      'pub', 'starbucks', 'boba', 'juice', 'daru', 'alcohol', 'liquor',
+      'coffee', 'cafe', 'chai', 'tea', 'tapri', 'brewery', 'mocktail'
+    ])) {
+      return ExpenseCategory.drinks;
+    }
+
+    // Food keywords
+    if (_matches(lower, [
+      'dinner', 'lunch', 'breakfast', 'brunch', 'burger', 'pizza', 'biryani',
+      'swiggy', 'zomato', "domino's", 'dominos', 'mcdonald', 'kfc', 'subway',
+      'restaurant', 'dhaba', 'food', 'khana', 'snack', 'thali', 'roti',
+      'paneer', 'chicken', 'dosa', 'samosa', 'chaat', 'dessert', 'bakery',
+      'sweet', 'sweets', 'ice cream', 'icecream'
+    ])) {
+      return ExpenseCategory.food;
+    }
+
+    // Transport / Fuel keywords
+    if (_matches(lower, [
+      'petrol', 'fuel', 'diesel', 'cng', 'uber', 'ola', 'cab', 'taxi',
+      'flight', 'airfare', 'indigo', 'air india', 'spicejet', 'vistara',
+      'train', 'irctc', 'railway', 'metro', 'bus', 'toll', 'fastag',
+      'parking', 'auto', 'rickshaw', 'rapido', 'ferry', 'boat ride',
+      'scooter rent', 'car rent', 'car rental', 'bike rental'
+    ])) {
+      return ExpenseCategory.transport;
+    }
+
+    // Stay / Hotel keywords
+    if (_matches(lower, [
+      'hotel', 'resort', 'airbnb', 'stay', 'room', 'hostel', 'lodge',
+      'villa', 'oyo', 'taj', 'marriott', 'hyatt', 'radisson', 'booking.com',
+      'homestay', 'guesthouse', 'cottage', 'tent', 'campsite'
+    ])) {
+      return ExpenseCategory.stay;
+    }
+
+    // Activities / Entertainment keywords
+    if (_matches(lower, [
+      'ticket', 'tickets', 'entry', 'movie', 'cinema', 'museum', 'theme park',
+      'water park', 'boating', 'scuba', 'diving', 'trekking', 'safari',
+      'bowling', 'game', 'arcade', 'pass', 'concert', 'show', 'amusement',
+      'rafting', 'bungee', 'kayaking', 'sightseeing'
+    ])) {
+      return ExpenseCategory.activities;
+    }
+
+    // Groceries keywords
+    if (_matches(lower, [
+      'groceries', 'grocery', 'supermarket', 'blinkit', 'zepto', 'instamart',
+      'dmart', 'bigbasket', 'milk', 'vegetables', 'veggies', 'fruits',
+      'water bottle', 'water cans', 'ration', 'eggs', 'bread', 'kirana'
+    ])) {
+      return ExpenseCategory.groceries;
+    }
+
+    // Shopping keywords
+    if (_matches(lower, [
+      'shopping', 'clothes', 'zara', 'h&m', 'mall', 'shoes', 'souvenir',
+      'souvenirs', 'gift', 'gifts', 'amazon', 'flipkart', 'myntra',
+      'uniqlo', 'dress', 'shirt', 'sunglasses', 't-shirt'
+    ])) {
+      return ExpenseCategory.shopping;
+    }
+
+    return null;
+  }
+
+  static bool _matches(String text, List<String> keywords) {
+    for (final kw in keywords) {
+      if (text.contains(kw)) return true;
+    }
+    return false;
   }
 
   static ExpenseCategory fromString(String value) {

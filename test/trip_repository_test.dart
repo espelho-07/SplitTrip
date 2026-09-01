@@ -78,19 +78,27 @@ void main() {
       expect(joinedTrip.members.any((m) => m.userId == 'usr_friend'), isTrue);
     });
 
-    test('Updates trip lifecycle state from active to completed', () async {
+    test('Updates trip lifecycle state from active to completing when offline mutations pending', () async {
       final trip = await tripRepo.createTrip(
         name: 'Weekend Getaway',
         creator: creator,
       );
 
-      final updated = await tripRepo.updateLifecycle(
+      // 1. With pending offline mutations -> transitions to completing
+      final updatedOffline = await tripRepo.updateLifecycle(
         tripId: trip.id,
         newLifecycle: TripLifecycle.completed,
       );
+      expect(updatedOffline.lifecycleState, TripLifecycle.completing);
 
-      expect(updated.lifecycleState, TripLifecycle.completed);
-      expect(updated.lifecycleState.isLocked, isTrue);
+      // 2. Clear outbox queue -> transitions directly to completed
+      await storage.saveMutationQueue([]);
+      final updatedClean = await tripRepo.updateLifecycle(
+        tripId: trip.id,
+        newLifecycle: TripLifecycle.completed,
+      );
+      expect(updatedClean.lifecycleState, TripLifecycle.completed);
+      expect(updatedClean.lifecycleState.isLocked, isTrue);
     });
   });
 }

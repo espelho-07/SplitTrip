@@ -56,6 +56,7 @@ class AddExpenseView extends StatefulWidget {
 class _AddExpenseViewState extends State<AddExpenseView> {
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _locationController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
   bool _isLoadingTrip = true;
 
@@ -104,6 +105,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
           widget.existingExpense!.amountInPaise % 100 == 0 ? 0 : 2,
         );
         _selectedDate = widget.existingExpense!.createdAt;
+        if (widget.existingExpense!.location != null) _locationController.text = widget.existingExpense!.location!;
       } else if (widget.initialMemberId != null || widget.initialPersonName != null || widget.initialTitle != null || widget.initialAmountInPaise != null) {
         // Resolve member id from person name if not provided
         String? targetMemberId = widget.initialMemberId;
@@ -139,6 +141,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
   void dispose() {
     _amountController.dispose();
     _titleController.dispose();
+    _locationController.dispose();
     super.dispose();
   }
 
@@ -597,6 +600,55 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                       HapticHelper.light();
                       _titleController.clear();
                       addVm.setTitle('');
+                    },
+                    child: Icon(Icons.close_rounded, size: 16, color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                  ),
+              ],
+            ),
+          ),
+
+          Divider(
+            height: 1,
+            thickness: 0.8,
+            color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+          ),
+
+          // Where / Location Field (Merchant / Place)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.location_on_outlined,
+                  color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                  size: 19,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: _locationController,
+                    textCapitalization: TextCapitalization.words,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    ),
+                    decoration: KithInputDecoration.borderless(
+                      hintText: 'Where? (e.g. Starbucks, Airport)',
+                      hintStyle: TextStyle(
+                        color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                        fontSize: 13.5,
+                      ),
+                    ),
+                    onChanged: (val) => addVm.setLocation(val),
+                  ),
+                ),
+                if (_locationController.text.isNotEmpty)
+                  GestureDetector(
+                    onTap: () {
+                      HapticHelper.light();
+                      _locationController.clear();
+                      addVm.setLocation('');
                     },
                     child: Icon(Icons.close_rounded, size: 16, color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
                   ),

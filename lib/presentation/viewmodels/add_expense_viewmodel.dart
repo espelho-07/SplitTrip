@@ -25,6 +25,8 @@ class AddExpenseViewModel extends ChangeNotifier {
   String _title = '';
   int _amountInPaise = 0;
   ExpenseCategory _category = ExpenseCategory.general;
+  bool _userExplicitlySelectedCategory = false;
+  String _location = '';
   String _paidById = '';
   SplitType _splitType = SplitType.equal;
 
@@ -54,6 +56,8 @@ class AddExpenseViewModel extends ChangeNotifier {
   String get title => _title;
   int get amountInPaise => _amountInPaise;
   ExpenseCategory get category => _category;
+  bool get userExplicitlySelectedCategory => _userExplicitlySelectedCategory;
+  String get location => _location;
   String get paidById => _paidById;
   SplitType get splitType => _splitType;
   Set<String> get selectedParticipantMemberIds => _selectedParticipantMemberIds;
@@ -92,6 +96,8 @@ class AddExpenseViewModel extends ChangeNotifier {
     _title = '';
     _amountInPaise = 0;
     _category = ExpenseCategory.general;
+    _userExplicitlySelectedCategory = false;
+    _location = '';
     _splitType = SplitType.equal;
 
     // Default payer to current user
@@ -134,12 +140,17 @@ class AddExpenseViewModel extends ChangeNotifier {
     init(trip: trip, currentUserId: currentUserId);
     if (initialTitle != null && initialTitle.isNotEmpty) {
       _title = initialTitle;
+      final predicted = ExpenseCategory.predictFromTitle(initialTitle);
+      if (predicted != null && category == null) {
+        _category = predicted;
+      }
     }
     if (initialAmountInPaise != null && initialAmountInPaise > 0) {
       _amountInPaise = initialAmountInPaise;
     }
     if (category != null) {
       _category = category;
+      _userExplicitlySelectedCategory = true;
     }
     if (splitType != null) {
       _splitType = splitType;
@@ -170,6 +181,8 @@ class AddExpenseViewModel extends ChangeNotifier {
     _title = expense.title;
     _amountInPaise = expense.amountInPaise;
     _category = expense.category;
+    _userExplicitlySelectedCategory = true;
+    _location = expense.location ?? '';
     _paidById = expense.paidById;
     _splitType = expense.splitType;
     _currentTab = 2; // Manual edit tab
@@ -202,8 +215,14 @@ class AddExpenseViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setTitle(String value) {
+  void setTitle(String value, {bool autoPredictCategory = true}) {
     _title = value;
+    if (autoPredictCategory && !_userExplicitlySelectedCategory) {
+      final predicted = ExpenseCategory.predictFromTitle(value);
+      if (predicted != null) {
+        _category = predicted;
+      }
+    }
     notifyListeners();
   }
 
@@ -212,8 +231,16 @@ class AddExpenseViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setCategory(ExpenseCategory cat) {
+  void setCategory(ExpenseCategory cat, {bool explicit = true}) {
     _category = cat;
+    if (explicit) {
+      _userExplicitlySelectedCategory = true;
+    }
+    notifyListeners();
+  }
+
+  void setLocation(String value) {
+    _location = value;
     notifyListeners();
   }
 
@@ -336,6 +363,7 @@ class AddExpenseViewModel extends ChangeNotifier {
       _title = draft.title;
     }
     _category = draft.category;
+    _userExplicitlySelectedCategory = true;
     _splitType = draft.splitType;
 
     if (draft.payerMemberId != null && draft.payerMemberId!.isNotEmpty) {
@@ -427,6 +455,7 @@ class AddExpenseViewModel extends ChangeNotifier {
           title: _title.trim(),
           amountInPaise: _amountInPaise,
           category: _category,
+          location: _location.trim().isNotEmpty ? _location.trim() : null,
           paidById: _paidById,
           splits: splits,
           splitType: _splitType,
@@ -444,6 +473,7 @@ class AddExpenseViewModel extends ChangeNotifier {
           title: _title.trim(),
           amountInPaise: _amountInPaise,
           category: _category,
+          location: _location.trim().isNotEmpty ? _location.trim() : null,
           paidById: _paidById,
           splits: splits,
           splitType: _splitType,
