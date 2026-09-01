@@ -51,8 +51,8 @@ object KithNotificationHelper {
             }
             notificationManager.createNotificationChannel(paymentsChannel)
 
-            // 2. Expenses channel (DEFAULT Priority)
-            val expensesChannel = NotificationChannel(CHANNEL_ID_EXPENSES, CHANNEL_NAME_EXPENSES, NotificationManager.IMPORTANCE_DEFAULT).apply {
+            // 2. Expenses channel (HIGH Priority for closed-app heads-up delivery)
+            val expensesChannel = NotificationChannel(CHANNEL_ID_EXPENSES, CHANNEL_NAME_EXPENSES, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "New expense alerts, edits, and split updates"
                 enableLights(true)
                 enableVibration(true)
@@ -61,8 +61,8 @@ object KithNotificationHelper {
             }
             notificationManager.createNotificationChannel(expensesChannel)
 
-            // 3. Trips & Members channel (DEFAULT Priority)
-            val tripsChannel = NotificationChannel(CHANNEL_ID_TRIPS, CHANNEL_NAME_TRIPS, NotificationManager.IMPORTANCE_DEFAULT).apply {
+            // 3. Trips & Members channel (HIGH Priority)
+            val tripsChannel = NotificationChannel(CHANNEL_ID_TRIPS, CHANNEL_NAME_TRIPS, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "Trip invites, member join alerts, and trip status updates"
                 enableLights(true)
                 enableVibration(true)
@@ -71,8 +71,8 @@ object KithNotificationHelper {
             }
             notificationManager.createNotificationChannel(tripsChannel)
 
-            // 4. Activity channel (DEFAULT Priority)
-            val activityChannel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_DEFAULT).apply {
+            // 4. Activity channel (HIGH Priority)
+            val activityChannel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "General collaboration and balance updates"
                 enableLights(true)
                 enableVibration(true)
@@ -81,8 +81,8 @@ object KithNotificationHelper {
             }
             notificationManager.createNotificationChannel(activityChannel)
 
-            // 5. IPO channel (DEFAULT Priority)
-            val ipoChannel = NotificationChannel(CHANNEL_ID_IPO, CHANNEL_NAME_IPO, NotificationManager.IMPORTANCE_DEFAULT).apply {
+            // 5. IPO channel (HIGH Priority)
+            val ipoChannel = NotificationChannel(CHANNEL_ID_IPO, CHANNEL_NAME_IPO, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "IPO bidding reminders, allotment status, and listing alerts"
                 enableLights(true)
                 enableVibration(true)

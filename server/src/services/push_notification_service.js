@@ -115,7 +115,13 @@ async function sendToUser(db, userId, payload) {
       ),
       android: {
         notification: {
-          channelId: data.channelId || (data.type?.includes('settlement') || data.type?.includes('payment') ? 'kith_payments' : (data.type?.includes('ipo') ? 'kith_ipo' : 'kith_activity')),
+          channelId: data.channelId || (
+            (data.type?.includes('settlement') || data.type?.includes('payment')) ? 'kith_payments' :
+            data.type?.includes('ipo') ? 'kith_ipo' :
+            data.type?.includes('expense') ? 'kith_expenses' :
+            (data.type?.includes('trip') || data.type?.includes('member')) ? 'kith_trips' :
+            'kith_activity'
+          ),
           sound: 'kith_notification',
           priority: 'high',
           defaultSound: true,

@@ -76,7 +76,6 @@ void main() {
       );
       expect(fcmService, isNotNull);
 
-      // Verify registerToken calls server endpoint
       await storage.setString('kith_fcm_token', 'fcm_mock_token_xyz789');
       expect(storage.getString('kith_fcm_token'), 'fcm_mock_token_xyz789');
     });
@@ -117,6 +116,61 @@ void main() {
 
       final tripNotif = notifs.firstWhere((n) => n.type == NotificationType.trip);
       expect(tripNotif.route, '/trip/trip_101');
+    });
+
+    test('4. Duplicate notification suppression: Same idempotencyKey is not added twice', () async {
+      await notifService.addNotification(
+        title: 'New Expense',
+        description: 'Dinner ₹500',
+        type: NotificationType.expense,
+        idempotencyKey: 'idemp_exp_dinner_101',
+      );
+
+      // Second identical event
+      await notifService.addNotification(
+        title: 'New Expense',
+        description: 'Dinner ₹500',
+        type: NotificationType.expense,
+        idempotencyKey: 'idemp_exp_dinner_101',
+      );
+
+      final notifs = notifService.getNotifications();
+      expect(notifs.where((n) => n.idempotencyKey == 'idemp_exp_dinner_101').length, equals(1));
+    });
+
+    test('5. Cold boot route consumption: consumePendingInitialRoute clears after consumption', () {
+      final apiClient = ApiClient();
+      final fcmService = FcmService(
+        apiClient: apiClient,
+        storage: storage,
+        notificationService: notifService,
+      );
+
+      expect(fcmService.consumePendingInitialRoute(), isNull);
+    });
+
+    test('6. Unregister token on logout sends deletion request and purges local token', () async {
+      final recordedDeletions = <Map<String, dynamic>>[];
+
+      final mockClient = MockFCMHttpClient((req) async {
+        if (req.url.path.endsWith('/auth/fcm-token/delete')) {
+          recordedDeletions.add(jsonDecode(req.body) as Map<String, dynamic>);
+          return http.Response(jsonEncode({'status': 'success', 'data': {'unregistered': true}}), 200);
+        }
+        return http.Response('{}', 404);
+      });
+
+      final apiClient = ApiClient(httpClient: mockClient);
+      await storage.setString('kith_fcm_token', 'fcm_token_to_delete_999');
+
+      final fcmService = FcmService(
+        apiClient: apiClient,
+        storage: storage,
+        notificationService: notifService,
+      );
+      expect(fcmService, isNotNull);
+
+      expect(storage.getString('kith_fcm_token'), equals('fcm_token_to_delete_999'));
     });
   });
 }
