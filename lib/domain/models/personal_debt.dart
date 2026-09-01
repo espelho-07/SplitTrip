@@ -202,3 +202,37 @@ class PersonalDebtsSummary {
     );
   }
 }
+
+/// Aggregated, unified person relationship ledger summary (WhatsApp-style single thread per contact).
+class PersonRelationshipSummary {
+  final String personName;
+  final String? personUserId;
+  final int totalLentPaise;
+  final int totalBorrowedPaise;
+  final int netBalancePaise; // totalLentPaise - totalBorrowedPaise
+  final int unsettledLentPaise;
+  final int unsettledBorrowedPaise;
+  final int activeRemainingPaise;
+  final int transactionCount;
+  final DateTime lastActivityDate;
+  final String? lastNote;
+  final bool isSettled;
+  final List<PersonalDebt> debts;
+
+  const PersonRelationshipSummary({
+    required this.personName,
+    this.personUserId,
+    required this.totalLentPaise,
+    required this.totalBorrowedPaise,
+    required this.netBalancePaise,
+    required this.unsettledLentPaise,
+    required this.unsettledBorrowedPaise,
+    required this.activeRemainingPaise,
+    required this.transactionCount,
+    required this.lastActivityDate,
+    this.lastNote,
+    required this.isSettled,
+    required this.debts,
+  });
+}
+

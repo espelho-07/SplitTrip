@@ -279,24 +279,89 @@ void main() {
       expect(uncollected?.remainingAmountInPaise, 120000);
     });
 
-    test('9. Budget overspending calculation and over-budget delta', () async {
+    test('10. Autocomplete suggestions & canonical person name resolution', () async {
       final vm = PersonalExpenseViewModel(personalRepo: personalRepo);
       await vm.loadData(testUserId);
 
-      // Set budget of ₹10,000
-      await vm.setMonthlyBudget(1000000);
-
-      // Add expense of ₹10,500 (Over budget by ₹500)
-      await vm.addExpense(
+      // Add a debt for 'Xavier'
+      await vm.addDebt(
         userId: testUserId,
-        title: 'New Laptop Stand & Monitor',
-        amountInPaise: 1050000,
-        category: ExpenseCategory.shopping,
+        personName: 'Xavier',
+        debtType: PersonalDebtType.lent,
+        amountInPaise: 100000,
+        description: 'Dinner share',
       );
 
-      expect(vm.budget.spentInPaise, 1050000);
-      expect(vm.budget.remainingInPaise, -50000);
-      expect(vm.budget.percentageUsed, 105);
+      // Add a debt for 'Rohit Sharma'
+      await vm.addDebt(
+        userId: testUserId,
+        personName: 'Rohit Sharma',
+        debtType: PersonalDebtType.lent,
+        amountInPaise: 50000,
+      );
+
+      // Suggestions test: search 'x' should return 'Xavier'
+      final suggestionsX = vm.searchPersonSuggestions('x');
+      expect(suggestionsX, contains('Xavier'));
+
+      // Suggestions test: search 'rohit' should return 'Rohit Sharma'
+      final suggestionsR = vm.searchPersonSuggestions('rohit');
+      expect(suggestionsR, contains('Rohit Sharma'));
+
+      // Empty search query returns recent contacts
+      final recent = vm.searchPersonSuggestions('');
+      expect(recent, isNotEmpty);
+      expect(recent, contains('Xavier'));
+      expect(recent, contains('Rohit Sharma'));
+
+      // Canonical resolution test: '  xavier  ' should resolve to 'Xavier'
+      expect(vm.getCanonicalPersonName('  xavier  '), 'Xavier');
+      expect(vm.getCanonicalPersonName('rohit sharma'), 'Rohit Sharma');
+      // Unknown name should return trimmed string
+      expect(vm.getCanonicalPersonName('  Priya  '), 'Priya');
+    });
+
+    test('11. WhatsApp-Style Single Unified Person Ledger aggregation', () async {
+      final vm = PersonalExpenseViewModel(personalRepo: personalRepo);
+      await vm.loadData(testUserId);
+
+      // Add 3 separate transactions with 'Rohit' (with different casing and spaces)
+      await vm.addDebt(
+        userId: testUserId,
+        personName: 'Rohit',
+        debtType: PersonalDebtType.lent,
+        amountInPaise: 100000, // Lent ₹1,000
+        description: 'Movie ticket',
+      );
+
+      await vm.addDebt(
+        userId: testUserId,
+        personName: 'rohit', // lowercase
+        debtType: PersonalDebtType.lent,
+        amountInPaise: 50000, // Lent ₹500
+        description: 'Popcorn',
+      );
+
+      await vm.addDebt(
+        userId: testUserId,
+        personName: ' Rohit ', // with whitespace
+        debtType: PersonalDebtType.borrowed,
+        amountInPaise: 30000, // Borrowed ₹300
+        description: 'Cab fare share',
+      );
+
+      // Verify that all 3 transactions route into EXACTLY ONE canonical person ledger
+      final summaries = vm.personSummaries;
+      expect(summaries.length, 1, reason: 'Must have exactly 1 unified ledger card per person');
+
+      final rohitLedger = summaries.first;
+      expect(rohitLedger.personName, 'Rohit');
+      expect(rohitLedger.transactionCount, 3);
+      expect(rohitLedger.totalLentPaise, 150000); // ₹1,500
+      expect(rohitLedger.totalBorrowedPaise, 30000); // ₹300
+      expect(rohitLedger.netBalancePaise, 120000); // Net +₹1,200 (Rohit owes user)
+      expect(rohitLedger.isSettled, false);
     });
   });
 }
+

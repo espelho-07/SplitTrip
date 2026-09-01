@@ -550,21 +550,117 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
 
               const SizedBox(height: AppSpacing.md),
 
-              // Person Name (For Lent / Borrowed)
+              // Person Name (For Lent / Borrowed) with Live Contact Suggestions
               if (_mode == PersonalEntryMode.lent || _mode == PersonalEntryMode.borrowed) ...[
                 TextField(
                   controller: _personController,
                   textCapitalization: TextCapitalization.words,
+                  onChanged: (_) => setState(() {}),
                   style: AppTypography.bodyLarge(isDark: isDark),
                   decoration: KithInputDecoration.borderless(
                     isDark: isDark,
                     labelText: _mode == PersonalEntryMode.lent ? 'Who owes you?' : 'Who did you borrow from?',
-                    hintText: 'Enter name (e.g. Rahul)',
+                    hintText: 'Enter name (e.g. Rahul, Rohit)',
                     prefixIcon: const Icon(Icons.person_outline_rounded, size: 20),
+                    suffixIcon: _personController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear_rounded, size: 18),
+                            onPressed: () {
+                              _personController.clear();
+                              setState(() {});
+                            },
+                          )
+                        : null,
                     fillColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
                   ),
                 ),
-                const SizedBox(height: AppSpacing.md),
+                Builder(
+                  builder: (context) {
+                    final personalVm = context.watch<PersonalExpenseViewModel>();
+                    final suggestions = personalVm.searchPersonSuggestions(_personController.text);
+                    if (suggestions.isEmpty) return const SizedBox(height: AppSpacing.md);
+
+                    final isSearching = _personController.text.trim().isNotEmpty;
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Icon(
+                              isSearching ? Icons.search_rounded : Icons.history_rounded,
+                              size: 13,
+                              color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              isSearching ? 'Matching contacts (tap to use)' : 'Recent contacts',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: suggestions.map((name) {
+                              final isSelected = _personController.text.trim().toLowerCase() == name.trim().toLowerCase();
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 6),
+                                child: ActionChip(
+                                  avatar: CircleAvatar(
+                                    radius: 10,
+                                    backgroundColor: isSelected
+                                        ? AppColors.emeraldPrimary
+                                        : (isDark ? Colors.white24 : Colors.black12),
+                                    child: Text(
+                                      name.isNotEmpty ? name[0].toUpperCase() : '?',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: isSelected ? Colors.white : (isDark ? Colors.white : Colors.black87),
+                                      ),
+                                    ),
+                                  ),
+                                  label: Text(
+                                    name,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                      color: isSelected
+                                          ? AppColors.emeraldPrimary
+                                          : (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
+                                    ),
+                                  ),
+                                  backgroundColor: isSelected
+                                      ? AppColors.emeraldPrimary.withValues(alpha: 0.15)
+                                      : (isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard),
+                                  side: BorderSide(
+                                    color: isSelected
+                                        ? AppColors.emeraldPrimary
+                                        : (isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle),
+                                    width: 0.8,
+                                  ),
+                                  onPressed: () {
+                                    HapticHelper.light();
+                                    _personController.text = name;
+                                    setState(() {});
+                                  },
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                      ],
+                    );
+                  },
+                ),
               ],
 
               // Title / Description

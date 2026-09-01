@@ -606,7 +606,129 @@ class PersonalExpenseViewModel extends ChangeNotifier {
     }
   }
 
-  // --- Lending & Borrowing ---
+  // --- Lending & Borrowing (WhatsApp-Style Unified Contacts & Ledgers) ---
+
+  /// Returns all unique person names across debts and trips, with canonical casing.
+  List<String> get allKnownPersonNames {
+    final names = <String>{};
+    for (final d in _debtsSummary.debts) {
+      final name = d.personName.trim();
+      if (name.isNotEmpty) {
+        names.add(name);
+      }
+    }
+    // Also include trip members if available
+    if (tripRepo != null) {
+      for (final trip in tripRepo!.getCachedTrips()) {
+        for (final m in trip.members) {
+          final mName = m.displayName.trim();
+          if (mName.isNotEmpty) {
+            names.add(mName);
+          }
+        }
+      }
+    }
+    // Deduplicate case-insensitively, preserving canonical casing
+    final canonicalMap = <String, String>{};
+    for (final name in names) {
+      final key = name.toLowerCase();
+      canonicalMap.putIfAbsent(key, () => name);
+    }
+    return canonicalMap.values.toList();
+  }
+
+  /// Search for matching person names for auto-complete and suggestions.
+  List<String> searchPersonSuggestions(String query) {
+    final all = allKnownPersonNames;
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) {
+      // Return up to 6 most recent contacts
+      return all.take(6).toList();
+    }
+    return all.where((name) => name.toLowerCase().contains(q)).toList();
+  }
+
+  /// Resolves the canonical name if user typed with different casing or trailing spaces.
+  String getCanonicalPersonName(String input) {
+    final trimmed = input.trim();
+    if (trimmed.isEmpty) return trimmed;
+    final lower = trimmed.toLowerCase();
+    for (final name in allKnownPersonNames) {
+      if (name.trim().toLowerCase() == lower) {
+        return name.trim();
+      }
+    }
+    return trimmed;
+  }
+
+  /// WhatsApp-Style Unified Person Summaries.
+  /// Groups all debts and repayments per unique person, computing net balances and recent activity.
+  List<PersonRelationshipSummary> get personSummaries {
+    final map = <String, List<PersonalDebt>>{};
+    for (final d in _debtsSummary.debts) {
+      final key = d.personName.trim().toLowerCase();
+      map.putIfAbsent(key, () => []).add(d);
+    }
+
+    final summaries = <PersonRelationshipSummary>[];
+
+    for (final entry in map.entries) {
+      final debts = entry.value;
+      if (debts.isEmpty) continue;
+
+      // Pick canonical name from the most recent record
+      debts.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      final canonicalName = debts.first.personName.trim();
+
+      int totalLent = 0;
+      int totalBorrowed = 0;
+      int unsettledLent = 0;
+      int unsettledBorrowed = 0;
+      int activeRemaining = 0;
+
+      for (final d in debts) {
+        final isLent = d.debtType == PersonalDebtType.lent;
+        if (isLent) {
+          totalLent += d.initialAmountInPaise;
+          if (!d.isSettled && d.remainingAmountInPaise > 0) {
+            unsettledLent += d.remainingAmountInPaise;
+            activeRemaining += d.remainingAmountInPaise;
+          }
+        } else {
+          totalBorrowed += d.initialAmountInPaise;
+          if (!d.isSettled && d.remainingAmountInPaise > 0) {
+            unsettledBorrowed += d.remainingAmountInPaise;
+            activeRemaining += d.remainingAmountInPaise;
+          }
+        }
+      }
+
+      final netBalance = totalLent - totalBorrowed;
+      final isSettled = unsettledLent == 0 && unsettledBorrowed == 0;
+      final lastDate = debts.first.updatedAt;
+      final lastNote = debts.first.description;
+
+      summaries.add(PersonRelationshipSummary(
+        personName: canonicalName,
+        totalLentPaise: totalLent,
+        totalBorrowedPaise: totalBorrowed,
+        netBalancePaise: netBalance,
+        unsettledLentPaise: unsettledLent,
+        unsettledBorrowedPaise: unsettledBorrowed,
+        activeRemainingPaise: activeRemaining,
+        transactionCount: debts.length,
+        lastActivityDate: lastDate,
+        lastNote: lastNote,
+        isSettled: isSettled,
+        debts: debts,
+      ));
+    }
+
+    // Sort by latest activity descending (like WhatsApp chat list)
+    summaries.sort((a, b) => b.lastActivityDate.compareTo(a.lastActivityDate));
+    return summaries;
+  }
+
   Future<PersonalDebt?> addDebt({
     required String userId,
     required String personName,
@@ -621,9 +743,10 @@ class PersonalExpenseViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
+      final canonicalName = getCanonicalPersonName(personName);
       final debt = await personalRepo.createPersonalDebt(
         userId: userId,
-        personName: personName,
+        personName: canonicalName,
         debtType: debtType,
         amountInPaise: amountInPaise,
         description: description,
