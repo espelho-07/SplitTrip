@@ -41,10 +41,6 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutterVersionCode
         versionName = flutterVersionName
-
-        ndk {
-            abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a"))
-        }
     }
 
     signingConfigs {
@@ -81,7 +77,7 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
         jniLibs {
-            keepDebugSymbols += listOf("**/*.so")
+            // Unstripped debug symbols omitted in release to optimize APK package size
         }
     }
 }
