@@ -10,6 +10,7 @@ import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/utils/kith_calculator_engine.dart';
 import '../../../core/widgets/kith_amount_calculator_field.dart';
 import '../../../core/widgets/member_avatar.dart';
+import '../../../core/widgets/shimmer_skeleton.dart';
 import '../../../domain/models/person_ledger_item.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/person_ledger_viewmodel.dart';
@@ -828,7 +829,7 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
           // 4. Chat / Conversation Timeline
           Expanded(
             child: vm.isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const PersonLedgerSkeleton()
                 : (displayItems.isEmpty
                     ? _buildEmptyState(isDark)
                     : ListView.builder(

@@ -872,20 +872,41 @@ class _SettlementSheetState extends State<SettlementSheet> {
               ),
             ] else if (isPayerCurrentUser) ...[
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: Colors.amber.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
                 ),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.hourglass_top_rounded, size: 16, color: Colors.amber),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Payment Sent • Waiting for $toName to confirm',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.amber),
+                    Row(
+                      children: [
+                        const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.amber),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Payment Sent • Waiting for $toName to confirm',
+                            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Colors.amber),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'You marked this as paid. You cannot pay again while confirmation is in progress. Once $toName confirms, your balance will clear automatically.',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
                       ),
                     ),
                   ],
