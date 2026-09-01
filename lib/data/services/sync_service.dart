@@ -479,6 +479,25 @@ class SyncService {
           }
           break;
 
+        case MutationType.createTrip:
+        case MutationType.joinTrip:
+        case MutationType.updateTripLifecycle:
+          final trips = storage.getSavedTrips();
+          final tId = payload['id'] as String? ?? payload['tripId'] as String? ?? mutation.tripId;
+          if (tId != null) {
+            final idx = trips.indexWhere((t) => t['id'] == tId);
+            if (idx != -1) {
+              trips[idx] = {
+                ...trips[idx],
+                ...payload,
+              };
+            } else {
+              trips.insert(0, payload);
+            }
+            await storage.saveTrips(trips);
+          }
+          break;
+
         default:
           break;
       }
@@ -671,6 +690,14 @@ class SyncService {
           isSuccess: false,
         ));
       }
+    } else {
+      sources.add(const SyncSourceResult(
+        name: 'Kith Cloud (Supabase)',
+        type: SyncSourceType.cloud,
+        status: 'offline',
+        errorMessage: 'Device offline • Changes queued locally',
+        isSuccess: false,
+      ));
     }
 
     // ── 2. Nearby P2P Peers Reconciliation ──────────────────────────────────
@@ -701,7 +728,20 @@ class SyncService {
     }
 
     final remainingPending = getPendingCountForTrip(tripId);
-    final isFullySynced = remainingPending == 0 && sources.every((s) => s.isSuccess);
+    final isFullySynced = sources.isNotEmpty &&
+        remainingPending == 0 &&
+        sources.every((s) => s.isSuccess);
+
+    await _storage.addSyncLog(
+      source: 'Trip Sync ($tripId)',
+      status: isFullySynced
+          ? 'synced'
+          : (sources.any((s) => s.status == 'offline') ? 'offline' : 'partial'),
+      changesSent: totalSent,
+      changesReceived: totalReceived,
+      tripId: tripId,
+      details: '$totalSent sent, $totalReceived received, $remainingPending pending',
+    );
 
     return TripSyncReport(
       tripId: tripId,

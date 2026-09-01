@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../../../core/services/permission_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/haptic_feedback_helper.dart';
 import '../../../../data/services/p2p_sync_service.dart';
@@ -74,7 +75,7 @@ class _NearbySyncSheetState extends State<NearbySyncSheet>
     });
     HapticHelper.selection();
 
-    final result = await widget.p2pService.syncWithPeer(peer);
+    final result = await widget.p2pService.syncWithPeer(peer, targetTripId: widget.initialTripId);
 
     if (mounted) {
       setState(() {
@@ -544,11 +545,13 @@ class _NearbySyncSheetState extends State<NearbySyncSheet>
         SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(
-            onPressed: () {
-              widget.p2pService.startDiscoverySession();
+            onPressed: () async {
+              HapticHelper.light();
+              await PermissionService.requestNearbyPermissions();
+              widget.p2pService.startDiscoverySession(timeout: const Duration(seconds: 60));
             },
-            icon: const Icon(Icons.refresh_rounded, size: 18),
-            label: const Text('Search Again', style: TextStyle(fontWeight: FontWeight.w600)),
+            icon: const Icon(Icons.bluetooth_searching_rounded, size: 18),
+            label: const Text('Search Nearby & Bluetooth', style: TextStyle(fontWeight: FontWeight.w600)),
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 12),
               shape: RoundedRectangleBorder(

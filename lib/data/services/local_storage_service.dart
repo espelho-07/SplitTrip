@@ -239,6 +239,52 @@ class LocalStorageService {
     return _prefs.setString(_deviceIdKey, id);
   }
 
+  // --- Sync Operation Logs ---
+  static const String _syncLogsKey = 'kith_sync_logs';
+
+  List<Map<String, dynamic>> getSyncLogs({String? tripId, int limit = 50}) {
+    final raw = _prefs.getString(_syncLogsKey);
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      final list = (jsonDecode(raw) as List<dynamic>).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      if (tripId != null) {
+        return list.where((l) => l['tripId'] == tripId).take(limit).toList();
+      }
+      return list.take(limit).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<void> addSyncLog({
+    required String source,
+    required String status,
+    required int changesSent,
+    required int changesReceived,
+    String? tripId,
+    String? details,
+  }) async {
+    final logs = getSyncLogs(limit: 200);
+    logs.insert(0, {
+      'id': 'log_${DateTime.now().millisecondsSinceEpoch}',
+      'timestamp': DateTime.now().toIso8601String(),
+      'source': source,
+      'status': status,
+      'changesSent': changesSent,
+      'changesReceived': changesReceived,
+      'tripId': tripId,
+      'details': details,
+    });
+    if (logs.length > 100) {
+      logs.removeRange(100, logs.length);
+    }
+    await _prefs.setString(_syncLogsKey, jsonEncode(logs));
+  }
+
+  Future<bool> clearSyncLogs() async {
+    return _prefs.remove(_syncLogsKey);
+  }
+
   // --- Theme Mode ---
   String? getSavedThemeMode() {
     return _prefs.getString(_themeModeKey);

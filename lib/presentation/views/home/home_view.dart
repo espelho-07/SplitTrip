@@ -11,6 +11,7 @@ import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../data/repositories/expense_repository.dart';
 import '../../../data/services/local_storage_service.dart';
+import '../../../data/services/p2p_sync_service.dart';
 import '../../../data/services/sync_service.dart';
 import '../../../domain/enums/app_experience_mode.dart';
 import '../../../domain/services/notification_service.dart';
@@ -47,14 +48,20 @@ class _HomeViewState extends State<HomeView> {
     _currentIndex = widget.initialIndex;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
+        if (!mounted) return;
         final storage = context.read<LocalStorageService>();
         if (!storage.hasRequestedInitialPermissions()) {
           await storage.setHasRequestedInitialPermissions(true);
           await PermissionService.requestInitialAppPermissions();
         }
+        if (!mounted) return;
+        final p2p = context.read<P2PSyncService>();
+        await p2p.start();
       } catch (_) {}
-      _refreshAllData();
-      _setupRealtimeListener();
+      if (mounted) {
+        _refreshAllData();
+        _setupRealtimeListener();
+      }
     });
   }
 

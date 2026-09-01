@@ -20,10 +20,34 @@ class PermissionService {
         Permission.camera,
         Permission.microphone,
         Permission.locationWhenInUse,
+        Permission.bluetoothScan,
+        Permission.bluetoothAdvertise,
+        Permission.bluetoothConnect,
+        Permission.nearbyWifiDevices,
       ];
       await permissions.request();
     } catch (e) {
       debugPrint('[PermissionService] Error during initial permissions request: $e');
+    }
+  }
+
+  /// Explicitly requests Nearby P2P & Bluetooth permissions when user searches for nearby devices.
+  static Future<bool> requestNearbyPermissions() async {
+    if (kIsWeb) return true;
+
+    try {
+      final statuses = await [
+        Permission.locationWhenInUse,
+        Permission.bluetoothScan,
+        Permission.bluetoothAdvertise,
+        Permission.bluetoothConnect,
+        Permission.nearbyWifiDevices,
+      ].request();
+
+      return statuses.values.any((s) => s.isGranted);
+    } catch (e) {
+      debugPrint('[PermissionService] Error requesting nearby permissions: $e');
+      return false;
     }
   }
 

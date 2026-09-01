@@ -310,9 +310,6 @@ class P2PSyncService {
         }
       }
 
-      // If no shared trips, ignore peer completely (Data Minimization & Same-Trip Filter)
-      if (sharedTripIds.isEmpty) return;
-
       final now = DateTime.now();
       final pairingCode = derivePairingCode(_deviceId, peerDeviceId);
 
@@ -353,8 +350,13 @@ class P2PSyncService {
   }
 
   /// Synchronizes missing operations bidirectionally with a verified nearby peer.
-  Future<NearbySyncResult> syncWithPeer(NearbyPeer peer) async {
-    if (peer.sharedTripIds.isEmpty) {
+  Future<NearbySyncResult> syncWithPeer(NearbyPeer peer, {String? targetTripId}) async {
+    final effectiveTripIds = <String>{
+      if (targetTripId != null && targetTripId.isNotEmpty) targetTripId,
+      ...peer.sharedTripIds,
+    };
+
+    if (effectiveTripIds.isEmpty) {
       return NearbySyncResult(success: false, errorMessage: 'No shared trips found');
     }
 
@@ -366,7 +368,7 @@ class P2PSyncService {
     client.connectionTimeout = const Duration(seconds: 4);
 
     try {
-      for (final tripId in peer.sharedTripIds) {
+      for (final tripId in effectiveTripIds) {
         // 1. Fetch peer watermark (which operation IDs peer already has)
         final watermarkUri = Uri(
           scheme: 'http',
@@ -443,12 +445,21 @@ class P2PSyncService {
         _lastSyncTimestamp = DateTime.now();
       }
 
+      await _storage.addSyncLog(
+        source: 'Nearby Peer (${peer.displayName})',
+        status: 'synced',
+        changesSent: sentCount,
+        changesReceived: receivedCount,
+        tripId: effectiveTripIds.isNotEmpty ? effectiveTripIds.first : null,
+        details: 'Exchanged $sentCount sent, $receivedCount received via P2P',
+      );
+
       _setStatus(P2PStatus.synced);
       return NearbySyncResult(
         success: true,
         operationsSent: sentCount,
         operationsReceived: receivedCount,
-        sharedTripIds: peer.sharedTripIds.toList(),
+        sharedTripIds: effectiveTripIds.toList(),
       );
     } catch (e) {
       debugPrint('[P2PSync] Error syncing with peer ${peer.deviceId}: $e');

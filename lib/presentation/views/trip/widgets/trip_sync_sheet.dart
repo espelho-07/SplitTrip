@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../../core/network/api_client.dart';
+import '../../../../core/services/permission_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/haptic_feedback_helper.dart';
 import '../../../../data/services/p2p_sync_service.dart';
@@ -33,6 +35,12 @@ class TripSyncSheet extends StatefulWidget {
     VoidCallback? onSyncCompleted,
   }) {
     HapticHelper.light();
+    ApiClient? resolvedApiClient = apiClient;
+    if (resolvedApiClient == null) {
+      try {
+        resolvedApiClient = context.read<ApiClient>();
+      } catch (_) {}
+    }
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -41,7 +49,7 @@ class TripSyncSheet extends StatefulWidget {
         tripId: tripId,
         syncService: syncService,
         p2pService: p2pService,
-        apiClient: apiClient,
+        apiClient: resolvedApiClient,
         onSyncCompleted: onSyncCompleted,
       ),
     );
@@ -357,8 +365,35 @@ class _TripSyncSheetState extends State<TripSyncSheet>
   }
 
   Widget _buildSummaryBadge(ThemeData theme, bool isDark, TripSyncReport report) {
-    final hasFailed = report.sources.any((s) => !s.isSuccess);
-    final color = hasFailed ? const Color(0xFFEF4444) : const Color(0xFF10B981);
+    final isAllOffline = report.sources.isNotEmpty && report.sources.every((s) => s.status == 'offline');
+    final isFullySynced = report.isFullySynced;
+
+    Color color;
+    IconData icon;
+    String title;
+    String subtitle;
+
+    if (isAllOffline) {
+      color = const Color(0xFFF59E0B);
+      icon = Icons.cloud_off_rounded;
+      title = 'Offline Mode • Changes Queued';
+      subtitle = '${report.pendingChangesCount} changes queued locally • Auto-syncs when online or near friends';
+    } else if (isFullySynced) {
+      color = const Color(0xFF10B981);
+      icon = Icons.check_circle_rounded;
+      title = 'All Sources Synchronized 🎉';
+      subtitle = '${report.totalChangesSent} sent • ${report.totalChangesReceived} received • 0 pending';
+    } else if (report.sources.any((s) => s.isSuccess)) {
+      color = AppColors.emeraldPrimary;
+      icon = Icons.cloud_done_rounded;
+      title = 'Synchronized with Available Sources';
+      subtitle = '${report.totalChangesSent} sent • ${report.totalChangesReceived} received • ${report.pendingChangesCount} waiting';
+    } else {
+      color = const Color(0xFFEF4444);
+      icon = Icons.warning_amber_rounded;
+      title = 'Sync Incomplete';
+      subtitle = report.errorMessage ?? 'Please check connection and retry';
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -370,7 +405,7 @@ class _TripSyncSheetState extends State<TripSyncSheet>
       child: Row(
         children: [
           Icon(
-            hasFailed ? Icons.warning_amber_rounded : Icons.check_circle_rounded,
+            icon,
             color: color,
             size: 24,
           ),
@@ -380,12 +415,12 @@ class _TripSyncSheetState extends State<TripSyncSheet>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  hasFailed ? 'Partially Synchronized' : 'All Sources Synchronized 🎉',
+                  title,
                   style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: color),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${report.totalChangesSent} sent • ${report.totalChangesReceived} received • ${report.pendingChangesCount} waiting',
+                  subtitle,
                   style: TextStyle(
                     fontSize: 11.5,
                     color: isDark ? Colors.white70 : Colors.black87,
@@ -471,47 +506,71 @@ class _TripSyncSheetState extends State<TripSyncSheet>
       builder: (context, snapshot) {
         final peers = snapshot.data ?? [];
         final tripPeers = peers.where((p) => p.sharedTripIds.contains(widget.tripId)).toList();
+        final otherPeers = peers.where((p) => !p.sharedTripIds.contains(widget.tripId)).toList();
 
-        if (tripPeers.isEmpty) {
+        if (peers.isEmpty) {
           return Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF262C3D).withValues(alpha: 0.6) : const Color(0xFFF1F5F9),
               borderRadius: BorderRadius.circular(16),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                AnimatedBuilder(
-                  animation: _radarController,
-                  builder: (context, child) {
-                    return Transform.scale(
-                      scale: 1.0 + (_radarController.value * 0.15),
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: AppColors.emeraldPrimary.withValues(alpha: 0.12),
-                        ),
-                        child: const Icon(Icons.wifi_tethering_rounded, size: 18, color: AppColors.emeraldPrimary),
+                Row(
+                  children: [
+                    AnimatedBuilder(
+                      animation: _radarController,
+                      builder: (context, child) {
+                        return Transform.scale(
+                          scale: 1.0 + (_radarController.value * 0.15),
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: AppColors.emeraldPrimary.withValues(alpha: 0.12),
+                            ),
+                            child: const Icon(Icons.wifi_tethering_rounded, size: 18, color: AppColors.emeraldPrimary),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Searching for Nearby Friends...',
+                            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Turn on Wi-Fi / Hotspot & Bluetooth to pair.',
+                            style: TextStyle(fontSize: 11, color: isDark ? Colors.white60 : Colors.black54),
+                          ),
+                        ],
                       ),
-                    );
-                  },
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Searching for Nearby Friends...',
-                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Ensure friends are on same Wi-Fi or Hotspot.',
-                        style: TextStyle(fontSize: 11, color: isDark ? Colors.white60 : Colors.black54),
-                      ),
-                    ],
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      HapticHelper.light();
+                      await PermissionService.requestNearbyPermissions();
+                      widget.p2pService.startDiscoverySession(timeout: const Duration(seconds: 60));
+                      _performFullTripSync();
+                    },
+                    icon: const Icon(Icons.bluetooth_searching_rounded, size: 16),
+                    label: const Text('Search Nearby / Bluetooth Devices', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
                   ),
                 ),
               ],
@@ -520,70 +579,76 @@ class _TripSyncSheetState extends State<TripSyncSheet>
         }
 
         return Column(
-          children: tripPeers.map((peer) {
-            final peerResult = _syncReport?.sources.where((s) => s.name == peer.displayName).firstOrNull;
-            final isPeerSuccess = peerResult != null && peerResult.isSuccess;
-
-            return Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF262C3D) : const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 14,
-                        backgroundColor: AppColors.emeraldPrimary.withValues(alpha: 0.15),
-                        child: Text(
-                          peer.displayName.isNotEmpty ? peer.displayName.substring(0, 1).toUpperCase() : 'F',
-                          style: const TextStyle(color: AppColors.emeraldPrimary, fontWeight: FontWeight.bold, fontSize: 12),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(peer.displayName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                            Text(
-                              isPeerSuccess
-                                  ? '${peerResult.changesSent} sent • ${peerResult.changesReceived} received'
-                                  : 'Pairing Code: ${peer.pairingCode}',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: isPeerSuccess ? const Color(0xFF10B981) : (isDark ? Colors.white60 : Colors.black54),
-                                fontWeight: isPeerSuccess ? FontWeight.w600 : FontWeight.normal,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      ElevatedButton(
-                        onPressed: _isReconciling ? null : () => _syncWithSpecificPeer(peer),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.emeraldPrimary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          elevation: 0,
-                        ),
-                        child: const Text('Sync', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
+          children: [
+            ...tripPeers.map((peer) => _buildPeerTile(peer, isDark, isTripPeer: true)),
+            ...otherPeers.map((peer) => _buildPeerTile(peer, isDark, isTripPeer: false)),
+          ],
         );
       },
+    );
+  }
+
+  Widget _buildPeerTile(NearbyPeer peer, bool isDark, {required bool isTripPeer}) {
+    final peerResult = _syncReport?.sources.where((s) => s.name == peer.displayName).firstOrNull;
+    final isPeerSuccess = peerResult != null && peerResult.isSuccess;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF262C3D) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 14,
+            backgroundColor: AppColors.emeraldPrimary.withValues(alpha: 0.15),
+            child: Text(
+              peer.displayName.isNotEmpty ? peer.displayName.substring(0, 1).toUpperCase() : 'F',
+              style: const TextStyle(color: AppColors.emeraldPrimary, fontWeight: FontWeight.bold, fontSize: 12),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  peer.displayName,
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                ),
+                Text(
+                  isPeerSuccess
+                      ? '${peerResult.changesSent} sent • ${peerResult.changesReceived} received'
+                      : (isTripPeer ? 'Pairing Code: ${peer.pairingCode}' : 'Nearby Device • Tap to Pair & Sync'),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isPeerSuccess
+                        ? const Color(0xFF10B981)
+                        : (isDark ? Colors.white60 : Colors.black54),
+                    fontWeight: isPeerSuccess ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ElevatedButton(
+            onPressed: _isReconciling ? null : () => _syncWithSpecificPeer(peer),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.emeraldPrimary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              elevation: 0,
+            ),
+            child: Text(isTripPeer ? 'Sync' : 'Pair & Sync', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
     );
   }
 }
