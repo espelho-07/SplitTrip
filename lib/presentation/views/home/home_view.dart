@@ -24,6 +24,7 @@ import '../ipo/ipo_home_view.dart';
 import '../profile/profile_home_tab.dart';
 import '../trip/trips_home_tab.dart';
 import '../version/update_available_banner.dart';
+import '../version/kith_update_popup_dialog.dart';
 import '../payment/payment_verification_dialog.dart';
 import 'widgets/dashboard_tab.dart';
 
@@ -311,6 +312,9 @@ class _HomeViewState extends State<HomeView> {
 
           if (mounted) {
             await PaymentVerificationManager.checkAndPrompt(context, syncServer: false);
+            if (mounted) {
+              await KithUpdatePopupDialog.showIfAvailable(context);
+            }
           }
         }
       }
