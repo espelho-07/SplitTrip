@@ -34,6 +34,7 @@ import '../views/version/update_required_view.dart';
 import '../views/ipo/ipo_home_view.dart';
 import '../views/ipo/ipo_detail_view.dart';
 import '../views/ipo/ipo_apply_view.dart';
+import '../views/ipo/ipo_accounts_view.dart';
 import '../viewmodels/ipo_viewmodel.dart';
 import 'package:provider/provider.dart';
 
@@ -263,6 +264,10 @@ class AppRouter {
       GoRoute(
         path: '/ipos',
         builder: (context, state) => const IpoHomeView(),
+      ),
+      GoRoute(
+        path: '/ipo-accounts',
+        builder: (context, state) => const IpoAccountsView(),
       ),
       GoRoute(
         path: '/ipo/:id',

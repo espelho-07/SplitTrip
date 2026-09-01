@@ -91,11 +91,13 @@ class FcmService {
     final settlementId = data['settlementId'] as String?;
     final expenseId = data['expenseId'] as String?;
 
-    final notifType = eventType.contains('expense')
-        ? NotificationType.expense
-        : (eventType.contains('trip') || eventType.contains('member'))
-            ? NotificationType.trip
-            : NotificationType.settlement;
+    final notifType = eventType.contains('ipo')
+        ? NotificationType.ipo
+        : eventType.contains('expense') || eventType.contains('debt')
+            ? NotificationType.expense
+            : (eventType.contains('trip') || eventType.contains('member'))
+                ? NotificationType.trip
+                : NotificationType.settlement;
 
     if (eventType == 'settlement_marked_paid' && settlementId != null) {
       // Store payment verification in local vault for immediate foreground prompt
@@ -116,7 +118,19 @@ class FcmService {
       });
     }
 
-    final targetRoute = route ?? (tripId != null ? (expenseId != null ? '/trip/$tripId?expenseId=$expenseId' : (settlementId != null ? '/trip/$tripId?settlementId=$settlementId' : '/trip/$tripId')) : null);
+    final ipoId = data['ipoId'] as String?;
+    final personName = data['personName'] as String?;
+
+    final targetRoute = route ??
+        (tripId != null
+            ? (expenseId != null
+                ? '/trip/$tripId?expenseId=$expenseId'
+                : (settlementId != null ? '/trip/$tripId?settlementId=$settlementId' : '/trip/$tripId'))
+            : (ipoId != null
+                ? '/ipo/$ipoId'
+                : (personName != null
+                    ? '/personal/person?name=${Uri.encodeComponent(personName)}'
+                    : null)));
 
     _notificationService.addNotification(
       title: title,
@@ -124,7 +138,12 @@ class FcmService {
       type: notifType,
       route: targetRoute,
       actionLabel: _actionLabelForType(eventType),
-      idempotencyKey: idempotencyKey ?? (expenseId != null ? '${expenseId}_$eventType' : (settlementId != null ? '${settlementId}_$eventType' : null)),
+      idempotencyKey: idempotencyKey ??
+          (expenseId != null
+              ? '${expenseId}_$eventType'
+              : (settlementId != null
+                  ? '${settlementId}_$eventType'
+                  : (ipoId != null ? '${ipoId}_$eventType' : null))),
     );
   }
 
@@ -134,7 +153,19 @@ class FcmService {
     final tripId = data['tripId'] as String?;
     final settlementId = data['settlementId'] as String?;
     final expenseId = data['expenseId'] as String?;
-    final targetRoute = route ?? (tripId != null ? (expenseId != null ? '/trip/$tripId?expenseId=$expenseId' : (settlementId != null ? '/trip/$tripId?settlementId=$settlementId' : '/trip/$tripId')) : null);
+    final ipoId = data['ipoId'] as String?;
+    final personName = data['personName'] as String?;
+
+    final targetRoute = route ??
+        (tripId != null
+            ? (expenseId != null
+                ? '/trip/$tripId?expenseId=$expenseId'
+                : (settlementId != null ? '/trip/$tripId?settlementId=$settlementId' : '/trip/$tripId'))
+            : (ipoId != null
+                ? '/ipo/$ipoId'
+                : (personName != null
+                    ? '/personal/person?name=${Uri.encodeComponent(personName)}'
+                    : null)));
 
     if (targetRoute != null && targetRoute.isNotEmpty && onNavigate != null) {
       Future.delayed(const Duration(milliseconds: 300), () {
@@ -160,6 +191,14 @@ class FcmService {
       case 'member_joined':
       case 'trip_completed':
         return 'View Trip';
+      case 'ipo_open':
+      case 'ipo_allotment':
+      case 'ipo_listing':
+      case 'ipo_close':
+        return 'View IPO';
+      case 'debt_added':
+      case 'debt_repaid':
+        return 'View Balance';
       default:
         return 'Open';
     }

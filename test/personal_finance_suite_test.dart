@@ -88,7 +88,7 @@ void main() {
         title: 'Old Train Ticket',
         amountInPaise: 40000,
         category: ExpenseCategory.transport,
-        date: now.subtract(const Duration(days: 10)),
+        date: now.day == 1 ? now.add(const Duration(days: 2)) : now.subtract(const Duration(days: 1)),
       );
 
       // Today filter

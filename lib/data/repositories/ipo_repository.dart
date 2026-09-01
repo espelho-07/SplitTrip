@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../../domain/models/ipo/ipo.dart';
+import '../../domain/models/ipo/ipo_account.dart';
 import '../../domain/models/ipo/ipo_application.dart';
 import '../../domain/models/personal_debt.dart';
 import '../services/ipo_data_provider.dart';
@@ -77,10 +78,47 @@ class IpoRepository {
     return _cachedIpos.cast<Ipo?>().firstWhere((i) => i?.id == id, orElse: () => null);
   }
 
+  /// Returns the primary application for an IPO (for backward compatibility)
   IpoApplication? getApplicationForIpo(String ipoId) {
     return _cachedApplications
         .cast<IpoApplication?>()
         .firstWhere((a) => a?.ipoId == ipoId, orElse: () => null);
+  }
+
+  /// Returns all applications recorded for a specific IPO (across multiple accounts)
+  List<IpoApplication> getAllApplicationsForIpo(String ipoId) {
+    return _cachedApplications.where((a) => a.ipoId == ipoId).toList();
+  }
+
+  /// Returns all applications recorded for a specific application account
+  List<IpoApplication> getApplicationsForAccount(String accountId) {
+    if (accountId == 'me') {
+      return _cachedApplications.where((a) => a.applicationAccountId == null || a.applicationAccountId == 'me').toList();
+    }
+    return _cachedApplications.where((a) => a.applicationAccountId == accountId).toList();
+  }
+
+  /// Reusable IPO Application Accounts
+  List<IpoAccount> getIpoAccounts() {
+    final raw = storage.getSavedIpoAccounts();
+    return raw.map((json) => IpoAccount.fromJson(json)).toList();
+  }
+
+  Future<IpoAccount> saveIpoAccount(IpoAccount account) async {
+    final accounts = getIpoAccounts();
+    final idx = accounts.indexWhere((a) => a.id == account.id);
+    if (idx != -1) {
+      accounts[idx] = account.copyWith(updatedAt: DateTime.now());
+    } else {
+      accounts.add(account);
+    }
+    await storage.saveIpoAccounts(accounts.map((a) => a.toJson()).toList());
+    return account;
+  }
+
+  Future<void> deleteIpoAccount(String accountId) async {
+    final accounts = getIpoAccounts()..removeWhere((a) => a.id == accountId);
+    await storage.saveIpoAccounts(accounts.map((a) => a.toJson()).toList());
   }
 
   Future<void> toggleTrackIpo(String ipoId, bool isTracked) async {
@@ -92,7 +130,17 @@ class IpoRepository {
     }
   }
 
-  /// Records an IPO application and links peer funding to the Person Ledger
+  /// Records multiple IPO applications (e.g. Me, Brother, Friend) for an IPO
+  Future<List<IpoApplication>> recordApplications(List<IpoApplication> applications) async {
+    final saved = <IpoApplication>[];
+    for (final app in applications) {
+      final res = await recordApplication(app);
+      saved.add(res);
+    }
+    return saved;
+  }
+
+  /// Records a single IPO application and links peer funding to the Person Ledger
   Future<IpoApplication> recordApplication(IpoApplication application) async {
     final updatedFundings = <IpoFunding>[];
 
@@ -105,7 +153,7 @@ class IpoRepository {
             personName: funding.personName!,
             debtType: PersonalDebtType.borrowed, // Person gave user money for the IPO
             amountInPaise: funding.amountInPaise,
-            description: '${application.ipoName} (IPO Funding)',
+            description: '${application.ipoName} (${application.accountName} IPO Funding)',
             date: application.applicationDate,
           );
           updatedFundings.add(funding.copyWith(debtId: debt.id));
@@ -124,7 +172,7 @@ class IpoRepository {
     );
 
     // Save in cache & local storage
-    final existingIdx = _cachedApplications.indexWhere((a) => a.id == finalApplication.id || a.ipoId == finalApplication.ipoId);
+    final existingIdx = _cachedApplications.indexWhere((a) => a.id == finalApplication.id);
     if (existingIdx != -1) {
       _cachedApplications[existingIdx] = finalApplication;
     } else {

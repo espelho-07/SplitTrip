@@ -59,6 +59,14 @@ class _IpoHomeViewState extends State<IpoHomeView> {
         centerTitle: true,
         actions: [
           IconButton(
+            icon: const Icon(Icons.account_balance_wallet_outlined, size: 22),
+            tooltip: 'IPO Accounts & Balances',
+            onPressed: () {
+              HapticHelper.light();
+              context.push('/ipo-accounts');
+            },
+          ),
+          IconButton(
             icon: Icon(_isSearchOpen ? Icons.close_rounded : Icons.search_rounded),
             onPressed: () {
               HapticHelper.light();

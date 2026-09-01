@@ -671,9 +671,10 @@ class LocalStorageService {
     return _prefs.setBool('$_autoBudgetingPrefix$cleanKey', enabled);
   }
 
-  // --- IPO Money Manager Persistence ---
+  // --- IPO Money Manager & Multi-Account Persistence ---
   static const String _iposCacheKey = 'kith_ipos_cache_v1';
   static const String _ipoApplicationsKey = 'kith_ipo_applications_v1';
+  static const String _ipoAccountsKey = 'kith_ipo_accounts_v1';
   static const String _iposLastUpdatedKey = 'kith_ipos_last_updated';
   static const String _trackedIposKey = 'kith_tracked_ipos_v1';
 
@@ -707,6 +708,33 @@ class LocalStorageService {
 
   Future<void> saveIpoApplications(List<Map<String, dynamic>> apps) async {
     await _prefs.setString(_ipoApplicationsKey, jsonEncode(apps));
+  }
+
+  List<Map<String, dynamic>> getSavedIpoAccounts() {
+    final raw = _prefs.getString(_ipoAccountsKey);
+    if (raw == null || raw.isEmpty) {
+      // Default: Primary "Me" account
+      return [
+        {
+          'id': 'me',
+          'displayName': 'Me (Primary)',
+          'maskedPan': '',
+          'createdAt': DateTime.now().toIso8601String(),
+          'updatedAt': DateTime.now().toIso8601String(),
+        }
+      ];
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  Future<void> saveIpoAccounts(List<Map<String, dynamic>> accounts) async {
+    await _prefs.setString(_ipoAccountsKey, jsonEncode(accounts));
   }
 
   Set<String> getTrackedIpoIds() {

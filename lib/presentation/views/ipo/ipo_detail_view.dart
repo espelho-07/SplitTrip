@@ -604,7 +604,7 @@ class IpoDetailView extends StatelessWidget {
                   Icon(Icons.verified_rounded, size: 18, color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary),
                   const SizedBox(width: 6),
                   Text(
-                    'MY APPLICATION',
+                    app.accountName.toLowerCase() == 'me' ? 'MY APPLICATION' : '${app.accountName.toUpperCase()} APPLICATION',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w900,

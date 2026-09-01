@@ -1,6 +1,7 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../../data/repositories/ipo_repository.dart';
 import '../../domain/models/ipo/ipo.dart';
+import '../../domain/models/ipo/ipo_account.dart';
 import '../../domain/models/ipo/ipo_application.dart';
 import '../../domain/services/notification_service.dart';
 
@@ -22,9 +23,14 @@ class IpoViewModel extends ChangeNotifier {
     _loadFromCache();
   }
 
+  List<IpoAccount> _accounts = [];
+
+  List<IpoAccount> get accounts => _accounts;
+
   void _loadFromCache() {
     _ipos = ipoRepo.getCachedIpos();
     _applications = ipoRepo.getCachedApplications();
+    _accounts = ipoRepo.getIpoAccounts();
   }
 
   List<Ipo> get ipos => _ipos;
@@ -123,6 +129,47 @@ class IpoViewModel extends ChangeNotifier {
     return pnl;
   }
 
+  // --- Account-level Aggregations & Smart Payment Calculations ---
+  Map<String, dynamic> getAccountMetrics(String accountId) {
+    final accountApps = ipoRepo.getApplicationsForAccount(accountId);
+    int applied = 0;
+    int paid = 0;
+    int pending = 0;
+    int allotted = 0;
+    int refunded = 0;
+
+    for (final a in accountApps) {
+      applied += a.applicationAmountInPaise;
+      paid += a.effectivePaidPaise;
+      pending += a.effectiveRemainingPaise;
+
+      if (a.status == IpoApplicationStatus.allotted) {
+        allotted += (a.actualInvestedAmountInPaise ?? a.applicationAmountInPaise);
+      } else if (a.status == IpoApplicationStatus.notAllotted || a.status == IpoApplicationStatus.refunded) {
+        refunded += (a.releasedAmountInPaise ?? a.applicationAmountInPaise);
+      }
+    }
+
+    return {
+      'applicationCount': accountApps.length,
+      'totalAppliedPaise': applied,
+      'totalPaidPaise': paid,
+      'totalPendingPaise': pending,
+      'totalAllottedPaise': allotted,
+      'totalRefundedPaise': refunded,
+      'applications': accountApps,
+    };
+  }
+
+  /// Checks if an account has eligible reusable credit from released/refunded non-allotments
+  int getAccountAvailableCreditPaise(String accountId) {
+    final metrics = getAccountMetrics(accountId);
+    final totalRefunded = metrics['totalRefundedPaise'] as int? ?? 0;
+    final totalPending = metrics['totalPendingPaise'] as int? ?? 0;
+    final available = totalRefunded - totalPending;
+    return available > 0 ? available : 0;
+  }
+
   // --- Actions ---
   Future<void> loadData({bool forceRefresh = false}) async {
     _isLoading = true;
@@ -130,6 +177,7 @@ class IpoViewModel extends ChangeNotifier {
 
     _ipos = await ipoRepo.getIpos(forceRefresh: forceRefresh);
     _applications = ipoRepo.getCachedApplications();
+    _accounts = ipoRepo.getIpoAccounts();
 
     _isLoading = false;
     notifyListeners();
@@ -141,6 +189,30 @@ class IpoViewModel extends ChangeNotifier {
         applications: _applications,
       );
     }
+  }
+
+  Future<IpoAccount> createAccount({
+    required String displayName,
+    String? rawPan,
+    String? accountHolderName,
+    String? upiId,
+  }) async {
+    final newAcc = IpoAccount.create(
+      displayName: displayName,
+      rawPan: rawPan,
+      accountHolderName: accountHolderName,
+      upiId: upiId,
+    );
+    final saved = await ipoRepo.saveIpoAccount(newAcc);
+    _accounts = ipoRepo.getIpoAccounts();
+    notifyListeners();
+    return saved;
+  }
+
+  Future<void> deleteAccount(String accountId) async {
+    await ipoRepo.deleteIpoAccount(accountId);
+    _accounts = ipoRepo.getIpoAccounts();
+    notifyListeners();
   }
 
   void setTab(String tab) {
@@ -164,6 +236,8 @@ class IpoViewModel extends ChangeNotifier {
 
   IpoApplication? getApplicationForIpo(String ipoId) => ipoRepo.getApplicationForIpo(ipoId);
 
+  List<IpoApplication> getAllApplicationsForIpo(String ipoId) => ipoRepo.getAllApplicationsForIpo(ipoId);
+
   Future<void> toggleTrackIpo(String ipoId) async {
     final ipo = getIpoById(ipoId);
     if (ipo == null) return;
@@ -171,6 +245,25 @@ class IpoViewModel extends ChangeNotifier {
     await ipoRepo.toggleTrackIpo(ipoId, newTracked);
     _ipos = ipoRepo.getCachedIpos();
     notifyListeners();
+  }
+
+  Future<List<IpoApplication>> recordMultipleApplications(List<IpoApplication> applications) async {
+    final savedList = await ipoRepo.recordApplications(applications);
+    _applications = ipoRepo.getCachedApplications();
+    notifyListeners();
+
+    if (notificationService != null && savedList.isNotEmpty) {
+      for (final app in savedList) {
+        await notificationService!.notifyIpoApplicationUpdated(
+          ipoId: app.ipoId,
+          ipoName: app.ipoName,
+          statusDisplayName: '${app.accountName}: ${app.status.displayName}',
+          applicationId: app.id,
+        );
+      }
+    }
+
+    return savedList;
   }
 
   Future<IpoApplication> recordApplication(IpoApplication application) async {

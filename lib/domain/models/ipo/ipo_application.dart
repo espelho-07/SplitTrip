@@ -1,4 +1,4 @@
-﻿enum IpoFunderType {
+enum IpoFunderType {
   self,
   person;
 
@@ -134,11 +134,16 @@ class IpoApplication {
   final String ipoId;
   final String ipoName;
   final String userId;
+  final String? applicationAccountId;
+  final String? accountDisplayName;
+  final String? accountMaskedPan;
   final DateTime applicationDate;
   final int lotsApplied;
   final int lotSize;
   final int bidPriceInRupees;
   final int applicationAmountInPaise;
+  final int? paidAmountInPaise;
+  final int? remainingAmountInPaise;
   final List<IpoFunding> fundings;
   final IpoApplicationStatus status;
   final int? allottedLots;
@@ -154,11 +159,16 @@ class IpoApplication {
     required this.ipoId,
     required this.ipoName,
     required this.userId,
+    this.applicationAccountId,
+    this.accountDisplayName,
+    this.accountMaskedPan,
     required this.applicationDate,
     required this.lotsApplied,
     required this.lotSize,
     required this.bidPriceInRupees,
     required this.applicationAmountInPaise,
+    this.paidAmountInPaise,
+    this.remainingAmountInPaise,
     required this.fundings,
     this.status = IpoApplicationStatus.applied,
     this.allottedLots,
@@ -169,6 +179,9 @@ class IpoApplication {
     required this.createdAt,
     required this.updatedAt,
   });
+
+  /// Account name to display
+  String get accountName => accountDisplayName ?? 'Me';
 
   /// Total shares applied
   int get totalSharesApplied => lotsApplied * lotSize;
@@ -183,6 +196,12 @@ class IpoApplication {
 
   /// Remaining amount in paise needed to allocate (if positive) or over-allocated (if negative)
   int get fundingDifferencePaise => applicationAmountInPaise - totalFundingAllocatedPaise;
+
+  /// Effective amount paid for this IPO
+  int get effectivePaidPaise => paidAmountInPaise ?? totalFundingAllocatedPaise;
+
+  /// Effective remaining amount required for this IPO
+  int get effectiveRemainingPaise => (remainingAmountInPaise ?? (applicationAmountInPaise - effectivePaidPaise)).clamp(0, applicationAmountInPaise);
 
   /// Deterministic calculation helper for application amount
   static int calculateApplicationAmountPaise({
@@ -219,11 +238,16 @@ class IpoApplication {
     String? ipoId,
     String? ipoName,
     String? userId,
+    String? applicationAccountId,
+    String? accountDisplayName,
+    String? accountMaskedPan,
     DateTime? applicationDate,
     int? lotsApplied,
     int? lotSize,
     int? bidPriceInRupees,
     int? applicationAmountInPaise,
+    int? paidAmountInPaise,
+    int? remainingAmountInPaise,
     List<IpoFunding>? fundings,
     IpoApplicationStatus? status,
     int? allottedLots,
@@ -239,11 +263,16 @@ class IpoApplication {
       ipoId: ipoId ?? this.ipoId,
       ipoName: ipoName ?? this.ipoName,
       userId: userId ?? this.userId,
+      applicationAccountId: applicationAccountId ?? this.applicationAccountId,
+      accountDisplayName: accountDisplayName ?? this.accountDisplayName,
+      accountMaskedPan: accountMaskedPan ?? this.accountMaskedPan,
       applicationDate: applicationDate ?? this.applicationDate,
       lotsApplied: lotsApplied ?? this.lotsApplied,
       lotSize: lotSize ?? this.lotSize,
       bidPriceInRupees: bidPriceInRupees ?? this.bidPriceInRupees,
       applicationAmountInPaise: applicationAmountInPaise ?? this.applicationAmountInPaise,
+      paidAmountInPaise: paidAmountInPaise ?? this.paidAmountInPaise,
+      remainingAmountInPaise: remainingAmountInPaise ?? this.remainingAmountInPaise,
       fundings: fundings ?? this.fundings,
       status: status ?? this.status,
       allottedLots: allottedLots ?? this.allottedLots,
@@ -262,6 +291,9 @@ class IpoApplication {
       ipoId: json['ipoId'] as String? ?? json['ipo_id'] as String? ?? '',
       ipoName: json['ipoName'] as String? ?? json['ipo_name'] as String? ?? '',
       userId: json['userId'] as String? ?? json['user_id'] as String? ?? '',
+      applicationAccountId: json['applicationAccountId'] as String? ?? json['application_account_id'] as String?,
+      accountDisplayName: json['accountDisplayName'] as String? ?? json['account_display_name'] as String?,
+      accountMaskedPan: json['accountMaskedPan'] as String? ?? json['account_masked_pan'] as String?,
       applicationDate: json['applicationDate'] != null
           ? DateTime.parse(json['applicationDate'] as String)
           : DateTime.now(),
@@ -269,6 +301,8 @@ class IpoApplication {
       lotSize: (json['lotSize'] ?? json['lot_size'] as num?)?.toInt() ?? 1,
       bidPriceInRupees: (json['bidPriceInRupees'] ?? json['bid_price_in_rupees'] as num?)?.toInt() ?? 0,
       applicationAmountInPaise: (json['applicationAmountInPaise'] ?? json['application_amount_in_paise'] as num).toInt(),
+      paidAmountInPaise: (json['paidAmountInPaise'] ?? json['paid_amount_in_paise'] as num?)?.toInt(),
+      remainingAmountInPaise: (json['remainingAmountInPaise'] ?? json['remaining_amount_in_paise'] as num?)?.toInt(),
       fundings: (json['fundings'] as List<dynamic>?)
               ?.map((f) => IpoFunding.fromJson(f as Map<String, dynamic>))
               .toList() ??
@@ -290,11 +324,16 @@ class IpoApplication {
       'ipoId': ipoId,
       'ipoName': ipoName,
       'userId': userId,
+      if (applicationAccountId != null) 'applicationAccountId': applicationAccountId,
+      if (accountDisplayName != null) 'accountDisplayName': accountDisplayName,
+      if (accountMaskedPan != null) 'accountMaskedPan': accountMaskedPan,
       'applicationDate': applicationDate.toIso8601String(),
       'lotsApplied': lotsApplied,
       'lotSize': lotSize,
       'bidPriceInRupees': bidPriceInRupees,
       'applicationAmountInPaise': applicationAmountInPaise,
+      if (paidAmountInPaise != null) 'paidAmountInPaise': paidAmountInPaise,
+      if (remainingAmountInPaise != null) 'remainingAmountInPaise': remainingAmountInPaise,
       'fundings': fundings.map((f) => f.toJson()).toList(),
       'status': status.name,
       'allottedLots': allottedLots,

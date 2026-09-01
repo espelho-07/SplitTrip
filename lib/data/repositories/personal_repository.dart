@@ -65,9 +65,11 @@ class PersonalRepository {
             .map((j) => PersonalExpense.fromJson(j as Map<String, dynamic>))
             .toList();
 
-        // Update local storage
-        await storage.savePersonalExpenses(list.map((e) => e.toJson()).toList());
-        return list;
+        // Update local storage only if remote returns non-empty list
+        if (list.isNotEmpty) {
+          await storage.savePersonalExpenses(list.map((e) => e.toJson()).toList());
+          return list;
+        }
       }
     } catch (_) {
       // Offline fallback
@@ -195,8 +197,10 @@ class PersonalRepository {
       final res = await apiClient.get('/personal/debts');
       if (res is Map<String, dynamic>) {
         final summary = PersonalDebtsSummary.fromJson(res);
-        await storage.savePersonalDebts(summary.debts.map((d) => d.toJson()).toList());
-        return summary;
+        if (summary.debts.isNotEmpty) {
+          await storage.savePersonalDebts(summary.debts.map((d) => d.toJson()).toList());
+          return summary;
+        }
       }
     } catch (_) {
       // Offline fallback

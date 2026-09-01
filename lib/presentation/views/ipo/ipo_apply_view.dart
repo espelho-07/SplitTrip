@@ -1,17 +1,15 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
-import '../../../core/utils/kith_calculator_engine.dart';
-import '../../../core/widgets/kith_amount_calculator_field.dart';
 import '../../../domain/models/ipo/ipo.dart';
+import '../../../domain/models/ipo/ipo_account.dart';
 import '../../../domain/models/ipo/ipo_application.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/ipo_viewmodel.dart';
-import '../../viewmodels/personal_expense_viewmodel.dart';
 
 class IpoApplyView extends StatefulWidget {
   final Ipo ipo;
@@ -27,6 +25,20 @@ class IpoApplyView extends StatefulWidget {
   State<IpoApplyView> createState() => _IpoApplyViewState();
 }
 
+class _AccountApplicationConfig {
+  final IpoAccount account;
+  int lots;
+  late TextEditingController paidController;
+
+  _AccountApplicationConfig({
+    required this.account,
+    this.lots = 1,
+    String initialPaidRupees = '0',
+  }) {
+    paidController = TextEditingController(text: initialPaidRupees);
+  }
+}
+
 class _ContributorEntry {
   String name;
   String? userId;
@@ -40,34 +52,39 @@ class _ContributorEntry {
 }
 
 class _IpoApplyViewState extends State<IpoApplyView> {
-  late int _lotsApplied;
   late TextEditingController _bidPriceController;
-  late TextEditingController _selfAmountController;
   late TextEditingController _notesController;
+  final Map<String, _AccountApplicationConfig> _selectedAccounts = {};
   final List<_ContributorEntry> _contributors = [];
 
   @override
   void initState() {
     super.initState();
     final app = widget.existingApplication;
-    _lotsApplied = app?.lotsApplied ?? 1;
     _bidPriceController = TextEditingController(
       text: app != null ? app.bidPriceInRupees.toString() : widget.ipo.maxPrice.toString(),
     );
     _notesController = TextEditingController(text: app?.notes ?? '');
 
-    final initialTotalPaise = IpoApplication.calculateApplicationAmountPaise(
-      lots: _lotsApplied,
-      lotSize: widget.ipo.lotSize,
-      bidPriceRupees: int.tryParse(_bidPriceController.text.trim()) ?? widget.ipo.maxPrice,
+    // Initialize with primary "Me" account or existing app's account
+    final initialLots = app?.lotsApplied ?? 1;
+    final ipoVm = context.read<IpoViewModel>();
+    final accounts = ipoVm.accounts;
+    final defaultAcc = accounts.isNotEmpty
+        ? (app?.applicationAccountId != null
+            ? accounts.firstWhere((a) => a.id == app!.applicationAccountId, orElse: () => accounts.first)
+            : accounts.first)
+        : IpoAccount.self();
+
+    final totalRequiredRupees = (initialLots * widget.ipo.lotSize * (int.tryParse(_bidPriceController.text.trim()) ?? widget.ipo.maxPrice)).toString();
+
+    _selectedAccounts[defaultAcc.id] = _AccountApplicationConfig(
+      account: defaultAcc,
+      lots: initialLots,
+      initialPaidRupees: totalRequiredRupees,
     );
 
     if (app != null && app.fundings.isNotEmpty) {
-      final selfFunding = app.fundings.firstWhere((f) => f.isSelf, orElse: () => const IpoFunding(id: '', applicationId: '', funderType: IpoFunderType.self, amountInPaise: 0));
-      _selfAmountController = TextEditingController(
-        text: (selfFunding.amountInPaise / 100.0).toStringAsFixed(0),
-      );
-
       for (final f in app.fundings.where((f) => !f.isSelf)) {
         _contributors.add(_ContributorEntry(
           name: f.personName ?? 'Friend',
@@ -75,18 +92,16 @@ class _IpoApplyViewState extends State<IpoApplyView> {
           controller: TextEditingController(text: (f.amountInPaise / 100.0).toStringAsFixed(0)),
         ));
       }
-    } else {
-      _selfAmountController = TextEditingController(
-        text: (initialTotalPaise / 100.0).toStringAsFixed(0),
-      );
     }
   }
 
   @override
   void dispose() {
     _bidPriceController.dispose();
-    _selfAmountController.dispose();
     _notesController.dispose();
+    for (final cfg in _selectedAccounts.values) {
+      cfg.paidController.dispose();
+    }
     for (final c in _contributors) {
       c.controller.dispose();
     }
@@ -95,134 +110,43 @@ class _IpoApplyViewState extends State<IpoApplyView> {
 
   int get _bidPrice => int.tryParse(_bidPriceController.text.trim()) ?? widget.ipo.maxPrice;
 
-  int get _totalApplicationAmountPaise {
+  int _calculateAccountAmountPaise(int lots) {
     return IpoApplication.calculateApplicationAmountPaise(
-      lots: _lotsApplied,
+      lots: lots,
       lotSize: widget.ipo.lotSize,
       bidPriceRupees: _bidPrice,
     );
   }
 
-  int get _selfAmountPaise {
-    return KithCalculatorEngine.evaluateToPaise(_selfAmountController.text.trim());
-  }
-
-  int get _totalAllocatedPaise {
-    int total = _selfAmountPaise;
-    for (final c in _contributors) {
-      total += KithCalculatorEngine.evaluateToPaise(c.controller.text.trim());
-    }
-    return total;
-  }
-
-  void _recalculateSelfAmountOnLotChange() {
-    if (_contributors.isEmpty) {
-      final total = _totalApplicationAmountPaise;
-      _selfAmountController.text = (total / 100.0).toStringAsFixed(0);
-    }
-  }
-
-  void _addContributorModal() {
-    HapticHelper.light();
-    final personalVm = context.read<PersonalExpenseViewModel>();
-    final knownPeople = personalVm.debtsSummary.debts
-        .map((d) => d.personName.trim())
-        .where((n) => n.isNotEmpty && !_contributors.any((c) => c.name.toLowerCase() == n.toLowerCase()))
-        .toSet()
-        .toList();
-
-    final nameController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        final isDark = Theme.of(context).brightness == Brightness.dark;
-        return AlertDialog(
-          backgroundColor: isDark ? AppColors.darkSurfaceCard : Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text(
-            'Add Contributor',
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              color: isDark ? Colors.white : const Color(0xFF0F172A),
-            ),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(
-                controller: nameController,
-                autofocus: true,
-                decoration: InputDecoration(
-                  labelText: 'Friend / Contributor Name',
-                  hintText: 'e.g. Rohit, Priya, Rahul',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-              if (knownPeople.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Text(
-                  'Recent People:',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  children: knownPeople.map((name) {
-                    return ActionChip(
-                      label: Text(name, style: const TextStyle(fontSize: 12)),
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        _addContributor(name);
-                      },
-                    );
-                  }).toList(),
-                ),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final name = nameController.text.trim();
-                if (name.isNotEmpty) {
-                  Navigator.pop(ctx);
-                  _addContributor(name);
-                }
-              },
-              child: const Text('Add'),
-            ),
-          ],
-        );
-      },
+  int get _grandTotalApplicationAmountPaise {
+    return _selectedAccounts.values.fold<int>(
+      0,
+      (sum, cfg) => sum + _calculateAccountAmountPaise(cfg.lots),
     );
   }
 
-  void _addContributor(String name) {
+  void _toggleAccount(IpoAccount account) {
     setState(() {
-      _contributors.add(_ContributorEntry(
-        name: name,
-        controller: TextEditingController(text: '0'),
-      ));
+      if (_selectedAccounts.containsKey(account.id)) {
+        if (_selectedAccounts.length > 1) {
+          _selectedAccounts.remove(account.id)?.paidController.dispose();
+        }
+      } else {
+        final amountPaise = _calculateAccountAmountPaise(1);
+        _selectedAccounts[account.id] = _AccountApplicationConfig(
+          account: account,
+          lots: 1,
+          initialPaidRupees: (amountPaise / 100.0).toStringAsFixed(0),
+        );
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final totalAppPaise = _totalApplicationAmountPaise;
-    final totalAllocPaise = _totalAllocatedPaise;
-    final diffPaise = totalAppPaise - totalAllocPaise;
-    final isExactMatch = diffPaise == 0;
+    final ipoVm = context.watch<IpoViewModel>();
+    final allAccounts = ipoVm.accounts;
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
@@ -311,9 +235,58 @@ class _IpoApplyViewState extends State<IpoApplyView> {
 
           const SizedBox(height: 20),
 
-          // Application Details Form
+          // 1. Account Selection (Multi-Account)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '1. SELECT APPLICATION ACCOUNTS',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.6,
+                  color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () => context.push('/ipo-accounts'),
+                icon: const Icon(Icons.add, size: 14),
+                label: const Text('Manage', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: allAccounts.map((acc) {
+              final isSelected = _selectedAccounts.containsKey(acc.id);
+              return FilterChip(
+                selected: isSelected,
+                label: Text(
+                  acc.displayName,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    color: isSelected
+                        ? (isDark ? AppColors.darkBackground : Colors.white)
+                        : (isDark ? Colors.white70 : const Color(0xFF334155)),
+                  ),
+                ),
+                selectedColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                checkmarkColor: isDark ? AppColors.darkBackground : Colors.white,
+                backgroundColor: isDark ? const Color(0xFF1E252D) : const Color(0xFFF1F5F9),
+                onSelected: (_) => _toggleAccount(acc),
+              );
+            }).toList(),
+          ),
+
+          const SizedBox(height: 20),
+
+          // 2. Application & Bid Configuration
           Text(
-            '1. APPLICATION DETAILS',
+            '2. BID & LOT CONFIGURATION',
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w800,
@@ -323,81 +296,11 @@ class _IpoApplyViewState extends State<IpoApplyView> {
           ),
           const SizedBox(height: 10),
 
-          // Lots Selector
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: isDark ? AppColors.darkSurfaceCard : Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
-                width: 0.8,
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Lots Applied',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: isDark ? Colors.white : const Color(0xFF0F172A),
-                      ),
-                    ),
-                    Text(
-                      '${_lotsApplied * widget.ipo.lotSize} Shares (${widget.ipo.lotSize} per lot)',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                      ),
-                    ),
-                  ],
-                ),
-                Row(
-                  children: [
-                    IconButton.outlined(
-                      icon: const Icon(Icons.remove_rounded, size: 18),
-                      onPressed: _lotsApplied > 1
-                          ? () {
-                              setState(() {
-                                _lotsApplied--;
-                                _recalculateSelfAmountOnLotChange();
-                              });
-                            }
-                          : null,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '$_lotsApplied',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton.outlined(
-                      icon: const Icon(Icons.add_rounded, size: 18),
-                      onPressed: () {
-                        setState(() {
-                          _lotsApplied++;
-                          _recalculateSelfAmountOnLotChange();
-                        });
-                      },
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
           // Bid Price Field
           TextField(
             controller: _bidPriceController,
             keyboardType: TextInputType.number,
-            onChanged: (_) => setState(() => _recalculateSelfAmountOnLotChange()),
+            onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
               prefixText: '₹ ',
               labelText: 'Bid / Cut-off Price per Share',
@@ -406,9 +309,153 @@ class _IpoApplyViewState extends State<IpoApplyView> {
             ),
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
-          // Total Application Amount Display
+          // Per-Account Lots Configuration Cards
+          ..._selectedAccounts.values.map((cfg) {
+            final accAmountPaise = _calculateAccountAmountPaise(cfg.lots);
+            final availableCreditPaise = ipoVm.getAccountAvailableCreditPaise(cfg.account.id);
+            final remainingNeededPaise = (accAmountPaise - availableCreditPaise).clamp(0, accAmountPaise);
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.darkSurfaceCard : Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+                  width: 0.8,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            cfg.account.isSelf ? Icons.person_rounded : Icons.group_rounded,
+                            size: 18,
+                            color: AppColors.emeraldPrimary,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            cfg.account.displayName,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: isDark ? Colors.white : const Color(0xFF0F172A),
+                            ),
+                          ),
+                          if (cfg.account.maskedPan.isNotEmpty) ...[
+                            const SizedBox(width: 6),
+                            Text(
+                              '(${cfg.account.maskedPan})',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isDark ? Colors.white54 : Colors.black45,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      Text(
+                        CurrencyFormatter.formatPaise(accAmountPaise, currencyCode: 'INR'),
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Lots: ${cfg.lots} (${cfg.lots * widget.ipo.lotSize} shares)',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          IconButton.outlined(
+                            icon: const Icon(Icons.remove_rounded, size: 16),
+                            onPressed: cfg.lots > 1
+                                ? () {
+                                    setState(() {
+                                      cfg.lots--;
+                                    });
+                                  }
+                                : null,
+                          ),
+                          const SizedBox(width: 8),
+                          Text('${cfg.lots}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                          const SizedBox(width: 8),
+                          IconButton.outlined(
+                            icon: const Icon(Icons.add_rounded, size: 16),
+                            onPressed: () {
+                              setState(() {
+                                cfg.lots++;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  if (availableCreditPaise > 0) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.emeraldPrimary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.account_balance_wallet_outlined, size: 14, color: AppColors.emeraldPrimary),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Eligible Reusable Credit: ${CurrencyFormatter.formatPaise(availableCreditPaise, currencyCode: 'INR')}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.emeraldPrimary,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Additional Amount Needed: ${CurrencyFormatter.formatPaise(remainingNeededPaise, currencyCode: 'INR')}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: remainingNeededPaise > 0 ? Colors.amber.shade700 : AppColors.emeraldPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          }),
+
+          const SizedBox(height: 14),
+
+          // Total Summary Banner
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
@@ -426,7 +473,7 @@ class _IpoApplyViewState extends State<IpoApplyView> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Total Application Amount',
+                      'Total Applications Required',
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
@@ -434,7 +481,7 @@ class _IpoApplyViewState extends State<IpoApplyView> {
                       ),
                     ),
                     Text(
-                      '$_lotsApplied Lots × ${widget.ipo.lotSize} Shares × ₹$_bidPrice',
+                      '${_selectedAccounts.length} Account(s) • ${_selectedAccounts.values.fold<int>(0, (s, c) => s + c.lots)} Lots Total',
                       style: TextStyle(
                         fontSize: 10,
                         color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
@@ -443,7 +490,7 @@ class _IpoApplyViewState extends State<IpoApplyView> {
                   ],
                 ),
                 Text(
-                  CurrencyFormatter.formatPaise(totalAppPaise, currencyCode: 'INR'),
+                  CurrencyFormatter.formatPaise(_grandTotalApplicationAmountPaise, currencyCode: 'INR'),
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w900,
@@ -454,196 +501,9 @@ class _IpoApplyViewState extends State<IpoApplyView> {
             ),
           ),
 
-          const SizedBox(height: 24),
-
-          // Who funded this IPO Section
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '2. WHO FUNDED THIS IPO?',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.6,
-                  color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                ),
-              ),
-              TextButton.icon(
-                onPressed: _addContributorModal,
-                icon: const Icon(Icons.person_add_alt_1_rounded, size: 16),
-                label: const Text('Add Friend', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-
-          // Me (Self Contributor)
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: isDark ? AppColors.darkSurfaceCard : Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
-                width: 0.8,
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.15),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(Icons.person_rounded, size: 16, color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary),
-                    ),
-                    const SizedBox(width: 10),
-                    const Text(
-                      'Me (My Contribution)',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                KithAmountCalculatorField(
-                  controller: _selfAmountController,
-                  currencyCode: 'INR',
-                  onAmountChanged: (_) => setState(() {}),
-                ),
-              ],
-            ),
-          ),
-
-          // Peer Contributors List
-          ..._contributors.asMap().entries.map((entry) {
-            final idx = entry.key;
-            final item = entry.value;
-            return Padding(
-              padding: const EdgeInsets.only(top: 12.0),
-              child: Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: isDark ? AppColors.darkSurfaceCard : Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
-                    width: 0.8,
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(6),
-                              decoration: BoxDecoration(
-                                color: Colors.blueAccent.withValues(alpha: 0.15),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(Icons.group_rounded, size: 16, color: Colors.blueAccent),
-                            ),
-                            const SizedBox(width: 10),
-                            Text(
-                              item.name,
-                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-                            ),
-                          ],
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close_rounded, size: 18, color: Colors.redAccent),
-                          onPressed: () {
-                            setState(() {
-                              _contributors.removeAt(idx);
-                            });
-                          },
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    KithAmountCalculatorField(
-                      controller: item.controller,
-                      currencyCode: 'INR',
-                      onAmountChanged: (_) => setState(() {}),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }),
-
-          const SizedBox(height: 14),
-
-          // Live Funding Allocation Validation Box
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: isExactMatch
-                  ? (isDark ? const Color(0xFF132A22) : const Color(0xFFE8F5E9))
-                  : (diffPaise > 0
-                      ? (isDark ? const Color(0xFF2C2411) : const Color(0xFFFEF3C7))
-                      : (isDark ? const Color(0xFF2E1719) : const Color(0xFFFFE4E6))),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isExactMatch
-                    ? (isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight)
-                    : (diffPaise > 0 ? Colors.amber : Colors.redAccent),
-                width: 1,
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  isExactMatch
-                      ? Icons.check_circle_rounded
-                      : (diffPaise > 0 ? Icons.info_outline_rounded : Icons.warning_amber_rounded),
-                  color: isExactMatch
-                      ? (isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight)
-                      : (diffPaise > 0 ? Colors.amber : Colors.redAccent),
-                  size: 20,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        isExactMatch
-                            ? 'Funding matches application amount perfectly!'
-                            : (diffPaise > 0
-                                ? '₹${CurrencyFormatter.formatPaise(diffPaise.abs(), currencyCode: 'INR')} remaining to allocate'
-                                : 'Funding exceeds application amount by ₹${CurrencyFormatter.formatPaise(diffPaise.abs(), currencyCode: 'INR')}'),
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: isExactMatch
-                              ? (isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight)
-                              : (diffPaise > 0 ? Colors.amber : Colors.redAccent),
-                        ),
-                      ),
-                      Text(
-                        'Total Allocated: ${CurrencyFormatter.formatPaise(totalAllocPaise, currencyCode: 'INR')} / ${CurrencyFormatter.formatPaise(totalAppPaise, currencyCode: 'INR')}',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
           const SizedBox(height: 16),
+
+          // Notes
           TextField(
             controller: _notesController,
             decoration: InputDecoration(
@@ -661,18 +521,14 @@ class _IpoApplyViewState extends State<IpoApplyView> {
             height: 50,
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: isExactMatch
-                    ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
-                    : (isDark ? const Color(0xFF2C3238) : const Color(0xFFCBD5E1)),
-                foregroundColor: isExactMatch
-                    ? (isDark ? AppColors.darkBackground : Colors.white)
-                    : const Color(0xFF64748B),
+                backgroundColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                foregroundColor: isDark ? AppColors.darkBackground : Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
-              onPressed: isExactMatch ? _saveApplication : null,
-              child: const Text(
-                'Save Application & Update Ledger',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+              onPressed: _saveApplications,
+              child: Text(
+                'Save ${_selectedAccounts.length == 1 ? 'Application' : '${_selectedAccounts.length} Applications'} & Update Ledger',
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
               ),
             ),
           ),
@@ -681,59 +537,61 @@ class _IpoApplyViewState extends State<IpoApplyView> {
     );
   }
 
-  Future<void> _saveApplication() async {
+  Future<void> _saveApplications() async {
     HapticHelper.medium();
     final authVm = context.read<AuthViewModel>();
     final ipoVm = context.read<IpoViewModel>();
     final userId = authVm.currentUser?.id ?? 'usr_current';
-    final appId = widget.existingApplication?.id ?? const Uuid().v4();
 
-    final fundings = <IpoFunding>[
-      IpoFunding(
-        id: const Uuid().v4(),
-        applicationId: appId,
-        funderType: IpoFunderType.self,
-        amountInPaise: _selfAmountPaise,
-      ),
-    ];
+    final applicationsToSave = <IpoApplication>[];
 
-    for (final c in _contributors) {
-      final amt = KithCalculatorEngine.evaluateToPaise(c.controller.text.trim());
-      if (amt > 0) {
-        fundings.add(IpoFunding(
+    for (final cfg in _selectedAccounts.values) {
+      final appId = const Uuid().v4();
+      final totalAmountPaise = _calculateAccountAmountPaise(cfg.lots);
+      final availableCreditPaise = ipoVm.getAccountAvailableCreditPaise(cfg.account.id);
+      final remainingNeededPaise = (totalAmountPaise - availableCreditPaise).clamp(0, totalAmountPaise);
+
+      final fundings = <IpoFunding>[
+        IpoFunding(
           id: const Uuid().v4(),
           applicationId: appId,
-          funderType: IpoFunderType.person,
-          personName: c.name,
-          personUserId: c.userId,
-          amountInPaise: amt,
-        ));
-      }
+          funderType: cfg.account.isSelf ? IpoFunderType.self : IpoFunderType.person,
+          personName: cfg.account.isSelf ? null : cfg.account.displayName,
+          amountInPaise: totalAmountPaise,
+        ),
+      ];
+
+      final app = IpoApplication(
+        id: appId,
+        ipoId: widget.ipo.id,
+        ipoName: widget.ipo.name,
+        userId: userId,
+        applicationAccountId: cfg.account.id,
+        accountDisplayName: cfg.account.displayName,
+        accountMaskedPan: cfg.account.maskedPan,
+        applicationDate: DateTime.now(),
+        lotsApplied: cfg.lots,
+        lotSize: widget.ipo.lotSize,
+        bidPriceInRupees: _bidPrice,
+        applicationAmountInPaise: totalAmountPaise,
+        paidAmountInPaise: totalAmountPaise,
+        remainingAmountInPaise: remainingNeededPaise,
+        fundings: fundings,
+        status: IpoApplicationStatus.applied,
+        notes: _notesController.text.trim(),
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      applicationsToSave.add(app);
     }
 
-    final application = IpoApplication(
-      id: appId,
-      ipoId: widget.ipo.id,
-      ipoName: widget.ipo.name,
-      userId: userId,
-      applicationDate: DateTime.now(),
-      lotsApplied: _lotsApplied,
-      lotSize: widget.ipo.lotSize,
-      bidPriceInRupees: _bidPrice,
-      applicationAmountInPaise: _totalApplicationAmountPaise,
-      fundings: fundings,
-      status: IpoApplicationStatus.applied,
-      notes: _notesController.text.trim(),
-      createdAt: widget.existingApplication?.createdAt ?? DateTime.now(),
-      updatedAt: DateTime.now(),
-    );
-
-    await ipoVm.recordApplication(application);
+    await ipoVm.recordMultipleApplications(applicationsToSave);
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Application for ${widget.ipo.name} saved!'),
+          content: Text('${applicationsToSave.length} application(s) for ${widget.ipo.name} saved!'),
           backgroundColor: AppColors.emeraldPrimary,
         ),
       );
