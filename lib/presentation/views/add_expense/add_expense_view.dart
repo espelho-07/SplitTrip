@@ -9,6 +9,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/utils/kith_calculator_engine.dart';
+import '../../../core/services/location_service.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/kith_amount_calculator_field.dart';
 import '../../../core/widgets/kith_numeric_keypad.dart';
@@ -58,6 +59,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
+  bool _isFetchingLocation = false;
   DateTime _selectedDate = DateTime.now();
   bool _isLoadingTrip = true;
   bool _showCustomKeypad = true;
@@ -137,6 +139,49 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     }
 
     setState(() => _isLoadingTrip = false);
+  }
+
+  Future<void> _fetchCurrentLocation(AddExpenseViewModel addVm) async {
+    if (_isFetchingLocation) return;
+    setState(() => _isFetchingLocation = true);
+    HapticHelper.selection();
+
+    final place = await LocationService().getCurrentPlaceName();
+    if (!mounted) return;
+
+    setState(() => _isFetchingLocation = false);
+
+    if (place != null && place.trim().isNotEmpty) {
+      HapticHelper.medium();
+      _locationController.text = place;
+      addVm.setLocation(place);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.location_on_rounded, color: Colors.white, size: 16),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text('📍 $place', maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
+            ],
+          ),
+          backgroundColor: const Color(0xFF14B8A6),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } else {
+      HapticHelper.warning();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not fetch location. You can type manually.'),
+          backgroundColor: Color(0xFFE11D48),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   @override
@@ -637,9 +682,9 @@ class _AddExpenseViewState extends State<AddExpenseView> {
             color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
           ),
 
-          // Where / Location Field (Merchant / Place)
+          // Where / Location Field (Manual Typing or Current GPS Location)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             child: Row(
               children: [
                 Icon(
@@ -668,15 +713,74 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                     onChanged: (val) => addVm.setLocation(val),
                   ),
                 ),
-                if (_locationController.text.isNotEmpty)
+                if (_locationController.text.isNotEmpty) ...[
                   GestureDetector(
                     onTap: () {
                       HapticHelper.light();
                       _locationController.clear();
                       addVm.setLocation('');
+                      setState(() {});
                     },
-                    child: Icon(Icons.close_rounded, size: 16, color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Icon(
+                        Icons.close_rounded,
+                        size: 17,
+                        color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                      ),
+                    ),
                   ),
+                  const SizedBox(width: 4),
+                ],
+
+                // "Current Location" GPS Action Button
+                Tooltip(
+                  message: 'Use Current Location',
+                  child: InkWell(
+                    onTap: _isFetchingLocation ? null : () => _fetchCurrentLocation(addVm),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF14B8A6).withValues(alpha: isDark ? 0.18 : 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: const Color(0xFF14B8A6).withValues(alpha: 0.3),
+                          width: 0.8,
+                        ),
+                      ),
+                      child: _isFetchingLocation
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 1.8,
+                                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF14B8A6)),
+                              ),
+                            )
+                          : Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.my_location_rounded,
+                                  size: 14,
+                                  color: Color(0xFF14B8A6),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'GPS',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    color: const Color(0xFF14B8A6),
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
+                              ],
+                            ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
