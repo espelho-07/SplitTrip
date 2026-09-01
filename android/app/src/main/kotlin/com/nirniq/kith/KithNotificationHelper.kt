@@ -17,6 +17,10 @@ object KithNotificationHelper {
     const val CHANNEL_NAME = "Kith Activity"
     const val CHANNEL_ID_PAYMENTS = "kith_payments"
     const val CHANNEL_NAME_PAYMENTS = "Kith Payments & Settlements"
+    const val CHANNEL_ID_EXPENSES = "kith_expenses"
+    const val CHANNEL_NAME_EXPENSES = "Kith Expenses"
+    const val CHANNEL_ID_TRIPS = "kith_trips"
+    const val CHANNEL_NAME_TRIPS = "Kith Trips & Members"
     const val CHANNEL_ID_IPO = "kith_ipo"
     const val CHANNEL_NAME_IPO = "Kith IPO Alerts & Milestones"
 
@@ -37,17 +41,7 @@ object KithNotificationHelper {
 
             val subtleVibrationPattern = longArrayOf(0, 100, 50, 80)
 
-            // 1. Activity channel (Expenses, Member Updates, Trip Events)
-            val activityChannel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Expenses, member updates, and trip activity alerts"
-                enableLights(true)
-                enableVibration(true)
-                vibrationPattern = subtleVibrationPattern
-                setSound(soundUri, audioAttributes)
-            }
-            notificationManager.createNotificationChannel(activityChannel)
-
-            // 2. Dedicated payments channel (Payment Confirmations, Settlement Requests)
+            // 1. Dedicated payments channel (HIGH Priority)
             val paymentsChannel = NotificationChannel(CHANNEL_ID_PAYMENTS, CHANNEL_NAME_PAYMENTS, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "Payment confirmations, settlement requests, and payment proof notifications"
                 enableLights(true)
@@ -57,8 +51,38 @@ object KithNotificationHelper {
             }
             notificationManager.createNotificationChannel(paymentsChannel)
 
-            // 3. IPO channel (IPO Bidding, Allotment Out, Listing Milestones)
-            val ipoChannel = NotificationChannel(CHANNEL_ID_IPO, CHANNEL_NAME_IPO, NotificationManager.IMPORTANCE_HIGH).apply {
+            // 2. Expenses channel (DEFAULT Priority)
+            val expensesChannel = NotificationChannel(CHANNEL_ID_EXPENSES, CHANNEL_NAME_EXPENSES, NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "New expense alerts, edits, and split updates"
+                enableLights(true)
+                enableVibration(true)
+                vibrationPattern = subtleVibrationPattern
+                setSound(soundUri, audioAttributes)
+            }
+            notificationManager.createNotificationChannel(expensesChannel)
+
+            // 3. Trips & Members channel (DEFAULT Priority)
+            val tripsChannel = NotificationChannel(CHANNEL_ID_TRIPS, CHANNEL_NAME_TRIPS, NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Trip invites, member join alerts, and trip status updates"
+                enableLights(true)
+                enableVibration(true)
+                vibrationPattern = subtleVibrationPattern
+                setSound(soundUri, audioAttributes)
+            }
+            notificationManager.createNotificationChannel(tripsChannel)
+
+            // 4. Activity channel (DEFAULT Priority)
+            val activityChannel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "General collaboration and balance updates"
+                enableLights(true)
+                enableVibration(true)
+                vibrationPattern = subtleVibrationPattern
+                setSound(soundUri, audioAttributes)
+            }
+            notificationManager.createNotificationChannel(activityChannel)
+
+            // 5. IPO channel (DEFAULT Priority)
+            val ipoChannel = NotificationChannel(CHANNEL_ID_IPO, CHANNEL_NAME_IPO, NotificationManager.IMPORTANCE_DEFAULT).apply {
                 description = "IPO bidding reminders, allotment status, and listing alerts"
                 enableLights(true)
                 enableVibration(true)
@@ -74,9 +98,12 @@ object KithNotificationHelper {
         id: Int,
         title: String,
         body: String,
-        route: String? = null
+        route: String? = null,
+        channelId: String? = null
     ) {
         createNotificationChannel(context)
+
+        val selectedChannel = channelId ?: CHANNEL_ID_PAYMENTS
 
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -99,12 +126,12 @@ object KithNotificationHelper {
             pendingIntentFlags
         )
 
-        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(context, selectedChannel)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setPriority(if (selectedChannel == CHANNEL_ID_PAYMENTS) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
             .setSound(getSoundUri(context))
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)

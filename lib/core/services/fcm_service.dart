@@ -1,44 +1,53 @@
-// ignore_for_file: prefer_initializing_formals
+import 'dart:async';
 import 'dart:convert';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/supabase_config.dart';
 import '../../data/services/local_storage_service.dart';
 import '../../domain/services/notification_service.dart';
 import '../network/api_client.dart';
+import 'supabase_cloud_sync.dart';
 
-/// FCM background message handler — MUST be a top-level function.
+/// Top-level background message entry-point for Firebase Cloud Messaging.
+/// Executed in an isolated headless VM when Android receives a background/terminated push.
 @pragma('vm:entry-point')
 Future<void> kithFcmBackgroundHandler(RemoteMessage message) async {
-  debugPrint('[FCM] Background message received: ${message.messageId}');
-  // System-level notification payload with channelId is displayed natively by Android OS
+  debugPrint('[FCM] Background push received: messageId=${message.messageId}, data=${message.data}');
+  // System-level notification payloads with android.notification.channel_id are posted
+  // natively to the Android notification shade by Google Play Services without requiring Dart UI.
 }
 
-/// Service that manages Firebase Cloud Messaging for Kith.
+/// Production FCM Service managing token lifecycle, foreground/background dispatch,
+/// cold-boot deep links, channel routing, and idempotent deduplication.
 class FcmService {
-  final ApiClient _apiClient;
-  final LocalStorageService _storage;
-  final NotificationService _notificationService;
+  final ApiClient apiClient;
+  final LocalStorageService storage;
+  final NotificationService notificationService;
+  final SupabaseCloudSync _cloudSync = SupabaseCloudSync();
+
+  ApiClient get _apiClient => apiClient;
+  LocalStorageService get _storage => storage;
+  NotificationService get _notificationService => notificationService;
 
   void Function(String route)? _onNavigate;
   String? _pendingRoute;
+  String? _pendingInitialRoute;
+
+  final Set<String> _processedMessageIds = <String>{};
 
   FcmService({
-    required ApiClient apiClient,
-    required LocalStorageService storage,
-    required NotificationService notificationService,
-  })  : _apiClient = apiClient,
-        _storage = storage,
-        _notificationService = notificationService;
+    required this.apiClient,
+    required this.storage,
+    required this.notificationService,
+  });
 
   void setNavigationHandler(void Function(String route) handler) {
     _onNavigate = handler;
     if (_pendingRoute != null) {
       final route = _pendingRoute!;
       _pendingRoute = null;
-      Future.delayed(const Duration(milliseconds: 400), () {
+      Future.delayed(const Duration(milliseconds: 350), () {
         handler(route);
       });
     }
@@ -53,10 +62,20 @@ class FcmService {
     }
   }
 
+  /// Consumes and clears any initial route set when the app was launched by tapping
+  /// a notification while the process was terminated/killed.
+  String? consumePendingInitialRoute() {
+    final route = _pendingInitialRoute;
+    _pendingInitialRoute = null;
+    return route;
+  }
+
+  /// Registers the top-level background handler. Must be called in main().
   static void registerBackgroundHandler() {
     FirebaseMessaging.onBackgroundMessage(kithFcmBackgroundHandler);
   }
 
+  /// Initializes FCM permissions, token registration, streams, and initial messages.
   Future<void> init() async {
     try {
       // 1. Android 13+ runtime POST_NOTIFICATIONS permission
@@ -75,61 +94,118 @@ class FcmService {
       );
       debugPrint('[FCM] Permission status: ${settings.authorizationStatus}');
 
-      // Suppress FCM auto-display in foreground — we render our own styled in-app notification
+      // Suppress FCM auto-banner in foreground — we display our own in-app notification
       await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
         alert: false,
         badge: true,
         sound: false,
       );
 
+      // 2. Initial token registration
       final token = await FirebaseMessaging.instance.getToken();
       if (token != null && token.isNotEmpty) {
         await _registerTokenWithServer(token);
       }
 
+      // 3. Listen for token refreshes
       FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
+        debugPrint('[FCM] Token refreshed');
         await _registerTokenWithServer(newToken);
       });
 
-      // Foreground message handler
+      // 4. Foreground message listener
       FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
 
-      // Background tap (app was backgrounded)
+      // 5. Background message opened listener (app backgrounded)
       FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
 
-      // Terminated tap (app was killed/swiped from recents)
+      // 6. Cold-boot message check (app was completely terminated/killed)
       final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
       if (initialMessage != null) {
-        _handleNotificationTap(initialMessage);
+        debugPrint('[FCM] App launched from cold-boot initial message: ${initialMessage.messageId}');
+        final targetRoute = _extractRouteFromMessage(initialMessage);
+        if (targetRoute != null && targetRoute.isNotEmpty) {
+          _pendingInitialRoute = targetRoute;
+        }
       }
     } catch (e) {
       debugPrint('[FCM] Init error (non-fatal): $e');
     }
   }
 
-  void _handleForegroundMessage(RemoteMessage message) {
-    final notification = message.notification;
+  String? _extractRouteFromMessage(RemoteMessage message) {
     final data = message.data;
+    final explicitRoute = data['route'] as String?;
+    if (explicitRoute != null && explicitRoute.isNotEmpty) {
+      return explicitRoute;
+    }
 
-    final title = notification?.title ?? data['title'] as String? ?? 'Kith';
-    final body = notification?.body ?? data['body'] as String? ?? '';
-    final route = data['route'] as String?;
-    final eventType = data['type'] as String? ?? 'settlement';
-    final idempotencyKey = data['idempotencyKey'] as String?;
     final tripId = data['tripId'] as String?;
     final settlementId = data['settlementId'] as String?;
     final expenseId = data['expenseId'] as String?;
+    final ipoId = data['ipoId'] as String?;
+    final personName = data['personName'] as String?;
+
+    if (tripId != null && tripId.isNotEmpty) {
+      if (expenseId != null && expenseId.isNotEmpty) {
+        return '/trip/$tripId?expenseId=$expenseId';
+      }
+      if (settlementId != null && settlementId.isNotEmpty) {
+        return '/trip/$tripId?settlementId=$settlementId';
+      }
+      return '/trip/$tripId';
+    }
+
+    if (ipoId != null && ipoId.isNotEmpty) {
+      return '/ipo/$ipoId';
+    }
+
+    if (personName != null && personName.isNotEmpty) {
+      return '/person-ledger?name=${Uri.encodeComponent(personName)}';
+    }
+
+    final type = (data['type'] as String? ?? '').toLowerCase();
+    if (type.contains('debt') || type.contains('lending') || type.contains('borrowing')) {
+      return '/personal/debts';
+    }
+    if (type.contains('settle') || type.contains('payment')) {
+      return '/balances';
+    }
+
+    return null;
+  }
+
+  void _handleForegroundMessage(RemoteMessage message) {
+    final messageId = message.messageId ?? '';
+    final data = message.data;
+    final idempotencyKey = data['idempotencyKey'] as String? ?? messageId;
+
+    if (idempotencyKey.isNotEmpty && _processedMessageIds.contains(idempotencyKey)) {
+      debugPrint('[FCM] Duplicate message suppressed: $idempotencyKey');
+      return;
+    }
+    if (idempotencyKey.isNotEmpty) {
+      _processedMessageIds.add(idempotencyKey);
+    }
+
+    final notification = message.notification;
+    final title = notification?.title ?? data['title'] as String? ?? 'Kith';
+    final body = notification?.body ?? data['body'] as String? ?? '';
+    final eventType = data['type'] as String? ?? 'activity';
+    final targetRoute = _extractRouteFromMessage(message);
 
     final notifType = eventType.contains('ipo')
         ? NotificationType.ipo
-        : eventType.contains('expense') || eventType.contains('debt')
+        : (eventType.contains('expense') || eventType.contains('debt'))
             ? NotificationType.expense
             : (eventType.contains('trip') || eventType.contains('member'))
                 ? NotificationType.trip
                 : NotificationType.settlement;
 
-    if (eventType == 'settlement_marked_paid' && settlementId != null) {
-      // Store payment verification in local vault for immediate foreground prompt
+    final tripId = data['tripId'] as String?;
+    final settlementId = data['settlementId'] as String?;
+
+    if ((eventType == 'settlement_marked_paid' || eventType == 'PAYMENT_RECEIVED') && settlementId != null) {
       _storage.addPaymentVerification({
         'id': 'pvr_$settlementId',
         'settlementId': settlementId,
@@ -147,55 +223,18 @@ class FcmService {
       });
     }
 
-    final ipoId = data['ipoId'] as String?;
-    final personName = data['personName'] as String?;
-
-    final targetRoute = route ??
-        (tripId != null
-            ? (expenseId != null
-                ? '/trip/$tripId?expenseId=$expenseId'
-                : (settlementId != null ? '/trip/$tripId?settlementId=$settlementId' : '/trip/$tripId'))
-            : (ipoId != null
-                ? '/ipo/$ipoId'
-                : (personName != null
-                    ? '/personal/person?name=${Uri.encodeComponent(personName)}'
-                    : null)));
-
     _notificationService.addNotification(
       title: title,
       description: body,
       type: notifType,
       route: targetRoute,
       actionLabel: _actionLabelForType(eventType),
-      idempotencyKey: idempotencyKey ??
-          (expenseId != null
-              ? '${expenseId}_$eventType'
-              : (settlementId != null
-                  ? '${settlementId}_$eventType'
-                  : (ipoId != null ? '${ipoId}_$eventType' : null))),
+      idempotencyKey: idempotencyKey,
     );
   }
 
   void _handleNotificationTap(RemoteMessage message) {
-    final data = message.data;
-    final route = data['route'] as String?;
-    final tripId = data['tripId'] as String?;
-    final settlementId = data['settlementId'] as String?;
-    final expenseId = data['expenseId'] as String?;
-    final ipoId = data['ipoId'] as String?;
-    final personName = data['personName'] as String?;
-
-    final targetRoute = route ??
-        (tripId != null
-            ? (expenseId != null
-                ? '/trip/$tripId?expenseId=$expenseId'
-                : (settlementId != null ? '/trip/$tripId?settlementId=$settlementId' : '/trip/$tripId'))
-            : (ipoId != null
-                ? '/ipo/$ipoId'
-                : (personName != null
-                    ? '/personal/person?name=${Uri.encodeComponent(personName)}'
-                    : null)));
-
+    final targetRoute = _extractRouteFromMessage(message);
     if (targetRoute != null && targetRoute.isNotEmpty) {
       if (_onNavigate != null) {
         Future.delayed(const Duration(milliseconds: 300), () {
@@ -208,33 +247,13 @@ class FcmService {
   }
 
   String _actionLabelForType(String eventType) {
-    switch (eventType) {
-      case 'settlement_marked_paid':
-        return 'Confirm';
-      case 'settlement_confirmed':
-        return 'View';
-      case 'settlement_disputed':
-        return 'Resolve';
-      case 'payment_proof_submitted':
-        return 'Review';
-      case 'expense_created':
-      case 'expense_updated':
-        return 'View Expense';
-      case 'expense_deleted':
-      case 'member_joined':
-      case 'trip_completed':
-        return 'View Trip';
-      case 'ipo_open':
-      case 'ipo_allotment':
-      case 'ipo_listing':
-      case 'ipo_close':
-        return 'View IPO';
-      case 'debt_added':
-      case 'debt_repaid':
-        return 'View Balance';
-      default:
-        return 'Open';
-    }
+    final lower = eventType.toLowerCase();
+    if (lower.contains('paid') || lower.contains('payment')) return 'Confirm';
+    if (lower.contains('expense')) return 'View Expense';
+    if (lower.contains('trip') || lower.contains('member')) return 'View Trip';
+    if (lower.contains('ipo')) return 'View IPO';
+    if (lower.contains('debt')) return 'View Balance';
+    return 'Open';
   }
 
   Future<void> registerToken() async {
@@ -260,35 +279,37 @@ class FcmService {
 
       final user = _storage.getSavedUser();
       if (user != null && user['id'] != null) {
+        final userId = user['id'] as String;
+        final accountId = user['accountId'] as String? ?? userId;
         final tokenStr = user['anonymousToken']?.toString() ?? user['token']?.toString();
         if (tokenStr != null && tokenStr.isNotEmpty) {
           _apiClient.setAuthToken(tokenStr);
         }
 
-        await _apiClient.post('/auth/fcm-token', body: {
-          'token': token,
-          'deviceId': deviceId,
-          'platform': 'android',
-          'userId': user['id'],
-        });
-        debugPrint('[FCM] Token registered with server for user ${user['id']}');
+        // 1. Register with backend API
+        try {
+          await _apiClient.post('/auth/fcm-token', body: {
+            'token': token,
+            'deviceId': deviceId,
+            'platform': 'android',
+            'userId': userId,
+            'accountId': accountId,
+          });
+        } catch (_) {}
 
-        // Layer 2: Sync to Supabase device_tokens / user_fcm_tokens table
+        // 2. Register on Supabase user_fcm_tokens
         if (SupabaseConfig.isConfigured) {
           try {
-            await Supabase.instance.client.from('user_fcm_tokens').upsert({
-              'user_id': user['id'],
-              'device_id': deviceId,
-              'token': token,
-              'platform': 'android',
-              'updated_at': DateTime.now().toIso8601String(),
-            }, onConflict: 'user_id,device_id');
-          } catch (_) {
-            // Non-fatal if table not provisioned
+            await _cloudSync.registerFcmToken(
+              userId: accountId,
+              deviceId: deviceId,
+              token: token,
+              platform: 'android',
+            );
+          } catch (e) {
+            debugPrint('[FCM] Supabase token upsert notice (non-fatal): $e');
           }
         }
-      } else {
-        debugPrint('[FCM] Token saved locally, will register once user session is active');
       }
     } catch (e) {
       debugPrint('[FCM] Token registration notice: $e');
@@ -299,7 +320,15 @@ class FcmService {
     try {
       final token = _storage.getString('kith_fcm_token');
       if (token != null) {
-        await _apiClient.post('/auth/fcm-token/delete', body: {'token': token});
+        try {
+          await _apiClient.post('/auth/fcm-token/delete', body: {'token': token});
+        } catch (_) {}
+
+        if (SupabaseConfig.isConfigured) {
+          try {
+            await _cloudSync.unregisterFcmToken(token);
+          } catch (_) {}
+        }
       }
       await _storage.remove('kith_fcm_token');
       await FirebaseMessaging.instance.deleteToken();
@@ -308,5 +337,3 @@ class FcmService {
     }
   }
 }
-
-

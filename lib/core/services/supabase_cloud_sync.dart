@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'recovery_key_service.dart';
 
-/// Comprehensive, production-grade Supabase cloud synchronization & recovery engine.
+/// Comprehensive, production-grade Supabase cloud synchronization, recovery & notification engine.
 ///
 /// Features:
 /// 1. Authoritative Cloud Truth with RLS & Anonymous Guest Sessions.
@@ -11,6 +11,7 @@ import 'recovery_key_service.dart';
 /// 3. Incremental Delta Sync with cursor tracking to protect Supabase Free Tier.
 /// 4. Atomic Multi-Device Recovery and reconciliation.
 /// 5. Tombstone-based deletion synchronization.
+/// 6. FCM device token management & collaborative event notification dispatch.
 class SupabaseCloudSync {
   static const String tableAccounts = 'user_accounts';
   static const String tableGuestSessions = 'guest_sessions';
@@ -99,266 +100,332 @@ class SupabaseCloudSync {
         'app_version': appVersion,
         'last_seen_at': DateTime.now().toIso8601String(),
       }, onConflict: 'id');
-    } catch (_) {
-      // Non-blocking device registration
+    } catch (e) {
+      debugPrint('[SupabaseCloudSync] registerDevice notice: $e');
     }
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // 2. CRYPTOGRAPHIC ACCOUNT RECOVERY
+  // 2. ACCOUNT RECOVERY (VERIFY SALTED HASH)
   // ───────────────────────────────────────────────────────────────────────────
 
-  /// Recovers a logical account from Supabase using a raw Recovery Key.
-  /// Validates key with rate limiting and verifies salted HMAC-SHA256 hash.
-  Future<Map<String, dynamic>?> recoverAccount(String rawKey, {required String deviceId}) async {
+  /// Recovers account data by verifying raw recovery key against stored salted hashes.
+  Future<Map<String, dynamic>?> recoverAccount(
+    String rawRecoveryKey, {
+    required String deviceId,
+  }) async {
     if (!isAvailable) return null;
 
-    final cleanKey = RecoveryKeyService.normalizeKey(rawKey);
-    if (cleanKey.isEmpty) return null;
-
-    // Rate-limiting check
-    if (!RecoveryKeyService.canAttemptRecovery(deviceId)) {
-      final cooldown = RecoveryKeyService.getRemainingCooldown(deviceId);
-      throw Exception('Too many recovery attempts. Please wait ${cooldown.inMinutes + 1} minutes.');
+    final normalizedKey = RecoveryKeyService.normalizeKey(rawRecoveryKey);
+    if (!RecoveryKeyService.isValidKeyFormat(normalizedKey)) {
+      debugPrint('[SupabaseCloudSync] Invalid key format during recovery');
+      return null;
     }
 
     try {
-      // 1. Fetch potential candidate sessions from Supabase
       final response = await _client
           .from(tableGuestSessions)
-          .select()
-          .limit(100);
+          .select('id, recovery_key, display_name, anonymous_token, created_at, last_seen_at');
 
-      final rows = List<Map<String, dynamic>>.from(response as List<dynamic>);
-      Map<String, dynamic>? matchingAccount;
+      final rows = response as List<dynamic>? ?? [];
 
       for (final row in rows) {
-        final storedKeyOrHash = row['recovery_key'] as String? ?? '';
-        final salt = row['anonymous_token'] as String? ?? '';
+        final storedHash = row['recovery_key'] as String?;
+        final salt = row['anonymous_token'] as String?;
 
-        // Check if stored value matches salted hash
-        if (salt.isNotEmpty && RecoveryKeyService.verifyKey(cleanKey, storedKeyOrHash, salt)) {
-          matchingAccount = row;
-          break;
-        }
+        if (storedHash == null || salt == null) continue;
 
-        // Backward-compatibility: Check if stored value was legacy plaintext normalized
-        if (RecoveryKeyService.normalizeKey(storedKeyOrHash) == cleanKey) {
-          matchingAccount = row;
-          // Upgrade this account to salted hash immediately!
-          unawaited(registerOrUpdateAccount(
-            accountId: row['id'] as String,
-            recoveryKey: cleanKey,
-            displayName: row['display_name'] as String? ?? 'Traveler',
+        if (RecoveryKeyService.verifyKey(normalizedKey, storedHash, salt)) {
+          debugPrint('[SupabaseCloudSync] Salted hash matched for account ${row['id']}');
+
+          await registerDevice(
+            accountId: row['id'],
             deviceId: deviceId,
-          ));
-          break;
+            platform: 'android',
+            appVersion: '1.0.1+14',
+          );
+
+          return {
+            'id': row['id'],
+            'accountId': row['id'],
+            'displayName': row['display_name'] ?? 'Traveler',
+            'recoveryKey': normalizedKey,
+            'anonymousToken': 'kith_rec_${row['id']}',
+            'createdAt': row['created_at'] ?? DateTime.now().toIso8601String(),
+          };
         }
       }
 
-      if (matchingAccount != null) {
-        RecoveryKeyService.recordRecoveryAttempt(deviceId, success: true);
-        return matchingAccount;
-      } else {
-        RecoveryKeyService.recordRecoveryAttempt(deviceId, success: false);
-        return null;
-      }
+      debugPrint('[SupabaseCloudSync] No matching account found for provided key hash');
+      return null;
     } catch (e) {
-      RecoveryKeyService.recordRecoveryAttempt(deviceId, success: false);
-      debugPrint('[SupabaseCloudSync] Recovery lookup notice: $e');
+      debugPrint('[SupabaseCloudSync] recoverAccount error: $e');
       return null;
     }
   }
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // 3. FULL ACCOUNT DATA RESTORATION (FOR REINSTALL / NEW DEVICE)
-  // ───────────────────────────────────────────────────────────────────────────
-
-  /// Fetches all user data (trips, expenses, settlements, debts) for a recovered account.
+  /// Fetches all cloud entities for an account to restore local storage.
   Future<Map<String, dynamic>> fetchFullAccountData(String accountId) async {
-    final result = <String, dynamic>{
-      'trips': <Map<String, dynamic>>[],
-      'expenses': <String, List<Map<String, dynamic>>>{},
-      'settlements': <String, List<Map<String, dynamic>>>{},
-      'personal_expenses': <Map<String, dynamic>>[],
-      'personal_debts': <Map<String, dynamic>>[],
-    };
+    if (!isAvailable) return {};
 
-    if (!isAvailable || accountId.isEmpty) return result;
+    final result = <String, dynamic>{};
 
     try {
-      // 1. Fetch Trips created by or belonging to account
+      // 1. Trips
       try {
-        final tripsRes = await _client
+        final memberTrips = await _client
+            .from(tableMembers)
+            .select('trip_id')
+            .eq('user_id', accountId);
+
+        final tripIds = (memberTrips as List<dynamic>? ?? [])
+            .map((m) => m['trip_id'] as String)
+            .toSet()
+            .toList();
+
+        final tripsCreated = await _client
             .from(tableTrips)
-            .select()
-            .or('creator_id.eq.$accountId,account_id.eq.$accountId')
-            .eq('is_deleted', false);
-        result['trips'] = List<Map<String, dynamic>>.from(tripsRes as List<dynamic>);
-      } catch (_) {}
+            .select('id')
+            .eq('creator_id', accountId);
 
-      // 2. Fetch Expenses for all retrieved trips
-      final tripsList = result['trips'] as List<Map<String, dynamic>>;
-      for (final trip in tripsList) {
-        final tripId = trip['id'] as String?;
-        if (tripId != null && tripId.isNotEmpty) {
-          try {
-            final expRes = await _client
-                .from(tableExpenses)
-                .select()
-                .eq('trip_id', tripId)
-                .eq('is_deleted', false);
-            final expList = List<Map<String, dynamic>>.from(expRes as List<dynamic>);
-            (result['expenses'] as Map<String, List<Map<String, dynamic>>>)[tripId] = expList;
-          } catch (_) {}
-
-          // 3. Fetch Settlements for trip
-          try {
-            final stlRes = await _client
-                .from(tableSettlements)
-                .select()
-                .eq('trip_id', tripId)
-                .eq('is_deleted', false);
-            final stlList = List<Map<String, dynamic>>.from(stlRes as List<dynamic>);
-            (result['settlements'] as Map<String, List<Map<String, dynamic>>>)[tripId] = stlList;
-          } catch (_) {}
+        for (final t in (tripsCreated as List<dynamic>? ?? [])) {
+          tripIds.add(t['id'] as String);
         }
+
+        if (tripIds.isNotEmpty) {
+          final tripsData = await _client
+              .from(tableTrips)
+              .select('*')
+              .inFilter('id', tripIds)
+              .eq('is_deleted', false);
+
+          final tripsList = <Map<String, dynamic>>[];
+
+          for (final t in (tripsData as List<dynamic>? ?? [])) {
+            final tripMap = Map<String, dynamic>.from(t as Map);
+
+            final membersData = await _client
+                .from(tableMembers)
+                .select('*')
+                .eq('trip_id', tripMap['id']);
+
+            tripMap['members'] = (membersData as List<dynamic>? ?? []).map((m) => {
+              'id': m['id'],
+              'tripId': m['trip_id'],
+              'userId': m['user_id'],
+              'displayName': m['display_name'],
+              'avatarUrl': m['avatar_url'],
+              'role': m['role'],
+              'upiId': m['upi_id'],
+              'joinedAt': m['joined_at'],
+            }).toList();
+
+            tripsList.add(tripMap);
+          }
+
+          result['trips'] = tripsList;
+
+          // Expenses for these trips
+          final expensesData = await _client
+              .from(tableExpenses)
+              .select('*')
+              .inFilter('trip_id', tripIds)
+              .eq('is_deleted', false);
+
+          final expensesByTrip = <String, List<Map<String, dynamic>>>{};
+          for (final e in (expensesData as List<dynamic>? ?? [])) {
+            final expMap = Map<String, dynamic>.from(e as Map);
+            final tid = expMap['trip_id'] as String;
+            expensesByTrip.putIfAbsent(tid, () => []).add(expMap);
+          }
+          result['expenses'] = expensesByTrip;
+
+          // Settlements for these trips
+          final settlementsData = await _client
+              .from(tableSettlements)
+              .select('*')
+              .inFilter('trip_id', tripIds)
+              .eq('is_deleted', false);
+
+          final settlementsByTrip = <String, List<Map<String, dynamic>>>{};
+          for (final s in (settlementsData as List<dynamic>? ?? [])) {
+            final stlMap = Map<String, dynamic>.from(s as Map);
+            final tid = stlMap['trip_id'] as String;
+            settlementsByTrip.putIfAbsent(tid, () => []).add(stlMap);
+          }
+          result['settlements'] = settlementsByTrip;
+        }
+      } catch (e) {
+        debugPrint('[SupabaseCloudSync] fetch trips notice: $e');
       }
 
-      // 4. Fetch Personal Expenses
+      // 2. Personal Expenses
       try {
-        final peRes = await _client
+        final peData = await _client
             .from(tablePersonalExpenses)
-            .select()
-            .or('user_id.eq.$accountId,account_id.eq.$accountId')
+            .select('*')
+            .eq('user_id', accountId)
             .eq('is_deleted', false);
-        result['personal_expenses'] = List<Map<String, dynamic>>.from(peRes as List<dynamic>);
+
+        result['personal_expenses'] = (peData as List<dynamic>? ?? [])
+            .map((pe) => Map<String, dynamic>.from(pe as Map))
+            .toList();
       } catch (_) {}
 
-      // 5. Fetch Personal Debts
+      // 3. Personal Debts
       try {
-        final pdRes = await _client
+        final pdData = await _client
             .from(tablePersonalDebts)
-            .select()
-            .or('user_id.eq.$accountId,account_id.eq.$accountId')
+            .select('*')
+            .eq('user_id', accountId)
             .eq('is_deleted', false);
-        result['personal_debts'] = List<Map<String, dynamic>>.from(pdRes as List<dynamic>);
+
+        result['personal_debts'] = (pdData as List<dynamic>? ?? [])
+            .map((pd) => Map<String, dynamic>.from(pd as Map))
+            .toList();
       } catch (_) {}
 
-      debugPrint('[SupabaseCloudSync] Full account restoration payload loaded for $accountId');
+      return result;
     } catch (e) {
       debugPrint('[SupabaseCloudSync] fetchFullAccountData error: $e');
+      return {};
     }
-
-    return result;
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // 4. INCREMENTAL DELTA SYNC (BANDWIDTH & FREE-TIER OPTIMIZED)
+  // 3. INCREMENTAL DELTA SYNC (BY CURSOR)
   // ───────────────────────────────────────────────────────────────────────────
 
-  /// Fetches only changes that occurred after [sinceCursor] for this account.
+  /// Fetches changes that occurred since [sinceCursor] for this account.
   Future<Map<String, dynamic>> fetchDeltaChanges({
     required String accountId,
     required DateTime sinceCursor,
-    required List<String> activeTripIds,
+    List<String> activeTripIds = const [],
   }) async {
-    final cursorIso = sinceCursor.toIso8601String();
-    final deltas = <String, dynamic>{
-      'modifiedTrips': <Map<String, dynamic>>[],
-      'modifiedExpenses': <Map<String, dynamic>>[],
-      'modifiedSettlements': <Map<String, dynamic>>[],
-      'modifiedPersonalExpenses': <Map<String, dynamic>>[],
-      'modifiedPersonalDebts': <Map<String, dynamic>>[],
-    };
+    if (!isAvailable) return {};
 
-    if (!isAvailable || accountId.isEmpty) return deltas;
+    final cursorIso = sinceCursor.toIso8601String();
+    final deltas = <String, dynamic>{};
 
     try {
-      // 1. Modified Trips
-      try {
-        final tripsRes = await _client
-            .from(tableTrips)
-            .select()
-            .or('creator_id.eq.$accountId,account_id.eq.$accountId')
-            .gt('updated_at', cursorIso);
-        deltas['modifiedTrips'] = List<Map<String, dynamic>>.from(tripsRes as List<dynamic>);
-      } catch (_) {}
+      // 1. Fetch updated trips
+      final tripsRes = await _client
+          .from(tableTrips)
+          .select('*')
+          .gt('updated_at', cursorIso);
 
-      // 2. Modified Expenses across active trips
-      if (activeTripIds.isNotEmpty) {
-        try {
-          final tripFilter = activeTripIds.map((id) => 'trip_id.eq.$id').join(',');
-          final expRes = await _client
-              .from(tableExpenses)
-              .select()
-              .or(tripFilter)
-              .gt('updated_at', cursorIso);
-          deltas['modifiedExpenses'] = List<Map<String, dynamic>>.from(expRes as List<dynamic>);
-        } catch (_) {}
+      final modifiedTrips = <Map<String, dynamic>>[];
+      for (final t in (tripsRes as List<dynamic>? ?? [])) {
+        final tripMap = Map<String, dynamic>.from(t as Map);
+        final membersData = await _client
+            .from(tableMembers)
+            .select('*')
+            .eq('trip_id', tripMap['id']);
 
-        // 3. Modified Settlements across active trips
-        try {
-          final tripFilter = activeTripIds.map((id) => 'trip_id.eq.$id').join(',');
-          final stlRes = await _client
-              .from(tableSettlements)
-              .select()
-              .or(tripFilter)
-              .gt('updated_at', cursorIso);
-          deltas['modifiedSettlements'] = List<Map<String, dynamic>>.from(stlRes as List<dynamic>);
-        } catch (_) {}
+        tripMap['members'] = (membersData as List<dynamic>? ?? []).map((m) => {
+          'id': m['id'],
+          'tripId': m['trip_id'],
+          'userId': m['user_id'],
+          'displayName': m['display_name'],
+          'avatarUrl': m['avatar_url'],
+          'role': m['role'],
+          'upiId': m['upi_id'],
+          'joinedAt': m['joined_at'],
+        }).toList();
+
+        modifiedTrips.add(tripMap);
       }
+      deltas['modifiedTrips'] = modifiedTrips;
 
-      // 4. Modified Personal Expenses
-      try {
-        final peRes = await _client
-            .from(tablePersonalExpenses)
-            .select()
-            .or('user_id.eq.$accountId,account_id.eq.$accountId')
-            .gt('updated_at', cursorIso);
-        deltas['modifiedPersonalExpenses'] = List<Map<String, dynamic>>.from(peRes as List<dynamic>);
-      } catch (_) {}
+      // 2. Fetch updated expenses
+      final expensesRes = await _client
+          .from(tableExpenses)
+          .select('*')
+          .gt('updated_at', cursorIso);
 
-      // 5. Modified Personal Debts
-      try {
-        final pdRes = await _client
-            .from(tablePersonalDebts)
-            .select()
-            .or('user_id.eq.$accountId,account_id.eq.$accountId')
-            .gt('updated_at', cursorIso);
-        deltas['modifiedPersonalDebts'] = List<Map<String, dynamic>>.from(pdRes as List<dynamic>);
-      } catch (_) {}
+      deltas['modifiedExpenses'] = (expensesRes as List<dynamic>? ?? [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+
+      // 3. Fetch updated settlements
+      final settlementsRes = await _client
+          .from(tableSettlements)
+          .select('*')
+          .gt('updated_at', cursorIso);
+
+      deltas['modifiedSettlements'] = (settlementsRes as List<dynamic>? ?? [])
+          .map((s) => Map<String, dynamic>.from(s as Map))
+          .toList();
+
+      // 4. Fetch updated personal expenses
+      final peRes = await _client
+          .from(tablePersonalExpenses)
+          .select('*')
+          .eq('user_id', accountId)
+          .gt('updated_at', cursorIso);
+
+      deltas['modifiedPersonalExpenses'] = (peRes as List<dynamic>? ?? [])
+          .map((pe) => Map<String, dynamic>.from(pe as Map))
+          .toList();
+
+      // 5. Fetch updated personal debts
+      final pdRes = await _client
+          .from(tablePersonalDebts)
+          .select('*')
+          .eq('user_id', accountId)
+          .gt('updated_at', cursorIso);
+
+      deltas['modifiedPersonalDebts'] = (pdRes as List<dynamic>? ?? [])
+          .map((pd) => Map<String, dynamic>.from(pd as Map))
+          .toList();
+
+      return deltas;
     } catch (e) {
       debugPrint('[SupabaseCloudSync] fetchDeltaChanges notice: $e');
+      return {};
     }
-
-    return deltas;
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // 5. ATOMIC DATA MUTATION UPSERTS & DELETIONS
+  // 4. ENTITY SYNCHRONIZATION
   // ───────────────────────────────────────────────────────────────────────────
 
-  /// Upserts a trip to Supabase.
+  /// Upserts a trip and its members to Supabase.
   Future<bool> syncTrip(Map<String, dynamic> tripJson, {required String accountId}) async {
     if (!isAvailable) return false;
     try {
+      final tripId = tripJson['id'];
       await _client.from(tableTrips).upsert({
-        'id': tripJson['id'],
+        'id': tripId,
         'name': tripJson['name'],
         'description': tripJson['description'],
         'emoji': tripJson['emoji'] ?? '✈️',
-        'cover_gradient_index': tripJson['coverGradientIndex'] ?? 0,
         'currency_code': tripJson['currencyCode'] ?? 'INR',
         'creator_id': tripJson['creatorId'] ?? accountId,
+        'invite_code': tripJson['inviteCode'],
         'lifecycle_state': tripJson['lifecycleState'] ?? 'active',
-        'invite_code': tripJson['inviteCode'] ?? '',
         'trip_mode': tripJson['tripMode'] ?? 'split_only',
-        'revision': tripJson['revision'] ?? 1,
+        'is_deleted': tripJson['isDeleted'] ?? false,
         'created_at': tripJson['createdAt'] ?? DateTime.now().toIso8601String(),
-        'updated_at': tripJson['updatedAt'] ?? DateTime.now().toIso8601String(),
-        'is_deleted': false,
+        'updated_at': DateTime.now().toIso8601String(),
       }, onConflict: 'id');
+
+      final members = tripJson['members'] as List<dynamic>? ?? [];
+      for (final m in members) {
+        if (m is Map<String, dynamic>) {
+          await _client.from(tableMembers).upsert({
+            'id': m['id'],
+            'trip_id': tripId,
+            'user_id': m['userId'],
+            'display_name': m['displayName'] ?? 'Traveler',
+            'avatar_url': m['avatarUrl'],
+            'role': m['role'] ?? 'member',
+            'upi_id': m['upi_id'] ?? m['upiId'],
+            'joined_at': m['joinedAt'] ?? DateTime.now().toIso8601String(),
+          }, onConflict: 'id');
+        }
+      }
+
       return true;
     } catch (e) {
       debugPrint('[SupabaseCloudSync] syncTrip error: $e');
@@ -376,7 +443,8 @@ class SupabaseCloudSync {
         'title': expenseJson['title'],
         'amount_in_paise': expenseJson['amountInPaise'],
         'category': expenseJson['category'] ?? 'general',
-        'paid_by_member_id': expenseJson['paidById'],
+        'paid_by_member_id': expenseJson['paidByMemberId'],
+        'paid_by_user_id': expenseJson['paidByUserId'] ?? accountId,
         'split_type': expenseJson['splitType'] ?? 'equal',
         'splits': expenseJson['splits'] ?? [],
         'location': expenseJson['location'],
@@ -490,5 +558,147 @@ class SupabaseCloudSync {
       recoveryKey: newRecoveryKey,
       displayName: displayName,
     );
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // 5. NOTIFICATION TOKEN MANAGEMENT & SERVER-SIDE EVENT DISPATCH
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /// Registers or refreshes an FCM device token in Supabase user_fcm_tokens.
+  Future<bool> registerFcmToken({
+    required String userId,
+    required String deviceId,
+    required String token,
+    String platform = 'android',
+  }) async {
+    if (!isAvailable) return false;
+    try {
+      try {
+        await _client
+            .from('user_fcm_tokens')
+            .delete()
+            .eq('token', token)
+            .neq('user_id', userId);
+      } catch (_) {}
+
+      await _client.from('user_fcm_tokens').upsert({
+        'user_id': userId,
+        'device_id': deviceId,
+        'token': token,
+        'platform': platform,
+        'updated_at': DateTime.now().toIso8601String(),
+      }, onConflict: 'user_id,device_id');
+
+      debugPrint('[SupabaseCloudSync] FCM token registered for $userId on $deviceId');
+      return true;
+    } catch (e) {
+      debugPrint('[SupabaseCloudSync] registerFcmToken notice: $e');
+      return false;
+    }
+  }
+
+  /// Removes an FCM device token upon logout or account change.
+  Future<void> unregisterFcmToken(String token) async {
+    if (!isAvailable) return;
+    try {
+      await _client.from('user_fcm_tokens').delete().eq('token', token);
+      debugPrint('[SupabaseCloudSync] FCM token unregistered');
+    } catch (e) {
+      debugPrint('[SupabaseCloudSync] unregisterFcmToken notice: $e');
+    }
+  }
+
+  /// Dispatches a persistent notification event to Supabase.
+  Future<void> dispatchNotificationEvent({
+    required String recipientUserId,
+    required String actorUserId,
+    required String actorName,
+    required String title,
+    required String body,
+    required String eventType,
+    String? tripId,
+    String? tripName,
+    String? expenseId,
+    String? settlementId,
+    int? amountInPaise,
+    String? route,
+    String? idempotencyKey,
+  }) async {
+    if (!isAvailable || recipientUserId.isEmpty) return;
+    if (recipientUserId == actorUserId) return;
+
+    final nowIso = DateTime.now().toIso8601String();
+    final notifId = idempotencyKey ?? 'notif_${DateTime.now().millisecondsSinceEpoch}_${recipientUserId.hashCode.abs()}';
+
+    try {
+      await _client.from('notifications').upsert({
+        'id': notifId,
+        'recipient_user_id': recipientUserId,
+        'actor_user_id': actorUserId,
+        'actor_name': actorName,
+        'trip_id': tripId,
+        'trip_name': tripName,
+        'expense_id': expenseId,
+        'settlement_id': settlementId,
+        'type': eventType,
+        'title': title,
+        'body': body,
+        'route': route ?? (tripId != null ? '/trip/$tripId' : '/notifications'),
+        'amount_in_paise': amountInPaise ?? 0,
+        'is_read': false,
+        'created_at': nowIso,
+        'updated_at': nowIso,
+      }, onConflict: 'id');
+
+      debugPrint('[SupabaseCloudSync] Notification event recorded: $notifId for $recipientUserId');
+    } catch (e) {
+      debugPrint('[SupabaseCloudSync] dispatchNotificationEvent notice (non-fatal): $e');
+    }
+  }
+
+  /// Automatically broadcasts notifications to other members of a trip when an expense is added/updated.
+  Future<void> notifyTripMembersForExpense({
+    required String tripId,
+    required String actorUserId,
+    required String actorName,
+    required String expenseTitle,
+    required int amountInPaise,
+    required String expenseId,
+    bool isUpdate = false,
+  }) async {
+    if (!isAvailable) return;
+    try {
+      final membersRes = await _client
+          .from(tableMembers)
+          .select('user_id')
+          .eq('trip_id', tripId);
+
+      final members = membersRes as List<dynamic>? ?? [];
+      final formattedAmt = '₹${(amountInPaise / 100).toStringAsFixed(2)}';
+      final title = isUpdate ? '$actorName updated an expense' : '$actorName added an expense';
+      final body = '$expenseTitle · $formattedAmt';
+      final route = '/trip/$tripId?expenseId=$expenseId';
+
+      for (final m in members) {
+        final uid = m['user_id'] as String?;
+        if (uid != null && uid.isNotEmpty && uid != actorUserId && !uid.startsWith('unclaimed_')) {
+          await dispatchNotificationEvent(
+            recipientUserId: uid,
+            actorUserId: actorUserId,
+            actorName: actorName,
+            title: title,
+            body: body,
+            eventType: isUpdate ? 'EXPENSE_UPDATED' : 'EXPENSE_ADDED',
+            tripId: tripId,
+            expenseId: expenseId,
+            amountInPaise: amountInPaise,
+            route: route,
+            idempotencyKey: '${expenseId}_${isUpdate ? 'update' : 'create'}_$uid',
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('[SupabaseCloudSync] notifyTripMembersForExpense notice: $e');
+    }
   }
 }

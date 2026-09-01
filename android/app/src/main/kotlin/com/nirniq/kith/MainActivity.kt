@@ -97,7 +97,8 @@ class MainActivity : FlutterFragmentActivity() {
                     val title = call.argument<String>("title") ?: "Kith"
                     val body = call.argument<String>("body") ?: ""
                     val route = call.argument<String>("route")
-                    KithNotificationHelper.showNotification(applicationContext, id, title, body, route)
+                    val channelId = call.argument<String>("channelId")
+                    KithNotificationHelper.showNotification(applicationContext, id, title, body, route, channelId)
                     result.success(true)
                 }
                 else -> result.notImplemented()

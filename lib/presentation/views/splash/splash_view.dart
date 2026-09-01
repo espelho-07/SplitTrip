@@ -1,3 +1,4 @@
+import '../../../core/services/fcm_service.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -82,7 +83,18 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
 
     try {
       if (authVm.isAuthenticated) {
-        context.go('/home');
+        String? initialRoute;
+        try {
+          final fcmService = context.read<FcmService>();
+          initialRoute = fcmService.consumePendingInitialRoute();
+        } catch (_) {}
+
+        if (initialRoute != null && initialRoute.isNotEmpty) {
+          debugPrint('[SplashView] Routing to cold-boot deep-link: $initialRoute');
+          context.go(initialRoute);
+        } else {
+          context.go('/home');
+        }
       } else if (!authVm.hasCompletedOnboarding) {
         context.go('/walkthrough');
       } else {

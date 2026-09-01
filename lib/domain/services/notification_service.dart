@@ -217,7 +217,7 @@ class NotificationService {
     }
 
     final item = AppNotificationItem(
-      id: 'notif_${DateTime.now().millisecondsSinceEpoch}',
+      id: idempotencyKey ?? 'notif_${DateTime.now().microsecondsSinceEpoch}',
       title: title,
       description: description,
       timestamp: DateTime.now(),
@@ -237,11 +237,19 @@ class NotificationService {
       try {
         const platform = MethodChannel('com.nirniq.kith/notifications');
         final notifId = (DateTime.now().millisecondsSinceEpoch % 100000);
+        final channelId = type == NotificationType.expense
+            ? 'kith_expenses'
+            : (type == NotificationType.trip
+                ? 'kith_trips'
+                : (type == NotificationType.settlement
+                    ? 'kith_payments'
+                    : (type == NotificationType.ipo ? 'kith_ipo' : 'kith_activity')));
         await platform.invokeMethod('showNotification', {
           'id': notifId,
           'title': title,
           'body': description,
           'route': route,
+          'channelId': channelId,
         });
       } catch (_) {
         // Fallback or non-Android platform
