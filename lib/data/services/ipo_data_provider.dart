@@ -39,7 +39,26 @@ class LiveIpoDataProvider implements IpoDataProvider {
       debugPrint('[LiveIpoDataProvider] Backend proxy fetch notice: $e');
     }
 
-    // 2. Try Supabase Edge Function proxy as seamless high-availability fallback
+    // 2. Direct FinAPI Market Feed (finapi.upvaly.com/api/ipo)
+    try {
+      final finApiUri = Uri.parse('https://finapi.upvaly.com/api/ipo');
+      final response = await _client.get(
+        finApiUri,
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'Kith-Mobile/1.0',
+        },
+      ).timeout(const Duration(seconds: 7));
+
+      final items = _parseResponse(response);
+      if (items.isNotEmpty) {
+        return items;
+      }
+    } catch (e) {
+      debugPrint('[LiveIpoDataProvider] Direct FinAPI fetch notice: $e');
+    }
+
+    // 3. Try Supabase Edge Function proxy as seamless high-availability fallback
     if (SupabaseConfig.isConfigured) {
       try {
         final edgeUri = Uri.parse('${SupabaseConfig.url}/functions/v1/ipo-data');

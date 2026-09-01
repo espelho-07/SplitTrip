@@ -1,4 +1,4 @@
-﻿const { IpoProvider } = require("./ipo_provider_interface");
+const { IpoProvider } = require("./ipo_provider_interface");
 
 /**
  * Backup Provider: FinAPI (finapi.in / finapi.co)
@@ -43,20 +43,35 @@ class FinApiProvider extends IpoProvider {
       const headers = {
         Accept: "application/json",
         "User-Agent": "Kith-Backend-Proxy/1.0",
+        "X-API-Key": this.apiKey,
+        "X-API-KEY": this.apiKey,
       };
 
       if (this.apiKey.startsWith("Bearer ")) {
         headers["Authorization"] = this.apiKey;
       } else {
         headers["Authorization"] = `Bearer ${this.apiKey}`;
-        headers["X-API-KEY"] = this.apiKey;
       }
 
-      const response = await fetchFn("https://api.finapi.in/v1/ipos", {
+      // 1. Try Upvaly FinAPI primary endpoint (https://finapi.upvaly.com/api/ipo)
+      let response = await fetchFn("https://finapi.upvaly.com/api/ipo", {
         method: "GET",
         headers,
         signal: AbortSignal.timeout(7000),
-      });
+      }).catch(() => null);
+
+      // Fallback endpoint if needed
+      if (!response || !response.ok) {
+        response = await fetchFn("https://api.finapi.in/v1/ipos", {
+          method: "GET",
+          headers,
+          signal: AbortSignal.timeout(7000),
+        }).catch(() => null);
+      }
+
+      if (!response) {
+        return null;
+      }
 
       if (response.status === 429) {
         console.warn("[FinApiProvider] Rate limit (429) reached from FinAPI");
@@ -71,7 +86,7 @@ class FinApiProvider extends IpoProvider {
       const payload = await response.json();
       const rawList = Array.isArray(payload)
         ? payload
-        : payload?.ipos ?? payload?.data ?? payload?.results ?? null;
+        : payload?.data ?? payload?.ipos ?? payload?.results ?? null;
 
       if (!Array.isArray(rawList) || rawList.length === 0) {
         return null;
@@ -112,9 +127,38 @@ class FinApiProvider extends IpoProvider {
       status = "listed";
     }
 
-    const minPrice = parseFloat(item.price_band_min ?? item.min_price ?? item.price_min ?? item.floor_price ?? 0) || 0;
-    const maxPrice = parseFloat(item.price_band_max ?? item.max_price ?? item.price_max ?? item.cap_price ?? minPrice) || minPrice;
-    const lotSize = parseInt(item.lot_size ?? item.market_lot ?? item.shares_per_lot ?? 1, 10) || 1;
+    // Schedule extraction (FinAPI puts dates inside schedule object)
+    const schedule = (item.schedule && typeof item.schedule === "object") ? item.schedule : {};
+    const openDate = schedule.startDate ?? schedule.biddingStartDate ?? item.open_date ?? item.bidding_start_date ?? item.openDate ?? null;
+    const closeDate = schedule.endDate ?? schedule.biddingEndDate ?? item.close_date ?? item.bidding_end_date ?? item.closeDate ?? null;
+    const allotmentDate = schedule.allotmentFinalization ?? schedule.allotmentDate ?? item.allotment_date ?? item.allotmentDate ?? null;
+    const listingDate = schedule.listingDate ?? item.listing_date ?? item.listingDate ?? null;
+
+    // Price range parsing (handles "₹408 – ₹429", "₹59", "450 - 475" strings or direct numbers)
+    let minPrice = parseFloat(item.price_band_min ?? item.min_price ?? item.price_min ?? item.floor_price ?? 0) || 0;
+    let maxPrice = parseFloat(item.price_band_max ?? item.max_price ?? item.price_max ?? item.cap_price ?? minPrice) || minPrice;
+
+    const priceRangeStr = item.priceRange ?? item.price_range ?? item.priceBand ?? item.price_band ?? null;
+    if (priceRangeStr && minPrice === 0 && maxPrice === 0) {
+      const numbers = (String(priceRangeStr).match(/\d+/g) || []).map(Number);
+      if (numbers.length >= 2) {
+        minPrice = numbers[0];
+        maxPrice = numbers[1];
+      } else if (numbers.length === 1) {
+        minPrice = numbers[0];
+        maxPrice = numbers[0];
+      }
+    }
+
+    // Lot size parsing (handles String "34" or num 34)
+    let lotSize = 1;
+    const rawLot = item.lotSize ?? item.lot_size ?? item.market_lot ?? item.shares_per_lot;
+    if (typeof rawLot === "number") {
+      lotSize = rawLot;
+    } else if (typeof rawLot === "string") {
+      const digits = rawLot.replace(/[^0-9]/g, "");
+      lotSize = parseInt(digits, 10) || 1;
+    }
 
     const issueSizeCrores = parseFloat(item.issue_size ?? item.total_issue_size_cr ?? item.issue_size_crores ?? 0) || null;
     const freshIssueCrores = parseFloat(item.fresh_issue ?? item.fresh_issue_cr ?? 0) || null;
@@ -145,13 +189,13 @@ class FinApiProvider extends IpoProvider {
       symbol,
       marketType,
       status,
-      openDate: item.open_date ?? item.bidding_start_date ?? item.openDate ?? null,
-      closeDate: item.close_date ?? item.bidding_end_date ?? item.closeDate ?? null,
-      allotmentDate: item.allotment_date ?? item.allotmentDate ?? null,
-      listingDate: item.listing_date ?? item.listingDate ?? null,
+      openDate,
+      closeDate,
+      allotmentDate,
+      listingDate,
       minPrice,
       maxPrice: maxPrice > 0 ? maxPrice : minPrice,
-      lotSize,
+      lotSize: lotSize > 0 ? lotSize : 1,
       issueSizeCrores,
       freshIssueCrores,
       ofsCrores,

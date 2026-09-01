@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Supabase Edge Function: ipo-data
  *
  * Secure proxy for IPO market data.
@@ -29,7 +29,7 @@ const CACHE_TTL_MS = 60 * 60 * 1000; // 60 minutes (~24 refreshes/day)
 function normalizeIpo(item: any, idx: number, source: string) {
   const rawId = item.id ?? item.symbol ?? item.ticker ?? `ipo_${source}_${idx}`;
   const id = String(rawId).toLowerCase().replace(/[^a-z0-9_-]/g, "_");
-  const name = item.company_name ?? item.name ?? item.ipo_name ?? "Unknown IPO";
+  const name = item.name ?? item.company_name ?? item.ipo_name ?? "Unknown IPO";
   const companyName = item.company_name ?? item.issuer ?? name;
   const symbol = item.symbol ?? item.ticker ?? item.nse_code ?? item.bse_code ?? "";
   const category = (item.category ?? item.market_type ?? item.type ?? "mainboard").toLowerCase();
@@ -47,9 +47,38 @@ function normalizeIpo(item: any, idx: number, source: string) {
     status = "listed";
   }
 
-  const minPrice = parseFloat(item.price_band_min ?? item.min_price ?? item.floor_price ?? 0) || 0;
-  const maxPrice = parseFloat(item.price_band_max ?? item.max_price ?? item.cap_price ?? minPrice) || minPrice;
-  const lotSize = parseInt(item.lot_size ?? item.market_lot ?? 1, 10) || 1;
+  // Schedule extraction (FinAPI puts dates inside schedule object)
+  const schedule = (item.schedule && typeof item.schedule === "object") ? item.schedule : {};
+  const openDate = schedule.startDate ?? schedule.biddingStartDate ?? item.open_date ?? item.bidding_start_date ?? item.openDate ?? null;
+  const closeDate = schedule.endDate ?? schedule.biddingEndDate ?? item.close_date ?? item.bidding_end_date ?? item.closeDate ?? null;
+  const allotmentDate = schedule.allotmentFinalization ?? schedule.allotmentDate ?? item.allotment_date ?? item.allotmentDate ?? null;
+  const listingDate = schedule.listingDate ?? item.listing_date ?? item.listingDate ?? null;
+
+  // Price range parsing (handles "₹408 – ₹429", "₹59", "450 - 475" strings or direct numbers)
+  let minPrice = parseFloat(item.price_band_min ?? item.min_price ?? item.floor_price ?? 0) || 0;
+  let maxPrice = parseFloat(item.price_band_max ?? item.max_price ?? item.cap_price ?? minPrice) || minPrice;
+
+  const priceRangeStr = item.priceRange ?? item.price_range ?? item.priceBand ?? item.price_band ?? null;
+  if (priceRangeStr && minPrice === 0 && maxPrice === 0) {
+    const numbers = (String(priceRangeStr).match(/\d+/g) || []).map(Number);
+    if (numbers.length >= 2) {
+      minPrice = numbers[0];
+      maxPrice = numbers[1];
+    } else if (numbers.length === 1) {
+      minPrice = numbers[0];
+      maxPrice = numbers[0];
+    }
+  }
+
+  // Lot size parsing (handles String "34" or num 34)
+  let lotSize = 1;
+  const rawLot = item.lotSize ?? item.lot_size ?? item.market_lot;
+  if (typeof rawLot === "number") {
+    lotSize = rawLot;
+  } else if (typeof rawLot === "string") {
+    const digits = rawLot.replace(/[^0-9]/g, "");
+    lotSize = parseInt(digits, 10) || 1;
+  }
 
   const issueSizeCrores = parseFloat(item.issue_size ?? item.total_issue_size_cr ?? 0) || null;
   const freshIssueCrores = parseFloat(item.fresh_issue ?? 0) || null;
@@ -63,13 +92,13 @@ function normalizeIpo(item: any, idx: number, source: string) {
     symbol,
     marketType,
     status,
-    openDate: item.open_date ?? item.bidding_start_date ?? item.openDate ?? null,
-    closeDate: item.close_date ?? item.bidding_end_date ?? item.closeDate ?? null,
-    allotmentDate: item.allotment_date ?? item.allotmentDate ?? null,
-    listingDate: item.listing_date ?? item.listingDate ?? null,
+    openDate,
+    closeDate,
+    allotmentDate,
+    listingDate,
     minPrice,
     maxPrice: maxPrice > 0 ? maxPrice : minPrice,
-    lotSize,
+    lotSize: lotSize > 0 ? lotSize : 1,
     issueSizeCrores,
     freshIssueCrores,
     ofsCrores,
@@ -101,21 +130,32 @@ async function fetchFromIpoGuru(apiKey: string): Promise<any[] | null> {
 
 async function fetchFromFinApi(apiKey: string): Promise<any[] | null> {
   try {
-    const headers: Record<string, string> = { Accept: "application/json" };
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+      "X-API-Key": apiKey,
+      "X-API-KEY": apiKey,
+    };
     if (apiKey.startsWith("Bearer ")) {
       headers["Authorization"] = apiKey;
     } else {
       headers["Authorization"] = `Bearer ${apiKey}`;
-      headers["X-API-KEY"] = apiKey;
     }
 
-    const res = await fetch("https://api.finapi.in/v1/ipos", {
+    let res = await fetch("https://finapi.upvaly.com/api/ipo", {
       method: "GET",
       headers,
-    });
-    if (!res.ok) return null;
+    }).catch(() => null);
+
+    if (!res || !res.ok) {
+      res = await fetch("https://api.finapi.in/v1/ipos", {
+        method: "GET",
+        headers,
+      }).catch(() => null);
+    }
+
+    if (!res || !res.ok) return null;
     const json = await res.json();
-    const rawList = Array.isArray(json) ? json : json?.ipos ?? json?.data ?? json?.results ?? null;
+    const rawList = Array.isArray(json) ? json : json?.data ?? json?.ipos ?? json?.results ?? null;
     if (!Array.isArray(rawList) || rawList.length === 0) return null;
     return rawList.map((item: any, idx: number) => normalizeIpo(item, idx, "finapi"));
   } catch {

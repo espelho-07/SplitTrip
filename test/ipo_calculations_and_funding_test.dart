@@ -497,5 +497,95 @@ void main() {
 
       expect(afterCount, equals(beforeCount));
     });
+
+    test('FinAPI exact payload parsing correctly parses Mainboard, SME, Schedule, and Price ranges', () {
+      final rawFinApiItems = [
+        {
+          "symbol": "ESDS",
+          "type": "Mainboard",
+          "name": "ESDS Software Solution",
+          "priceRange": "₹408 – ₹429",
+          "lotSize": "34",
+          "status": "LIVE",
+          "schedule": {
+            "startDate": "2026-08-28",
+            "endDate": "2026-09-01",
+            "listingDate": "2026-09-04",
+            "upiMandateDeadline": "2026-09-01",
+            "allotmentFinalization": "2026-09-02",
+            "refundInitiation": "2026-09-03",
+            "shareCredit": "2026-09-03",
+            "mandateEndDate": "2026-09-16",
+            "lockInEndDateAnchor50": "2026-10-01",
+            "lockInEndDateAnchorRemaining": "2026-11-30"
+          }
+        },
+        {
+          "symbol": "FARMPEACE",
+          "type": "SME",
+          "name": "Farm Peace",
+          "priceRange": "₹59",
+          "lotSize": "2000",
+          "status": "LIVE",
+          "schedule": {
+            "startDate": "2026-09-01",
+            "endDate": "2026-09-03",
+            "listingDate": "2026-09-08",
+            "upiMandateDeadline": "2026-09-03",
+            "allotmentFinalization": "2026-09-04",
+            "refundInitiation": "2026-09-07",
+            "shareCredit": "2026-09-07",
+            "mandateEndDate": "2026-09-18",
+            "lockInEndDateAnchor50": "2026-10-03",
+            "lockInEndDateAnchorRemaining": "2026-12-02"
+          }
+        },
+        {
+          "symbol": "DUROFLEX",
+          "type": "Mainboard",
+          "name": "Duroflex",
+          "priceRange": "–",
+          "status": "UPCOMING"
+        },
+      ];
+
+      final ipos = rawFinApiItems.map((m) => Ipo.fromJson(m)).toList();
+      expect(ipos.length, equals(3));
+
+      // 1. ESDS Mainboard verification
+      final esds = ipos[0];
+      expect(esds.symbol, equals('ESDS'));
+      expect(esds.name, equals('ESDS Software Solution'));
+      expect(esds.marketType, equals(IpoMarketType.mainboard));
+      expect(esds.status, equals(IpoStatus.open));
+      expect(esds.minPrice, equals(408));
+      expect(esds.maxPrice, equals(429));
+      expect(esds.lotSize, equals(34));
+      expect(esds.minInvestmentRupees, equals(34 * 429)); // 14,586
+      expect(esds.openDate.year, equals(2026));
+      expect(esds.openDate.month, equals(8));
+      expect(esds.openDate.day, equals(28));
+      expect(esds.closeDate.year, equals(2026));
+      expect(esds.closeDate.month, equals(9));
+      expect(esds.closeDate.day, equals(1));
+      expect(esds.allotmentDate?.day, equals(2));
+      expect(esds.listingDate?.day, equals(4));
+
+      // 2. FARMPEACE SME verification
+      final farmPeace = ipos[1];
+      expect(farmPeace.symbol, equals('FARMPEACE'));
+      expect(farmPeace.marketType, equals(IpoMarketType.sme));
+      expect(farmPeace.minPrice, equals(59));
+      expect(farmPeace.maxPrice, equals(59));
+      expect(farmPeace.lotSize, equals(2000));
+      expect(farmPeace.minInvestmentRupees, equals(2000 * 59)); // 1,18,000
+
+      // 3. DUROFLEX Upcoming verification
+      final duroflex = ipos[2];
+      expect(duroflex.symbol, equals('DUROFLEX'));
+      expect(duroflex.status, equals(IpoStatus.upcoming));
+      expect(duroflex.minPrice, equals(0));
+      expect(duroflex.maxPrice, equals(0));
+    });
   });
 }

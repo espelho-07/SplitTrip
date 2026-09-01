@@ -1,9 +1,12 @@
-﻿enum IpoMarketType {
+enum IpoMarketType {
   mainboard,
   sme;
 
   static IpoMarketType fromString(String? val) {
-    if (val?.toLowerCase() == 'sme') return IpoMarketType.sme;
+    final lower = val?.toLowerCase();
+    if (lower != null && (lower.contains('sme') || lower == 'sme')) {
+      return IpoMarketType.sme;
+    }
     return IpoMarketType.mainboard;
   }
 
@@ -19,6 +22,7 @@ enum IpoStatus {
 
   static IpoStatus fromString(String? val) {
     switch (val?.toLowerCase()) {
+      case 'live':
       case 'open':
       case 'active':
       case 'open_now':
@@ -310,13 +314,33 @@ class Ipo {
   }
 
   factory Ipo.fromJson(Map<String, dynamic> json) {
-    // Robust Price parsing (handles "450 - 475" strings or direct numbers)
-    int minP = (json['minPrice'] ?? json['min_price'] ?? json['price_band_min'] as num?)?.toInt() ?? 0;
-    int maxP = (json['maxPrice'] ?? json['max_price'] ?? json['price_band_max'] ?? json['issuePrice'] ?? json['issue_price'] as num?)?.toInt() ?? 0;
+    // 1. Nested schedule dates support (FinAPI style) or flat keys
+    final schedule = json['schedule'] is Map<String, dynamic> ? json['schedule'] as Map<String, dynamic> : null;
+    final openDateRaw = schedule?['startDate'] ?? json['openDate'] ?? json['open_date'] ?? json['bidding_start_date'] ?? json['startDate'];
+    final closeDateRaw = schedule?['endDate'] ?? json['closeDate'] ?? json['close_date'] ?? json['bidding_end_date'] ?? json['endDate'];
+    final allotmentDateRaw = schedule?['allotmentFinalization'] ?? schedule?['allotmentDate'] ?? json['allotmentDate'] ?? json['allotment_date'];
+    final listingDateRaw = schedule?['listingDate'] ?? json['listingDate'] ?? json['listing_date'];
 
-    final priceBandStr = json['priceBand'] as String? ?? json['price_band'] as String?;
-    if (priceBandStr != null && (minP == 0 && maxP == 0)) {
-      final numbers = RegExp(r'(\d+)').allMatches(priceBandStr).map((m) => int.parse(m.group(0)!)).toList();
+    // 2. Robust Price parsing (handles "₹408 – ₹429", "₹59", "450 - 475" strings or direct numbers)
+    int minP = 0;
+    int maxP = 0;
+
+    final rawMin = json['minPrice'] ?? json['min_price'] ?? json['price_band_min'];
+    if (rawMin is num) {
+      minP = rawMin.toInt();
+    }
+    final rawMax = json['maxPrice'] ?? json['max_price'] ?? json['price_band_max'] ?? json['issuePrice'] ?? json['issue_price'];
+    if (rawMax is num) {
+      maxP = rawMax.toInt();
+    }
+
+    final priceStr = json['priceRange'] as String? ??
+        json['price_range'] as String? ??
+        json['priceBand'] as String? ??
+        json['price_band'] as String?;
+
+    if (priceStr != null && (minP == 0 && maxP == 0)) {
+      final numbers = RegExp(r'(\d+)').allMatches(priceStr).map((m) => int.parse(m.group(0)!)).toList();
       if (numbers.length >= 2) {
         minP = numbers[0];
         maxP = numbers[1];
@@ -324,6 +348,16 @@ class Ipo {
         minP = numbers[0];
         maxP = numbers[0];
       }
+    }
+
+    // 3. Robust Lot size parsing (handles String "34" or num 34)
+    int parsedLot = 1;
+    final rawLot = json['lotSize'] ?? json['lot_size'] ?? json['market_lot'];
+    if (rawLot is num) {
+      parsedLot = rawLot.toInt();
+    } else if (rawLot is String) {
+      final digits = rawLot.replaceAll(RegExp(r'[^0-9]'), '');
+      parsedLot = int.tryParse(digits) ?? 1;
     }
 
     final rawSub = json['subscription'];
@@ -335,21 +369,23 @@ class Ipo {
     }
 
     final totalSub = (json['subscriptionOverall'] ?? json['subscription_overall'] ?? json['total_subscription'] ?? sub?.total as num?)?.toDouble();
+    final sym = json['symbol'] as String? ?? json['ticker'] as String? ?? '';
+    final nameStr = json['name'] as String? ?? json['companyName'] as String? ?? json['company_name'] as String? ?? json['ipoName'] as String? ?? 'IPO';
 
     return Ipo(
-      id: json['id'] as String? ?? 'ipo_${json['symbol'] ?? DateTime.now().millisecondsSinceEpoch}',
-      name: json['name'] as String? ?? json['ipoName'] as String? ?? json['company_name'] as String? ?? 'IPO',
-      companyName: json['companyName'] as String? ?? json['company_name'] as String? ?? json['name'] as String? ?? 'Company',
-      symbol: json['symbol'] as String? ?? json['ticker'] as String? ?? '',
-      marketType: IpoMarketType.fromString(json['marketType'] as String? ?? json['market_type'] as String? ?? json['category'] as String?),
+      id: json['id'] as String? ?? (sym.isNotEmpty ? 'ipo_${sym.toLowerCase()}' : 'ipo_${nameStr.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}'),
+      name: nameStr,
+      companyName: json['companyName'] as String? ?? json['company_name'] as String? ?? nameStr,
+      symbol: sym,
+      marketType: IpoMarketType.fromString(json['type'] as String? ?? json['marketType'] as String? ?? json['market_type'] as String? ?? json['category'] as String?),
       status: IpoStatus.fromString(json['status'] as String? ?? json['ipo_status'] as String?),
-      openDate: parseIpoDate(json['openDate'] ?? json['open_date'] ?? json['bidding_start_date']),
-      closeDate: parseIpoDate(json['closeDate'] ?? json['close_date'] ?? json['bidding_end_date']),
-      allotmentDate: parseOptionalIpoDate(json['allotmentDate'] ?? json['allotment_date']),
-      listingDate: parseOptionalIpoDate(json['listingDate'] ?? json['listing_date']),
+      openDate: parseIpoDate(openDateRaw),
+      closeDate: parseIpoDate(closeDateRaw, parseIpoDate(openDateRaw).add(const Duration(days: 3))),
+      allotmentDate: parseOptionalIpoDate(allotmentDateRaw),
+      listingDate: parseOptionalIpoDate(listingDateRaw),
       minPrice: minP,
       maxPrice: maxP > 0 ? maxP : minP,
-      lotSize: (json['lotSize'] ?? json['lot_size'] ?? json['market_lot'] as num?)?.toInt() ?? 1,
+      lotSize: parsedLot > 0 ? parsedLot : 1,
       issueSizeCrores: (json['issueSizeCrores'] ?? json['issue_size_crores'] ?? json['issue_size'] as num?)?.toDouble(),
       freshIssueCrores: (json['freshIssueCrores'] ?? json['fresh_issue_crores'] ?? json['fresh_issue'] as num?)?.toDouble(),
       ofsCrores: (json['ofsCrores'] ?? json['ofs_crores'] ?? json['ofs'] as num?)?.toDouble(),
