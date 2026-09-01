@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../../core/services/kith_contacts_service.dart';
+import '../../../core/services/permission_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -34,6 +36,19 @@ class _LendingBorrowingViewState extends State<LendingBorrowingView> {
   DebtFilterType _filter = DebtFilterType.all;
   String _search = '';
   final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        final hasGranted = await KithContactsService.hasPermission();
+        if (!hasGranted) {
+          await PermissionService.requestContactsPermission();
+        }
+      } catch (_) {}
+    });
+  }
 
   @override
   void dispose() {
@@ -90,6 +105,16 @@ class _LendingBorrowingViewState extends State<LendingBorrowingView> {
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          HapticHelper.light();
+          AddPersonalExpenseSheet.show(context, lendingOnly: true);
+        },
+        backgroundColor: const Color(0xFF14B8A6),
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add_rounded, size: 20),
+        label: const Text('Add Lend / Borrow', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+      ),
       appBar: AppBar(
         title: const Text('Lending & Borrowing', style: TextStyle(fontWeight: FontWeight.w700)),
         actions: [
@@ -108,7 +133,7 @@ class _LendingBorrowingViewState extends State<LendingBorrowingView> {
             icon: const Icon(Icons.add_circle_outline_rounded, size: 24),
             tooltip: 'Add Loan / Borrow',
             onPressed: () {
-              AddPersonalExpenseSheet.show(context);
+              AddPersonalExpenseSheet.show(context, lendingOnly: true);
             },
           ),
         ],

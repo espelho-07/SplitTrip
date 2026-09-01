@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../../../core/services/kith_contacts_service.dart';
 import '../../../../core/services/voice_speech_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
@@ -41,17 +43,23 @@ enum PersonalEntryMode {
 class AddPersonalExpenseSheet extends StatefulWidget {
   final bool initialVoice;
   final String? initialAmount;
+  final bool lendingOnly;
+  final String? initialPersonName;
 
   const AddPersonalExpenseSheet({
     super.key,
     this.initialVoice = false,
     this.initialAmount,
+    this.lendingOnly = false,
+    this.initialPersonName,
   });
 
   static Future<bool?> show(
     BuildContext context, {
     bool initialVoice = false,
     String? initialAmount,
+    bool lendingOnly = false,
+    String? initialPersonName,
   }) {
     return showModalBottomSheet<bool>(
       context: context,
@@ -60,6 +68,8 @@ class AddPersonalExpenseSheet extends StatefulWidget {
       builder: (ctx) => AddPersonalExpenseSheet(
         initialVoice: initialVoice,
         initialAmount: initialAmount,
+        lendingOnly: lendingOnly,
+        initialPersonName: initialPersonName,
       ),
     );
   }
@@ -69,7 +79,7 @@ class AddPersonalExpenseSheet extends StatefulWidget {
 }
 
 class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
-  PersonalEntryMode _mode = PersonalEntryMode.expense;
+  late PersonalEntryMode _mode;
 
   late final TextEditingController _amountController;
   final TextEditingController _titleController = TextEditingController();
@@ -90,7 +100,11 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
   @override
   void initState() {
     super.initState();
+    _mode = widget.lendingOnly ? PersonalEntryMode.lent : PersonalEntryMode.expense;
     _amountController = TextEditingController(text: widget.initialAmount ?? '');
+    if (widget.initialPersonName != null) {
+      _personController.text = widget.initialPersonName!;
+    }
     if (widget.initialVoice) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _toggleVoiceRecording();
@@ -306,6 +320,9 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
                 ? 'Lending record added ✓'
                 : 'Borrowing record added ✓',
           );
+          if (widget.lendingOnly) {
+            context.push('/person-ledger?name=${Uri.encodeComponent(personName)}');
+          }
         } else {
           HapticHelper.error();
           ScaffoldMessenger.of(context).showSnackBar(
@@ -393,7 +410,7 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
               ),
               const SizedBox(height: AppSpacing.sm),
 
-              // Context Badge: Personal Expense (Clearly distinguishing from trip expenses)
+              // Context Badge: Personal Expense vs Lending & Borrowing
               Row(
                 children: [
                   Container(
@@ -402,14 +419,18 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
                       color: AppColors.emeraldPrimary.withValues(alpha: 0.12),
                       borderRadius: AppRadius.smBorder,
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.lock_outline_rounded, size: 12, color: AppColors.emeraldPrimary),
-                        SizedBox(width: 4),
+                        Icon(
+                          widget.lendingOnly ? Icons.swap_horiz_rounded : Icons.lock_outline_rounded,
+                          size: 12,
+                          color: AppColors.emeraldPrimary,
+                        ),
+                        const SizedBox(width: 4),
                         Text(
-                          'Personal · Private to you',
-                          style: TextStyle(
+                          widget.lendingOnly ? 'Lending & Borrowing · 1-on-1 Ledger' : 'Personal · Private to you',
+                          style: const TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                             color: AppColors.emeraldPrimary,
@@ -422,7 +443,7 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
               ),
               const SizedBox(height: AppSpacing.md),
 
-              // Mode Toggle + Mic
+              // Mode Toggle (Only Lent vs Borrowed if lendingOnly is true) + Mic
               Row(
                 children: [
                   Expanded(
@@ -433,7 +454,10 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Row(
-                        children: PersonalEntryMode.values.map((m) {
+                        children: (widget.lendingOnly
+                                ? [PersonalEntryMode.lent, PersonalEntryMode.borrowed]
+                                : PersonalEntryMode.values)
+                            .map((m) {
                           final isSelected = _mode == m;
                           return Expanded(
                             child: GestureDetector(
@@ -550,7 +574,7 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
 
               const SizedBox(height: AppSpacing.md),
 
-              // Person Name (For Lent / Borrowed) with Live Contact Suggestions
+              // Person Name (For Lent / Borrowed) with Live Contact Suggestions & Phone Contacts Button
               if (_mode == PersonalEntryMode.lent || _mode == PersonalEntryMode.borrowed) ...[
                 TextField(
                   controller: _personController,
@@ -562,15 +586,31 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
                     labelText: _mode == PersonalEntryMode.lent ? 'Who owes you?' : 'Who did you borrow from?',
                     hintText: 'Enter name (e.g. Rahul, Rohit)',
                     prefixIcon: const Icon(Icons.person_outline_rounded, size: 20),
-                    suffixIcon: _personController.text.isNotEmpty
-                        ? IconButton(
+                    suffixIcon: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_personController.text.isNotEmpty)
+                          IconButton(
                             icon: const Icon(Icons.clear_rounded, size: 18),
                             onPressed: () {
                               _personController.clear();
                               setState(() {});
                             },
-                          )
-                        : null,
+                          ),
+                        IconButton(
+                          icon: const Icon(Icons.contacts_rounded, size: 20, color: AppColors.emeraldPrimary),
+                          tooltip: 'Pick from Phone Contacts',
+                          onPressed: () async {
+                            HapticHelper.selection();
+                            final contact = await KithContactsService.pickContact();
+                            if (contact != null && contact.name.isNotEmpty) {
+                              _personController.text = contact.name;
+                              setState(() {});
+                            }
+                          },
+                        ),
+                      ],
+                    ),
                     fillColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
                   ),
                 ),

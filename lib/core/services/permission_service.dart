@@ -24,10 +24,24 @@ class PermissionService {
         Permission.bluetoothAdvertise,
         Permission.bluetoothConnect,
         Permission.nearbyWifiDevices,
+        Permission.contacts,
       ];
       await permissions.request();
     } catch (e) {
       debugPrint('[PermissionService] Error during initial permissions request: $e');
+    }
+  }
+
+  /// Explicitly requests Contacts permission when user accesses Lending / Contacts.
+  static Future<bool> requestContactsPermission() async {
+    if (kIsWeb) return true;
+
+    try {
+      final status = await Permission.contacts.request();
+      return status.isGranted;
+    } catch (e) {
+      debugPrint('[PermissionService] Error requesting contacts permission: $e');
+      return false;
     }
   }
 
