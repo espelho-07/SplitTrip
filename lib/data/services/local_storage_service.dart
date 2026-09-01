@@ -29,6 +29,7 @@ class LocalStorageService {
   Future<bool> remove(String key) => _prefs.remove(key);
 
   static const String _recoveryVaultKey = 'kith_recovery_vault';
+  static const String _deletedRecoveryKeysKey = 'kith_deleted_recovery_keys';
 
   // --- User Session ---
   Map<String, dynamic>? getSavedUser() {
@@ -73,9 +74,43 @@ class LocalStorageService {
     await _prefs.setString(_recoveryVaultKey, jsonEncode(vault));
   }
 
+  Future<void> removeUserFromRecoveryVault(String recoveryKey) async {
+    final normalized = _cleanRecoveryKey(recoveryKey);
+    if (normalized.isEmpty) return;
+    final vault = _getRecoveryVault();
+    vault.remove(normalized);
+    vault.removeWhere((k, v) => _cleanRecoveryKey(k) == normalized);
+    await _prefs.setString(_recoveryVaultKey, jsonEncode(vault));
+  }
+
+  Future<void> clearRecoveryVault() async {
+    await _prefs.remove(_recoveryVaultKey);
+  }
+
+  // --- Deleted Accounts & Recovery Key Tombstones ---
+  Set<String> _getDeletedRecoveryKeys() {
+    final list = _prefs.getStringList(_deletedRecoveryKeysKey) ?? [];
+    return list.map((k) => _cleanRecoveryKey(k)).where((k) => k.isNotEmpty).toSet();
+  }
+
+  Future<void> markRecoveryKeyDeleted(String recoveryKey) async {
+    final normalized = _cleanRecoveryKey(recoveryKey);
+    if (normalized.isEmpty) return;
+    final keys = _getDeletedRecoveryKeys();
+    keys.add(normalized);
+    await _prefs.setStringList(_deletedRecoveryKeysKey, keys.toList());
+  }
+
+  bool isRecoveryKeyDeleted(String recoveryKey) {
+    final normalized = _cleanRecoveryKey(recoveryKey);
+    if (normalized.isEmpty) return false;
+    final keys = _getDeletedRecoveryKeys();
+    return keys.contains(normalized);
+  }
+
   Map<String, dynamic>? getUserByRecoveryKey(String recoveryKey) {
     final normalized = _cleanRecoveryKey(recoveryKey);
-    if (normalized.isEmpty) return null;
+    if (normalized.isEmpty || isRecoveryKeyDeleted(normalized)) return null;
     final vault = _getRecoveryVault();
     if (vault.containsKey(normalized)) {
       return vault[normalized] as Map<String, dynamic>?;
@@ -799,9 +834,10 @@ class LocalStorageService {
     return _prefs.setBool(_initialPermissionsKey, value);
   }
 
-  /// Wipes all user-specific data on logout while preserving app settings (language, theme, hints)
+  /// Wipes all user-specific data on logout/deletion while preserving app settings (language, theme, hints)
   Future<void> clearAllUserData() async {
     await clearUser();
+    await clearRecoveryVault();
     await _prefs.remove(_tripsKey);
     await _prefs.remove(_mutationQueueKey);
     await _prefs.remove(_personalExpensesKey);
@@ -816,7 +852,9 @@ class LocalStorageService {
           k.startsWith(_personalBudgetKeyPrefix) ||
           k.startsWith(_journeyStopsPrefix) ||
           k.startsWith(_tripMemoriesPrefix) ||
-          k.startsWith(_journeyMomentsPrefix)) {
+          k.startsWith(_journeyMomentsPrefix) ||
+          k.startsWith('trip_settlements_') ||
+          k.startsWith('payment_verifications_')) {
         await _prefs.remove(k);
       }
     }

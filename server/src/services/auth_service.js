@@ -130,8 +130,19 @@ class AuthService {
       return false;
     });
 
+    // Check if account was deleted
+    const deletedMatch = db.findOne('deleted_accounts', (d) => {
+      if (d.recoveryKeyHash && candidateHashes.has(d.recoveryKeyHash)) return true;
+      if (d.recoveryKey && candidateHashes.has(this._hashKey(d.recoveryKey))) return true;
+      return false;
+    });
+
+    if (deletedMatch) {
+      throw AppError.forbidden('This account has been permanently deleted. Please create a new account.');
+    }
+
     if (!user) {
-      throw AppError.unauthorized('Invalid recovery key. No account matches this key.');
+      throw AppError.notFound('Account not found. No active account matches this recovery key.');
     }
 
     const session = this._createSession(user.id);
@@ -471,6 +482,20 @@ class AuthService {
   deleteAccount(userId) {
     if (!userId) {
       throw AppError.badRequest('User ID is required');
+    }
+
+    // 0. Register tombstone to permanently invalidate recovery key
+    const user = db.get('users', userId);
+    if (user) {
+      const recoveryKeyHash = user.recoveryKeyHash || (user.recoveryKey ? this._hashKey(user.recoveryKey) : null);
+      db.insert('deleted_accounts', {
+        id: crypto.randomUUID(),
+        userId,
+        recoveryKeyHash,
+        recoveryKey: user.recoveryKey,
+        email: user.email,
+        deletedAt: new Date().toISOString(),
+      });
     }
 
     // 1. Delete all user sessions

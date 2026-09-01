@@ -105,6 +105,95 @@ class SupabaseCloudSync {
     }
   }
 
+  /// Permanently purges the user account, session, devices, FCM tokens, and associated data from Supabase.
+  Future<bool> deleteAccount({
+    required String accountId,
+    required String recoveryKey,
+  }) async {
+    if (!isAvailable) return false;
+    if (accountId.isEmpty) return false;
+
+    try {
+      // 1. Delete from guest_sessions table
+      try {
+        await _client.from(tableGuestSessions).delete().eq('id', accountId);
+      } catch (e) {
+        debugPrint('[SupabaseCloudSync] guest_sessions delete notice: $e');
+      }
+
+      // Also delete any session matching the recovery key hash
+      if (recoveryKey.isNotEmpty) {
+        try {
+          final normalizedKey = RecoveryKeyService.normalizeKey(recoveryKey);
+          final rows = await _client
+              .from(tableGuestSessions)
+              .select('id, recovery_key, anonymous_token');
+          final rList = rows as List<dynamic>? ?? [];
+          for (final r in rList) {
+            final storedHash = r['recovery_key'] as String?;
+            final salt = r['anonymous_token'] as String?;
+            final rId = r['id'] as String?;
+            if (storedHash != null && salt != null && rId != null) {
+              if (RecoveryKeyService.verifyKey(normalizedKey, storedHash, salt)) {
+                await _client.from(tableGuestSessions).delete().eq('id', rId);
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      // 2. Delete from user_accounts
+      try {
+        await _client.from(tableAccounts).delete().eq('id', accountId);
+      } catch (_) {}
+
+      // 3. Delete registered devices
+      try {
+        await _client.from(tableDevices).delete().eq('account_id', accountId);
+      } catch (_) {}
+
+      // 4. Delete FCM tokens
+      try {
+        await _client.from('user_fcm_tokens').delete().eq('user_id', accountId);
+      } catch (_) {}
+
+      // 5. Delete personal finances
+      try {
+        await _client.from(tablePersonalExpenses).delete().eq('user_id', accountId);
+      } catch (_) {}
+      try {
+        await _client.from(tablePersonalDebts).delete().eq('user_id', accountId);
+      } catch (_) {}
+      try {
+        await _client.from('personal_budgets').delete().eq('user_id', accountId);
+      } catch (_) {}
+      try {
+        await _client.from('personal_repayments').delete().eq('user_id', accountId);
+      } catch (_) {}
+
+      // 6. Delete trip memberships
+      try {
+        await _client.from(tableMembers).delete().eq('user_id', accountId);
+      } catch (_) {}
+
+      // 7. Delete trips created by this account
+      try {
+        await _client.from(tableTrips).delete().eq('creator_id', accountId);
+      } catch (_) {}
+
+      // 8. Delete user record
+      try {
+        await _client.from('users').delete().eq('id', accountId);
+      } catch (_) {}
+
+      debugPrint('[SupabaseCloudSync] Successfully purged account $accountId from Supabase');
+      return true;
+    } catch (e) {
+      debugPrint('[SupabaseCloudSync] deleteAccount error: $e');
+      return false;
+    }
+  }
+
   // ───────────────────────────────────────────────────────────────────────────
   // 2. ACCOUNT RECOVERY (VERIFY SALTED HASH)
   // ───────────────────────────────────────────────────────────────────────────

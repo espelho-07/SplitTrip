@@ -331,6 +331,12 @@ class AuthService {
     final cleanKey = RecoveryKeyService.normalizeKey(recoveryKey);
     if (cleanKey.isEmpty) return null;
 
+    // Check if locally marked as deleted
+    if (storage.isRecoveryKeyDeleted(cleanKey)) {
+      debugPrint('[AuthService] Recovery attempt for deleted recovery key rejected: $cleanKey');
+      return null;
+    }
+
     final deviceId = storage.getDeviceId();
 
     // 1. Check active local match
@@ -376,16 +382,38 @@ class AuthService {
       debugPrint('[AuthService] Supabase cloud recovery notice: $e');
     }
 
-    // 3. Fallback to local device Recovery Vault
-    final vaultUserJson = storage.getUserByRecoveryKey(cleanKey);
-    if (vaultUserJson != null) {
-      final user = GuestUser.fromJson(vaultUserJson);
-      apiClient.setAuthToken(user.anonymousToken);
-      realtimeClient?.setAuthToken(user.anonymousToken);
-      await storage.saveUser(user.toJson());
-      unawaited(_secureId.persistGuestIdentity(user.id, user.recoveryKey));
-      syncLocalGuestSession(user);
-      return user;
+    // 3. Query Render backend /auth/recover
+    try {
+      final backendRes = await apiClient.post('/auth/recover', body: {'recoveryKey': cleanKey});
+      if (backendRes is Map<String, dynamic> && backendRes['data'] is Map<String, dynamic>) {
+        final data = backendRes['data'] as Map<String, dynamic>;
+        final userMap = data['user'] as Map<String, dynamic>?;
+        if (userMap != null) {
+          final user = GuestUser.fromJson(userMap);
+          apiClient.setAuthToken(user.anonymousToken);
+          realtimeClient?.setAuthToken(user.anonymousToken);
+          await storage.saveUser(user.toJson());
+          await _secureId.persistGuestIdentity(user.id, user.recoveryKey);
+          syncLocalGuestSession(user);
+          return user;
+        }
+      }
+    } catch (e) {
+      debugPrint('[AuthService] Backend server recovery notice: $e');
+    }
+
+    // 4. Fallback to local device Recovery Vault (if not deleted)
+    if (!storage.isRecoveryKeyDeleted(cleanKey)) {
+      final vaultUserJson = storage.getUserByRecoveryKey(cleanKey);
+      if (vaultUserJson != null) {
+        final user = GuestUser.fromJson(vaultUserJson);
+        apiClient.setAuthToken(user.anonymousToken);
+        realtimeClient?.setAuthToken(user.anonymousToken);
+        await storage.saveUser(user.toJson());
+        unawaited(_secureId.persistGuestIdentity(user.id, user.recoveryKey));
+        syncLocalGuestSession(user);
+        return user;
+      }
     }
 
     return null;
@@ -672,10 +700,32 @@ class AuthService {
   Future<void> deleteAccount() async {
     final current = getCurrentUser();
     if (current != null) {
+      // 1. Mark recovery key permanently deleted on local device & purge vault
+      if (current.recoveryKey.isNotEmpty) {
+        await storage.markRecoveryKeyDeleted(current.recoveryKey);
+        await storage.removeUserFromRecoveryVault(current.recoveryKey);
+      }
+
+      // 2. Delete on Render backend server
       try {
         await apiClient.post('/auth/delete-account', body: {'userId': current.id});
       } catch (_) {}
+      try {
+        await apiClient.delete('/auth/account');
+      } catch (_) {}
+
+      // 3. Purge all records from Supabase Cloud
+      try {
+        await _cloudSync.deleteAccount(
+          accountId: current.effectiveAccountId,
+          recoveryKey: current.recoveryKey,
+        );
+      } catch (e) {
+        debugPrint('[AuthService] Supabase deleteAccount notice: $e');
+      }
     }
+
+    // 4. Wipe local data, Keystore anchor, and disconnect
     await logout();
   }
 

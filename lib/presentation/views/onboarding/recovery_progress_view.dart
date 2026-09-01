@@ -10,6 +10,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/kith_brand.dart';
+import '../../../data/services/local_storage_service.dart';
 import '../../../data/services/sync_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
@@ -101,9 +102,13 @@ class _RecoveryProgressViewState extends State<RecoveryProgressView> {
       if (!mounted) return;
 
       if (user == null) {
+        final storage = context.read<LocalStorageService>();
+        final isDeleted = storage.isRecoveryKeyDeleted(key);
         setState(() {
           _isRecovering = false;
-          _errorMessage = "Couldn't restore your account.\nPlease check your Recovery Key and try again.";
+          _errorMessage = isDeleted
+              ? "Account Already Deleted\nThis account was permanently deleted and cannot be restored."
+              : "Account Not Found\nNo active account matches this Recovery Key. Please check your key or create a new account.";
         });
         HapticHelper.error();
         return;
@@ -328,14 +333,14 @@ class _RecoveryProgressViewState extends State<RecoveryProgressView> {
                     Column(
                       children: [
                         AppButton(
-                          text: 'Retry Recovery',
+                          text: 'Create New Account',
                           variant: AppButtonVariant.primary,
                           isFullWidth: true,
-                          onPressed: _startRecovery,
+                          onPressed: () => context.go('/onboarding'),
                         ),
                         const SizedBox(height: 12),
                         AppButton(
-                          text: 'Back',
+                          text: 'Retry with Different Key',
                           variant: AppButtonVariant.secondary,
                           isFullWidth: true,
                           onPressed: () => Navigator.of(context).pop(),
