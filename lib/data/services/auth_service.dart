@@ -651,7 +651,7 @@ class AuthService {
     apiClient.setAuthToken(null);
     realtimeClient?.setAuthToken(null);
     realtimeClient?.disconnect();
-    await storage.clearUser();
+    await storage.clearAllUserData();
     await _secureId.clearSecureIdentity();
   }
 

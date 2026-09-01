@@ -84,6 +84,12 @@ void main() {
         creator: creator,
       );
 
+      // Add a pending offline expense mutation
+      await syncService.enqueueMutation(
+        MutationType.addExpense,
+        {'tripId': trip.id, 'title': 'Fuel', 'amountInPaise': 200000},
+      );
+
       // 1. With pending offline mutations -> transitions to completing
       final updatedOffline = await tripRepo.updateLifecycle(
         tripId: trip.id,

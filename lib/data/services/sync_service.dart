@@ -280,6 +280,11 @@ class SyncService {
     return raw.map((json) => SyncMutation.fromJson(json)).toList();
   }
 
+  Future<void> clearQueue() async {
+    await _storage.clearMutationQueue();
+    _setStatus(SyncStatus.synced);
+  }
+
   /// Returns all pending mutations for a specific trip.
   List<SyncMutation> getPendingMutationsForTrip(String tripId) {
     return getPendingMutations().where((m) => m.tripId == tripId).toList();

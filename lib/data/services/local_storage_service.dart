@@ -154,6 +154,10 @@ class LocalStorageService {
     return _prefs.setString(_mutationQueueKey, jsonEncode(queue));
   }
 
+  Future<bool> clearMutationQueue() async {
+    return _prefs.remove(_mutationQueueKey);
+  }
+
   // --- Processed P2P Operations ---
   static const String _processedP2POpsKey = 'kith_processed_p2p_ops';
 

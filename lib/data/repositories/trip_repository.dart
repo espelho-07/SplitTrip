@@ -426,9 +426,19 @@ class TripRepository {
     // Determine target local lifecycle:
     // If completing a trip and pending un-synced operations exist for this trip,
     // transition locally to `completing` ("Finishing sync") rather than jumping to `completed`.
-    final pendingMutations = syncService.getPendingMutationsForTrip(tripId);
+    final pendingFinancialMutations = syncService
+        .getPendingMutationsForTrip(tripId)
+        .where((m) =>
+            m.type == MutationType.addExpense ||
+            m.type == MutationType.updateExpense ||
+            m.type == MutationType.deleteExpense ||
+            m.type == MutationType.recordTripSettlement ||
+            m.type == MutationType.confirmTripSettlement ||
+            m.type == MutationType.disputeTripSettlement ||
+            m.type == MutationType.submitSettlementProof)
+        .toList();
     TripLifecycle targetLocalState = newLifecycle;
-    if (newLifecycle == TripLifecycle.completed && pendingMutations.isNotEmpty) {
+    if (newLifecycle == TripLifecycle.completed && pendingFinancialMutations.isNotEmpty) {
       targetLocalState = TripLifecycle.completing;
     }
 
@@ -456,7 +466,7 @@ class TripRepository {
     await addLocalActivityLog(tripId, log);
 
     // Enqueue mutation with dependency list of all pending mutations for this trip
-    final dependencyIds = pendingMutations.map((m) => m.id).toList();
+    final dependencyIds = pendingFinancialMutations.map((m) => m.id).toList();
     await syncService.enqueueMutation(
       MutationType.updateTripLifecycle,
       {'tripId': tripId, 'lifecycleState': newLifecycle.name},
