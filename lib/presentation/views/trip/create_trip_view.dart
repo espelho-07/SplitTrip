@@ -7,6 +7,7 @@ import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/widgets/kith_components.dart';
+import '../../../core/widgets/trip_cover_background.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/create_trip_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
@@ -54,14 +55,7 @@ class _CreateTripViewState extends State<CreateTripView> {
     {'code': 'AED', 'symbol': 'AED', 'label': 'AED'},
   ];
 
-  static const List<List<Color>> _coverGradients = [
-    [Color(0xFF0D9488), Color(0xFF0F766E)], // Teal Gradient
-    [Color(0xFF6366F1), Color(0xFF4338CA)], // Indigo Gradient
-    [Color(0xFFF97316), Color(0xFFC2410C)], // Orange Sunset
-    [Color(0xFFEC4899), Color(0xFFBE185D)], // Pink Punch
-    [Color(0xFF8B5CF6), Color(0xFF6D28D9)], // Purple Haze
-    [Color(0xFF10B981), Color(0xFF047857)], // Emerald Green
-  ];
+
 
   @override
   void dispose() {
@@ -347,110 +341,124 @@ class _CreateTripViewState extends State<CreateTripView> {
     );
   }
 
-  /// Interactive Live Hero Card (Compact Small-to-Medium ~112px height)
+  /// Interactive Live Hero Card with Scenic Vector Artwork Background (~116px height)
   Widget _buildHeroTripPreviewCard(
     CreateTripViewModel createVm,
     bool isDark,
     AppLocalizations l10n,
   ) {
-    final gradIndex = createVm.coverGradientIndex.clamp(0, _coverGradients.length - 1);
-    final gradientColors = _coverGradients[gradIndex];
     final hasName = createVm.name.trim().isNotEmpty;
+    final activeTheme = TripBackgroundThemes.getTheme(createVm.coverGradientIndex);
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      height: 112,
-      padding: const EdgeInsets.all(14),
+    return Container(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: gradientColors,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: gradientColors.first.withValues(alpha: isDark ? 0.35 : 0.25),
+            color: activeTheme.gradientColors.first.withValues(alpha: isDark ? 0.40 : 0.25),
             blurRadius: 16,
-            offset: const Offset(0, 5),
+            offset: const Offset(0, 6),
           ),
         ],
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // Emoji Avatar
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.22),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.35), width: 1.2),
+      child: TripCoverBackground(
+        themeIndex: createVm.coverGradientIndex,
+        borderRadius: 18,
+        height: 116,
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Emoji Avatar
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.25),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 1.2),
+              ),
+              child: Center(
+                child: Text(createVm.emoji, style: const TextStyle(fontSize: 30)),
+              ),
             ),
-            child: Center(
-              child: Text(createVm.emoji, style: const TextStyle(fontSize: 30)),
-            ),
-          ),
-          const SizedBox(width: 14),
+            const SizedBox(width: 14),
 
-          // Trip Name & Subtitle
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  hasName ? createVm.name : l10n.translate('trip_idea_goa'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.3,
+            // Trip Name & Badges
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    hasName ? createVm.name : l10n.translate('trip_idea_goa'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.3,
+                      shadows: [
+                        Shadow(color: Colors.black45, blurRadius: 4, offset: Offset(0, 1)),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.25),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        createVm.tripMode == 'split_and_journey' ? 'Split + Journey' : 'Split Only',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w700,
+                  const SizedBox(height: 5),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.35),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 0.8),
+                        ),
+                        child: Text(
+                          createVm.tripMode == 'split_and_journey' ? 'Split + Journey' : 'Split Only',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.25),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        createVm.currencyCode,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w800,
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.35),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 0.8),
+                        ),
+                        child: Text(
+                          createVm.currencyCode,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.25),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          activeTheme.emoji,
+                          style: const TextStyle(fontSize: 10.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -634,52 +642,95 @@ class _CreateTripViewState extends State<CreateTripView> {
 
           const SizedBox(height: 14),
 
-          // Color Palette Dot Picker (Size 26px dots)
-          Text(
-            l10n.createTripChooseTheme.toUpperCase(),
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.7,
-              color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
-            ),
-          ),
-          const SizedBox(height: 8),
+          // Scenic Artwork Theme Selector (Mountains, Beach, Forest, Skyline, Dunes, Aurora, Minimal)
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: List.generate(_coverGradients.length, (index) {
-              final isSelected = createVm.coverGradientIndex == index;
-              final colors = _coverGradients[index];
-              return GestureDetector(
-                onTap: () {
-                  HapticHelper.selection();
-                  createVm.setCoverGradientIndex(index);
-                },
-                child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(colors: colors),
-                    shape: BoxShape.circle,
-                    border: isSelected
-                        ? Border.all(color: Colors.white, width: 2.5)
-                        : Border.all(color: Colors.transparent, width: 1),
-                    boxShadow: isSelected
-                        ? [
-                            BoxShadow(
-                              color: colors.first.withValues(alpha: 0.6),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ]
-                        : null,
-                  ),
-                  child: isSelected
-                      ? const Center(child: Icon(Icons.check_rounded, color: Colors.white, size: 16))
-                      : null,
+            children: [
+              Text(
+                'BACKGROUND THEME & ARTWORK',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.7,
+                  color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
                 ),
-              );
-            }),
+              ),
+              Text(
+                TripBackgroundThemes.getTheme(createVm.coverGradientIndex).name,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF14B8A6),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 58,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              itemCount: TripBackgroundThemes.themes.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                final theme = TripBackgroundThemes.themes[index];
+                final isSelected = createVm.coverGradientIndex == theme.id;
+                return InkWell(
+                  onTap: () {
+                    HapticHelper.selection();
+                    createVm.setCoverGradientIndex(theme.id);
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    width: 92,
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: theme.gradientColors,
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isSelected ? Colors.white : Colors.transparent,
+                        width: isSelected ? 2.0 : 0.8,
+                      ),
+                      boxShadow: isSelected
+                          ? [
+                              BoxShadow(
+                                color: theme.gradientColors.first.withValues(alpha: 0.6),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(theme.emoji, style: const TextStyle(fontSize: 16)),
+                        const SizedBox(height: 2),
+                        Text(
+                          theme.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+                            shadows: const [
+                              Shadow(color: Colors.black45, blurRadius: 2),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
           ),
         ],
       ),

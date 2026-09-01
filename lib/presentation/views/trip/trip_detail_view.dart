@@ -15,6 +15,7 @@ import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/currency_display.dart';
 import '../../../core/widgets/empty_state_view.dart';
 import '../../../core/widgets/kith_components.dart';
+import '../../../core/widgets/trip_cover_background.dart';
 import '../../../core/widgets/member_avatar.dart';
 import '../../../core/widgets/pill_badge.dart';
 import '../../../core/widgets/shimmer_skeleton.dart';
@@ -799,11 +800,6 @@ class _TripDetailViewState extends State<TripDetailView> {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: gradientColors,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
         borderRadius: AppRadius.xlBorder,
         boxShadow: [
           BoxShadow(
@@ -813,8 +809,11 @@ class _TripDetailViewState extends State<TripDetailView> {
           ),
         ],
       ),
-      padding: const EdgeInsets.all(20.0),
-      child: Column(
+      child: TripCoverBackground(
+        themeIndex: trip.coverGradientIndex,
+        borderRadius: 24,
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -1015,6 +1014,7 @@ class _TripDetailViewState extends State<TripDetailView> {
             ),
           ],
         ],
+      ),
       ),
     );
   }

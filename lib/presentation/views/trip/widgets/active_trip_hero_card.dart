@@ -6,6 +6,7 @@ import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/utils/date_formatter.dart';
 import '../../../../core/utils/haptic_feedback_helper.dart';
 import '../../../../core/widgets/member_avatar.dart';
+import '../../../../core/widgets/trip_cover_background.dart';
 import '../../../../domain/models/balance_summary.dart';
 import '../../../../domain/models/trip.dart';
 
@@ -31,7 +32,6 @@ class ActiveTripHeroCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final l10n = context.l10n;
-    final gradientColors = AppColors.getGradient(trip.coverGradientIndex);
     final userNetPaise = balance?.currentUserNetBalanceInPaise ?? 0;
 
     return GestureDetector(
@@ -60,17 +60,12 @@ class ActiveTripHeroCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. Cover Gradient Header Banner
-            Container(
-              height: 88,
+            // 1. Cover Scenic Artwork Header Banner
+            TripCoverBackground(
+              themeIndex: trip.coverGradientIndex,
+              borderRadius: 0,
+              height: 92,
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: gradientColors,
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: CrossAxisAlignment.start,
