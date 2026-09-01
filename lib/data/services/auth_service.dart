@@ -136,9 +136,12 @@ class AuthService {
     // Fallback: If Keystore has both ID and Recovery Key, reconstruct local session
     final persistedKey = await _secureId.getPersistedRecoveryKey();
     if (persistedKey != null && persistedKey.isNotEmpty) {
+      final vaultUserJson = storage.getUserByRecoveryKey(persistedKey);
+      final vaultName = vaultUserJson != null ? (vaultUserJson['displayName'] ?? vaultUserJson['display_name']) as String? : null;
+
       final user = GuestUser(
         id: secureId,
-        displayName: 'Traveler',
+        displayName: (vaultName != null && vaultName.trim().isNotEmpty && vaultName != 'Traveler') ? vaultName.trim() : (vaultName ?? 'Traveler'),
         recoveryKey: persistedKey,
         anonymousToken: 'kith_sess_${secureId.replaceAll('usr_', '')}',
         createdAt: DateTime.now(),
@@ -290,6 +293,7 @@ class AuthService {
         avatarUrl: avatarUrl,
         deviceId: deviceId,
       );
+      await _supabaseSync.upsertGuestSession(user);
     } catch (_) {}
 
     // Anchor in Android Keystore
@@ -325,8 +329,13 @@ class AuthService {
     try {
       final supabaseRow = await _cloudSync.recoverAccount(cleanKey, deviceId: deviceId);
       if (supabaseRow != null) {
-        final accountId = supabaseRow['id'] as String;
-        final displayName = supabaseRow['display_name'] as String? ?? 'Traveler';
+        final accountId = (supabaseRow['id'] ?? supabaseRow['accountId']) as String;
+        final rawDisplayName = supabaseRow['displayName'] as String? ??
+            supabaseRow['display_name'] as String? ??
+            supabaseRow['name'] as String?;
+        final displayName = (rawDisplayName != null && rawDisplayName.trim().isNotEmpty)
+            ? rawDisplayName.trim()
+            : 'Traveler';
         final token = 'kith_sess_${accountId.replaceAll('usr_', '')}';
 
         final user = GuestUser(

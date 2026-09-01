@@ -1,20 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
 import '../../../../core/localization/app_localizations.dart';
-import '../../../../core/network/api_client.dart';
 import '../../../../core/services/recovery_key_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/haptic_feedback_helper.dart';
 import '../../../../core/widgets/app_button.dart';
-import '../../../../data/services/sync_service.dart';
-import '../../../viewmodels/auth_viewmodel.dart';
-import '../../../viewmodels/home_viewmodel.dart';
-import '../../../viewmodels/personal_expense_viewmodel.dart';
-import '../../../widgets/progress/progress.dart';
+import '../recovery_progress_view.dart';
 
 /// Focused bottom sheet for entering a recovery key and restoring account data.
 class RecoveryKeySheet extends StatefulWidget {
@@ -36,7 +29,7 @@ class RecoveryKeySheet extends StatefulWidget {
 
 class _RecoveryKeySheetState extends State<RecoveryKeySheet> {
   final TextEditingController _keyController = TextEditingController();
-  bool _isRestoring = false;
+  bool _isSubmitting = false;
 
   @override
   void dispose() {
@@ -55,9 +48,8 @@ class _RecoveryKeySheetState extends State<RecoveryKeySheet> {
   }
 
   Future<void> _handleRecover() async {
-    final authVm = context.read<AuthViewModel>();
     final l10n = context.l10n;
-    if (_isRestoring || authVm.isLoading) return;
+    if (_isSubmitting) return;
 
     final rawInput = _keyController.text.trim();
     final key = RecoveryKeyService.normalizeKey(rawInput);
@@ -68,52 +60,14 @@ class _RecoveryKeySheetState extends State<RecoveryKeySheet> {
       return;
     }
 
-    setState(() => _isRestoring = true);
+    setState(() => _isSubmitting = true);
     HapticHelper.medium();
 
-    try {
-      final user = await authVm.recoverSession(key);
+    final navigator = Navigator.of(context);
+    navigator.pop(); // Dismiss sheet smoothly
 
-      if (!mounted) return;
-
-      if (user != null) {
-        Navigator.pop(context); // Close bottom sheet
-        final syncService = context.read<SyncService>();
-        final apiClient = context.read<ApiClient>();
-        final homeVm = context.read<HomeViewModel>();
-        final personalVm = context.read<PersonalExpenseViewModel>();
-
-        await syncService.reconcileWithCloud(user.effectiveAccountId, apiClient: apiClient);
-        await homeVm.loadTrips(user.id);
-        await personalVm.loadData(user.id);
-        await personalVm.syncTripExpenses(user.id);
-
-        if (mounted) {
-          context.go('/home');
-          KithSuccessToast.show(context, '${l10n.onboardingWelcomeBack}, ${user.displayName} ✓');
-        }
-      } else {
-        setState(() => _isRestoring = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Recovery key is incorrect. Please verify and try again.'),
-            backgroundColor: AppColors.negativeRedDark,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isRestoring = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString().replaceAll('Exception: ', '')),
-            backgroundColor: AppColors.negativeRedDark,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    }
+    // Transition immediately to dedicated recovery progress screen
+    RecoveryProgressView.push(context, key);
   }
 
   @override
@@ -192,9 +146,9 @@ class _RecoveryKeySheetState extends State<RecoveryKeySheet> {
 
             // Restore CTA
             AppButton(
-              text: _isRestoring ? 'Restoring your Kith data...' : l10n.onboardingRecoverySheetCta,
+              text: _isSubmitting ? 'Verifying key...' : l10n.onboardingRecoverySheetCta,
               isFullWidth: true,
-              isLoading: _isRestoring,
+              isLoading: _isSubmitting,
               onPressed: _handleRecover,
             ),
           ],

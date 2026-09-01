@@ -136,21 +136,47 @@ class SupabaseCloudSync {
         if (storedHash == null || salt == null) continue;
 
         if (RecoveryKeyService.verifyKey(normalizedKey, storedHash, salt)) {
-          debugPrint('[SupabaseCloudSync] Salted hash matched for account ${row['id']}');
+          final accountId = row['id'] as String;
+          debugPrint('[SupabaseCloudSync] Salted hash matched for account $accountId');
 
           await registerDevice(
-            accountId: row['id'],
+            accountId: accountId,
             deviceId: deviceId,
             platform: 'android',
             appVersion: '1.0.1+14',
           );
 
+          String resolvedName = (row['display_name'] as String?)?.trim() ?? '';
+          if (resolvedName.isEmpty || resolvedName == 'Traveler') {
+            try {
+              final userRes = await _client.from('users').select('display_name').eq('id', accountId).maybeSingle();
+              if (userRes != null && userRes['display_name'] != null && (userRes['display_name'] as String).trim().isNotEmpty) {
+                resolvedName = (userRes['display_name'] as String).trim();
+              }
+            } catch (_) {}
+          }
+
+          if (resolvedName.isEmpty || resolvedName == 'Traveler') {
+            try {
+              final memberRes = await _client.from(tableMembers).select('display_name').eq('user_id', accountId).limit(1);
+              final mList = memberRes as List<dynamic>? ?? [];
+              if (mList.isNotEmpty && mList.first['display_name'] != null && (mList.first['display_name'] as String).trim().isNotEmpty) {
+                resolvedName = (mList.first['display_name'] as String).trim();
+              }
+            } catch (_) {}
+          }
+
+          if (resolvedName.isEmpty) {
+            resolvedName = 'Traveler';
+          }
+
           return {
-            'id': row['id'],
-            'accountId': row['id'],
-            'displayName': row['display_name'] ?? 'Traveler',
+            'id': accountId,
+            'accountId': accountId,
+            'displayName': resolvedName,
+            'display_name': resolvedName,
             'recoveryKey': normalizedKey,
-            'anonymousToken': 'kith_rec_${row['id']}',
+            'anonymousToken': 'kith_rec_$accountId',
             'createdAt': row['created_at'] ?? DateTime.now().toIso8601String(),
           };
         }
