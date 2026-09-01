@@ -5,9 +5,13 @@ import 'package:http/http.dart' as http;
 import '../../core/config/app_config.dart';
 import '../../core/config/supabase_config.dart';
 import '../../domain/models/ipo/ipo.dart';
+import '../../domain/models/ipo/ipo_application.dart';
 
 abstract class IpoDataProvider {
   Future<List<Ipo>> fetchIpos();
+  Future<bool> registerApplicationMonitoring(IpoApplication app);
+  Future<IpoApplication?> checkApplicationAllotment(String applicationId);
+  Future<List<IpoApplication>> syncUserAllotments(String userId);
 }
 
 /// Fetches real-time Indian IPO market data via Kith's secure backend proxy & Supabase Edge Functions.
@@ -117,6 +121,70 @@ class LiveIpoDataProvider implements IpoDataProvider {
     } catch (_) {}
     return const [];
   }
+
+  @override
+  Future<bool> registerApplicationMonitoring(IpoApplication app) async {
+    try {
+      final backendUri = Uri.parse('${AppConfig.baseUrl}/ipos/applications/register');
+      final response = await _client.post(
+        backendUri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode(app.toJson()),
+      ).timeout(const Duration(seconds: 5));
+
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('[LiveIpoDataProvider] Register monitoring notice: $e');
+      return false;
+    }
+  }
+
+  @override
+  Future<IpoApplication?> checkApplicationAllotment(String applicationId) async {
+    try {
+      final backendUri = Uri.parse('${AppConfig.baseUrl}/ipos/applications/$applicationId/check-now');
+      final response = await _client.post(
+        backendUri,
+        headers: {'Accept': 'application/json'},
+      ).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        if (body is Map<String, dynamic> && body['data'] is Map<String, dynamic>) {
+          return IpoApplication.fromJson(body['data'] as Map<String, dynamic>);
+        }
+      }
+    } catch (e) {
+      debugPrint('[LiveIpoDataProvider] Check allotment notice: $e');
+    }
+    return null;
+  }
+
+  @override
+  Future<List<IpoApplication>> syncUserAllotments(String userId) async {
+    try {
+      final backendUri = Uri.parse('${AppConfig.baseUrl}/ipos/user/$userId/allotments');
+      final response = await _client.get(
+        backendUri,
+        headers: {'Accept': 'application/json'},
+      ).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        if (body is Map<String, dynamic> && body['data'] is List) {
+          final list = body['data'] as List;
+          return list.whereType<Map<String, dynamic>>().map((m) => IpoApplication.fromJson(m)).toList();
+        }
+      }
+    } catch (e) {
+      debugPrint('[LiveIpoDataProvider] Sync user allotments notice: $e');
+    }
+    return const [];
+  }
 }
+
 
 

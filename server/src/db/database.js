@@ -23,6 +23,8 @@ class Database {
       user_fcm_tokens: new Map(),
       notifications: new Map(),
       processed_operations: new Map(),
+      ipo_applications: new Map(),
+      ipo_allotment_records: new Map(),
     };
 
     // Secondary Indexes for O(1) concurrent lookups
@@ -35,6 +37,7 @@ class Database {
       settlements: { byTripId: new Map() },
       notifications: { byRecipientUserId: new Map() },
       processed_operations: { byTripId: new Map() },
+      ipo_applications: { byUserId: new Map(), byIpoId: new Map() },
     };
 
     if (!this.inMemory) {
@@ -128,6 +131,19 @@ class Database {
         }
         this.indexes.processed_operations.byTripId.get(item.tripId).add(item.id);
       }
+    } else if (tableName === 'ipo_applications') {
+      if (item.userId) {
+        if (!this.indexes.ipo_applications.byUserId.has(item.userId)) {
+          this.indexes.ipo_applications.byUserId.set(item.userId, new Set());
+        }
+        this.indexes.ipo_applications.byUserId.get(item.userId).add(item.id);
+      }
+      if (item.ipoId) {
+        if (!this.indexes.ipo_applications.byIpoId.has(item.ipoId)) {
+          this.indexes.ipo_applications.byIpoId.set(item.ipoId, new Set());
+        }
+        this.indexes.ipo_applications.byIpoId.get(item.ipoId).add(item.id);
+      }
     }
   }
 
@@ -166,6 +182,13 @@ class Database {
     } else if (tableName === 'processed_operations') {
       if (item.tripId && this.indexes.processed_operations.byTripId.has(item.tripId)) {
         this.indexes.processed_operations.byTripId.get(item.tripId).delete(item.id);
+      }
+    } else if (tableName === 'ipo_applications') {
+      if (item.userId && this.indexes.ipo_applications.byUserId.has(item.userId)) {
+        this.indexes.ipo_applications.byUserId.get(item.userId).delete(item.id);
+      }
+      if (item.ipoId && this.indexes.ipo_applications.byIpoId.has(item.ipoId)) {
+        this.indexes.ipo_applications.byIpoId.get(item.ipoId).delete(item.id);
       }
     }
   }

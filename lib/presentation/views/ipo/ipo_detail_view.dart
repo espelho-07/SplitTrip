@@ -646,6 +646,12 @@ class IpoDetailView extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 8),
+
+          // ── Automatic Allotment Monitoring Status Banner ──
+          if (app.status == IpoApplicationStatus.applied || app.status == IpoApplicationStatus.fundsBlocked) ...
+            _buildMonitoringStatusBanner(context, app, isDark, ipoVm),
+
           const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -915,6 +921,131 @@ class IpoDetailView extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// Returns a list of widgets forming the allotment monitoring status banner.
+  List<Widget> _buildMonitoringStatusBanner(
+    BuildContext context,
+    IpoApplication app,
+    bool isDark,
+    IpoViewModel ipoVm,
+  ) {
+    final ms = app.monitoringStatus;
+    final isChecking = ms == IpoMonitoringStatus.checking;
+    final isFailed = ms == IpoMonitoringStatus.failed;
+
+    Color bg;
+    Color fg;
+    Color borderColor;
+    IconData icon;
+    String label;
+    String sublabel;
+
+    if (isFailed) {
+      bg = isDark ? const Color(0xFF2A1A12) : const Color(0xFFFFF3E0);
+      fg = isDark ? Colors.orange.shade300 : Colors.orange.shade800;
+      borderColor = fg.withValues(alpha: 0.3);
+      icon = Icons.warning_amber_rounded;
+      label = 'Manual verification needed';
+      sublabel = 'Tap "Check Now" to verify your allotment';
+    } else if (isChecking) {
+      bg = isDark ? const Color(0xFF0D1F3A) : const Color(0xFFE3F2FD);
+      fg = isDark ? Colors.blue.shade300 : Colors.blue.shade700;
+      borderColor = fg.withValues(alpha: 0.3);
+      icon = Icons.sync_rounded;
+      label = 'Checking allotment…';
+      sublabel = 'Verifying with registrar / exchange';
+    } else {
+      bg = isDark ? const Color(0xFF0D1F2A) : const Color(0xFFF0FDF4);
+      fg = isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary;
+      borderColor = fg.withValues(alpha: 0.25);
+      icon = Icons.radar_rounded;
+      label = ms.displayName;
+      sublabel = app.lastCheckMessage ?? 'Kith checks automatically near allotment date';
+    }
+
+    final lastCheckedText = app.lastCheckedAt != null
+        ? 'Last checked: ${_formatRelativeTime(app.lastCheckedAt!)}'
+        : null;
+
+    return [
+      Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: borderColor, width: 0.9),
+        ),
+        child: Row(
+          children: [
+            isChecking
+                ? SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(fg),
+                    ),
+                  )
+                : Icon(icon, size: 16, color: fg),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: fg,
+                    ),
+                  ),
+                  Text(
+                    lastCheckedText ?? sublabel,
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: fg.withValues(alpha: 0.8),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (!isChecking)
+              GestureDetector(
+                onTap: () {
+                  HapticHelper.light();
+                  ipoVm.checkAllotmentNow(app.id);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: fg.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'Check Now',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: fg,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    ];
+  }
+
+  String _formatRelativeTime(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
+    if (diff.inHours < 24) return '${diff.inHours} hr ago';
+    return '${diff.inDays} day${diff.inDays > 1 ? 's' : ''} ago';
   }
 
   Future<void> _markIpoPaymentReceived(BuildContext context, IpoApplication app, IpoViewModel ipoVm) async {

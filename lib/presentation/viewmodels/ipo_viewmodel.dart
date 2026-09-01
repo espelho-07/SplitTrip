@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../data/repositories/ipo_repository.dart';
 import '../../domain/models/ipo/ipo.dart';
@@ -164,12 +165,47 @@ class IpoViewModel extends ChangeNotifier {
     _isLoading = false;
     notifyListeners();
 
+    // Background: sync allotment statuses from server for pending applications
+    if (_applications.isNotEmpty) {
+      final userId = _applications.first.userId;
+      unawaited(_syncAllotmentsAndRefresh(userId));
+    }
+
     // Check and trigger notifications for milestone reminders
     if (notificationService != null && _ipos.isNotEmpty) {
       await notificationService!.checkAndDispatchIpoReminders(
         ipos: _ipos,
         applications: _applications,
       );
+    }
+  }
+
+  Future<void> _syncAllotmentsAndRefresh(String userId) async {
+    try {
+      await ipoRepo.syncAllotments(userId);
+      _applications = ipoRepo.getCachedApplications();
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  /// Manually triggers on-demand allotment check for a single application
+  Future<void> checkAllotmentNow(String applicationId) async {
+    final result = await ipoRepo.checkAllotmentNow(applicationId);
+    if (result != null) {
+      _applications = ipoRepo.getCachedApplications();
+      notifyListeners();
+
+      if (notificationService != null) {
+        final updated = _applications.firstWhere((a) => a.id == applicationId, orElse: () => result);
+        if (updated.status != IpoApplicationStatus.applied && updated.status != IpoApplicationStatus.fundsBlocked) {
+          await notificationService!.notifyIpoApplicationUpdated(
+            ipoId: updated.ipoId,
+            ipoName: updated.ipoName,
+            statusDisplayName: '${updated.accountName}: ${updated.status.displayName}',
+            applicationId: applicationId,
+          );
+        }
+      }
     }
   }
 
@@ -316,3 +352,4 @@ class IpoViewModel extends ChangeNotifier {
     notifyListeners();
   }
 }
+

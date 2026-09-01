@@ -188,4 +188,135 @@ router.get("/:id", async (req, res) => {
   res.status(404).json({ error: "IPO not found in current market catalog" });
 });
 
+// ==========================================
+// IPO Allotment Monitoring Endpoints
+// ==========================================
+
+const { db } = require("../db/database");
+const { AllotmentMonitorService } = require("../services/ipo/allotment/allotment_monitor_service");
+
+const monitorService = new AllotmentMonitorService(db);
+if (process.env.NODE_ENV !== "test") {
+  monitorService.start();
+}
+
+/**
+ * POST /api/ipos/applications/register
+ * Registers an IPO application for backend automatic allotment monitoring.
+ */
+router.post("/applications/register", async (req, res) => {
+  try {
+    const payload = req.body;
+    if (!payload || !payload.id || !payload.ipoId) {
+      return res.status(400).json({ error: "Missing required application parameters" });
+    }
+
+    const appsTable = db.tables.ipo_applications;
+    const nowIso = new Date().toISOString();
+
+    const existing = appsTable ? appsTable.get(payload.id) : null;
+    const application = {
+      ...payload,
+      monitoringStatus: payload.monitoringStatus || existing?.monitoringStatus || "monitoring",
+      checkCount: existing?.checkCount || 0,
+      lastCheckedAt: existing?.lastCheckedAt || null,
+      lastCheckMessage: existing?.lastCheckMessage || "Registered for automatic allotment monitoring",
+      auditTrail: existing?.auditTrail || [
+        {
+          id: `audit_${Date.now()}_init`,
+          timestamp: nowIso,
+          title: "Application Registered",
+          description: `Applied for ${payload.lotsApplied || 1} lots (${payload.accountDisplayName || "Account"})`,
+        },
+      ],
+      createdAt: existing?.createdAt || payload.createdAt || nowIso,
+      updatedAt: nowIso,
+    };
+
+    if (appsTable) {
+      appsTable.set(application.id, application);
+      db._persistTable("ipo_applications");
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Application registered for automatic allotment monitoring",
+      data: application,
+    });
+  } catch (err) {
+    console.error("[IpoRoutes] Error registering application:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/ipos/applications/:id/check-now
+ * Manual on-demand allotment check fallback for a single application.
+ */
+router.post("/applications/:id/check-now", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await monitorService.checkApplication(id);
+    res.status(200).json({
+      success: true,
+      data: result.application,
+      result: result.result,
+    });
+  } catch (err) {
+    console.error(`[IpoRoutes] Error in check-now for ${req.params.id}:`, err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/ipos/applications/:id/status
+ * Queries current monitoring status and audit history for an application.
+ */
+router.get("/applications/:id/status", (req, res) => {
+  try {
+    const { id } = req.params;
+    const appsTable = db.tables.ipo_applications;
+    const app = appsTable ? appsTable.get(id) : null;
+
+    if (!app) {
+      return res.status(404).json({ error: "Application not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: app,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/ipos/user/:userId/allotments
+ * Retrieves all tracked application allotment records for a user.
+ */
+router.get("/user/:userId/allotments", (req, res) => {
+  try {
+    const { userId } = req.params;
+    const appsTable = db.tables.ipo_applications;
+    const results = [];
+
+    if (appsTable) {
+      for (const app of appsTable.values()) {
+        if (app.userId === userId) {
+          results.push(app);
+        }
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      data: results,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
+

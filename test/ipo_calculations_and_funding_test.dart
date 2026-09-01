@@ -60,6 +60,15 @@ class TestIpoDataProvider implements IpoDataProvider {
       ),
     ];
   }
+
+  @override
+  Future<bool> registerApplicationMonitoring(IpoApplication app) async => true;
+
+  @override
+  Future<IpoApplication?> checkApplicationAllotment(String applicationId) async => null;
+
+  @override
+  Future<List<IpoApplication>> syncUserAllotments(String userId) async => const [];
 }
 
 void main() {

@@ -135,6 +135,90 @@ enum IpoApplicationStatus {
   }
 }
 
+enum IpoMonitoringStatus {
+  notMonitored,
+  monitoring,
+  checking,
+  resultFound,
+  retrying,
+  failed,
+  stopped;
+
+  static IpoMonitoringStatus fromString(String? val) {
+    switch (val?.toLowerCase()) {
+      case 'notmonitored':
+      case 'not_monitored':
+        return IpoMonitoringStatus.notMonitored;
+      case 'monitoring':
+        return IpoMonitoringStatus.monitoring;
+      case 'checking':
+        return IpoMonitoringStatus.checking;
+      case 'resultfound':
+      case 'result_found':
+        return IpoMonitoringStatus.resultFound;
+      case 'retrying':
+        return IpoMonitoringStatus.retrying;
+      case 'failed':
+        return IpoMonitoringStatus.failed;
+      case 'stopped':
+        return IpoMonitoringStatus.stopped;
+      default:
+        return IpoMonitoringStatus.monitoring;
+    }
+  }
+
+  String get displayName {
+    switch (this) {
+      case IpoMonitoringStatus.notMonitored:
+        return 'Not Monitored';
+      case IpoMonitoringStatus.monitoring:
+        return 'Checking automatically';
+      case IpoMonitoringStatus.checking:
+        return 'Checking allotment…';
+      case IpoMonitoringStatus.resultFound:
+        return 'Allotment confirmed';
+      case IpoMonitoringStatus.retrying:
+        return "We'll check again automatically";
+      case IpoMonitoringStatus.failed:
+        return 'Verification required';
+      case IpoMonitoringStatus.stopped:
+        return 'Monitoring stopped';
+    }
+  }
+}
+
+class IpoAuditEntry {
+  final String id;
+  final DateTime timestamp;
+  final String title;
+  final String description;
+
+  const IpoAuditEntry({
+    required this.id,
+    required this.timestamp,
+    required this.title,
+    required this.description,
+  });
+
+  factory IpoAuditEntry.fromJson(Map<String, dynamic> json) {
+    return IpoAuditEntry(
+      id: json['id'] as String? ?? 'audit_${DateTime.now().millisecondsSinceEpoch}',
+      timestamp: json['timestamp'] != null ? DateTime.parse(json['timestamp'] as String) : DateTime.now(),
+      title: json['title'] as String? ?? 'Event',
+      description: json['description'] as String? ?? '',
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'timestamp': timestamp.toIso8601String(),
+      'title': title,
+      'description': description,
+    };
+  }
+}
+
 class IpoApplication {
   final String id;
   final String ipoId;
@@ -143,6 +227,8 @@ class IpoApplication {
   final String? applicationAccountId;
   final String? accountDisplayName;
   final String? accountMaskedPan;
+  final String? applicationNumber;
+  final String? registrar;
   final DateTime applicationDate;
   final int lotsApplied;
   final int lotSize;
@@ -152,10 +238,16 @@ class IpoApplication {
   final int? remainingAmountInPaise;
   final List<IpoFunding> fundings;
   final IpoApplicationStatus status;
+  final IpoMonitoringStatus monitoringStatus;
   final int? allottedLots;
   final int? allottedShares;
   final int? actualInvestedAmountInPaise;
   final int? releasedAmountInPaise;
+  final DateTime? lastCheckedAt;
+  final DateTime? nextCheckAt;
+  final int checkCount;
+  final String? lastCheckMessage;
+  final List<IpoAuditEntry> auditTrail;
   final String? notes;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -168,6 +260,8 @@ class IpoApplication {
     this.applicationAccountId,
     this.accountDisplayName,
     this.accountMaskedPan,
+    this.applicationNumber,
+    this.registrar,
     required this.applicationDate,
     required this.lotsApplied,
     required this.lotSize,
@@ -177,10 +271,16 @@ class IpoApplication {
     this.remainingAmountInPaise,
     required this.fundings,
     this.status = IpoApplicationStatus.applied,
+    this.monitoringStatus = IpoMonitoringStatus.monitoring,
     this.allottedLots,
     this.allottedShares,
     this.actualInvestedAmountInPaise,
     this.releasedAmountInPaise,
+    this.lastCheckedAt,
+    this.nextCheckAt,
+    this.checkCount = 0,
+    this.lastCheckMessage,
+    this.auditTrail = const [],
     this.notes,
     required this.createdAt,
     required this.updatedAt,
@@ -188,6 +288,13 @@ class IpoApplication {
 
   /// Account name to display
   String get accountName => accountDisplayName ?? 'Me';
+
+  /// Masked application number for safe UI display
+  String get maskedApplicationNumber {
+    if (applicationNumber == null || applicationNumber!.isEmpty) return '';
+    if (applicationNumber!.length <= 4) return applicationNumber!;
+    return '••••${applicationNumber!.substring(applicationNumber!.length - 4)}';
+  }
 
   /// Total shares applied
   int get totalSharesApplied => lotsApplied * lotSize;
@@ -256,6 +363,8 @@ class IpoApplication {
     String? applicationAccountId,
     String? accountDisplayName,
     String? accountMaskedPan,
+    String? applicationNumber,
+    String? registrar,
     DateTime? applicationDate,
     int? lotsApplied,
     int? lotSize,
@@ -265,10 +374,16 @@ class IpoApplication {
     int? remainingAmountInPaise,
     List<IpoFunding>? fundings,
     IpoApplicationStatus? status,
+    IpoMonitoringStatus? monitoringStatus,
     int? allottedLots,
     int? allottedShares,
     int? actualInvestedAmountInPaise,
     int? releasedAmountInPaise,
+    DateTime? lastCheckedAt,
+    DateTime? nextCheckAt,
+    int? checkCount,
+    String? lastCheckMessage,
+    List<IpoAuditEntry>? auditTrail,
     String? notes,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -281,6 +396,8 @@ class IpoApplication {
       applicationAccountId: applicationAccountId ?? this.applicationAccountId,
       accountDisplayName: accountDisplayName ?? this.accountDisplayName,
       accountMaskedPan: accountMaskedPan ?? this.accountMaskedPan,
+      applicationNumber: applicationNumber ?? this.applicationNumber,
+      registrar: registrar ?? this.registrar,
       applicationDate: applicationDate ?? this.applicationDate,
       lotsApplied: lotsApplied ?? this.lotsApplied,
       lotSize: lotSize ?? this.lotSize,
@@ -290,10 +407,16 @@ class IpoApplication {
       remainingAmountInPaise: remainingAmountInPaise ?? this.remainingAmountInPaise,
       fundings: fundings ?? this.fundings,
       status: status ?? this.status,
+      monitoringStatus: monitoringStatus ?? this.monitoringStatus,
       allottedLots: allottedLots ?? this.allottedLots,
       allottedShares: allottedShares ?? this.allottedShares,
       actualInvestedAmountInPaise: actualInvestedAmountInPaise ?? this.actualInvestedAmountInPaise,
       releasedAmountInPaise: releasedAmountInPaise ?? this.releasedAmountInPaise,
+      lastCheckedAt: lastCheckedAt ?? this.lastCheckedAt,
+      nextCheckAt: nextCheckAt ?? this.nextCheckAt,
+      checkCount: checkCount ?? this.checkCount,
+      lastCheckMessage: lastCheckMessage ?? this.lastCheckMessage,
+      auditTrail: auditTrail ?? this.auditTrail,
       notes: notes ?? this.notes,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -309,6 +432,8 @@ class IpoApplication {
       applicationAccountId: json['applicationAccountId'] as String? ?? json['application_account_id'] as String?,
       accountDisplayName: json['accountDisplayName'] as String? ?? json['account_display_name'] as String?,
       accountMaskedPan: json['accountMaskedPan'] as String? ?? json['account_masked_pan'] as String?,
+      applicationNumber: json['applicationNumber'] as String? ?? json['application_number'] as String?,
+      registrar: json['registrar'] as String?,
       applicationDate: json['applicationDate'] != null
           ? DateTime.parse(json['applicationDate'] as String)
           : DateTime.now(),
@@ -323,10 +448,26 @@ class IpoApplication {
               .toList() ??
           [],
       status: IpoApplicationStatus.fromString(json['status'] as String?),
+      monitoringStatus: IpoMonitoringStatus.fromString(json['monitoringStatus'] as String? ?? json['monitoring_status'] as String?),
       allottedLots: (json['allottedLots'] ?? json['allotted_lots'] as num?)?.toInt(),
       allottedShares: (json['allottedShares'] ?? json['allotted_shares'] as num?)?.toInt(),
       actualInvestedAmountInPaise: (json['actualInvestedAmountInPaise'] ?? json['actual_invested_amount_in_paise'] as num?)?.toInt(),
       releasedAmountInPaise: (json['releasedAmountInPaise'] ?? json['released_amount_in_paise'] as num?)?.toInt(),
+      lastCheckedAt: json['lastCheckedAt'] != null
+          ? DateTime.parse(json['lastCheckedAt'] as String)
+          : (json['last_checked_at'] != null ? DateTime.parse(json['last_checked_at'] as String) : null),
+      nextCheckAt: json['nextCheckAt'] != null
+          ? DateTime.parse(json['nextCheckAt'] as String)
+          : (json['next_check_at'] != null ? DateTime.parse(json['next_check_at'] as String) : null),
+      checkCount: (json['checkCount'] ?? json['check_count'] as num?)?.toInt() ?? 0,
+      lastCheckMessage: json['lastCheckMessage'] as String? ?? json['last_check_message'] as String?,
+      auditTrail: (json['auditTrail'] as List<dynamic>?)
+              ?.map((a) => IpoAuditEntry.fromJson(a as Map<String, dynamic>))
+              .toList() ??
+          (json['audit_trail'] as List<dynamic>?)
+              ?.map((a) => IpoAuditEntry.fromJson(a as Map<String, dynamic>))
+              .toList() ??
+          [],
       notes: json['notes'] as String?,
       createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt'] as String) : DateTime.now(),
       updatedAt: json['updatedAt'] != null ? DateTime.parse(json['updatedAt'] as String) : DateTime.now(),
@@ -342,6 +483,8 @@ class IpoApplication {
       if (applicationAccountId != null) 'applicationAccountId': applicationAccountId,
       if (accountDisplayName != null) 'accountDisplayName': accountDisplayName,
       if (accountMaskedPan != null) 'accountMaskedPan': accountMaskedPan,
+      if (applicationNumber != null) 'applicationNumber': applicationNumber,
+      if (registrar != null) 'registrar': registrar,
       'applicationDate': applicationDate.toIso8601String(),
       'lotsApplied': lotsApplied,
       'lotSize': lotSize,
@@ -351,13 +494,20 @@ class IpoApplication {
       if (remainingAmountInPaise != null) 'remainingAmountInPaise': remainingAmountInPaise,
       'fundings': fundings.map((f) => f.toJson()).toList(),
       'status': status.name,
+      'monitoringStatus': monitoringStatus.name,
       'allottedLots': allottedLots,
       'allottedShares': allottedShares,
       'actualInvestedAmountInPaise': actualInvestedAmountInPaise,
       'releasedAmountInPaise': releasedAmountInPaise,
+      if (lastCheckedAt != null) 'lastCheckedAt': lastCheckedAt!.toIso8601String(),
+      if (nextCheckAt != null) 'nextCheckAt': nextCheckAt!.toIso8601String(),
+      'checkCount': checkCount,
+      if (lastCheckMessage != null) 'lastCheckMessage': lastCheckMessage,
+      'auditTrail': auditTrail.map((a) => a.toJson()).toList(),
       'notes': notes,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
     };
   }
 }
+

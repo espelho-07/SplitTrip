@@ -166,8 +166,20 @@ class IpoRepository {
       }
     }
 
+    final initialAudit = application.auditTrail.isNotEmpty
+        ? application.auditTrail
+        : [
+            IpoAuditEntry(
+              id: 'audit_${DateTime.now().millisecondsSinceEpoch}',
+              timestamp: DateTime.now(),
+              title: 'Application Registered',
+              description: 'Applied for ${application.lotsApplied} lots (${application.accountName})',
+            ),
+          ];
+
     final finalApplication = application.copyWith(
       fundings: updatedFundings,
+      auditTrail: initialAudit,
       updatedAt: DateTime.now(),
     );
 
@@ -180,15 +192,122 @@ class IpoRepository {
     }
 
     await storage.saveIpoApplications(_cachedApplications.map((a) => a.toJson()).toList());
+
+    // Register with backend automatic allotment monitoring worker
+    unawaited(dataProvider.registerApplicationMonitoring(finalApplication));
+
     return finalApplication;
   }
 
-  /// Updates allotment outcome and calculates utilized/released funds
+  /// Triggers on-demand manual check for an application
+  Future<IpoApplication?> checkAllotmentNow(String applicationId) async {
+    final idx = _cachedApplications.indexWhere((a) => a.id == applicationId);
+    if (idx == -1) return null;
+
+    final app = _cachedApplications[idx];
+    
+    // Set checking state in UI
+    _cachedApplications[idx] = app.copyWith(
+      monitoringStatus: IpoMonitoringStatus.checking,
+      lastCheckedAt: DateTime.now(),
+    );
+
+    try {
+      final serverApp = await dataProvider.checkApplicationAllotment(applicationId);
+      if (serverApp != null) {
+        if (serverApp.status != IpoApplicationStatus.applied &&
+            serverApp.status != IpoApplicationStatus.fundsBlocked) {
+          // Definitive result found on server
+          return await updateAllotment(
+            applicationId: applicationId,
+            status: serverApp.status,
+            allottedLots: serverApp.allottedLots,
+            issuePriceInRupees: serverApp.bidPriceInRupees,
+            auditDescription: serverApp.lastCheckMessage ?? 'Allotment verified via backend checker',
+          );
+        } else {
+          // Still pending
+          final updated = app.copyWith(
+            monitoringStatus: serverApp.monitoringStatus,
+            lastCheckedAt: serverApp.lastCheckedAt ?? DateTime.now(),
+            nextCheckAt: serverApp.nextCheckAt,
+            checkCount: serverApp.checkCount,
+            lastCheckMessage: serverApp.lastCheckMessage ?? "We'll check again automatically",
+            updatedAt: DateTime.now(),
+          );
+          _cachedApplications[idx] = updated;
+          await storage.saveIpoApplications(_cachedApplications.map((a) => a.toJson()).toList());
+          return updated;
+        }
+      }
+    } catch (e) {
+      debugPrint('[IpoRepository] checkAllotmentNow error: $e');
+    }
+
+    // Graceful fallback on network timeout: keep status pending and schedule retry
+    final updated = app.copyWith(
+      monitoringStatus: IpoMonitoringStatus.retrying,
+      lastCheckedAt: DateTime.now(),
+      lastCheckMessage: "We'll check again automatically",
+      updatedAt: DateTime.now(),
+    );
+    _cachedApplications[idx] = updated;
+    await storage.saveIpoApplications(_cachedApplications.map((a) => a.toJson()).toList());
+    return updated;
+  }
+
+  /// Synchronizes all application allotments from the backend
+  Future<void> syncAllotments(String userId) async {
+    try {
+      final serverApps = await dataProvider.syncUserAllotments(userId);
+      if (serverApps.isEmpty) return;
+
+      bool changed = false;
+      for (final serverApp in serverApps) {
+        final idx = _cachedApplications.indexWhere((a) => a.id == serverApp.id);
+        if (idx != -1) {
+          final localApp = _cachedApplications[idx];
+          if (localApp.status != serverApp.status &&
+              serverApp.status != IpoApplicationStatus.applied &&
+              serverApp.status != IpoApplicationStatus.fundsBlocked) {
+            final calc = IpoApplication.calculateAllotmentAmounts(
+              applicationAmountPaise: localApp.applicationAmountInPaise,
+              allottedLots: serverApp.allottedLots ?? 0,
+              lotSize: localApp.lotSize,
+              issuePriceRupees: serverApp.bidPriceInRupees,
+            );
+            _cachedApplications[idx] = localApp.copyWith(
+              status: serverApp.status,
+              monitoringStatus: serverApp.monitoringStatus,
+              allottedLots: serverApp.allottedLots,
+              allottedShares: serverApp.allottedShares,
+              actualInvestedAmountInPaise: calc['investedPaise'],
+              releasedAmountInPaise: calc['releasedPaise'],
+              lastCheckedAt: serverApp.lastCheckedAt,
+              lastCheckMessage: serverApp.lastCheckMessage,
+              auditTrail: serverApp.auditTrail.isNotEmpty ? serverApp.auditTrail : localApp.auditTrail,
+              updatedAt: DateTime.now(),
+            );
+            changed = true;
+          }
+        }
+      }
+
+      if (changed) {
+        await storage.saveIpoApplications(_cachedApplications.map((a) => a.toJson()).toList());
+      }
+    } catch (e) {
+      debugPrint('[IpoRepository] syncAllotments error: $e');
+    }
+  }
+
+  /// Updates allotment outcome and calculates utilized/released funds idempotently
   Future<IpoApplication?> updateAllotment({
     required String applicationId,
     required IpoApplicationStatus status,
     int? allottedLots,
     int? issuePriceInRupees,
+    String? auditDescription,
     String? notes,
   }) async {
     final idx = _cachedApplications.indexWhere((a) => a.id == applicationId);
@@ -206,12 +325,31 @@ class IpoRepository {
       issuePriceRupees: price,
     );
 
+    final newAudit = List<IpoAuditEntry>.from(app.auditTrail);
+    newAudit.add(
+      IpoAuditEntry(
+        id: 'audit_${DateTime.now().millisecondsSinceEpoch}',
+        timestamp: DateTime.now(),
+        title: 'Allotment: ${status.displayName}',
+        description: auditDescription ??
+            (status == IpoApplicationStatus.allotted
+                ? 'Allotted $lots lots ($shares shares)'
+                : (status == IpoApplicationStatus.notAllotted
+                    ? '0 lots allotted • 100% funds released'
+                    : 'Partially allotted $lots lots')),
+      ),
+    );
+
     final updated = app.copyWith(
       status: status,
+      monitoringStatus: IpoMonitoringStatus.resultFound,
       allottedLots: lots,
       allottedShares: shares,
       actualInvestedAmountInPaise: calc['investedPaise'],
       releasedAmountInPaise: calc['releasedPaise'],
+      lastCheckedAt: DateTime.now(),
+      lastCheckMessage: 'Allotment verified',
+      auditTrail: newAudit,
       notes: notes ?? app.notes,
       updatedAt: DateTime.now(),
     );
