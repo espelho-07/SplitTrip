@@ -109,7 +109,7 @@ void main() {
       expect(find.text('Save Expense'), findsOneWidget);
     });
 
-    testWidgets('2. Entering amount and title updates add expense form state', (tester) async {
+    testWidgets('2. Entering amount via custom keypad and title updates add expense form state', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -118,9 +118,18 @@ void main() {
       await tester.pumpWidget(createAddExpenseScreen());
       await tester.pumpAndSettle();
 
-      final textFields = find.byType(TextField);
-      await tester.enterText(textFields.at(0), '1250');
-      await tester.enterText(textFields.at(1), 'Seafood Dinner');
+      // Tap numeric keypad keys: 1, 2, 5, 0
+      await tester.tap(find.text('1').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('2').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('5').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('0').first);
+      await tester.pumpAndSettle();
+
+      final titleField = find.widgetWithText(TextField, 'e.g. Dinner, Uber, Groceries');
+      await tester.enterText(titleField, 'Seafood Dinner');
       await tester.pumpAndSettle();
 
       expect(addVm.amountInPaise, 125000);

@@ -10,6 +10,7 @@ class LocalStorageService {
   static const String _expensesPrefix = 'kith_expenses_';
   static const String _mutationQueueKey = 'kith_sync_mutations';
   static const String _themeModeKey = 'kith_theme_mode';
+  static const String _initialPermissionsKey = 'kith_has_requested_initial_permissions';
 
   final SharedPreferences _prefs;
 
@@ -784,6 +785,14 @@ class LocalStorageService {
 
   Future<void> setLocalSchemaVersion(int version) async {
     await _prefs.setInt(_localSchemaVersionKey, version);
+  }
+
+  bool hasRequestedInitialPermissions() {
+    return _prefs.getBool(_initialPermissionsKey) ?? false;
+  }
+
+  Future<bool> setHasRequestedInitialPermissions(bool value) {
+    return _prefs.setBool(_initialPermissionsKey, value);
   }
 
   /// Wipes all user-specific data on logout while preserving app settings (language, theme, hints)

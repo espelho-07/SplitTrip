@@ -12,6 +12,8 @@ class KithAmountCalculatorField extends StatefulWidget {
   final ValueChanged<int>? onAmountChanged;
   final VoidCallback? onSubmitted;
   final bool autoFocus;
+  final bool useInAppKeypad;
+  final VoidCallback? onTap;
 
   const KithAmountCalculatorField({
     super.key,
@@ -20,6 +22,8 @@ class KithAmountCalculatorField extends StatefulWidget {
     this.onAmountChanged,
     this.onSubmitted,
     this.autoFocus = false,
+    this.useInAppKeypad = false,
+    this.onTap,
   });
 
   @override
@@ -111,7 +115,10 @@ class _KithAmountCalculatorFieldState extends State<KithAmountCalculatorField> {
             Expanded(
               child: TextField(
                 controller: widget.controller,
-                keyboardType: TextInputType.text,
+                keyboardType: widget.useInAppKeypad ? TextInputType.none : TextInputType.text,
+                readOnly: widget.useInAppKeypad,
+                showCursor: true,
+                onTap: widget.onTap,
                 autofocus: widget.autoFocus,
                 style: TextStyle(
                   fontSize: 26,

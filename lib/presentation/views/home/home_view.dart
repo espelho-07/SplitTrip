@@ -44,7 +44,14 @@ class _HomeViewState extends State<HomeView> {
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        final storage = context.read<LocalStorageService>();
+        if (!storage.hasRequestedInitialPermissions()) {
+          await storage.setHasRequestedInitialPermissions(true);
+          await PermissionService.requestInitialAppPermissions();
+        }
+      } catch (_) {}
       _refreshAllData();
       _setupRealtimeListener();
     });

@@ -11,6 +11,7 @@ import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/utils/kith_calculator_engine.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/kith_amount_calculator_field.dart';
+import '../../../core/widgets/kith_numeric_keypad.dart';
 import '../../../core/widgets/kith_components.dart';
 import '../../../core/widgets/member_avatar.dart';
 import '../../../domain/enums/expense_category.dart';
@@ -59,6 +60,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
   final TextEditingController _locationController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
   bool _isLoadingTrip = true;
+  bool _showCustomKeypad = true;
 
   @override
   void initState() {
@@ -368,6 +370,25 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                     : _buildManualExpenseForm(context, isDark, addVm, trip, currency, l10n)),
           ),
 
+          // Custom In-App Numeric Keypad (+, -, ., 00, ⌫, ✓)
+          if (addVm.currentTab == 2 && _showCustomKeypad)
+            KithNumericKeypad(
+              controller: _amountController,
+              onExpressionChanged: (val) {
+                final evaluated = KithCalculatorEngine.evaluateToPaise(val);
+                addVm.setAmountInPaise(evaluated);
+              },
+              onDone: () {
+                final evaluated = KithCalculatorEngine.evaluateToPaise(_amountController.text);
+                if (evaluated > 0) {
+                  final rupees = evaluated / 100.0;
+                  _amountController.text = rupees % 1 == 0 ? rupees.toInt().toString() : rupees.toStringAsFixed(2);
+                  addVm.setAmountInPaise(evaluated);
+                }
+                setState(() => _showCustomKeypad = false);
+              },
+            ),
+
           // Bottom Action Dock
           if (addVm.currentTab == 2)
             _buildBottomActionDock(context, isDark, addVm, trip, l10n),
@@ -552,6 +573,8 @@ class _AddExpenseViewState extends State<AddExpenseView> {
             child: KithAmountCalculatorField(
               controller: _amountController,
               currencyCode: currency,
+              useInAppKeypad: true,
+              onTap: () => setState(() => _showCustomKeypad = true),
               onAmountChanged: (evaluatedPaise) {
                 addVm.setAmountInPaise(evaluatedPaise);
               },
@@ -578,6 +601,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                 Expanded(
                   child: TextField(
                     controller: _titleController,
+                    onTap: () => setState(() => _showCustomKeypad = false),
                     textCapitalization: TextCapitalization.sentences,
                     style: TextStyle(
                       fontSize: 14.5,
@@ -627,6 +651,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                 Expanded(
                   child: TextField(
                     controller: _locationController,
+                    onTap: () => setState(() => _showCustomKeypad = false),
                     textCapitalization: TextCapitalization.words,
                     style: TextStyle(
                       fontSize: 14,

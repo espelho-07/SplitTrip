@@ -85,7 +85,7 @@ void main() {
   }
 
   group('Master CreateTripView Suite', () {
-    testWidgets('1. Renders clean minimal Create Trip top bar, Trip name, Who is coming, Currency, and Create Trip button', (tester) async {
+    testWidgets('1. Renders rich compact Create Trip layout, preview card, mode cards, and CTA', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -93,10 +93,12 @@ void main() {
       await tester.pumpWidget(buildCreateTripTestWidget());
       await tester.pumpAndSettle();
 
-      expect(find.text('Create Trip'), findsNWidgets(2)); // AppBar title + button
-      expect(find.text('Trip name'), findsOneWidget);
-      expect(find.text("Who's coming?"), findsOneWidget);
-      expect(find.text('Currency'), findsOneWidget);
+      expect(find.text('Create Trip'), findsWidgets);
+      expect(find.text('TRIP NAME'), findsOneWidget);
+      expect(find.text('EXPERIENCE MODE'), findsOneWidget);
+      expect(find.text('Split Only'), findsWidgets);
+      expect(find.text('Split + Journey'), findsWidgets);
+      expect(find.text('BASE CURRENCY'), findsOneWidget);
       expect(find.text('₹ INR'), findsOneWidget);
     });
 
@@ -149,16 +151,23 @@ void main() {
       await tester.pumpWidget(buildCreateTripTestWidget());
       await tester.pumpAndSettle();
 
-      expect(find.text('You (Admin)'), findsOneWidget);
+      expect(find.text('1 members'), findsOneWidget);
 
-      final friendField = find.widgetWithText(TextField, 'Add friend name (e.g. Rahul)');
+      // Expand manual friends
+      final expandFriends = find.text('Add friend manually (offline/non-app member)');
+      await tester.tap(expandFriends);
+      await tester.pumpAndSettle();
+
+      final friendField = find.widgetWithText(TextField, 'e.g. Rahul, Priya, Vikram...');
       await tester.enterText(friendField, 'Ananya');
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
 
       expect(find.text('Ananya'), findsOneWidget);
+      expect(createVm.friendNames.contains('Ananya'), isTrue);
 
-      final removeIcon = find.byIcon(Icons.close_rounded).first;
+      // Remove friend
+      final removeIcon = find.byIcon(Icons.close_rounded).last;
       await tester.tap(removeIcon);
       await tester.pumpAndSettle();
 
