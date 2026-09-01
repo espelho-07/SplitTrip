@@ -8,6 +8,7 @@ class TripBackgroundTheme {
   final String emoji;
   final String description;
   final List<Color> gradientColors;
+  final bool isPlainColor;
 
   const TripBackgroundTheme({
     required this.id,
@@ -15,18 +16,21 @@ class TripBackgroundTheme {
     required this.emoji,
     required this.description,
     required this.gradientColors,
+    this.isPlainColor = false,
   });
 }
 
-/// All available scenic artwork themes for trip hero cards and banners.
+/// All available background themes categorized into Scenic Artworks and Plain Colors.
 class TripBackgroundThemes {
-  static const List<TripBackgroundTheme> themes = [
+  /// 1. Scenic Vector Artwork Themes (Mountains, Waves, Forest, Skyline, Dunes, Aurora)
+  static const List<TripBackgroundTheme> scenicThemes = [
     TripBackgroundTheme(
       id: 0,
       name: 'Mountains',
       emoji: '🏔️',
       description: 'Alpine peaks & starlit dusk',
       gradientColors: [Color(0xFF0F766E), Color(0xFF134E4A), Color(0xFF042F2E)],
+      isPlainColor: false,
     ),
     TripBackgroundTheme(
       id: 1,
@@ -34,6 +38,7 @@ class TripBackgroundThemes {
       emoji: '🏖️',
       description: 'Tropical sunset & ocean waves',
       gradientColors: [Color(0xFFF97316), Color(0xFFC2410C), Color(0xFF4C1D95)],
+      isPlainColor: false,
     ),
     TripBackgroundTheme(
       id: 2,
@@ -41,6 +46,7 @@ class TripBackgroundThemes {
       emoji: '🌲',
       description: 'Evergreen pines & moonlight',
       gradientColors: [Color(0xFF065F46), Color(0xFF064E3B), Color(0xFF022C22)],
+      isPlainColor: false,
     ),
     TripBackgroundTheme(
       id: 3,
@@ -48,6 +54,7 @@ class TripBackgroundThemes {
       emoji: '🏙️',
       description: 'Modern skyscrapers & neon glow',
       gradientColors: [Color(0xFF4F46E5), Color(0xFF3730A3), Color(0xFF1E1B4B)],
+      isPlainColor: false,
     ),
     TripBackgroundTheme(
       id: 4,
@@ -55,6 +62,7 @@ class TripBackgroundThemes {
       emoji: '🏜️',
       description: 'Warm sand dunes & roadtrip horizon',
       gradientColors: [Color(0xFFEA580C), Color(0xFF9A3412), Color(0xFF431407)],
+      isPlainColor: false,
     ),
     TripBackgroundTheme(
       id: 5,
@@ -62,24 +70,91 @@ class TripBackgroundThemes {
       emoji: '🌌',
       description: 'Northern lights & constellations',
       gradientColors: [Color(0xFF7C3AED), Color(0xFF5B21B6), Color(0xFF047857)],
-    ),
-    TripBackgroundTheme(
-      id: 6,
-      name: 'Clean Minimal',
-      emoji: '🎨',
-      description: 'Vibrant modern mesh gradient',
-      gradientColors: [Color(0xFF0D9488), Color(0xFF2563EB), Color(0xFF1E293B)],
+      isPlainColor: false,
     ),
   ];
 
+  /// 2. Clean Plain Colors & Solid Gradients (Minimalist modern solid gradients)
+  static const List<TripBackgroundTheme> plainThemes = [
+    TripBackgroundTheme(
+      id: 6,
+      name: 'Teal Emerald',
+      emoji: '🟢',
+      description: 'Clean emerald gradient',
+      gradientColors: [Color(0xFF0D9488), Color(0xFF0F766E)],
+      isPlainColor: true,
+    ),
+    TripBackgroundTheme(
+      id: 7,
+      name: 'Royal Indigo',
+      emoji: '🔵',
+      description: 'Deep royal indigo gradient',
+      gradientColors: [Color(0xFF6366F1), Color(0xFF4338CA)],
+      isPlainColor: true,
+    ),
+    TripBackgroundTheme(
+      id: 8,
+      name: 'Sunset Orange',
+      emoji: '🟠',
+      description: 'Warm vibrant sunset glow',
+      gradientColors: [Color(0xFFF97316), Color(0xFFC2410C)],
+      isPlainColor: true,
+    ),
+    TripBackgroundTheme(
+      id: 9,
+      name: 'Electric Purple',
+      emoji: '🟣',
+      description: 'Rich electric purple gradient',
+      gradientColors: [Color(0xFF8B5CF6), Color(0xFF6D28D9)],
+      isPlainColor: true,
+    ),
+    TripBackgroundTheme(
+      id: 10,
+      name: 'Rose Pink',
+      emoji: '🌸',
+      description: 'Punchy rose crimson gradient',
+      gradientColors: [Color(0xFFEC4899), Color(0xFFBE185D)],
+      isPlainColor: true,
+    ),
+    TripBackgroundTheme(
+      id: 11,
+      name: 'Ocean Cyan',
+      emoji: '🌊',
+      description: 'Crisp ocean cyan gradient',
+      gradientColors: [Color(0xFF0284C7), Color(0xFF0369A1)],
+      isPlainColor: true,
+    ),
+    TripBackgroundTheme(
+      id: 12,
+      name: 'Forest Jade',
+      emoji: '🌿',
+      description: 'Lush green jade gradient',
+      gradientColors: [Color(0xFF10B981), Color(0xFF047857)],
+      isPlainColor: true,
+    ),
+    TripBackgroundTheme(
+      id: 13,
+      name: 'Obsidian Night',
+      emoji: '🖤',
+      description: 'Sleek dark obsidian gradient',
+      gradientColors: [Color(0xFF334155), Color(0xFF0F172A)],
+      isPlainColor: true,
+    ),
+  ];
+
+  static List<TripBackgroundTheme> get allThemes => [...scenicThemes, ...plainThemes];
+
   static TripBackgroundTheme getTheme(int index) {
-    if (index < 0 || index >= themes.length) return themes.first;
-    return themes[index];
+    final all = allThemes;
+    final found = all.where((t) => t.id == index).firstOrNull;
+    if (found != null) return found;
+    if (index >= 0 && index < all.length) return all[index];
+    return all.first;
   }
 }
 
 /// Dynamic, vector-drawn scenic background for Trip hero cards.
-/// Renders crisp Mountains, Waves, Pines, Skylines, Dunes, and Aurora.
+/// Renders crisp Mountains, Waves, Pines, Skylines, Dunes, Aurora, or Clean Plain Gradients.
 class TripCoverBackground extends StatelessWidget {
   final int themeIndex;
   final Widget? child;
@@ -115,12 +190,13 @@ class TripCoverBackground extends StatelessWidget {
         child: Stack(
           fit: StackFit.passthrough,
           children: [
-            // Custom vector scenic artwork painter
-            Positioned.fill(
-              child: CustomPaint(
-                painter: _ScenicArtworkPainter(themeId: theme.id),
+            // Custom vector scenic artwork painter (only if not a plain color theme)
+            if (!theme.isPlainColor)
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _ScenicArtworkPainter(themeId: theme.id),
+                ),
               ),
-            ),
 
             // Content layer
             ?child,
@@ -159,9 +235,7 @@ class _ScenicArtworkPainter extends CustomPainter {
       case 5:
         _paintAurora(canvas, size);
         break;
-      case 6:
       default:
-        _paintMinimalMesh(canvas, size);
         break;
     }
   }
@@ -443,20 +517,6 @@ class _ScenicArtworkPainter extends CustomPainter {
 
     // Mountain silhouettes in foreground
     _paintMountains(canvas, size);
-  }
-
-  /// Theme 6: 🎨 Clean Minimal Mesh
-  void _paintMinimalMesh(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-
-    // Smooth subtle ambient circle accents
-    final orbPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.10)
-      ..style = PaintingStyle.fill;
-
-    canvas.drawCircle(Offset(w * 0.85, h * 0.30), 45, orbPaint);
-    canvas.drawCircle(Offset(w * 0.20, h * 0.80), 35, orbPaint);
   }
 
   @override

@@ -28,6 +28,7 @@ class _CreateTripViewState extends State<CreateTripView> {
   final TextEditingController _friendController = TextEditingController();
   bool _showManualFriends = false;
   bool _showEmojiTray = false;
+  int _bgStyleTab = 0;
 
   List<Map<String, String>> _getTripIdeas(AppLocalizations l10n) => [
     {'name': l10n.translate('trip_idea_goa'), 'emoji': '🏖️', 'gradient': '0'},
@@ -642,12 +643,12 @@ class _CreateTripViewState extends State<CreateTripView> {
 
           const SizedBox(height: 14),
 
-          // Scenic Artwork Theme Selector (Mountains, Beach, Forest, Skyline, Dunes, Aurora, Minimal)
+          // Background Options (Scenic Artwork vs Plain Solid Colors)
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'BACKGROUND THEME & ARTWORK',
+                'BACKGROUND THEME',
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
@@ -655,84 +656,128 @@ class _CreateTripViewState extends State<CreateTripView> {
                   color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
                 ),
               ),
-              Text(
-                TripBackgroundThemes.getTheme(createVm.coverGradientIndex).name,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF14B8A6),
+              Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF161E27) : const Color(0xFFE2E8F0),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  children: [
+                    _buildBgTabChip('🌄 Scenic', 0, isDark),
+                    _buildBgTabChip('🎨 Plain Colors', 1, isDark),
+                  ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           SizedBox(
             height: 58,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              itemCount: TripBackgroundThemes.themes.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 8),
-              itemBuilder: (context, index) {
-                final theme = TripBackgroundThemes.themes[index];
-                final isSelected = createVm.coverGradientIndex == theme.id;
-                return InkWell(
-                  onTap: () {
-                    HapticHelper.selection();
-                    createVm.setCoverGradientIndex(theme.id);
-                  },
-                  borderRadius: BorderRadius.circular(12),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    width: 92,
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: theme.gradientColors,
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
+            child: Builder(
+              builder: (context) {
+                final displayThemes = _bgStyleTab == 0
+                    ? TripBackgroundThemes.scenicThemes
+                    : TripBackgroundThemes.plainThemes;
+
+                return ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  itemCount: displayThemes.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    final theme = displayThemes[index];
+                    final isSelected = createVm.coverGradientIndex == theme.id;
+
+                    return InkWell(
+                      onTap: () {
+                        HapticHelper.selection();
+                        createVm.setCoverGradientIndex(theme.id);
+                      },
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isSelected ? Colors.white : Colors.transparent,
-                        width: isSelected ? 2.0 : 0.8,
-                      ),
-                      boxShadow: isSelected
-                          ? [
-                              BoxShadow(
-                                color: theme.gradientColors.first.withValues(alpha: 0.6),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ]
-                          : null,
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(theme.emoji, style: const TextStyle(fontSize: 16)),
-                        const SizedBox(height: 2),
-                        Text(
-                          theme.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
-                            shadows: const [
-                              Shadow(color: Colors.black45, blurRadius: 2),
-                            ],
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        width: 92,
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: theme.gradientColors,
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
                           ),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isSelected ? Colors.white : Colors.transparent,
+                            width: isSelected ? 2.2 : 0.8,
+                          ),
+                          boxShadow: isSelected
+                              ? [
+                                  BoxShadow(
+                                    color: theme.gradientColors.first.withValues(alpha: 0.6),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ]
+                              : null,
                         ),
-                      ],
-                    ),
-                  ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(theme.emoji, style: const TextStyle(fontSize: 16)),
+                            const SizedBox(height: 2),
+                            Text(
+                              theme.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+                                shadows: const [
+                                  Shadow(color: Colors.black45, blurRadius: 2),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
                 );
               },
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildBgTabChip(String label, int index, bool isDark) {
+    final isSelected = _bgStyleTab == index;
+    return GestureDetector(
+      onTap: () {
+        HapticHelper.selection();
+        setState(() => _bgStyleTab = index);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? const Color(0xFF14B8A6)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+            color: isSelected
+                ? Colors.white
+                : (isDark ? AppColors.darkTextMuted : const Color(0xFF64748B)),
+          ),
+        ),
       ),
     );
   }
