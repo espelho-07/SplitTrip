@@ -40,7 +40,7 @@ class ApiClient {
     return Uri.parse(urlStr);
   }
 
-  static const Duration _defaultTimeout = Duration(seconds: 8);
+  static const Duration _defaultTimeout = Duration(seconds: 25);
 
   Future<dynamic> get(String path, {Map<String, dynamic>? queryParams}) async {
     try {

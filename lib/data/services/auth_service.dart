@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
+import '../../core/config/supabase_config.dart';
 import '../../core/network/api_client.dart';
 import '../../core/network/realtime_client.dart';
 import '../../core/services/google_auth_service.dart';
@@ -64,12 +65,25 @@ class AuthService {
 
       final fcmToken = storage.getString('kith_fcm_token');
       if (fcmToken != null && fcmToken.isNotEmpty) {
-        final deviceId = storage.getString('kith_device_id');
+        final deviceId = storage.getString('kith_device_id') ?? storage.getDeviceId();
         await apiClient.post('/auth/fcm-token', body: {
           'token': fcmToken,
           'deviceId': deviceId,
           'platform': 'android',
+          'userId': user.id,
+          'accountId': user.effectiveAccountId,
         });
+
+        if (SupabaseConfig.isConfigured) {
+          try {
+            await _cloudSync.registerFcmToken(
+              userId: user.effectiveAccountId,
+              deviceId: deviceId,
+              token: fcmToken,
+              platform: 'android',
+            );
+          } catch (_) {}
+        }
       }
     } catch (_) {
       // Non-blocking background sync to Kith backend
