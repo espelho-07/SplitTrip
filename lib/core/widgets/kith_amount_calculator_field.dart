@@ -60,32 +60,6 @@ class _KithAmountCalculatorFieldState extends State<KithAmountCalculatorField> {
     widget.onAmountChanged?.call(evaluatedPaise);
   }
 
-  void _insertOperator(String op) {
-    HapticHelper.light();
-    final text = widget.controller.text.trim();
-    if (text.isEmpty) return;
-
-    if (text.endsWith('+') || text.endsWith('-') || text.endsWith('*') || text.endsWith('/')) {
-      widget.controller.text = '${text.substring(0, text.length - 1)} $op ';
-    } else {
-      widget.controller.text = '$text $op ';
-    }
-    widget.controller.selection = TextSelection.fromPosition(
-      TextPosition(offset: widget.controller.text.length),
-    );
-  }
-
-  void _addQuickAmount(int amountInRupees) {
-    HapticHelper.selection();
-    final currentPaise = KithCalculatorEngine.evaluateToPaise(widget.controller.text);
-    final newPaise = currentPaise + (amountInRupees * 100);
-    final rupees = newPaise / 100.0;
-    widget.controller.text = rupees % 1 == 0 ? rupees.toInt().toString() : rupees.toStringAsFixed(2);
-    widget.controller.selection = TextSelection.fromPosition(
-      TextPosition(offset: widget.controller.text.length),
-    );
-  }
-
   void _clear() {
     HapticHelper.light();
     widget.controller.clear();
@@ -186,109 +160,7 @@ class _KithAmountCalculatorFieldState extends State<KithAmountCalculatorField> {
             ),
           ),
         ],
-
-        const SizedBox(height: 10),
-
-        // Calculator Accessory Strip (+ operator, quick amounts)
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          physics: const BouncingScrollPhysics(),
-          child: Row(
-            children: [
-              // '+' button
-              _buildKeypadPill(
-                label: '+ Add',
-                icon: Icons.add_rounded,
-                isDark: isDark,
-                isHighlight: true,
-                onTap: () => _insertOperator('+'),
-              ),
-              const SizedBox(width: 8),
-              // '-' button
-              _buildKeypadPill(
-                label: '-',
-                isDark: isDark,
-                onTap: () => _insertOperator('-'),
-              ),
-              const SizedBox(width: 8),
-              // Quick +100
-              _buildKeypadPill(
-                label: '+100',
-                isDark: isDark,
-                onTap: () => _addQuickAmount(100),
-              ),
-              const SizedBox(width: 8),
-              // Quick +500
-              _buildKeypadPill(
-                label: '+500',
-                isDark: isDark,
-                onTap: () => _addQuickAmount(500),
-              ),
-              const SizedBox(width: 8),
-              // Quick +1000
-              _buildKeypadPill(
-                label: '+1,000',
-                isDark: isDark,
-                onTap: () => _addQuickAmount(1000),
-              ),
-            ],
-          ),
-        ),
       ],
-    );
-  }
-
-  Widget _buildKeypadPill({
-    required String label,
-    IconData? icon,
-    required bool isDark,
-    bool isHighlight = false,
-    required VoidCallback onTap,
-  }) {
-    final bgColor = isHighlight
-        ? (isDark ? AppColors.emeraldLight.withValues(alpha: 0.18) : AppColors.emeraldPrimary.withValues(alpha: 0.12))
-        : (isDark ? const Color(0xFF1E2630) : const Color(0xFFF1F5F9));
-
-    final textColor = isHighlight
-        ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
-        : (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary);
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: isHighlight
-                  ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.3)
-                  : (isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle),
-              width: 0.7,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (icon != null) ...[
-                Icon(icon, size: 13, color: textColor),
-                const SizedBox(width: 4),
-              ],
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: textColor,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

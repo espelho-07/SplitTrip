@@ -13,6 +13,7 @@ import '../../../core/services/location_service.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/kith_amount_calculator_field.dart';
 import '../../../core/widgets/kith_numeric_keypad.dart';
+import '../../../core/widgets/kith_text_keypad.dart';
 import '../../../core/widgets/kith_components.dart';
 import '../../../core/widgets/member_avatar.dart';
 import '../../../domain/enums/expense_category.dart';
@@ -55,6 +56,8 @@ class AddExpenseView extends StatefulWidget {
   State<AddExpenseView> createState() => _AddExpenseViewState();
 }
 
+enum AddExpenseActiveInput { amount, title, location, none }
+
 class _AddExpenseViewState extends State<AddExpenseView> {
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _titleController = TextEditingController();
@@ -62,7 +65,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
   bool _isFetchingLocation = false;
   DateTime _selectedDate = DateTime.now();
   bool _isLoadingTrip = true;
-  bool _showCustomKeypad = true;
+  AddExpenseActiveInput _activeInput = AddExpenseActiveInput.amount;
 
   @override
   void initState() {
@@ -415,24 +418,59 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                     : _buildManualExpenseForm(context, isDark, addVm, trip, currency, l10n)),
           ),
 
-          // Custom In-App Numeric Keypad (+, -, ., 00, ⌫, ✓)
-          if (addVm.currentTab == 2 && _showCustomKeypad)
-            KithNumericKeypad(
-              controller: _amountController,
-              onExpressionChanged: (val) {
-                final evaluated = KithCalculatorEngine.evaluateToPaise(val);
-                addVm.setAmountInPaise(evaluated);
-              },
-              onDone: () {
-                final evaluated = KithCalculatorEngine.evaluateToPaise(_amountController.text);
-                if (evaluated > 0) {
-                  final rupees = evaluated / 100.0;
-                  _amountController.text = rupees % 1 == 0 ? rupees.toInt().toString() : rupees.toStringAsFixed(2);
+          // Custom In-App Keyboard (Numeric for amount or QWERTY Text for description/location)
+          if (addVm.currentTab == 2 && _activeInput != AddExpenseActiveInput.none) ...[
+            if (_activeInput == AddExpenseActiveInput.amount)
+              KithNumericKeypad(
+                controller: _amountController,
+                actionIcon: Icons.arrow_forward_rounded,
+                onExpressionChanged: (val) {
+                  final evaluated = KithCalculatorEngine.evaluateToPaise(val);
                   addVm.setAmountInPaise(evaluated);
-                }
-                setState(() => _showCustomKeypad = false);
-              },
-            ),
+                },
+                onNext: () {
+                  final evaluated = KithCalculatorEngine.evaluateToPaise(_amountController.text);
+                  if (evaluated > 0) {
+                    final rupees = evaluated / 100.0;
+                    _amountController.text = rupees % 1 == 0 ? rupees.toInt().toString() : rupees.toStringAsFixed(2);
+                    addVm.setAmountInPaise(evaluated);
+                  }
+                  setState(() => _activeInput = AddExpenseActiveInput.title);
+                },
+                onDone: () {
+                  final evaluated = KithCalculatorEngine.evaluateToPaise(_amountController.text);
+                  if (evaluated > 0) {
+                    final rupees = evaluated / 100.0;
+                    _amountController.text = rupees % 1 == 0 ? rupees.toInt().toString() : rupees.toStringAsFixed(2);
+                    addVm.setAmountInPaise(evaluated);
+                  }
+                  setState(() => _activeInput = AddExpenseActiveInput.title);
+                },
+              )
+            else if (_activeInput == AddExpenseActiveInput.title)
+              KithTextKeypad(
+                controller: _titleController,
+                actionLabel: 'Next',
+                actionIcon: Icons.arrow_forward_rounded,
+                onChanged: (val) => addVm.setTitle(val),
+                onNext: () {
+                  setState(() => _activeInput = AddExpenseActiveInput.location);
+                },
+                onDone: () {
+                  setState(() => _activeInput = AddExpenseActiveInput.none);
+                },
+              )
+            else if (_activeInput == AddExpenseActiveInput.location)
+              KithTextKeypad(
+                controller: _locationController,
+                actionLabel: 'Done',
+                actionIcon: Icons.check_rounded,
+                onChanged: (val) => addVm.setLocation(val),
+                onDone: () {
+                  setState(() => _activeInput = AddExpenseActiveInput.none);
+                },
+              ),
+          ],
 
           // Bottom Action Dock
           if (addVm.currentTab == 2)
@@ -612,14 +650,14 @@ class _AddExpenseViewState extends State<AddExpenseView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Amount Section with Built-in Calculator Engine & '+' Operator
+          // Amount Section with Built-in Calculator Engine
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
             child: KithAmountCalculatorField(
               controller: _amountController,
               currencyCode: currency,
               useInAppKeypad: true,
-              onTap: () => setState(() => _showCustomKeypad = true),
+              onTap: () => setState(() => _activeInput = AddExpenseActiveInput.amount),
               onAmountChanged: (evaluatedPaise) {
                 addVm.setAmountInPaise(evaluatedPaise);
               },
@@ -639,18 +677,23 @@ class _AddExpenseViewState extends State<AddExpenseView> {
               children: [
                 Icon(
                   Icons.edit_note_rounded,
-                  color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                  color: _activeInput == AddExpenseActiveInput.title
+                      ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
+                      : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
                   size: 20,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: TextField(
                     controller: _titleController,
-                    onTap: () => setState(() => _showCustomKeypad = false),
+                    readOnly: true,
+                    showCursor: true,
+                    enableInteractiveSelection: true,
+                    onTap: () => setState(() => _activeInput = AddExpenseActiveInput.title),
                     textCapitalization: TextCapitalization.sentences,
                     style: TextStyle(
                       fontSize: 14.5,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w600,
                       color: isDark ? Colors.white : const Color(0xFF0F172A),
                     ),
                     decoration: KithInputDecoration.borderless(
@@ -689,18 +732,23 @@ class _AddExpenseViewState extends State<AddExpenseView> {
               children: [
                 Icon(
                   Icons.location_on_outlined,
-                  color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                  color: _activeInput == AddExpenseActiveInput.location
+                      ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
+                      : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
                   size: 19,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: TextField(
                     controller: _locationController,
-                    onTap: () => setState(() => _showCustomKeypad = false),
+                    readOnly: true,
+                    showCursor: true,
+                    enableInteractiveSelection: true,
+                    onTap: () => setState(() => _activeInput = AddExpenseActiveInput.location),
                     textCapitalization: TextCapitalization.words,
                     style: TextStyle(
                       fontSize: 14,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w600,
                       color: isDark ? Colors.white : const Color(0xFF0F172A),
                     ),
                     decoration: KithInputDecoration.borderless(

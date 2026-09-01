@@ -7,13 +7,17 @@ import '../utils/haptic_feedback_helper.dart';
 class KithNumericKeypad extends StatelessWidget {
   final TextEditingController controller;
   final VoidCallback? onDone;
+  final VoidCallback? onNext;
   final ValueChanged<String>? onExpressionChanged;
+  final IconData actionIcon;
 
   const KithNumericKeypad({
     super.key,
     required this.controller,
     this.onDone,
+    this.onNext,
     this.onExpressionChanged,
+    this.actionIcon = Icons.arrow_forward_rounded,
   });
 
   void _handleNumberPress(String digit) {
@@ -250,7 +254,7 @@ class KithNumericKeypad extends StatelessWidget {
           child: InkWell(
             onTap: () {
               HapticHelper.medium();
-              onTap?.call();
+              (onNext ?? onTap)?.call();
             },
             borderRadius: BorderRadius.circular(12),
             child: Container(
@@ -259,7 +263,7 @@ class KithNumericKeypad extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
               alignment: Alignment.center,
-              child: const Icon(Icons.check_rounded, color: Colors.white, size: 22),
+              child: Icon(actionIcon, color: Colors.white, size: 22),
             ),
           ),
         ),
