@@ -31,6 +31,7 @@ import '../../../domain/services/trip_export_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/trip_detail_viewmodel.dart';
+import '../../../data/repositories/trip_repository.dart';
 import '../../../data/repositories/expense_repository.dart';
 import '../../../data/services/local_storage_service.dart';
 import '../../../data/services/p2p_sync_service.dart';
@@ -72,6 +73,7 @@ class _TripDetailViewState extends State<TripDetailView> {
   int _spendingSubTab = 0; // 0 = Expenses, 1 = People, 2 = Categories
   final TextEditingController _searchController = TextEditingController();
   bool _dismissedLocationPrompt = false;
+  bool _initialLoading = true;
   StreamSubscription<Map<String, dynamic>>? _notifSubscription;
 
   static const List<Map<String, String?>> _categories = [
@@ -121,10 +123,18 @@ class _TripDetailViewState extends State<TripDetailView> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final user = context.read<AuthViewModel>().currentUser;
       if (user != null) {
+        final tripDetailVm = context.read<TripDetailViewModel>();
         final expenseRepo = context.read<ExpenseRepository>();
-        await expenseRepo.getSettlements(widget.tripId);
+        
+        // 1. Immediately hydrate trip locally
+        await tripDetailVm.loadTrip(widget.tripId, user.id);
+        if (mounted) {
+          setState(() => _initialLoading = false);
+        }
+
+        // 2. Refresh settlements in background
         if (!mounted) return;
-        await context.read<TripDetailViewModel>().loadTrip(widget.tripId, user.id);
+        await expenseRepo.getSettlements(widget.tripId);
         if (mounted) {
           if (widget.expenseId != null && widget.expenseId!.isNotEmpty) {
             final vm = context.read<TripDetailViewModel>();
@@ -509,45 +519,90 @@ class _TripDetailViewState extends State<TripDetailView> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final tripDetailVm = context.watch<TripDetailViewModel>();
+    final tripRepo = context.watch<TripRepository>();
     final authVm = context.watch<AuthViewModel>();
     final l10n = context.l10n;
 
-    final trip = tripDetailVm.trip;
+    final cachedTrip = tripRepo.getCachedTripById(widget.tripId);
+    final trip = (tripDetailVm.trip?.id == widget.tripId)
+        ? tripDetailVm.trip
+        : cachedTrip;
     final user = authVm.currentUser;
     final balanceSummary = tripDetailVm.balanceSummary;
 
-    if (tripDetailVm.isLoading && trip == null) {
-      return Scaffold(
-        appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_rounded),
-            onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
-          ),
-        ),
-        body: const Padding(
-          padding: EdgeInsets.all(20.0),
-          child: Column(
-            children: [
-              ShimmerSkeleton(height: 180),
-              SizedBox(height: 20),
-              ShimmerSkeleton(height: 80),
-              SizedBox(height: 16),
-              ShimmerSkeleton(height: 80),
-            ],
-          ),
-        ),
-      );
-    }
-
     if (trip == null) {
+      if (tripDetailVm.isLoading || _initialLoading || tripDetailVm.errorMessage == null) {
+        return Scaffold(
+          backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
+          appBar: AppBar(
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_rounded),
+              onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
+            ),
+          ),
+          body: const Padding(
+            padding: EdgeInsets.all(20.0),
+            child: Column(
+              children: [
+                ShimmerSkeleton(height: 180),
+                SizedBox(height: 20),
+                ShimmerSkeleton(height: 80),
+                SizedBox(height: 16),
+                ShimmerSkeleton(height: 80),
+              ],
+            ),
+          ),
+        );
+      }
+
       return Scaffold(
+        backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
         appBar: AppBar(
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_rounded),
             onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
           ),
         ),
-        body: const Center(child: Text('Trip not found')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.explore_off_rounded,
+                  size: 56,
+                  color: isDark ? Colors.white38 : Colors.black38,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  tripDetailVm.errorMessage ?? 'Trip not found',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                FilledButton.icon(
+                  onPressed: () {
+                    final uid = user?.id ?? '';
+                    if (uid.isNotEmpty) {
+                      setState(() => _initialLoading = true);
+                      tripDetailVm.loadTrip(widget.tripId, uid);
+                    }
+                  },
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: const Text('Retry'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.emeraldPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 

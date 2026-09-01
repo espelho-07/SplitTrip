@@ -31,8 +31,14 @@ class _TripMemoriesViewState extends State<TripMemoriesView> {
 
     if (trip == null) {
       return Scaffold(
+        backgroundColor: isDark ? const Color(0xFF080C0E) : const Color(0xFFF8FAFC),
         appBar: AppBar(leading: const BackButton()),
-        body: const Center(child: Text('Trip not found')),
+        body: const Center(
+          child: CircularProgressIndicator(
+            strokeWidth: 2.5,
+            color: Color(0xFF14B8A6),
+          ),
+        ),
       );
     }
 
