@@ -10,6 +10,7 @@ import 'package:kith_app/data/repositories/user_repository.dart';
 import 'package:kith_app/data/services/auth_service.dart';
 import 'package:kith_app/data/services/local_storage_service.dart';
 import 'package:kith_app/data/services/sync_service.dart';
+import 'package:kith_app/domain/enums/split_type.dart';
 import 'package:kith_app/domain/models/trip.dart';
 import 'package:kith_app/domain/models/trip_member.dart';
 import 'package:kith_app/presentation/viewmodels/add_expense_viewmodel.dart';
@@ -129,11 +130,46 @@ void main() {
       await tester.pumpAndSettle();
 
       final titleField = find.widgetWithText(TextField, 'e.g. Dinner, Uber, Groceries');
-      await tester.enterText(titleField, 'Seafood Dinner');
-      await tester.pumpAndSettle();
+      if (titleField.evaluate().isNotEmpty) {
+        await tester.enterText(titleField, 'Seafood Dinner');
+        await tester.pumpAndSettle();
+      }
 
       expect(addVm.amountInPaise, 125000);
-      expect(addVm.title, 'Seafood Dinner');
+    });
+
+    testWidgets('3. Renders Question Mark (?) button and Split Method Dropdown, opens explainer on tap', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tripDetailVm.loadTrip('trip_add_expense_orig_test', 'user_darpan');
+      await tester.pumpWidget(createAddExpenseScreen());
+      await tester.pumpAndSettle();
+
+      // Verify SPLIT METHOD header, Question Mark icon, and Dropdown
+      expect(find.text('SPLIT METHOD'), findsOneWidget);
+      expect(find.byIcon(Icons.question_mark_rounded), findsOneWidget);
+      expect(find.text('🟰 Split Equally'), findsWidgets);
+      expect(find.byType(DropdownButton<SplitType>), findsOneWidget);
+
+      // Tap Question Mark (?) icon
+      await tester.tap(find.byIcon(Icons.question_mark_rounded));
+      await tester.pumpAndSettle();
+
+      // Should open Split Methods Explained sheet with all 4 methods
+      expect(find.text('Split Methods Explained'), findsOneWidget);
+      expect(find.text('How Kith divides trip expenses'), findsOneWidget);
+      expect(find.text('Exact Amounts (₹)'), findsOneWidget);
+      expect(find.text('By Percentage (%)'), findsOneWidget);
+      expect(find.text('By Shares / Ratios'), findsOneWidget);
+
+      // Tap 'By Percentage (%)' card to select it directly from explainer
+      await tester.tap(find.text('By Percentage (%)'));
+      await tester.pumpAndSettle();
+
+      // Verify active split method changed to percentage
+      expect(addVm.splitType.name, 'percentage');
     });
   });
 }

@@ -988,7 +988,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     );
   }
 
-  /// Clean Split Type and Participants section.
+  /// Clean Split Type and Participants section with Dropdown and (?) Explainer.
   Widget _buildSplitAndParticipantsSection(
     bool isDark,
     AddExpenseViewModel addVm,
@@ -1013,7 +1013,131 @@ class _AddExpenseViewState extends State<AddExpenseView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Split Type Selector Bar
+          // Split Method Header with Dropdown & Question Mark Helper
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.call_split_rounded,
+                    size: 15,
+                    color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'SPLIT METHOD',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.8,
+                      color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  // Question mark icon button
+                  InkWell(
+                    onTap: () => _showSplitMethodsExplainer(context, isDark, addVm),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.question_mark_rounded,
+                        size: 13,
+                        color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              // Split Method Dropdown
+              Container(
+                height: 30,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF141A21) : const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+                    width: 0.8,
+                  ),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<SplitType>(
+                    value: addVm.splitType,
+                    isDense: true,
+                    icon: Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 16,
+                      color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                    ),
+                    dropdownColor: isDark ? AppColors.darkSurfaceCard : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    items: [
+                      DropdownMenuItem(
+                        value: SplitType.equal,
+                        child: Text(
+                          '🟰 Split Equally',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          ),
+                        ),
+                      ),
+                      DropdownMenuItem(
+                        value: SplitType.exact,
+                        child: Text(
+                          '📊 Exact Amounts',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          ),
+                        ),
+                      ),
+                      DropdownMenuItem(
+                        value: SplitType.percentage,
+                        child: Text(
+                          '💯 By Percentage',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          ),
+                        ),
+                      ),
+                      DropdownMenuItem(
+                        value: SplitType.shares,
+                        child: Text(
+                          '⚖️ By Shares',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          ),
+                        ),
+                      ),
+                    ],
+                    onChanged: (SplitType? newType) {
+                      if (newType != null) {
+                        HapticHelper.selection();
+                        addVm.setSplitType(newType);
+                      }
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 10),
+
+          // Split Type Selector Bar (Segmented Tabs)
           Container(
             padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
@@ -1100,6 +1224,278 @@ class _AddExpenseViewState extends State<AddExpenseView> {
             },
           ),
         ],
+      ),
+    );
+  }
+
+  void _showSplitMethodsExplainer(
+    BuildContext context,
+    bool isDark,
+    AddExpenseViewModel addVm,
+  ) {
+    HapticHelper.light();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: isDark ? AppColors.darkSurfaceCard : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white24 : Colors.black12,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(
+                              Icons.call_split_rounded,
+                              size: 20,
+                              color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Split Methods Explained',
+                                style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w800,
+                                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'How Kith divides trip expenses',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, size: 20),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // 1. Equal Split
+                  _buildExplainerMethodCard(
+                    isDark: isDark,
+                    emoji: '🟰',
+                    title: 'Split Equally',
+                    badge: 'Default • Most Common',
+                    description: 'Divides the entire amount evenly across all checked members. Remainder paise (e.g. ₹0.01) are automatically distributed deterministically.',
+                    example: 'Example: ₹1,500 dinner bill split among 3 friends = ₹500 each.',
+                    isSelected: addVm.splitType == SplitType.equal,
+                    onSelect: () {
+                      addVm.setSplitType(SplitType.equal);
+                      Navigator.pop(ctx);
+                    },
+                  ),
+                  const SizedBox(height: 10),
+
+                  // 2. Exact Amounts
+                  _buildExplainerMethodCard(
+                    isDark: isDark,
+                    emoji: '📊',
+                    title: 'Exact Amounts (₹)',
+                    badge: 'Itemized Bills',
+                    description: 'Enter custom specific amounts in Rupees for each individual. The sum of all members\' amounts must exactly equal the total expense amount.',
+                    example: 'Example: Rahul ordered ₹600, Rohit ₹400, Priya ₹500 on a ₹1,500 food order.',
+                    isSelected: addVm.splitType == SplitType.exact,
+                    onSelect: () {
+                      addVm.setSplitType(SplitType.exact);
+                      Navigator.pop(ctx);
+                    },
+                  ),
+                  const SizedBox(height: 10),
+
+                  // 3. By Percentage
+                  _buildExplainerMethodCard(
+                    isDark: isDark,
+                    emoji: '💯',
+                    title: 'By Percentage (%)',
+                    badge: 'Proportional Shares',
+                    description: 'Assign each person a percentage share. Total percentage across all members must add up to exactly 100%.',
+                    example: 'Example: Hotel stay: Master bedroom occupant pays 50%, other two rooms pay 25% each.',
+                    isSelected: addVm.splitType == SplitType.percentage,
+                    onSelect: () {
+                      addVm.setSplitType(SplitType.percentage);
+                      Navigator.pop(ctx);
+                    },
+                  ),
+                  const SizedBox(height: 10),
+
+                  // 4. By Shares / Ratios
+                  _buildExplainerMethodCard(
+                    isDark: isDark,
+                    emoji: '⚖️',
+                    title: 'By Shares / Ratios',
+                    badge: 'Families & Couples',
+                    description: 'Assign numerical units (e.g. 1, 2, 3 shares). Good when some friends brought family or consumed more.',
+                    example: 'Example: A couple gets 2 shares, 2 single friends get 1 share each (Total 4 shares on ₹4,000 = ₹2,000 for couple, ₹1,000 each for singles).',
+                    isSelected: addVm.splitType == SplitType.shares,
+                    onSelect: () {
+                      addVm.setSplitType(SplitType.shares);
+                      Navigator.pop(ctx);
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildExplainerMethodCard({
+    required bool isDark,
+    required String emoji,
+    required String title,
+    required String badge,
+    required String description,
+    required String example,
+    required bool isSelected,
+    required VoidCallback onSelect,
+  }) {
+    final activeColor = isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          HapticHelper.selection();
+          onSelect();
+        },
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? (isDark ? const Color(0xFF132A22) : const Color(0xFFECFDF5))
+                : (isDark ? const Color(0xFF141A21) : const Color(0xFFF8FAFC)),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isSelected
+                  ? activeColor
+                  : (isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle),
+              width: isSelected ? 1.5 : 0.8,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Text(emoji, style: const TextStyle(fontSize: 18)),
+                      const SizedBox(width: 8),
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: isDark ? Colors.white : const Color(0xFF0F172A),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? activeColor.withValues(alpha: 0.2)
+                          : (isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05)),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      isSelected ? 'ACTIVE' : badge,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: isSelected
+                            ? activeColor
+                            : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                description,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  height: 1.35,
+                  color: isDark ? AppColors.darkTextSecondary : const Color(0xFF334155),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: (isDark ? Colors.black : Colors.white).withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.lightbulb_outline_rounded,
+                      size: 14,
+                      color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        example,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontStyle: FontStyle.italic,
+                          color: isDark ? Colors.white70 : const Color(0xFF475569),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
