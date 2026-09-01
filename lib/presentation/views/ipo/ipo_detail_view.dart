@@ -152,6 +152,12 @@ class IpoDetailView extends StatelessWidget {
               // 3. 2x2 Metric Grid Card (Price Band, Lot Size, Min Invest, Issue Size)
               _buildKeyMetricsGrid(ipo, isDark),
 
+              // 3.5 Prominent GMP & Estimated Listing Profit Card
+              if (ipo.gmp != null && ipo.gmp! > 0) ...[
+                const SizedBox(height: 14),
+                _buildGmpInsightCard(ipo, isDark),
+              ],
+
               const SizedBox(height: 18),
 
               // 4. Timeline Milestones (Opens -> Closes -> Allotment -> Listing)
@@ -304,6 +310,125 @@ class IpoDetailView extends StatelessWidget {
             ),
           ],
           TextSpan(text: 'Closes ${DateFormatter.formatDate(ipo.closeDate)}'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGmpInsightCard(Ipo ipo, bool isDark) {
+    final gmp = ipo.gmp ?? 0;
+    final maxPrice = ipo.maxPrice;
+    final estListingPrice = maxPrice + gmp;
+    final gmpPercent = maxPrice > 0 ? ((gmp / maxPrice) * 100).toStringAsFixed(1) : '0.0';
+    final estProfitPerLot = gmp * ipo.lotSize;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFF10B981).withValues(alpha: 0.3),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF10B981).withValues(alpha: isDark ? 0.15 : 0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Text('🔥', style: TextStyle(fontSize: 16)),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Grey Market Premium (GMP)',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDCFCE7),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '+$gmpPercent%',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF15803D),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'GMP Value',
+                      style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '₹$gmp',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF10B981)),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Est. Listing Price',
+                      style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '₹$estListingPrice',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: isDark ? Colors.white : const Color(0xFF0F172A)),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Profit / Lot',
+                      style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '+${CurrencyFormatter.formatPaise(estProfitPerLot * 100, currencyCode: 'INR')}',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF10B981)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
