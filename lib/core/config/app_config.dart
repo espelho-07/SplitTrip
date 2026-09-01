@@ -42,6 +42,21 @@ class AppConfig {
 
   static String? get customServerUrl => _customServerUrl;
 
+  static const String _envDefineIpoApiUrl = String.fromEnvironment('IPO_API_URL');
+  static const String _envDefineIpoApiKey = String.fromEnvironment('IPO_API_KEY');
+
+  /// Kith IPO API service base URL
+  static String get ipoApiBaseUrl {
+    if (_envDefineIpoApiUrl.isNotEmpty) return _envDefineIpoApiUrl;
+    return 'https://kith-ipo-api.onrender.com';
+  }
+
+  /// Client API key for authenticating with Kith IPO API service
+  static String get ipoApiKey {
+    if (_envDefineIpoApiKey.isNotEmpty) return _envDefineIpoApiKey;
+    return 'kith_live_secret_key_change_in_production';
+  }
+
   static String get baseUrl {
     if (_overrideBaseUrl != null) return _overrideBaseUrl!;
     if (_customServerUrl != null && _customServerUrl!.isNotEmpty) {
