@@ -221,6 +221,40 @@ class FcmService {
         'status': 'pending_verification',
         'markedAt': DateTime.now().toIso8601String(),
       });
+    } else if ((eventType == 'settlement_confirmed' || eventType == 'SETTLEMENT_CONFIRMED') && tripId != null) {
+      final settlements = _storage.getSavedTripSettlements(tripId);
+      final fromMemId = data['payerMemberId'] ?? data['fromMemberId'];
+      final toMemId = data['receiverMemberId'] ?? data['toMemberId'];
+      bool updated = false;
+
+      final nowStr = DateTime.now().toIso8601String();
+      for (int i = 0; i < settlements.length; i++) {
+        final s = settlements[i];
+        final matchesId = settlementId != null && s['id'] == settlementId;
+        final matchesPair = fromMemId != null && toMemId != null &&
+            s['fromMemberId'] == fromMemId && s['toMemberId'] == toMemId;
+        if (matchesId || matchesPair) {
+          settlements[i]['status'] = 'confirmed';
+          settlements[i]['isSettled'] = true;
+          settlements[i]['confirmedAt'] = nowStr;
+          updated = true;
+        }
+      }
+
+      if (!updated && settlementId != null) {
+        settlements.insert(0, {
+          'id': settlementId,
+          'tripId': tripId,
+          'fromMemberId': fromMemId,
+          'toMemberId': toMemId,
+          'amountInPaise': int.tryParse(data['amountInPaise']?.toString() ?? '0') ?? 0,
+          'status': 'confirmed',
+          'isSettled': true,
+          'confirmedAt': nowStr,
+          'createdAt': nowStr,
+        });
+      }
+      _storage.saveTripSettlements(tripId, settlements);
     }
 
     _notificationService.addNotification(

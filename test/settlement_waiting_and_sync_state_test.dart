@@ -6,7 +6,13 @@ import 'package:kith_app/core/widgets/shimmer_skeleton.dart';
 import 'package:kith_app/data/repositories/expense_repository.dart';
 import 'package:kith_app/data/services/local_storage_service.dart';
 import 'package:kith_app/data/services/sync_service.dart';
+import 'package:kith_app/domain/engine/balance_engine.dart';
+import 'package:kith_app/domain/enums/expense_category.dart';
+import 'package:kith_app/domain/enums/split_type.dart';
+import 'package:kith_app/domain/models/expense.dart';
+import 'package:kith_app/domain/models/expense_split.dart';
 import 'package:kith_app/domain/models/guest_user.dart';
+import 'package:kith_app/domain/models/trip_member.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -133,6 +139,57 @@ void main() {
       expect(find.byType(BalanceCardSkeleton), findsOneWidget);
       expect(find.byType(ExpenseCardSkeleton), findsOneWidget);
       expect(find.byType(PersonLedgerSkeleton), findsOneWidget);
+    });
+
+    test('4. BalanceEngine immediately calculates 0 net debt once settlement is confirmed (even if matched via userId)', () {
+      final now = DateTime.now();
+      final memberA = TripMember(id: 'mem_A', userId: 'usr_A', displayName: 'User A', role: 'member', joinedAt: now);
+      final memberB = TripMember(id: 'mem_B', userId: 'usr_B', displayName: 'User B', role: 'member', joinedAt: now);
+
+      final expense = Expense(
+        id: 'exp_1',
+        tripId: 'trip_1',
+        title: 'Dinner',
+        amountInPaise: 10000,
+        paidById: 'mem_A',
+        category: ExpenseCategory.food,
+        splitType: SplitType.equal,
+        splits: [
+          ExpenseSplit(memberId: 'mem_A', amountInPaise: 5000),
+          ExpenseSplit(memberId: 'mem_B', amountInPaise: 5000),
+        ],
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      // Before settlement: B owes A ₹50
+      final summaryBefore = BalanceEngine.calculateBalances(
+        members: [memberA, memberB],
+        expenses: [expense],
+        settlements: [],
+        currentUserId: 'usr_B',
+      );
+      expect(summaryBefore.debtsToPay.isNotEmpty, isTrue);
+      expect(summaryBefore.debtsToPay.first.amountInPaise, equals(5000));
+
+      // After settlement: B paid A ₹50 (recorded with userId 'usr_B' & 'usr_A')
+      final summaryAfter = BalanceEngine.calculateBalances(
+        members: [memberA, memberB],
+        expenses: [expense],
+        settlements: [
+          {
+            'fromMemberId': 'usr_B',
+            'toMemberId': 'usr_A',
+            'amountInPaise': 5000,
+            'status': 'confirmed',
+            'isSettled': true,
+          }
+        ],
+        currentUserId: 'usr_B',
+      );
+      expect(summaryAfter.debtsToPay.isEmpty, isTrue);
+      expect(summaryAfter.currentUserNetBalanceInPaise, equals(0));
+      expect(summaryAfter.isCurrentUserSettled, isTrue);
     });
   });
 }

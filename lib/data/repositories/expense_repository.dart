@@ -1,3 +1,4 @@
+import 'dart:async';
 import '../../core/network/api_client.dart';
 import '../../core/network/realtime_client.dart';
 import '../../domain/engine/balance_engine.dart';
@@ -401,13 +402,42 @@ class ExpenseRepository {
 
     // 2. Update settlement in local trip storage
     final settlements = storage.getSavedTripSettlements(tripId);
-    final idx = settlements.indexWhere((s) => s['id'] == settlementId);
+    final verifs = storage.getSavedPaymentVerifications();
+    final v = verifs.where((x) => x['id'] == verificationId || x['settlementId'] == settlementId).firstOrNull;
+
+    final payerMemId = v?['payerMemberId'] as String?;
+    final receiverMemId = v?['receiverMemberId'] as String?;
+    final payerUsrId = v?['payerUserId'] as String?;
+    final receiverUsrId = v?['receiverUserId'] as String?;
+
+    int idx = settlements.indexWhere((s) => s['id'] == settlementId || s['id'] == verificationId);
+    if (idx == -1 && payerMemId != null && receiverMemId != null) {
+      idx = settlements.indexWhere((s) => s['fromMemberId'] == payerMemId && s['toMemberId'] == receiverMemId);
+    }
+
+    final nowStr = DateTime.now().toIso8601String();
     if (idx != -1) {
       settlements[idx]['status'] = 'confirmed';
       settlements[idx]['isSettled'] = true;
-      settlements[idx]['confirmedAt'] = DateTime.now().toIso8601String();
-      await storage.saveTripSettlements(tripId, settlements);
+      settlements[idx]['confirmedAt'] = nowStr;
+    } else {
+      settlements.insert(0, {
+        'id': settlementId,
+        'tripId': tripId,
+        'fromMemberId': payerMemId,
+        'toMemberId': receiverMemId,
+        'fromUserId': payerUsrId,
+        'toUserId': receiverUsrId,
+        'fromName': payerName ?? v?['payerName'],
+        'toName': receiverName ?? v?['receiverName'],
+        'amountInPaise': amountInPaise ?? v?['amountInPaise'] ?? 0,
+        'status': 'confirmed',
+        'isSettled': true,
+        'confirmedAt': nowStr,
+        'createdAt': nowStr,
+      });
     }
+    await storage.saveTripSettlements(tripId, settlements);
 
     final rName = receiverName ?? 'Receiver';
     final pName = payerName ?? 'Payer';
@@ -436,6 +466,9 @@ class ExpenseRepository {
       idempotencyKey: 'cnf_$verificationId',
       backgroundApiClient: apiClient,
     );
+
+    // Drain background sync immediately
+    unawaited(syncService.flushQueue(apiClient));
   }
 
   /// Dispute payment receipt by Receiver (Payee Handshake)

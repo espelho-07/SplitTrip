@@ -668,9 +668,18 @@ class _SettlementSheetState extends State<SettlementSheet> {
     final isProcessing = _processingTransferIds.contains(transferKey);
     final isPaid = _paidTransferKeys.contains(transferKey);
 
+    final isAlreadySettledInCache = cachedSettlements.any((cs) {
+      final matchesPair = (cs['fromMemberId'] == s.fromMemberId && cs['toMemberId'] == s.toMemberId) ||
+          (fromMember?.userId != null && cs['fromUserId'] == fromMember!.userId && toMember?.userId != null && cs['toUserId'] == toMember!.userId);
+      final isSettled = cs['isSettled'] as bool? ?? false;
+      final st = cs['status'] as String?;
+      return matchesPair && (isSettled || st == 'paid' || st == 'confirmed' || st == 'completed' || st == 'manual_settled');
+    });
+
     // Look up in-flight settlement state for this pair
     final inFlight = cachedSettlements.where((cs) {
-      final matchesPair = cs['fromMemberId'] == s.fromMemberId && cs['toMemberId'] == s.toMemberId;
+      final matchesPair = (cs['fromMemberId'] == s.fromMemberId && cs['toMemberId'] == s.toMemberId) ||
+          (fromMember?.userId != null && cs['fromUserId'] == fromMember!.userId && toMember?.userId != null && cs['toUserId'] == toMember!.userId);
       final isSettled = cs['isSettled'] as bool? ?? false;
       final st = cs['status'] as String?;
       final isNotSettled = !isSettled && st != 'paid' && st != 'confirmed' && st != 'completed';
@@ -1093,7 +1102,7 @@ class _SettlementSheetState extends State<SettlementSheet> {
                 ),
 
                 if (canRecord && widget.onRecordTransfer != null) ...[
-                  if (isPaid)
+                  if (isPaid || isAlreadySettledInCache)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(

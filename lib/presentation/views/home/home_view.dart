@@ -144,6 +144,57 @@ class _HomeViewState extends State<HomeView> {
           });
         }
       } else if (event.type == 'settlement_confirmed') {
+        final storage = context.read<LocalStorageService>();
+        // Update local settlement in storage immediately
+        final settlementId = event.data['settlementId'] as String? ??
+            (event.data['settlement'] is Map ? event.data['settlement']['id'] as String? : null);
+        final fromMemberId = event.data['fromMemberId'] as String? ??
+            event.data['payerMemberId'] as String? ??
+            (event.data['settlement'] is Map ? event.data['settlement']['fromMemberId'] as String? : null);
+        final toMemberId = event.data['toMemberId'] as String? ??
+            event.data['receiverMemberId'] as String? ??
+            (event.data['settlement'] is Map ? event.data['settlement']['toMemberId'] as String? : null);
+        final amt = int.tryParse(event.data['amountInPaise']?.toString() ??
+            (event.data['settlement'] is Map ? event.data['settlement']['amountInPaise']?.toString() ?? '0' : '0')) ?? 0;
+
+        final saved = storage.getSavedTripSettlements(event.tripId);
+        bool found = false;
+        final nowStr = DateTime.now().toIso8601String();
+        for (int i = 0; i < saved.length; i++) {
+          final s = saved[i];
+          final matchesId = settlementId != null && s['id'] == settlementId;
+          final matchesPair = fromMemberId != null && toMemberId != null &&
+              s['fromMemberId'] == fromMemberId && s['toMemberId'] == toMemberId;
+          if (matchesId || matchesPair) {
+            saved[i]['status'] = 'confirmed';
+            saved[i]['isSettled'] = true;
+            saved[i]['confirmedAt'] = nowStr;
+            found = true;
+          }
+        }
+        if (!found && settlementId != null) {
+          saved.insert(0, {
+            'id': settlementId,
+            'tripId': event.tripId,
+            'fromMemberId': fromMemberId,
+            'toMemberId': toMemberId,
+            'amountInPaise': amt,
+            'status': 'confirmed',
+            'isSettled': true,
+            'confirmedAt': nowStr,
+            'createdAt': nowStr,
+          });
+        }
+        storage.saveTripSettlements(event.tripId, saved);
+
+        final homeVm = context.read<HomeViewModel>();
+        final personalVm = context.read<PersonalExpenseViewModel>();
+        final currentUserId = context.read<AuthViewModel>().currentUser?.id;
+        if (currentUserId != null) {
+          homeVm.loadTrips(currentUserId);
+          personalVm.loadData(currentUserId);
+        }
+
         // X (payer) receives confirmation that Y acknowledged the payment
         final nd = notifData(event);
         if (isPayer(nd)) {

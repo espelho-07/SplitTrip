@@ -69,11 +69,18 @@ class BalanceEngine {
       }
 
       if (isPaid && fromId != null && toId != null && amt > 0) {
+        // Resolve member by id or userId
+        final fromMember = members.where((m) => m.id == fromId || m.userId == fromId).firstOrNull;
+        final toMember = members.where((m) => m.id == toId || m.userId == toId).firstOrNull;
+
+        final targetFromId = fromMember?.id ?? fromId;
+        final targetToId = toMember?.id ?? toId;
+
         // fromId transferred amt to toId.
         // Therefore fromId is credited +amt (they paid their debt),
         // and toId is debited +amt (they collected their receivable).
-        paidMap[fromId] = (paidMap[fromId] ?? 0) + amt;
-        shareMap[toId] = (shareMap[toId] ?? 0) + amt;
+        paidMap[targetFromId] = (paidMap[targetFromId] ?? 0) + amt;
+        shareMap[targetToId] = (shareMap[targetToId] ?? 0) + amt;
       }
     }
 
