@@ -75,6 +75,8 @@ class _TripDetailViewState extends State<TripDetailView> {
   final TextEditingController _searchController = TextEditingController();
   bool _dismissedLocationPrompt = false;
   bool _initialLoading = true;
+  bool _isOpeningDeepLink = false;
+  String _deepLinkStatus = '';
   StreamSubscription<Map<String, dynamic>>? _notifSubscription;
 
   static const List<Map<String, String?>> _categories = [
@@ -91,6 +93,13 @@ class _TripDetailViewState extends State<TripDetailView> {
   @override
   void initState() {
     super.initState();
+    final hasExpenseDeepLink = widget.expenseId != null && widget.expenseId!.isNotEmpty;
+    final hasSettlementDeepLink = widget.settlementId != null && widget.settlementId!.isNotEmpty;
+    _isOpeningDeepLink = hasExpenseDeepLink || hasSettlementDeepLink;
+    _deepLinkStatus = hasExpenseDeepLink
+        ? 'Opening Expense Details...'
+        : (hasSettlementDeepLink ? 'Loading Payment Verification...' : '');
+
     final vm = context.read<TripDetailViewModel>();
     _notifSubscription = vm.notificationEvents.listen((notif) async {
       if (mounted) {
@@ -126,6 +135,7 @@ class _TripDetailViewState extends State<TripDetailView> {
       if (user != null) {
         final tripDetailVm = context.read<TripDetailViewModel>();
         final expenseRepo = context.read<ExpenseRepository>();
+        final storage = context.read<LocalStorageService>();
         
         // 1. Immediately hydrate trip locally
         await tripDetailVm.loadTrip(widget.tripId, user.id);
@@ -133,34 +143,62 @@ class _TripDetailViewState extends State<TripDetailView> {
           setState(() => _initialLoading = false);
         }
 
-        // 2. Refresh settlements in background
-        if (!mounted) return;
-        await expenseRepo.getSettlements(widget.tripId);
-        if (mounted) {
-          if (widget.expenseId != null && widget.expenseId!.isNotEmpty) {
-            final vm = context.read<TripDetailViewModel>();
-            final targetExpense = vm.expenses.where((e) => e.id == widget.expenseId).firstOrNull;
-            if (targetExpense != null && vm.trip != null) {
-              _showExpenseDetailSheet(targetExpense, vm.trip!, user.id);
+        // 2. Immediate Deep Link handling (ZERO LAG - before background network sync)
+        if (mounted && hasExpenseDeepLink) {
+          final currentVm = context.read<TripDetailViewModel>();
+          Expense? targetExpense = currentVm.expenses.where((e) => e.id == widget.expenseId).firstOrNull;
+          
+          if (targetExpense == null) {
+            if (mounted) {
+              setState(() => _deepLinkStatus = 'Fetching expense from cloud...');
+            }
+            final freshExpenses = await expenseRepo.getExpenses(widget.tripId);
+            targetExpense = freshExpenses.where((e) => e.id == widget.expenseId).firstOrNull;
+          }
+
+          if (mounted) {
+            setState(() => _isOpeningDeepLink = false);
+            if (targetExpense != null && currentVm.trip != null) {
+              _showExpenseDetailSheet(targetExpense, currentVm.trip!, user.id);
             } else {
               await PaymentVerificationManager.checkAndPrompt(context);
             }
-          } else if (widget.settlementId != null && widget.settlementId!.isNotEmpty) {
-            final storage = context.read<LocalStorageService>();
-            final allPending = storage.getSavedPaymentVerifications();
-            final match = allPending.firstWhere(
+          }
+        } else if (mounted && hasSettlementDeepLink) {
+          final allPending = storage.getSavedPaymentVerifications();
+          var match = allPending.firstWhere(
+            (p) => p['settlementId'] == widget.settlementId || p['id'] == widget.settlementId,
+            orElse: () => <String, dynamic>{},
+          );
+
+          if (match.isEmpty) {
+            if (mounted) {
+              setState(() => _deepLinkStatus = 'Syncing payment verification...');
+            }
+            await expenseRepo.syncPendingVerifications(user.id);
+            final updatedPending = storage.getSavedPaymentVerifications();
+            match = updatedPending.firstWhere(
               (p) => p['settlementId'] == widget.settlementId || p['id'] == widget.settlementId,
               orElse: () => <String, dynamic>{},
             );
+          }
+
+          if (mounted) {
+            setState(() => _isOpeningDeepLink = false);
             if (match.isNotEmpty) {
               final req = PaymentVerificationRequest.fromJson(match);
               await PaymentVerificationView.show(context, request: req);
             } else {
               await PaymentVerificationManager.checkAndPrompt(context);
             }
-          } else {
-            await PaymentVerificationManager.checkAndPrompt(context);
           }
+        } else if (mounted) {
+          await PaymentVerificationManager.checkAndPrompt(context);
+        }
+
+        // 3. Background settlements sync
+        if (mounted) {
+          expenseRepo.getSettlements(widget.tripId);
         }
       }
     });
@@ -541,15 +579,19 @@ class _TripDetailViewState extends State<TripDetailView> {
               onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
             ),
           ),
-          body: const Padding(
-            padding: EdgeInsets.all(20.0),
+          body: Padding(
+            padding: const EdgeInsets.all(20.0),
             child: Column(
               children: [
-                ShimmerSkeleton(height: 180),
-                SizedBox(height: 20),
-                ShimmerSkeleton(height: 80),
-                SizedBox(height: 16),
-                ShimmerSkeleton(height: 80),
+                if (_isOpeningDeepLink) ...[
+                  _buildDeepLinkLoadingBanner(isDark),
+                  const SizedBox(height: 16),
+                ],
+                const ShimmerSkeleton(height: 180),
+                const SizedBox(height: 20),
+                const ShimmerSkeleton(height: 80),
+                const SizedBox(height: 16),
+                const ShimmerSkeleton(height: 80),
               ],
             ),
           ),
@@ -736,55 +778,68 @@ class _TripDetailViewState extends State<TripDetailView> {
           const SizedBox(width: 4),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          if (user != null) {
-            await tripDetailVm.refresh(user.id);
-          }
-        },
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Hero Trip Financial Overview Card
-              _buildHeroTripCard(
-                trip,
-                balanceSummary,
-                userNetPaise,
-                _calculateUserSpentPaise(tripDetailVm.expenses, user?.id, trip),
-                isDark,
-                gradientColors,
-                l10n,
+      body: Stack(
+        children: [
+          RefreshIndicator(
+            onRefresh: () async {
+              if (user != null) {
+                await tripDetailVm.refresh(user.id);
+              }
+            },
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Hero Trip Financial Overview Card
+                  _buildHeroTripCard(
+                    trip,
+                    balanceSummary,
+                    userNetPaise,
+                    _calculateUserSpentPaise(tripDetailVm.expenses, user?.id, trip),
+                    isDark,
+                    gradientColors,
+                    l10n,
+                  ),
+
+                  const SizedBox(height: AppSpacing.md),
+
+                  // Contextual Lifecycle Action Bar
+                  _buildLifecycleActionBar(trip, isCreator, isDark, l10n),
+
+                  const SizedBox(height: AppSpacing.lg),
+
+                  // Top-Level Segmented Navigation [ 🏝️ Overview ] [ 💳 Spending ] [ 🗺️ Journey (if enabled) ]
+                  _buildTopTabSwitcher(trip, isDark, l10n),
+
+                  const SizedBox(height: AppSpacing.lg),
+
+                  // Active Tab Content
+                  if (_topLevelTab == 0)
+                    _buildOverviewSection(tripDetailVm, trip, balanceSummary, isDark, user?.id ?? '', l10n)
+                  else if (_topLevelTab == 1)
+                    _buildSpendingSection(tripDetailVm, trip, balanceSummary, isDark, user?.id ?? '', l10n)
+                  else if (trip.isJourneyEnabled)
+                    _buildJourneySection(tripDetailVm, trip, isDark, user?.id ?? '')
+                  else
+                    _buildOverviewSection(tripDetailVm, trip, balanceSummary, isDark, user?.id ?? '', l10n),
+
+                  const SizedBox(height: 90),
+                ],
               ),
-
-              const SizedBox(height: AppSpacing.md),
-
-              // Contextual Lifecycle Action Bar
-              _buildLifecycleActionBar(trip, isCreator, isDark, l10n),
-
-              const SizedBox(height: AppSpacing.lg),
-
-              // Top-Level Segmented Navigation [ 🏝️ Overview ] [ 💳 Spending ] [ 🗺️ Journey (if enabled) ]
-              _buildTopTabSwitcher(trip, isDark, l10n),
-
-              const SizedBox(height: AppSpacing.lg),
-
-              // Active Tab Content
-              if (_topLevelTab == 0)
-                _buildOverviewSection(tripDetailVm, trip, balanceSummary, isDark, user?.id ?? '', l10n)
-              else if (_topLevelTab == 1)
-                _buildSpendingSection(tripDetailVm, trip, balanceSummary, isDark, user?.id ?? '', l10n)
-              else if (trip.isJourneyEnabled)
-                _buildJourneySection(tripDetailVm, trip, isDark, user?.id ?? '')
-              else
-                _buildOverviewSection(tripDetailVm, trip, balanceSummary, isDark, user?.id ?? '', l10n),
-
-              const SizedBox(height: 90),
-            ],
+            ),
           ),
-        ),
+          if (_isOpeningDeepLink)
+            Positioned(
+              top: 14,
+              left: 20,
+              right: 20,
+              child: Center(
+                child: _buildDeepLinkLoadingBanner(isDark),
+              ),
+            ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
@@ -2961,10 +3016,53 @@ class _TripDetailViewState extends State<TripDetailView> {
                       ),
                   ],
                 ),
-              );
-            },
-          ),
+        );
+      },
+    ),
       ],
+    );
+  }
+
+  Widget _buildDeepLinkLoadingBanner(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: (isDark ? const Color(0xFF0F172A) : Colors.white).withValues(alpha: 0.96),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.18),
+            blurRadius: 18,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(
+          color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.35),
+          width: 1.4,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.2,
+              color: AppColors.emeraldLight,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            _deepLinkStatus.isNotEmpty ? _deepLinkStatus : 'Loading Details...',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

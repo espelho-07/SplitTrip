@@ -28,6 +28,7 @@ class _NotificationsViewState extends State<NotificationsView> {
   bool _ipoAlerts = true;
 
   List<AppNotificationItem> _notifications = [];
+  String? _loadingNotificationId;
 
   @override
   void initState() {
@@ -433,29 +434,56 @@ class _NotificationsViewState extends State<NotificationsView> {
         break;
     }
 
+    final isLoadingThis = _loadingNotificationId == item.id;
+
     return GestureDetector(
       onTap: () async {
         HapticHelper.light();
+        setState(() {
+          _loadingNotificationId = item.id;
+          item.isRead = true;
+        });
+
         final storage = context.read<LocalStorageService>();
         storage.markNotificationAsRead(item.id);
-        setState(() => item.isRead = true);
 
-        if (item.type == NotificationType.settlement) {
-          final authVm = Provider.of<AuthViewModel?>(context, listen: false);
-          final currentUserId = authVm?.currentUser?.id;
-          if (currentUserId != null) {
-            final pending = storage.getPendingVerificationsForReceiver(userId: currentUserId);
-            if (pending.isNotEmpty) {
-              final req = PaymentVerificationRequest.fromJson(pending.first);
-              await PaymentVerificationView.show(context, request: req);
-              _loadNotifications();
-              return;
+        try {
+          if (item.type == NotificationType.settlement) {
+            final authVm = Provider.of<AuthViewModel?>(context, listen: false);
+            final currentUserId = authVm?.currentUser?.id;
+            if (currentUserId != null) {
+              var pending = storage.getPendingVerificationsForReceiver(userId: currentUserId);
+              if (pending.isEmpty) {
+                final expenseRepo = Provider.of<ExpenseRepository?>(context, listen: false);
+                if (expenseRepo != null) {
+                  await expenseRepo.syncPendingVerifications(currentUserId);
+                  pending = storage.getPendingVerificationsForReceiver(userId: currentUserId);
+                }
+              }
+              if (pending.isNotEmpty) {
+                final req = PaymentVerificationRequest.fromJson(pending.first);
+                if (mounted) {
+                  setState(() => _loadingNotificationId = null);
+                  await PaymentVerificationView.show(context, request: req);
+                  _loadNotifications();
+                  return;
+                }
+              }
             }
           }
-        }
 
-        if (item.route != null && item.route!.isNotEmpty) {
-          context.push(item.route!);
+          if (item.route != null && item.route!.isNotEmpty && mounted) {
+            final targetRoute = item.route!;
+            setState(() => _loadingNotificationId = null);
+            await context.push(targetRoute);
+            if (mounted) {
+              _loadNotifications();
+            }
+          }
+        } finally {
+          if (mounted) {
+            setState(() => _loadingNotificationId = null);
+          }
         }
       },
 
@@ -484,7 +512,16 @@ class _NotificationsViewState extends State<NotificationsView> {
                 shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
-              child: Icon(icon, color: iconColor, size: 20),
+              child: isLoadingThis
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.emeraldLight,
+                      ),
+                    )
+                  : Icon(icon, color: iconColor, size: 20),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -522,7 +559,7 @@ class _NotificationsViewState extends State<NotificationsView> {
                       color: isDark ? AppColors.darkTextSecondary : const Color(0xFF475569),
                     ),
                   ),
-                  if (item.actionLabel != null) ...[
+                  if (item.actionLabel != null || isLoadingThis) ...[
                     const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -530,13 +567,38 @@ class _NotificationsViewState extends State<NotificationsView> {
                         color: AppColors.emeraldLight.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Text(
-                        '${item.actionLabel!} →',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.emeraldLight,
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (isLoadingThis) ...[
+                            const SizedBox(
+                              width: 11,
+                              height: 11,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 1.8,
+                                color: AppColors.emeraldLight,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            const Text(
+                              'Opening...',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.emeraldLight,
+                              ),
+                            ),
+                          ] else ...[
+                            Text(
+                              '${item.actionLabel!} →',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.emeraldLight,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                   ],
