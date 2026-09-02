@@ -188,12 +188,20 @@ void main() {
       await tester.tap(find.text('Unselect All'));
       await tester.pumpAndSettle();
 
+      // Verify all participants are unselected (0 selected)
+      expect(addVm.selectedParticipantMemberIds.isEmpty, isTrue);
+      expect(find.textContaining('(0 / 2)'), findsOneWidget);
+
       // Now should show 'Select All'
       expect(find.text('Select All'), findsOneWidget);
 
       // Tap 'Select All'
       await tester.tap(find.text('Select All'));
       await tester.pumpAndSettle();
+
+      // Verify all participants are selected again (2 selected)
+      expect(addVm.selectedParticipantMemberIds.length, 2);
+      expect(find.textContaining('(2 / 2)'), findsOneWidget);
 
       // Should show 'Unselect All' again
       expect(find.text('Unselect All'), findsOneWidget);

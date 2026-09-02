@@ -254,14 +254,25 @@ class AddExpenseViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  void toggleParticipant(String memberId) {
+  void toggleParticipant(String memberId, {bool allowEmpty = true}) {
     if (_selectedParticipantMemberIds.contains(memberId)) {
-      if (_selectedParticipantMemberIds.length > 1) {
+      if (allowEmpty || _selectedParticipantMemberIds.length > 1) {
         _selectedParticipantMemberIds.remove(memberId);
       }
     } else {
       _selectedParticipantMemberIds.add(memberId);
     }
+    notifyListeners();
+  }
+
+  void selectAllParticipants(List<String> memberIds) {
+    _selectedParticipantMemberIds.clear();
+    _selectedParticipantMemberIds.addAll(memberIds);
+    notifyListeners();
+  }
+
+  void unselectAllParticipants() {
+    _selectedParticipantMemberIds.clear();
     notifyListeners();
   }
 

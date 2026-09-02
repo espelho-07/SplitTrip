@@ -997,7 +997,6 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     AppLocalizations l10n,
   ) {
     final count = addVm.selectedParticipantMemberIds.length;
-    final allSelected = count == trip.members.length;
     final activeColor = isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary;
 
     return Container(
@@ -1153,22 +1152,16 @@ class _AddExpenseViewState extends State<AddExpenseView> {
               GestureDetector(
                 onTap: () {
                   HapticHelper.light();
-                  if (allSelected) {
-                    for (final m in trip.members.skip(1)) {
-                      if (addVm.selectedParticipantMemberIds.contains(m.id)) {
-                        addVm.toggleParticipant(m.id);
-                      }
-                    }
+                  if (count > 0) {
+                    addVm.unselectAllParticipants();
                   } else {
-                    for (final m in trip.members) {
-                      if (!addVm.selectedParticipantMemberIds.contains(m.id)) {
-                        addVm.toggleParticipant(m.id);
-                      }
-                    }
+                    addVm.selectAllParticipants(trip.members.map((m) => m.id).toList());
                   }
                 },
                 child: Text(
-                  allSelected ? (l10n.expenseDeselectAll.isNotEmpty ? l10n.expenseDeselectAll : 'Unselect All') : (l10n.expenseSelectAll.isNotEmpty ? l10n.expenseSelectAll : 'Select All'),
+                  count > 0
+                      ? (l10n.expenseDeselectAll.isNotEmpty ? l10n.expenseDeselectAll : 'Unselect All')
+                      : (l10n.expenseSelectAll.isNotEmpty ? l10n.expenseSelectAll : 'Select All'),
                   style: TextStyle(
                     fontSize: 11.5,
                     fontWeight: FontWeight.w700,
