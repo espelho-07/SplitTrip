@@ -850,6 +850,12 @@ class _AddExpenseViewState extends State<AddExpenseView> {
           ],
         ),
 
+        // Validation indicator for Exact or % splits
+        if (addVm.splitType == SplitType.exact)
+          _buildExactValidationBar(isDark, addVm, currency),
+        if (addVm.splitType == SplitType.percentage)
+          _buildPercentValidationBar(isDark, addVm),
+
         const SizedBox(height: 10),
 
         // Member list cards
@@ -866,6 +872,90 @@ class _AddExpenseViewState extends State<AddExpenseView> {
           },
         ),
       ],
+    );
+  }
+
+  Widget _buildExactValidationBar(bool isDark, AddExpenseViewModel addVm, String currency) {
+    final remaining = addVm.exactRemainingPaise;
+    final isBalanced = remaining == 0;
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: isBalanced
+            ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.12)
+            : Colors.amber.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isBalanced ? Icons.check_circle_rounded : Icons.info_outline_rounded,
+            size: 14,
+            color: isBalanced
+                ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
+                : Colors.amber,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              isBalanced
+                  ? 'Total matches exact sum perfectly'
+                  : 'Remaining: ${CurrencyFormatter.formatPaise(remaining, currencyCode: currency)}',
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: isBalanced
+                    ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
+                    : Colors.amber.shade700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPercentValidationBar(bool isDark, AddExpenseViewModel addVm) {
+    final remaining = 100.0 - addVm.totalAllocatedPercentage;
+    final isBalanced = remaining.abs() < 0.01;
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: isBalanced
+            ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.12)
+            : Colors.amber.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isBalanced ? Icons.check_circle_rounded : Icons.info_outline_rounded,
+            size: 14,
+            color: isBalanced
+                ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
+                : Colors.amber,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              isBalanced
+                  ? 'Percentages sum to 100%'
+                  : 'Remaining: ${remaining.toStringAsFixed(1)}%',
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: isBalanced
+                    ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
+                    : Colors.amber.shade700,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

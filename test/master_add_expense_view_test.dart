@@ -91,8 +91,8 @@ void main() {
     );
   }
 
-  group('Master Redesigned AddExpenseView Suite', () {
-    testWidgets('1. Renders clean Add Group Expense view with amount, title, payer, category, and bottom Total Amount dock', (tester) async {
+  group('Master Clean AddExpenseView Suite', () {
+    testWidgets('1. Renders clean Add Group Expense view with amount card, payer, category, split method, and bottom dock', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -110,11 +110,11 @@ void main() {
       expect(find.text('Category'), findsOneWidget);
       expect(find.text('Who Paid?'), findsOneWidget);
       expect(find.text('Split Method'), findsOneWidget);
-      expect(find.text('Total Amount'), findsOneWidget);
       expect(find.text('Save Expense'), findsOneWidget);
+      expect(find.text('Total Amount'), findsOneWidget);
     });
 
-    testWidgets('2. Entering amount and title updates live Total Amount in bottom dock and participant split', (tester) async {
+    testWidgets('2. Entering amount and title updates add expense form state and bottom total', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -123,20 +123,18 @@ void main() {
       await tester.pumpWidget(createAddExpenseScreen());
       await tester.pumpAndSettle();
 
-      // Enter amount: 1000
       final amountField = find.byType(TextField).first;
       await tester.enterText(amountField, '1000');
       await tester.pumpAndSettle();
 
       final titleField = find.widgetWithText(TextField, 'e.g. Train tickets, Dinner, Groceries');
-      await tester.enterText(titleField, 'Seafood Dinner');
-      await tester.pumpAndSettle();
+      if (titleField.evaluate().isNotEmpty) {
+        await tester.enterText(titleField, 'Dinner');
+        await tester.pumpAndSettle();
+      }
 
       expect(addVm.amountInPaise, 100000);
-      expect(addVm.title, 'Seafood Dinner');
-
-      // Verify bottom dock shows Total Amount: ₹1,000
-      expect(find.text('Total Amount'), findsOneWidget);
+      expect(addVm.title, 'Dinner');
       expect(find.text('₹1,000'), findsWidgets);
     });
 
@@ -152,6 +150,7 @@ void main() {
       // Verify Split Method header, Question Mark icon, and Dropdown
       expect(find.text('Split Method'), findsOneWidget);
       expect(find.byIcon(Icons.question_mark_rounded), findsOneWidget);
+      expect(find.text('Equally'), findsOneWidget);
       expect(find.byType(DropdownButton<SplitType>), findsOneWidget);
 
       // Tap Question Mark (?) icon
@@ -170,7 +169,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Verify active split method changed to percentage
-      expect(addVm.splitType.name, 'percentage');
+      expect(addVm.splitType, SplitType.percentage);
     });
   });
 }
