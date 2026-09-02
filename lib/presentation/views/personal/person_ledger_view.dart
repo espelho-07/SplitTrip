@@ -14,7 +14,9 @@ import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/person_ledger_viewmodel.dart';
 import '../../viewmodels/personal_expense_viewmodel.dart';
 
-/// WhatsApp Chat-Style Financial Relationship Timeline & 1-on-1 Ledger for a Person.
+/// Ultra-Clean, Modern Financial Relationship Timeline & 1-on-1 Ledger for a Person.
+/// Matches the exact design language with Top Summary Hero, Connected Vertical Timeline,
+/// Transaction Cards with illustrations, Summary Bar, and "You Gave" / "You Got" Action Dock.
 class PersonLedgerView extends StatefulWidget {
   final String personName;
   final String? personUserId;
@@ -120,6 +122,201 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
     );
   }
 
+  void _showSummaryDetailsSheet(BuildContext context, PersonLedgerViewModel vm, bool isDark) {
+    HapticHelper.selection();
+    final net = vm.netBalancePaise;
+    final isOwed = net > 0;
+    final isSettled = net == 0;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDark ? const Color(0xFF141A21) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white24 : Colors.black12,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00594C).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.analytics_rounded,
+                        size: 20,
+                        color: Color(0xFF00594C),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Summary with ${widget.personName}',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Stat Cards Row
+                Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF0C241B) : const Color(0xFFF2FBF7),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isDark ? const Color(0xFF134533) : const Color(0xFFD1FAE5),
+                            width: 0.8,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Total You Gave',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF059669)),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              CurrencyFormatter.formatPaise(vm.totalLentPaise, currencyCode: 'INR'),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                                color: isDark ? Colors.white : const Color(0xFF0F172A),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF0F1D2F) : const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isDark ? const Color(0xFF1E3A5F) : const Color(0xFFE2E8F0),
+                            width: 0.8,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Total You Got',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF2563EB)),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              CurrencyFormatter.formatPaise(vm.totalBorrowedPaise, currencyCode: 'INR'),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                                color: isDark ? Colors.white : const Color(0xFF0F172A),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // Net Balance Pill
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF064E3B) : const Color(0xFF03312B),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            isSettled
+                                ? 'Net Balance'
+                                : (isOwed ? 'Net Receivable (You will get)' : 'Net Payable (You owe)'),
+                            style: const TextStyle(fontSize: 11.5, color: Colors.white70, fontWeight: FontWeight.w500),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            isSettled ? '₹0 (Settled)' : CurrencyFormatter.formatPaise(net.abs(), currencyCode: 'INR'),
+                            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white),
+                          ),
+                        ],
+                      ),
+                      if (!isSettled)
+                        ElevatedButton(
+                          onPressed: () async {
+                            Navigator.pop(ctx);
+                            await vm.settleBalance(amountInPaise: net.abs());
+                            _loadData();
+                            HapticHelper.success();
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          ),
+                          child: const Text('Settle Up', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800)),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // Transactions Count
+                Center(
+                  child: Text(
+                    '${vm.items.length} total transaction(s) recorded in ledger',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -130,36 +327,34 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
     final isYouOwe = net < 0;
     final isSettled = net == 0;
 
-    final balanceColor = isSettled
-        ? (isDark ? Colors.white60 : Colors.black54)
+    final subtitleText = isSettled
+        ? 'All settled up ✓'
         : (isOwed
-            ? (isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight)
-            : const Color(0xFFF59E0B));
-
-    final balanceText = isSettled
-        ? 'Settled ✓'
-        : (isOwed
-            ? 'You will get ${CurrencyFormatter.formatPaise(net.abs(), currencyCode: 'INR')}'
+            ? 'You get ${CurrencyFormatter.formatPaise(net.abs(), currencyCode: 'INR')}'
             : 'You owe ${CurrencyFormatter.formatPaise(net.abs(), currencyCode: 'INR')}');
 
     final items = vm.items;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0B1014) : const Color(0xFFEFEAE2),
+      backgroundColor: isDark ? const Color(0xFF0B1014) : const Color(0xFFF8FAFC),
       appBar: AppBar(
-        elevation: 1,
-        backgroundColor: isDark ? const Color(0xFF161F26) : const Color(0xFF075E54),
-        foregroundColor: Colors.white,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        backgroundColor: isDark ? const Color(0xFF0B1014) : Colors.white,
+        foregroundColor: isDark ? Colors.white : const Color(0xFF0F172A),
         titleSpacing: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+          icon: Icon(
+            Icons.arrow_back_rounded,
+            color: isDark ? Colors.white : const Color(0xFF0F172A),
+          ),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Row(
           children: [
             CircleAvatar(
               radius: 19,
-              backgroundColor: isDark ? const Color(0xFF222E35) : const Color(0xFF128C7E),
+              backgroundColor: const Color(0xFF00897B),
               child: Text(
                 widget.personName.isNotEmpty ? widget.personName[0].toUpperCase() : '?',
                 style: const TextStyle(
@@ -177,21 +372,23 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
                 children: [
                   Text(
                     widget.personName,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
+                    style: TextStyle(
+                      fontSize: 16.5,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 1),
                   Text(
-                    balanceText,
+                    subtitleText,
                     style: TextStyle(
-                      fontSize: 11.5,
+                      fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: isSettled ? Colors.white70 : (isOwed ? const Color(0xFF4ADE80) : const Color(0xFFFCD34D)),
+                      color: isSettled
+                          ? (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted)
+                          : const Color(0xFF059669),
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -203,99 +400,245 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.share_rounded, size: 20, color: Colors.white),
-            tooltip: 'Share on WhatsApp',
+            icon: Icon(
+              Icons.share_outlined,
+              size: 20,
+              color: isDark ? Colors.white : const Color(0xFF0F172A),
+            ),
+            tooltip: 'Share Statement',
             onPressed: () => _openWhatsAppReminder(vm),
           ),
           IconButton(
-            icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
+            icon: Icon(
+              Icons.more_vert_rounded,
+              color: isDark ? Colors.white : const Color(0xFF0F172A),
+            ),
             onPressed: () => _showLedgerOptionsMenu(context, vm, isDark),
           ),
         ],
       ),
       body: Column(
         children: [
-          // Sticky Summary Pill Banner
-          _buildTopSummaryBanner(isDark, vm, net, isOwed, isYouOwe, isSettled, balanceColor),
+          // Top Net Summary Card (Dark Teal Gradient Card)
+          _buildTopSummaryHeroCard(isDark, vm, net, isOwed, isYouOwe, isSettled),
 
-          // WhatsApp Chat Timeline Feed
+          // Timeline Transactions List
           Expanded(
             child: vm.isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : (items.isEmpty ? _buildEmptyChatState(isDark) : _buildChatFeed(items, isDark)),
+                : (items.isEmpty ? _buildEmptyTimelineState(isDark) : _buildTimelineFeed(items, isDark)),
           ),
 
-          // Bottom WhatsApp Action Bar (You Gave / You Got + In-App Keypad)
-          _buildBottomChatBar(isDark, vm),
+          // Summary Pill Bar with Person
+          if (items.isNotEmpty)
+            _buildSummaryWithPersonCard(isDark, vm),
+
+          // Bottom Action Bar: "You Gave" & "You Got" Side-by-Side Dock
+          _buildBottomActionDock(isDark, vm),
         ],
       ),
     );
   }
 
-  Widget _buildTopSummaryBanner(
+  /// 1. Top Summary Hero Card matching the Dark Teal UI from screenshot
+  Widget _buildTopSummaryHeroCard(
     bool isDark,
     PersonLedgerViewModel vm,
     int net,
     bool isOwed,
     bool isYouOwe,
     bool isSettled,
-    Color balanceColor,
   ) {
+    final netLabel = isSettled
+        ? 'Net Balance'
+        : (isYouOwe ? 'Net Payable' : 'Net Receivable');
+
+    final formattedNet = CurrencyFormatter.formatPaise(net.abs(), currencyCode: 'INR');
+    final formattedTotal = CurrencyFormatter.formatPaise(net.abs(), currencyCode: 'INR');
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: isDark ? const Color(0xFF10171D) : const Color(0xFFD8D0C5),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Icon(
-                isSettled
-                    ? Icons.check_circle_outline_rounded
-                    : (isOwed ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded),
-                size: 14,
-                color: balanceColor,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                isSettled
-                    ? 'Total Balance: Settled'
-                    : (isOwed
-                        ? 'Net Receivable: ${CurrencyFormatter.formatPaise(net.abs(), currencyCode: 'INR')}'
-                        : 'Net Payable: ${CurrencyFormatter.formatPaise(net.abs(), currencyCode: 'INR')}'),
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: isDark ? Colors.white70 : const Color(0xFF1E293B),
-                ),
-              ),
-            ],
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFF022B25),
+            Color(0xFF043E35),
+            Color(0xFF064E43),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF022B25).withValues(alpha: isDark ? 0.4 : 0.2),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
-          InkWell(
-            onTap: () => _openWhatsAppReminder(vm),
-            borderRadius: BorderRadius.circular(6),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: const Color(0xFF25D366).withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: const Color(0xFF25D366), width: 0.8),
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.chat_rounded, size: 12, color: Color(0xFF25D366)),
-                  SizedBox(width: 4),
-                  Text(
-                    'Remind',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF25D366),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Left: Net Payable / Amount / Pill
+          Expanded(
+            flex: 6,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  netLabel,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF94A3B8),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  formattedNet,
+                  style: const TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.5,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isYouOwe
+                            ? Icons.arrow_outward_rounded
+                            : (isOwed ? Icons.call_received_rounded : Icons.check_rounded),
+                        size: 13,
+                        color: const Color(0xFF4ADE80),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        isSettled ? 'Settled' : (isYouOwe ? 'You owe' : 'You will get'),
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF4ADE80),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Divider Line
+          Container(
+            width: 0.8,
+            height: 64,
+            color: Colors.white.withValues(alpha: 0.15),
+          ),
+          const SizedBox(width: 16),
+
+          // Right: Total Balance + Remind Button
+          Expanded(
+            flex: 5,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Center(
+                        child: Icon(
+                          Icons.arrow_upward_rounded,
+                          size: 18,
+                          color: Color(0xFF4ADE80),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Total balance',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white70,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            formattedTotal,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF4ADE80),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // Remind Pill Button
+                InkWell(
+                  onTap: () => _openWhatsAppReminder(vm),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.35),
+                        width: 1,
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.chat_bubble_outline_rounded,
+                          size: 13,
+                          color: Colors.white,
+                        ),
+                        SizedBox(width: 6),
+                        Text(
+                          'Remind',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ],
@@ -303,15 +646,16 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
     );
   }
 
-  Widget _buildChatFeed(List<PersonLedgerItem> items, bool isDark) {
+  /// 2. Vertical Connected Timeline Feed
+  Widget _buildTimelineFeed(List<PersonLedgerItem> items, bool isDark) {
     return ListView.builder(
       controller: _scrollController,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
       itemCount: items.length,
       itemBuilder: (context, index) {
         final item = items[index];
 
-        // Date separator logic
+        // Date Header Divider Logic
         bool showDateHeader = false;
         if (index == 0) {
           showDateHeader = true;
@@ -323,6 +667,8 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
           if (!sameDay) showDateHeader = true;
         }
 
+        final isLast = index == items.length - 1;
+
         final dateHeaderStr = DateFormatter.isToday(item.date)
             ? 'TODAY'
             : (DateFormatter.isYesterday(item.date)
@@ -332,229 +678,633 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
         return Column(
           children: [
             if (showDateHeader)
-              Center(
-                child: Container(
-                  margin: const EdgeInsets.symmetric(vertical: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF182229) : const Color(0xFFE1DCD3),
-                    borderRadius: BorderRadius.circular(8),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 2,
-                        offset: const Offset(0, 1),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Divider(
+                        color: isDark ? Colors.white12 : const Color(0xFFE2E8F0),
+                        thickness: 0.8,
                       ),
-                    ],
-                  ),
-                  child: Text(
-                    dateHeaderStr,
-                    style: TextStyle(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.6,
-                      color: isDark ? Colors.white60 : const Color(0xFF54656F),
                     ),
-                  ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        dateHeaderStr,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.0,
+                          color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Divider(
+                        color: isDark ? Colors.white12 : const Color(0xFFE2E8F0),
+                        thickness: 0.8,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            _buildChatBubble(item, isDark),
+
+            // Timeline Row Item with connected line
+            _buildTimelineRowItem(item, isDark, isLast),
           ],
         );
       },
     );
   }
 
-  Widget _buildChatBubble(PersonLedgerItem item, bool isDark) {
-    // Lent by user = Outgoing (Right side, Green WhatsApp style bubble)
-    // Borrowed by user = Incoming (Left side, White / Dark Grey bubble)
-    final isOutgoing = item.isCreditToUser; // You gave money
-
-    final bubbleBg = isOutgoing
-        ? (isDark ? const Color(0xFF005C4B) : const Color(0xFFD9FDD3))
-        : (isDark ? const Color(0xFF202C33) : Colors.white);
-
-    final textColor = isOutgoing
-        ? (isDark ? Colors.white : const Color(0xFF111B21))
-        : (isDark ? Colors.white : const Color(0xFF111B21));
-
-    final timeColor = isOutgoing
-        ? (isDark ? Colors.white60 : const Color(0xFF667781))
-        : (isDark ? Colors.white54 : const Color(0xFF667781));
-
+  /// 3. Single Timeline Row with Left Time, Center Stepper Line & Right Transaction Card
+  Widget _buildTimelineRowItem(PersonLedgerItem item, bool isDark, bool isLast) {
+    final isOutgoing = item.isCreditToUser; // You Paid / Lent
     final timeStr = DateFormatter.formatTime(item.date);
 
-    return Align(
-      alignment: isOutgoing ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 3),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.78,
-        ),
-        decoration: BoxDecoration(
-          color: bubbleBg,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(12),
-            topRight: const Radius.circular(12),
-            bottomLeft: Radius.circular(isOutgoing ? 12 : 2),
-            bottomRight: Radius.circular(isOutgoing ? 2 : 12),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.06),
-              blurRadius: 2,
-              offset: const Offset(0, 1),
-            ),
-          ],
-        ),
-        padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Direction Title Tag
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  isOutgoing ? Icons.arrow_outward_rounded : Icons.call_received_rounded,
-                  size: 13,
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // 1. Left Time Label
+          SizedBox(
+            width: 58,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 4, right: 6),
+              child: Text(
+                timeStr,
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
                   color: isOutgoing
-                      ? (isDark ? const Color(0xFF4ADE80) : const Color(0xFF15803D))
-                      : (isDark ? const Color(0xFF60A5FA) : const Color(0xFF1D4ED8)),
+                      ? (isDark ? const Color(0xFF4ADE80) : const Color(0xFF059669))
+                      : (isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB)),
                 ),
-                const SizedBox(width: 4),
-                Text(
-                  isOutgoing ? 'You Paid / Lent' : '${widget.personName} Paid / You Borrowed',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: isOutgoing
-                        ? (isDark ? const Color(0xFF4ADE80) : const Color(0xFF15803D))
-                        : (isDark ? const Color(0xFF60A5FA) : const Color(0xFF1D4ED8)),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-
-            // Big Bold Amount
-            Text(
-              CurrencyFormatter.formatPaise(item.amountInPaise, currencyCode: 'INR'),
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-                letterSpacing: -0.3,
-                color: textColor,
               ),
             ),
+          ),
 
-            if (item.title.isNotEmpty) ...[
-              const SizedBox(height: 2),
-              Text(
-                item.title,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: textColor,
-                ),
-              ),
-            ],
-
-            if (item.note != null && item.note!.isNotEmpty && item.note != item.title) ...[
-              const SizedBox(height: 2),
-              Text(
-                item.note!,
-                style: TextStyle(
-                  fontSize: 11.5,
-                  fontStyle: FontStyle.italic,
-                  color: textColor.withValues(alpha: 0.8),
-                ),
-              ),
-            ],
-
-            const SizedBox(height: 4),
-
-            // Time + Blue Double Tick
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              mainAxisSize: MainAxisSize.min,
+          // 2. Middle Stepper Line & Circle Node
+          SizedBox(
+            width: 26,
+            child: Column(
               children: [
-                const Spacer(),
-                Text(
-                  timeStr,
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: timeColor,
+                Container(
+                  width: 26,
+                  height: 26,
+                  decoration: BoxDecoration(
+                    color: isOutgoing
+                        ? (isDark ? const Color(0xFF133829) : const Color(0xFFE6F4EA))
+                        : (isDark ? const Color(0xFF172D4A) : const Color(0xFFEFF6FF)),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: isOutgoing
+                          ? (isDark ? const Color(0xFF2D6A4F) : const Color(0xFFA7F3D0))
+                          : (isDark ? const Color(0xFF2B527E) : const Color(0xFFBFDBFE)),
+                      width: 1,
+                    ),
+                  ),
+                  child: Center(
+                    child: Icon(
+                      isOutgoing ? Icons.arrow_outward_rounded : Icons.call_received_rounded,
+                      size: 13,
+                      color: isOutgoing
+                          ? (isDark ? const Color(0xFF4ADE80) : const Color(0xFF059669))
+                          : (isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB)),
+                    ),
                   ),
                 ),
-                if (isOutgoing) ...[
-                  const SizedBox(width: 4),
-                  const Icon(
-                    Icons.done_all_rounded,
-                    size: 14,
-                    color: Color(0xFF53BDEB),
+                Expanded(
+                  child: Container(
+                    width: 1.5,
+                    color: isLast
+                        ? Colors.transparent
+                        : (isDark ? Colors.white12 : const Color(0xFFE2E8F0)),
                   ),
-                ],
+                ),
               ],
             ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 10),
+
+          // 3. Right Transaction Card
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                decoration: BoxDecoration(
+                  color: isOutgoing
+                      ? (isDark ? const Color(0xFF0C241B) : const Color(0xFFF2FBF7))
+                      : (isDark ? const Color(0xFF0F1D2F) : const Color(0xFFF8FAFC)),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isOutgoing
+                        ? (isDark ? const Color(0xFF134533) : const Color(0xFFDCFCE7))
+                        : (isDark ? const Color(0xFF1E3A5F) : const Color(0xFFE2E8F0)),
+                    width: 0.8,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: isDark ? 0.15 : 0.03),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Top Row: Tag + Illustration
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 6,
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  color: isOutgoing
+                                      ? const Color(0xFF10B981)
+                                      : const Color(0xFF3B82F6),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  isOutgoing
+                                      ? 'You Paid / Lent'
+                                      : '${widget.personName} Paid / You Borrowed',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: isOutgoing
+                                        ? (isDark ? const Color(0xFF4ADE80) : const Color(0xFF059669))
+                                        : (isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB)),
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Top Right Illustration Graphic
+                        if (isOutgoing)
+                          _buildCashIllustration(isDark)
+                        else
+                          _buildCardIllustration(isDark),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+
+                    // Amount
+                    Text(
+                      CurrencyFormatter.formatPaise(item.amountInPaise, currencyCode: 'INR'),
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.4,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+
+                    // Note / Description
+                    Text(
+                      item.title.isNotEmpty
+                          ? item.title
+                          : (isOutgoing ? 'Direct Loan' : 'Borrowed from ${widget.personName}'),
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w500,
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      ),
+                    ),
+
+                    if (item.note != null && item.note!.isNotEmpty && item.note != item.title) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        item.note!,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontStyle: FontStyle.italic,
+                          color: isDark ? Colors.white54 : const Color(0xFF94A3B8),
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 6),
+
+                    // Bottom Right Timestamp + Double Tick
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Text(
+                          timeStr,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                            color: isDark ? Colors.white38 : const Color(0xFF94A3B8),
+                          ),
+                        ),
+                        if (isOutgoing) ...[
+                          const SizedBox(width: 4),
+                          const Icon(
+                            Icons.done_all_rounded,
+                            size: 14,
+                            color: Color(0xFF10B981),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildBottomChatBar(bool isDark, PersonLedgerViewModel vm) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF161F26) : const Color(0xFFF0F2F5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 4,
-            offset: const Offset(0, -1),
+  /// Cash / Currency Note Graphic for Lent Transactions
+  Widget _buildCashIllustration(bool isDark) {
+    return SizedBox(
+      width: 54,
+      height: 34,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Back bill (tilted)
+          Transform.rotate(
+            angle: -0.12,
+            child: Container(
+              width: 44,
+              height: 26,
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF133829) : const Color(0xFFD1FAE5),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: isDark ? const Color(0xFF2D6A4F) : const Color(0xFFA7F3D0),
+                  width: 0.8,
+                ),
+              ),
+            ),
+          ),
+          // Front bill
+          Container(
+            width: 46,
+            height: 26,
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1B4332) : const Color(0xFFE6F4EA),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: isDark ? const Color(0xFF40916C) : const Color(0xFF86EFAC),
+                width: 0.8,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
+                  blurRadius: 3,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: isDark ? const Color(0xFF52B788) : const Color(0xFF34D399),
+                    width: 0.8,
+                  ),
+                ),
+                child: Text(
+                  '₹',
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w900,
+                    color: isDark ? const Color(0xFF86EFAC) : const Color(0xFF059669),
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Credit Card Illustration for Borrowed Transactions
+  Widget _buildCardIllustration(bool isDark) {
+    return SizedBox(
+      width: 54,
+      height: 34,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Back layer
+          Container(
+            width: 42,
+            height: 26,
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF172D4A) : const Color(0xFFDBEAFE),
+              borderRadius: BorderRadius.circular(6),
+            ),
+          ),
+          // Front Card
+          Container(
+            width: 46,
+            height: 26,
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E3A5F) : const Color(0xFFEFF6FF),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: isDark ? const Color(0xFF3B82F6) : const Color(0xFFBFDBFE),
+                width: 0.8,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
+                  blurRadius: 3,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.all(3),
+            child: Align(
+              alignment: Alignment.bottomRight,
+              child: Container(
+                width: 12,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2563EB),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 4. Summary Card with Person (Above Bottom Buttons)
+  Widget _buildSummaryWithPersonCard(bool isDark, PersonLedgerViewModel vm) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF141A21) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorderSubtle : const Color(0xFFE2E8F0),
+          width: 0.8,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.15 : 0.03),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: const Color(0xFF00594C).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Center(
+              child: Icon(
+                Icons.bar_chart_rounded,
+                size: 20,
+                color: Color(0xFF00594C),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Summary with ${widget.personName}',
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${vm.items.length} transaction${vm.items.length == 1 ? "" : "s"}',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          InkWell(
+            onTap: () => _showSummaryDetailsSheet(context, vm, isDark),
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white10 : const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'View details',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white70 : const Color(0xFF334155),
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 15,
+                    color: isDark ? Colors.white70 : const Color(0xFF334155),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 5. Bottom Action Dock with Side-by-Side "You Gave" & "You Got"
+  Widget _buildBottomActionDock(bool isDark, PersonLedgerViewModel vm) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0B1014) : Colors.white,
+        border: Border(
+          top: BorderSide(
+            color: isDark ? AppColors.darkBorderSubtle : const Color(0xFFF1F5F9),
+            width: 1,
+          ),
+        ),
       ),
       child: SafeArea(
         top: false,
         child: Row(
           children: [
-            // YOU GAVE (LENT) Button
+            // Left: YOU GAVE
             Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () => _openAddTransactionModal(isLend: true),
-                icon: const Icon(Icons.arrow_upward_rounded, size: 18),
-                label: const Text(
-                  'You Gave (₹)',
-                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF10B981),
-                  foregroundColor: Colors.white,
-                  elevation: 2,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: InkWell(
+                onTap: () => _openAddTransactionModal(isLend: true),
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  height: 54,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00594C),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF00594C).withValues(alpha: 0.25),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Center(
+                          child: Icon(
+                            Icons.arrow_upward_rounded,
+                            size: 18,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              'You Gave',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                              ),
+                            ),
+                            Text(
+                              'Add payment / loan',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                color: Colors.white70,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
 
-            // YOU GOT (BORROWED) Button
+            // Right: YOU GOT
             Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () => _openAddTransactionModal(isLend: false),
-                icon: const Icon(Icons.arrow_downward_rounded, size: 18),
-                label: const Text(
-                  'You Got (₹)',
-                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0284C7),
-                  foregroundColor: Colors.white,
-                  elevation: 2,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: InkWell(
+                onTap: () => _openAddTransactionModal(isLend: false),
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  height: 54,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0D62D4),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF0D62D4).withValues(alpha: 0.25),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Center(
+                          child: Icon(
+                            Icons.arrow_downward_rounded,
+                            size: 18,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              'You Got',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                              ),
+                            ),
+                            Text(
+                              'Add payment / loan',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                color: Colors.white70,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -564,7 +1314,7 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
     );
   }
 
-  Widget _buildEmptyChatState(bool isDark) {
+  Widget _buildEmptyTimelineState(bool isDark) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32.0),
@@ -574,13 +1324,13 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: const Color(0xFF25D366).withValues(alpha: 0.12),
+                color: const Color(0xFF00594C).withValues(alpha: 0.12),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
-                Icons.chat_bubble_outline_rounded,
+                Icons.account_balance_wallet_outlined,
                 size: 40,
-                color: Color(0xFF25D366),
+                color: Color(0xFF00594C),
               ),
             ),
             const SizedBox(height: 16),
@@ -630,6 +1380,14 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
                 },
               ),
               ListTile(
+                leading: const Icon(Icons.analytics_outlined, color: Color(0xFF00594C)),
+                title: const Text('View Detailed Relationship Summary', style: TextStyle(fontWeight: FontWeight.w600)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showSummaryDetailsSheet(context, vm, isDark);
+                },
+              ),
+              ListTile(
                 leading: const Icon(Icons.receipt_long_rounded, color: Colors.blueAccent),
                 title: const Text('Add 1-on-1 Trip Split Expense', style: TextStyle(fontWeight: FontWeight.w600)),
                 onTap: () {
@@ -645,7 +1403,7 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
   }
 }
 
-/// In-App Keypad Sheet for instant WhatsApp-style transaction entry.
+/// In-App Keypad Sheet for instant WhatsApp/Ledger transaction entry.
 class _LedgerQuickAddSheet extends StatefulWidget {
   final String personName;
   final bool isLend;
@@ -721,8 +1479,8 @@ class _LedgerQuickAddSheetState extends State<_LedgerQuickAddSheet> {
     final isDark = widget.isDark;
     final isLend = widget.isLend;
 
-    final primaryColor = isLend ? const Color(0xFF10B981) : const Color(0xFF0284C7);
-    final actionTitle = isLend ? 'You Paid ${widget.personName}' : '${widget.personName} Paid You';
+    final primaryColor = isLend ? const Color(0xFF00594C) : const Color(0xFF0D62D4);
+    final actionTitle = isLend ? 'You Paid / Lent ${widget.personName}' : '${widget.personName} Paid / You Borrowed';
 
     return Container(
       decoration: BoxDecoration(

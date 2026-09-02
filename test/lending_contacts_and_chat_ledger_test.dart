@@ -135,8 +135,8 @@ void main() {
     });
   });
 
-  group('2. WhatsApp Chat-Style PersonLedgerView', () {
-    testWidgets('Renders WhatsApp chat conversation with bubbles and bottom action bar', (tester) async {
+  group('2. Timeline-Style PersonLedgerView', () {
+    testWidgets('Renders timeline conversation with top hero card, cards and bottom action dock', (tester) async {
       // Seed debt records with Aarav
       await personalVm.addDebt(
         userId: testUser.id,
@@ -167,22 +167,27 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
       await tester.pump(const Duration(milliseconds: 200));
 
-      // Header should show person name and net receivable
+      // Header should show person name
       expect(find.text('Aarav'), findsWidgets);
-      expect(find.textContaining('You will get'), findsWidgets);
 
-      // Share on WhatsApp button
-      expect(find.byIcon(Icons.share_rounded), findsWidgets);
+      // Top Hero card
+      expect(find.text('Net Receivable'), findsOneWidget);
+      expect(find.text('Total balance'), findsOneWidget);
+      expect(find.text('Remind'), findsOneWidget);
 
-      // Chat bubbles
+      // Timeline cards
       expect(find.text('You Paid / Lent'), findsOneWidget);
       expect(find.text('Aarav Paid / You Borrowed'), findsOneWidget);
       expect(find.text('Dinner at Bistro'), findsOneWidget);
       expect(find.text('Metro Ticket'), findsOneWidget);
 
-      // Bottom WhatsApp Action Bar
-      expect(find.text('You Gave (₹)'), findsOneWidget);
-      expect(find.text('You Got (₹)'), findsOneWidget);
+      // Summary with person
+      expect(find.text('Summary with Aarav'), findsOneWidget);
+      expect(find.text('View details'), findsOneWidget);
+
+      // Bottom Action Dock
+      expect(find.text('You Gave'), findsOneWidget);
+      expect(find.text('You Got'), findsOneWidget);
     });
 
     testWidgets('Tapping "You Gave" opens quick in-app keypad sheet', (tester) async {
@@ -196,11 +201,11 @@ void main() {
 
       await tester.pump(const Duration(milliseconds: 200));
 
-      // Tap "You Gave (₹)"
-      await tester.tap(find.text('You Gave (₹)'));
+      // Tap "You Gave"
+      await tester.tap(find.text('You Gave'));
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('You Paid Rohan'), findsOneWidget);
+      expect(find.text('You Paid / Lent Rohan'), findsOneWidget);
       expect(find.text('Add a note (e.g. Dinner, Rent, Fuel)...'), findsOneWidget);
 
       // Numeric keypad should be visible with numbers
