@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
+import '../../../core/utils/whatsapp_share_helper.dart';
 import '../../../core/widgets/kith_numeric_keypad.dart';
 import '../../../core/widgets/kith_text_keypad.dart';
 import '../../../domain/models/person_ledger_item.dart';
@@ -13,6 +13,7 @@ import '../../../domain/models/personal_debt.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/person_ledger_viewmodel.dart';
 import '../../viewmodels/personal_expense_viewmodel.dart';
+import 'widgets/person_settle_up_sheet.dart';
 
 /// Ultra-Clean, Modern Financial Relationship Timeline & 1-on-1 Ledger for a Person.
 /// Matches the exact design language with Top Summary Hero, Connected Vertical Timeline,
@@ -20,11 +21,13 @@ import '../../viewmodels/personal_expense_viewmodel.dart';
 class PersonLedgerView extends StatefulWidget {
   final String personName;
   final String? personUserId;
+  final String? personPhone;
 
   const PersonLedgerView({
     super.key,
     required this.personName,
     this.personUserId,
+    this.personPhone,
   });
 
   @override
@@ -54,6 +57,7 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
       context.read<PersonLedgerViewModel>().loadLedger(
             personName: widget.personName,
             personUserId: widget.personUserId,
+            personPhone: widget.personPhone,
             currentUserId: user.id,
           );
     }
@@ -64,34 +68,35 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
     final net = vm.netBalancePaise;
     final isOwed = net > 0;
     final formattedAmount = CurrencyFormatter.formatPaise(net.abs(), currencyCode: 'INR');
+    final user = context.read<AuthViewModel>().currentUser;
+    final senderName = user?.displayName ?? 'Me';
 
     String text;
     if (net == 0) {
-      text = 'Hey ${widget.personName}, our accounts on Kith are all settled up! 🎉';
+      text = 'Hey ${widget.personName}, our accounts on Kith are all settled up! 🎉 - $senderName';
     } else if (isOwed) {
-      text = 'Hi ${widget.personName}, just a gentle reminder that ₹$formattedAmount is pending on Kith for our expenses. You can pay via UPI whenever convenient. Thanks! 🙏';
+      text = 'Hi ${widget.personName}, gentle reminder that ₹$formattedAmount is pending on Kith for our expenses. You can pay via UPI whenever convenient. Thanks! 🙏 - $senderName';
     } else {
-      text = 'Hi ${widget.personName}, I owe you ₹$formattedAmount on Kith. Let me know your UPI ID so I can clear it. Thanks! 🙏';
+      text = 'Hi ${widget.personName}, I owe you ₹$formattedAmount on Kith. Let me know your UPI ID so I can clear it. Thanks! 🙏 - $senderName';
     }
 
-    final uri = Uri.parse('https://wa.me/?text=${Uri.encodeComponent(text)}');
-    try {
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Could not open WhatsApp.')),
-          );
-        }
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open WhatsApp.')),
-        );
-      }
-    }
+    await WhatsAppShareHelper.sendWhatsAppMessage(
+      context: context,
+      text: text,
+      phone: widget.personPhone ?? vm.personPhone,
+    );
+  }
+
+  void _openSettleUpModal(PersonLedgerViewModel vm) {
+    HapticHelper.medium();
+    PersonSettleUpSheet.show(
+      context,
+      personName: widget.personName,
+      personUserId: widget.personUserId,
+      personPhone: widget.personPhone ?? vm.personPhone,
+      netBalancePaise: vm.netBalancePaise,
+      onSettled: _loadData,
+    );
   }
 
   void _openAddTransactionModal({required bool isLend}) {
@@ -279,11 +284,9 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
                       ),
                       if (!isSettled)
                         ElevatedButton(
-                          onPressed: () async {
+                          onPressed: () {
                             Navigator.pop(ctx);
-                            await vm.settleBalance(amountInPaise: net.abs());
-                            _loadData();
-                            HapticHelper.success();
+                            _openSettleUpModal(vm);
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
@@ -603,41 +606,62 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
                 ),
                 const SizedBox(height: 12),
 
-                // Remind Pill Button
-                InkWell(
-                  onTap: () => _openWhatsAppReminder(vm),
-                  borderRadius: BorderRadius.circular(10),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.transparent,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.35),
-                        width: 1,
+                // Remind or Settle Up Pill Button
+                if (!isSettled)
+                  InkWell(
+                    onTap: () {
+                      if (isYouOwe) {
+                        _openSettleUpModal(vm);
+                      } else {
+                        _openWhatsAppReminder(vm);
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isYouOwe
+                            ? const Color(0xFF10B981).withValues(alpha: 0.25)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isYouOwe ? const Color(0xFF4ADE80) : Colors.white.withValues(alpha: 0.35),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isYouOwe ? Icons.flash_on_rounded : Icons.chat_bubble_outline_rounded,
+                            size: 13,
+                            color: isYouOwe ? const Color(0xFF4ADE80) : Colors.white,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            isYouOwe ? 'Settle Up' : 'Remind',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: isYouOwe ? const Color(0xFF4ADE80) : Colors.white,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.chat_bubble_outline_rounded,
-                          size: 13,
-                          color: Colors.white,
-                        ),
-                        SizedBox(width: 6),
-                        Text(
-                          'Remind',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
+                  )
+                else
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'Settled ✓',
+                      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Colors.white70),
                     ),
                   ),
-                ),
               ],
             ),
           ),
@@ -1371,6 +1395,14 @@ class _PersonLedgerViewState extends State<PersonLedgerView> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              ListTile(
+                leading: const Icon(Icons.flash_on_rounded, color: AppColors.emeraldPrimary),
+                title: const Text('Settle Up / Record Payment', style: TextStyle(fontWeight: FontWeight.w600)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _openSettleUpModal(vm);
+                },
+              ),
               ListTile(
                 leading: const Icon(Icons.share_rounded, color: Color(0xFF25D366)),
                 title: const Text('Share Ledger Summary on WhatsApp', style: TextStyle(fontWeight: FontWeight.w600)),

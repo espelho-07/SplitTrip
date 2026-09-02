@@ -14,6 +14,7 @@ class PersonLedgerViewModel extends ChangeNotifier {
 
   String _personName = '';
   String? _personUserId;
+  String? _personPhone;
   String? _currentUserId;
 
   List<PersonLedgerItem> _items = [];
@@ -34,6 +35,7 @@ class PersonLedgerViewModel extends ChangeNotifier {
 
   String get personName => _personName;
   String? get personUserId => _personUserId;
+  String? get personPhone => _personPhone;
   List<PersonLedgerItem> get items => _items;
   String get selectedCategoryFilter => _selectedCategoryFilter;
 
@@ -99,10 +101,12 @@ class PersonLedgerViewModel extends ChangeNotifier {
   Future<void> loadLedger({
     required String personName,
     String? personUserId,
+    String? personPhone,
     required String currentUserId,
   }) async {
     _personName = personName;
     _personUserId = personUserId;
+    _personPhone = personPhone;
     _currentUserId = currentUserId;
     _isLoading = true;
 
@@ -130,15 +134,34 @@ class PersonLedgerViewModel extends ChangeNotifier {
     int borrowedSum = 0;
 
     final targetNameLower = _personName.trim().toLowerCase();
+    final savedUser = storage.getSavedUser();
+    final currentUserNameLower = (savedUser?['displayName'] as String? ?? '').trim().toLowerCase();
 
-    // 1. Personal Debts (Lend / Borrow / Repayments)
+    // 1. Unified Personal Debts (Lend / Borrow / Repayments)
     final debtsSummary = personalRepo.getCachedPersonalDebts();
     final matchingDebts = debtsSummary.debts.where((d) {
-      return d.personName.trim().toLowerCase() == targetNameLower;
+      final dName = d.personName.trim().toLowerCase();
+      // Case A: Created by current user with target person
+      if (d.userId == _currentUserId) {
+        if (dName == targetNameLower) return true;
+        if (_personUserId != null && dName == _personUserId!.toLowerCase()) return true;
+      }
+      // Case B: Created by target person with current user (bidirectional sync)
+      if (_personUserId != null && d.userId == _personUserId) {
+        if (dName == currentUserNameLower || (_currentUserId != null && dName == _currentUserId!.toLowerCase())) return true;
+      }
+      return false;
     }).toList();
 
     for (final d in matchingDebts) {
-      final isLent = d.debtType == PersonalDebtType.lent;
+      final isCreatedByMe = d.userId == _currentUserId;
+      // If created by me: lent is lent, borrowed is borrowed
+      // If created by them: lent is borrowed for me, borrowed is lent for me
+      final effectiveType = isCreatedByMe
+          ? d.debtType
+          : (d.debtType == PersonalDebtType.lent ? PersonalDebtType.borrowed : PersonalDebtType.lent);
+
+      final isLent = effectiveType == PersonalDebtType.lent;
       final isIpo = d.description?.contains('(IPO Funding)') == true || d.description?.toLowerCase().contains('ipo') == true;
       final ipoTitle = isIpo ? (d.description?.replaceAll('(IPO Funding)', '').trim() ?? 'IPO') : null;
 
@@ -147,6 +170,7 @@ class PersonLedgerViewModel extends ChangeNotifier {
         aggregated.add(PersonLedgerItem(
           id: d.id,
           personName: d.personName,
+          personUserId: _personUserId,
           type: PersonLedgerType.lent,
           amountInPaise: d.initialAmountInPaise,
           date: d.date,
@@ -177,6 +201,7 @@ class PersonLedgerViewModel extends ChangeNotifier {
         aggregated.add(PersonLedgerItem(
           id: d.id,
           personName: d.personName,
+          personUserId: _personUserId,
           type: PersonLedgerType.borrowed,
           amountInPaise: d.initialAmountInPaise,
           date: d.date,
@@ -306,6 +331,47 @@ class PersonLedgerViewModel extends ChangeNotifier {
             isSettled: true,
           ));
         }
+      }
+    }
+
+    // 4. Payment Verifications (UPI / Real-time Verification items)
+    final verifications = storage.getSavedPaymentVerifications();
+    for (final v in verifications) {
+      final payerUserId = v['payerUserId'] as String?;
+      final receiverUserId = v['receiverUserId'] as String?;
+      final payerName = (v['payerName'] as String?)?.trim().toLowerCase() ?? '';
+      final receiverName = (v['receiverName'] as String?)?.trim().toLowerCase() ?? '';
+      final amt = (v['amountInPaise'] as int?) ?? 0;
+      final status = v['status'] as String? ?? 'pending_verification';
+      final vDate = v['createdAt'] != null ? DateTime.tryParse(v['createdAt'] as String) ?? DateTime.now() : DateTime.now();
+
+      final isPayerMe = payerUserId == _currentUserId || (payerName.isNotEmpty && payerName == currentUserNameLower);
+      final isReceiverMe = receiverUserId == _currentUserId || (receiverName.isNotEmpty && receiverName == currentUserNameLower);
+      final isPayerTarget = (_personUserId != null && payerUserId == _personUserId) || payerName == targetNameLower;
+      final isReceiverTarget = (_personUserId != null && receiverUserId == _personUserId) || receiverName == targetNameLower;
+
+      if (isPayerMe && isReceiverTarget) {
+        aggregated.add(PersonLedgerItem(
+          id: v['id'] as String? ?? 'pv_${DateTime.now().millisecondsSinceEpoch}',
+          personName: _personName,
+          type: status == 'verified' ? PersonLedgerType.paymentVerified : PersonLedgerType.paymentPendingVerification,
+          amountInPaise: amt,
+          date: vDate,
+          title: status == 'verified' ? 'Payment Verified ✓' : 'Payment Sent (Pending Confirmation)',
+          note: v['tripName'] != null ? 'Trip: ${v['tripName']}' : 'Direct Settle Up',
+          isSettled: status == 'verified',
+        ));
+      } else if (isReceiverMe && isPayerTarget) {
+        aggregated.add(PersonLedgerItem(
+          id: v['id'] as String? ?? 'pv_${DateTime.now().millisecondsSinceEpoch}',
+          personName: _personName,
+          type: status == 'verified' ? PersonLedgerType.paymentVerified : PersonLedgerType.paymentPendingVerification,
+          amountInPaise: amt,
+          date: vDate,
+          title: status == 'verified' ? 'Payment Received & Verified ✓' : 'Payment Received (Please Verify)',
+          note: v['tripName'] != null ? 'Trip: ${v['tripName']}' : 'Direct Settle Up',
+          isSettled: status == 'verified',
+        ));
       }
     }
 

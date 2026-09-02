@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -95,6 +96,10 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
   String? _selectedTripId;
   String? _voiceTranscript;
 
+  List<KithDeviceContact> _matchingDeviceContacts = [];
+  Timer? _contactSearchDebounce;
+  String? _selectedContactPhone;
+
   final VoiceSpeechService _speechService = VoiceSpeechService();
 
   @override
@@ -114,12 +119,34 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
 
   @override
   void dispose() {
+    _contactSearchDebounce?.cancel();
     _amountController.dispose();
     _titleController.dispose();
     _personController.dispose();
     _notesController.dispose();
     _speechService.stopListening();
     super.dispose();
+  }
+
+  void _onPersonInputChanged(String text) {
+    setState(() {});
+    _contactSearchDebounce?.cancel();
+    final query = text.trim();
+    if (query.isEmpty) {
+      if (_matchingDeviceContacts.isNotEmpty) {
+        setState(() => _matchingDeviceContacts = []);
+      }
+      return;
+    }
+
+    _contactSearchDebounce = Timer(const Duration(milliseconds: 100), () async {
+      final contacts = await KithContactsService.getContacts(query: query, limit: 8);
+      if (mounted) {
+        setState(() {
+          _matchingDeviceContacts = contacts;
+        });
+      }
+    });
   }
 
   bool get _hasUnsavedData {
@@ -321,7 +348,10 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
                 : 'Borrowing record added ✓',
           );
           if (widget.lendingOnly) {
-            context.push('/person-ledger?name=${Uri.encodeComponent(personName)}');
+            final phoneQuery = _selectedContactPhone != null && _selectedContactPhone!.isNotEmpty
+                ? '&phone=${Uri.encodeComponent(_selectedContactPhone!)}'
+                : '';
+            context.push('/person-ledger?name=${Uri.encodeComponent(personName)}$phoneQuery');
           }
         } else {
           HapticHelper.error();
@@ -579,12 +609,12 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
                 TextField(
                   controller: _personController,
                   textCapitalization: TextCapitalization.words,
-                  onChanged: (_) => setState(() {}),
+                  onChanged: _onPersonInputChanged,
                   style: AppTypography.bodyLarge(isDark: isDark),
                   decoration: KithInputDecoration.borderless(
                     isDark: isDark,
                     labelText: _mode == PersonalEntryMode.lent ? 'Who owes you?' : 'Who did you borrow from?',
-                    hintText: 'Enter name (e.g. Rahul, Rohit)',
+                    hintText: 'Enter name or search contacts',
                     prefixIcon: const Icon(Icons.person_outline_rounded, size: 20),
                     suffixIcon: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -594,7 +624,7 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
                             icon: const Icon(Icons.clear_rounded, size: 18),
                             onPressed: () {
                               _personController.clear();
-                              setState(() {});
+                              _onPersonInputChanged('');
                             },
                           ),
                         IconButton(
@@ -605,6 +635,8 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
                             final contact = await KithContactsService.pickContact();
                             if (contact != null && contact.name.isNotEmpty) {
                               _personController.text = contact.name;
+                              _selectedContactPhone = contact.phone;
+                              _matchingDeviceContacts = [];
                               setState(() {});
                             }
                           },
@@ -617,8 +649,11 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
                 Builder(
                   builder: (context) {
                     final personalVm = context.watch<PersonalExpenseViewModel>();
-                    final suggestions = personalVm.searchPersonSuggestions(_personController.text);
-                    if (suggestions.isEmpty) return const SizedBox(height: AppSpacing.md);
+                    final recentSuggestions = personalVm.searchPersonSuggestions(_personController.text);
+                    final hasDeviceMatches = _matchingDeviceContacts.isNotEmpty;
+                    final hasRecentMatches = recentSuggestions.isNotEmpty;
+
+                    if (!hasDeviceMatches && !hasRecentMatches) return const SizedBox(height: AppSpacing.md);
 
                     final isSearching = _personController.text.trim().isNotEmpty;
 
@@ -629,13 +664,15 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
                         Row(
                           children: [
                             Icon(
-                              isSearching ? Icons.search_rounded : Icons.history_rounded,
+                              hasDeviceMatches ? Icons.contacts_rounded : (isSearching ? Icons.search_rounded : Icons.history_rounded),
                               size: 13,
                               color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              isSearching ? 'Matching contacts (tap to use)' : 'Recent contacts',
+                              hasDeviceMatches
+                                  ? 'Matching Phone Contacts (tap to auto-fill)'
+                                  : (isSearching ? 'Matching recent people' : 'Recent contacts'),
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
@@ -648,52 +685,116 @@ class _AddPersonalExpenseSheetState extends State<AddPersonalExpenseSheet> {
                         SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
                           child: Row(
-                            children: suggestions.map((name) {
-                              final isSelected = _personController.text.trim().toLowerCase() == name.trim().toLowerCase();
-                              return Padding(
-                                padding: const EdgeInsets.only(right: 6),
-                                child: ActionChip(
-                                  avatar: CircleAvatar(
-                                    radius: 10,
-                                    backgroundColor: isSelected
-                                        ? AppColors.emeraldPrimary
-                                        : (isDark ? Colors.white24 : Colors.black12),
-                                    child: Text(
-                                      name.isNotEmpty ? name[0].toUpperCase() : '?',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w700,
-                                        color: isSelected ? Colors.white : (isDark ? Colors.white : Colors.black87),
+                            children: [
+                              // 1. Device Contacts Matching
+                              ..._matchingDeviceContacts.map((contact) {
+                                final isSelected = _personController.text.trim().toLowerCase() == contact.name.trim().toLowerCase();
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: ActionChip(
+                                    avatar: CircleAvatar(
+                                      radius: 11,
+                                      backgroundColor: AppColors.emeraldPrimary,
+                                      child: Text(
+                                        contact.name.isNotEmpty ? contact.name[0].toUpperCase() : '?',
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w800,
+                                          color: Colors.white,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  label: Text(
-                                    name,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                    label: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          contact.name,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                          ),
+                                        ),
+                                        if (contact.phone.isNotEmpty)
+                                          Text(
+                                            contact.phone,
+                                            style: TextStyle(
+                                              fontSize: 9.5,
+                                              color: isDark ? Colors.white60 : Colors.black54,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                    backgroundColor: isSelected
+                                        ? AppColors.emeraldPrimary.withValues(alpha: 0.18)
+                                        : (isDark ? const Color(0xFF162520) : const Color(0xFFE8F5E9)),
+                                    side: BorderSide(
                                       color: isSelected
                                           ? AppColors.emeraldPrimary
-                                          : (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
+                                          : (isDark ? const Color(0xFF1E3A2F) : const Color(0xFFC8E6C9)),
+                                      width: 0.9,
                                     ),
+                                    onPressed: () {
+                                      HapticHelper.light();
+                                      _personController.text = contact.name;
+                                      _selectedContactPhone = contact.phone;
+                                      _matchingDeviceContacts = [];
+                                      setState(() {});
+                                    },
                                   ),
-                                  backgroundColor: isSelected
-                                      ? AppColors.emeraldPrimary.withValues(alpha: 0.15)
-                                      : (isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard),
-                                  side: BorderSide(
-                                    color: isSelected
-                                        ? AppColors.emeraldPrimary
-                                        : (isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle),
-                                    width: 0.8,
+                                );
+                              }),
+
+                              // 2. Recent Debt History Matches
+                              ...recentSuggestions.map((name) {
+                                final isSelected = _personController.text.trim().toLowerCase() == name.trim().toLowerCase();
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 6),
+                                  child: ActionChip(
+                                    avatar: CircleAvatar(
+                                      radius: 10,
+                                      backgroundColor: isSelected
+                                          ? AppColors.emeraldPrimary
+                                          : (isDark ? Colors.white24 : Colors.black12),
+                                      child: Text(
+                                        name.isNotEmpty ? name[0].toUpperCase() : '?',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                          color: isSelected ? Colors.white : (isDark ? Colors.white : Colors.black87),
+                                        ),
+                                      ),
+                                    ),
+                                    label: Text(
+                                      name,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                        color: isSelected
+                                            ? AppColors.emeraldPrimary
+                                            : (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
+                                      ),
+                                    ),
+                                    backgroundColor: isSelected
+                                        ? AppColors.emeraldPrimary.withValues(alpha: 0.15)
+                                        : (isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard),
+                                    side: BorderSide(
+                                      color: isSelected
+                                          ? AppColors.emeraldPrimary
+                                          : (isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle),
+                                      width: 0.8,
+                                    ),
+                                    onPressed: () {
+                                      HapticHelper.light();
+                                      _personController.text = name;
+                                      _matchingDeviceContacts = [];
+                                      setState(() {});
+                                    },
                                   ),
-                                  onPressed: () {
-                                    HapticHelper.light();
-                                    _personController.text = name;
-                                    setState(() {});
-                                  },
-                                ),
-                              );
-                            }).toList(),
+                                );
+                              }),
+                            ],
                           ),
                         ),
                         const SizedBox(height: AppSpacing.md),

@@ -204,9 +204,11 @@ class AppRouter {
         builder: (context, state) {
           final personName = state.uri.queryParameters['name'] ?? state.uri.queryParameters['person'] ?? 'Member';
           final personUserId = state.uri.queryParameters['userId'];
+          final personPhone = state.uri.queryParameters['phone'];
           return PersonLedgerView(
             personName: personName,
             personUserId: personUserId,
+            personPhone: personPhone,
           );
         },
       ),
@@ -215,9 +217,11 @@ class AppRouter {
         builder: (context, state) {
           final personName = state.pathParameters['personName'] ?? 'Member';
           final personUserId = state.uri.queryParameters['userId'];
+          final personPhone = state.uri.queryParameters['phone'];
           return PersonLedgerView(
             personName: Uri.decodeComponent(personName),
             personUserId: personUserId,
+            personPhone: personPhone,
           );
         },
       ),

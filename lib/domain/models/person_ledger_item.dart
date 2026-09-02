@@ -7,6 +7,8 @@ enum PersonLedgerType {
   tripSplitYouOwe,    // This person paid, you owe them
   tripSettlementPaid, // You paid this person on a trip
   tripSettlementReceived, // This person paid you on a trip
+  paymentPendingVerification, // Pending 2-way verification
+  paymentVerified, // Verified 2-way payment
 }
 
 class PersonLedgerItem {
@@ -55,11 +57,13 @@ class PersonLedgerItem {
       case PersonLedgerType.tripSplitOwedToYou:
       case PersonLedgerType.tripSettlementPaid:
       case PersonLedgerType.repaymentPaid:
+      case PersonLedgerType.paymentVerified:
         return true;
       case PersonLedgerType.borrowed:
       case PersonLedgerType.tripSplitYouOwe:
       case PersonLedgerType.tripSettlementReceived:
       case PersonLedgerType.repaymentReceived:
+      case PersonLedgerType.paymentPendingVerification:
         return false;
     }
   }
@@ -82,6 +86,11 @@ class PersonLedgerItem {
         return 'Settlement sent';
       case PersonLedgerType.tripSettlementReceived:
         return 'Settlement received';
+      case PersonLedgerType.paymentPendingVerification:
+        return 'Pending verification';
+      case PersonLedgerType.paymentVerified:
+        return 'Payment verified';
     }
   }
 }
+
