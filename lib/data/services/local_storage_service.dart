@@ -173,6 +173,32 @@ class LocalStorageService {
     return _prefs.setString('$_expensesPrefix$tripId', jsonEncode(expensesJson));
   }
 
+  // --- Deleted Expense Tombstones (Prevents stale P2P/Cloud resurrection) ---
+  static const String _tombstonesPrefix = 'kith_tombstones_';
+
+  Map<String, String> getDeletedExpenseTombstones(String tripId) {
+    final raw = _prefs.getString('$_tombstonesPrefix$tripId');
+    if (raw == null || raw.isEmpty) return {};
+    try {
+      final map = jsonDecode(raw) as Map<String, dynamic>;
+      return map.map((k, v) => MapEntry(k, v.toString()));
+    } catch (_) {
+      return {};
+    }
+  }
+
+  bool isExpenseTombstoned(String tripId, String expenseId) {
+    final tombstones = getDeletedExpenseTombstones(tripId);
+    return tombstones.containsKey(expenseId);
+  }
+
+  Future<void> markExpenseTombstoned(String tripId, String expenseId, [DateTime? deletedAt]) async {
+    final tombstones = getDeletedExpenseTombstones(tripId);
+    final timestamp = (deletedAt ?? DateTime.now()).toIso8601String();
+    tombstones[expenseId] = timestamp;
+    await _prefs.setString('$_tombstonesPrefix$tripId', jsonEncode(tombstones));
+  }
+
   // --- Mutation Queue ---
   List<Map<String, dynamic>> getMutationQueue() {
     final raw = _prefs.getString(_mutationQueueKey);

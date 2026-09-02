@@ -40,6 +40,31 @@ class NearbySyncResult {
   int get totalChanges => operationsSent + operationsReceived;
 }
 
+/// Result of a multi-peer mesh synchronization session.
+class NearbyMeshSyncResult {
+  final bool success;
+  final int totalPeersSynced;
+  final int operationsSent;
+  final int operationsReceived;
+  final List<String> syncedPeerNames;
+  final List<String> sharedTripIds;
+  final String? errorMessage;
+  final DateTime timestamp;
+
+  NearbyMeshSyncResult({
+    required this.success,
+    this.totalPeersSynced = 0,
+    this.operationsSent = 0,
+    this.operationsReceived = 0,
+    this.syncedPeerNames = const [],
+    this.sharedTripIds = const [],
+    this.errorMessage,
+    DateTime? timestamp,
+  }) : timestamp = timestamp ?? DateTime.now();
+
+  int get totalChanges => operationsSent + operationsReceived;
+}
+
 /// Represents a securely discovered nearby peer device sharing at least one trip.
 class NearbyPeer {
   final String deviceId;
@@ -50,6 +75,9 @@ class NearbyPeer {
   final List<String> sharedTripNames;
   final String pairingCode;
   final DateTime lastSeenAt;
+  final DateTime? lastSyncedAt;
+  final int lastSyncedChanges;
+  final bool isSyncing;
 
   NearbyPeer({
     required this.deviceId,
@@ -60,6 +88,9 @@ class NearbyPeer {
     this.sharedTripNames = const [],
     required this.pairingCode,
     required this.lastSeenAt,
+    this.lastSyncedAt,
+    this.lastSyncedChanges = 0,
+    this.isSyncing = false,
   });
 
   NearbyPeer copyWith({
@@ -67,6 +98,9 @@ class NearbyPeer {
     DateTime? lastSeenAt,
     Set<String>? sharedTripIds,
     List<String>? sharedTripNames,
+    DateTime? lastSyncedAt,
+    int? lastSyncedChanges,
+    bool? isSyncing,
   }) =>
       NearbyPeer(
         deviceId: deviceId,
@@ -77,6 +111,9 @@ class NearbyPeer {
         sharedTripNames: sharedTripNames ?? this.sharedTripNames,
         pairingCode: pairingCode,
         lastSeenAt: lastSeenAt ?? this.lastSeenAt,
+        lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
+        lastSyncedChanges: lastSyncedChanges ?? this.lastSyncedChanges,
+        isSyncing: isSyncing ?? this.isSyncing,
       );
 }
 
@@ -193,7 +230,7 @@ class P2PSyncService {
           InternetAddress.anyIPv4,
           p2pDiscoveryPort,
           reuseAddress: true,
-          reusePort: true,
+          reusePort: !Platform.isWindows,
         );
         _udpSocket!.broadcastEnabled = true;
         _udpSocket!.listen(_handleUdpDatagram, onError: (e) {
@@ -313,7 +350,8 @@ class P2PSyncService {
       final now = DateTime.now();
       final pairingCode = derivePairingCode(_deviceId, peerDeviceId);
 
-      _discoveredPeers[peerDeviceId] = NearbyPeer(
+      final existingPeer = _discoveredPeers[peerDeviceId];
+      final newPeer = NearbyPeer(
         deviceId: peerDeviceId,
         displayName: peerName,
         address: datagram.address,
@@ -322,12 +360,88 @@ class P2PSyncService {
         sharedTripNames: sharedTripNames,
         pairingCode: pairingCode,
         lastSeenAt: now,
+        lastSyncedAt: existingPeer?.lastSyncedAt,
+        lastSyncedChanges: existingPeer?.lastSyncedChanges ?? 0,
+        isSyncing: existingPeer?.isSyncing ?? false,
       );
 
+      _discoveredPeers[peerDeviceId] = newPeer;
       _notifyPeersChanged();
+
+      // Automatic Mesh Auto-Sync Trigger:
+      // When a peer sharing our trip is in local range, silently exchange pending mutations
+      if (autoSyncEnabled && sharedTripIds.isNotEmpty && !_isAutoSyncBusy) {
+        final lastSync = _lastAutoSyncTimes[peerDeviceId];
+        if (lastSync == null || now.difference(lastSync).inSeconds >= 15) {
+          _triggerBackgroundAutoSync(newPeer);
+        }
+      }
     } catch (_) {
       // Ignore malformed beacons
     }
+  }
+
+  final Map<String, DateTime> _lastAutoSyncTimes = {};
+  bool _isAutoSyncBusy = false;
+  bool autoSyncEnabled = true;
+
+  Future<void> _triggerBackgroundAutoSync(NearbyPeer peer) async {
+    if (_isAutoSyncBusy) return;
+    _isAutoSyncBusy = true;
+    _lastAutoSyncTimes[peer.deviceId] = DateTime.now();
+
+    try {
+      await syncWithPeer(peer);
+    } catch (_) {
+      // Ignore background auto-sync network glitches
+    } finally {
+      _isAutoSyncBusy = false;
+    }
+  }
+
+  /// Synchronizes with ALL currently discovered nearby peers in the mesh.
+  Future<NearbyMeshSyncResult> syncAllNearbyPeers({String? targetTripId}) async {
+    final candidatePeers = activePeers.where((p) {
+      if (targetTripId == null || targetTripId.isEmpty) return true;
+      return p.sharedTripIds.contains(targetTripId);
+    }).toList();
+
+    if (candidatePeers.isEmpty) {
+      return NearbyMeshSyncResult(
+        success: true,
+        totalPeersSynced: 0,
+        operationsSent: 0,
+        operationsReceived: 0,
+        syncedPeerNames: [],
+        sharedTripIds: targetTripId != null ? [targetTripId] : [],
+      );
+    }
+
+    _setStatus(P2PStatus.syncing);
+    int totalSent = 0;
+    int totalReceived = 0;
+    final syncedPeerNames = <String>[];
+    final allSharedTrips = <String>{};
+
+    for (final peer in candidatePeers) {
+      final res = await syncWithPeer(peer, targetTripId: targetTripId);
+      if (res.success) {
+        totalSent += res.operationsSent;
+        totalReceived += res.operationsReceived;
+        syncedPeerNames.add(peer.displayName);
+        allSharedTrips.addAll(res.sharedTripIds);
+      }
+    }
+
+    _setStatus(P2PStatus.synced);
+    return NearbyMeshSyncResult(
+      success: true,
+      totalPeersSynced: syncedPeerNames.length,
+      operationsSent: totalSent,
+      operationsReceived: totalReceived,
+      syncedPeerNames: syncedPeerNames,
+      sharedTripIds: allSharedTrips.toList(),
+    );
   }
 
   /// Removes peers that haven't broadcasted in the last 20 seconds.
@@ -361,6 +475,11 @@ class P2PSyncService {
     }
 
     _setStatus(P2PStatus.syncing);
+    if (_discoveredPeers.containsKey(peer.deviceId)) {
+      _discoveredPeers[peer.deviceId] = _discoveredPeers[peer.deviceId]!.copyWith(isSyncing: true);
+      _notifyPeersChanged();
+    }
+
     int sentCount = 0;
     int receivedCount = 0;
 
@@ -445,6 +564,15 @@ class P2PSyncService {
         _lastSyncTimestamp = DateTime.now();
       }
 
+      if (_discoveredPeers.containsKey(peer.deviceId)) {
+        _discoveredPeers[peer.deviceId] = _discoveredPeers[peer.deviceId]!.copyWith(
+          lastSyncedAt: DateTime.now(),
+          lastSyncedChanges: totalExchanged,
+          isSyncing: false,
+        );
+        _notifyPeersChanged();
+      }
+
       await _storage.addSyncLog(
         source: 'Nearby Peer (${peer.displayName})',
         status: 'synced',
@@ -463,6 +591,10 @@ class P2PSyncService {
       );
     } catch (e) {
       debugPrint('[P2PSync] Error syncing with peer ${peer.deviceId}: $e');
+      if (_discoveredPeers.containsKey(peer.deviceId)) {
+        _discoveredPeers[peer.deviceId] = _discoveredPeers[peer.deviceId]!.copyWith(isSyncing: false);
+        _notifyPeersChanged();
+      }
       _setStatus(P2PStatus.error);
       return NearbySyncResult(
         success: false,

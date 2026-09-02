@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
 import '../../../../data/services/p2p_sync_service.dart';
 import '../../../../data/services/sync_service.dart';
+import '../../../../domain/models/trip.dart';
+import 'nearby_trip_friends_radar_sheet.dart';
 import 'trip_sync_sheet.dart';
 
 class NearbySyncBadge extends StatelessWidget {
   final P2PSyncService p2pService;
   final SyncService syncService;
   final String tripId;
+  final Trip? trip;
 
   const NearbySyncBadge({
     super.key,
     required this.p2pService,
     required this.syncService,
     required this.tripId,
+    this.trip,
   });
 
   @override
@@ -60,12 +64,21 @@ class NearbySyncBadge extends StatelessWidget {
 
             return GestureDetector(
               onTap: () {
-                TripSyncSheet.show(
-                  context,
-                  tripId: tripId,
-                  syncService: syncService,
-                  p2pService: p2pService,
-                );
+                if (trip != null) {
+                  NearbyTripFriendsRadarSheet.show(
+                    context,
+                    trip: trip!,
+                    syncService: syncService,
+                    p2pService: p2pService,
+                  );
+                } else {
+                  TripSyncSheet.show(
+                    context,
+                    tripId: tripId,
+                    syncService: syncService,
+                    p2pService: p2pService,
+                  );
+                }
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 300),

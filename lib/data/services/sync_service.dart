@@ -372,35 +372,72 @@ class SyncService {
       switch (mutation.type) {
         case MutationType.addExpense:
           if (tripId != null) {
-            final expenses = storage.getSavedExpenses(tripId);
             final expId = payload['id'] as String? ?? mutation.id;
-            expenses.removeWhere((e) => e['id'] == expId);
-            expenses.insert(0, payload);
-            await storage.saveExpenses(tripId, expenses);
+            // Tombstone check: Never resurrect deleted expenses
+            if (storage.isExpenseTombstoned(tripId, expId)) {
+              await storage.markP2POperationProcessed(mutation.id);
+              return false;
+            }
+
+            final expenses = storage.getSavedExpenses(tripId);
+            final idx = expenses.indexWhere((e) => e['id'] == expId);
+            if (idx != -1) {
+              // Existing expense: LWW reconciliation by timestamp
+              final localUpdated = DateTime.tryParse(expenses[idx]['updatedAt']?.toString() ?? '') ??
+                  DateTime.tryParse(expenses[idx]['createdAt']?.toString() ?? '') ??
+                  DateTime.fromMillisecondsSinceEpoch(0);
+              final remoteUpdated = DateTime.tryParse(payload['updatedAt']?.toString() ?? '') ??
+                  DateTime.tryParse(payload['createdAt']?.toString() ?? '') ??
+                  mutation.createdAt;
+
+              if (remoteUpdated.isAfter(localUpdated)) {
+                expenses[idx] = {...expenses[idx], ...payload};
+                await storage.saveExpenses(tripId, expenses);
+              }
+            } else {
+              expenses.insert(0, payload);
+              await storage.saveExpenses(tripId, expenses);
+            }
           }
           break;
 
         case MutationType.updateExpense:
           if (tripId != null) {
-            final expenses = storage.getSavedExpenses(tripId);
             final expId = payload['id'] as String? ?? payload['expenseId'] as String?;
             if (expId != null) {
+              // Tombstone check: Never resurrect deleted expenses
+              if (storage.isExpenseTombstoned(tripId, expId)) {
+                await storage.markP2POperationProcessed(mutation.id);
+                return false;
+              }
+
+              final expenses = storage.getSavedExpenses(tripId);
               final idx = expenses.indexWhere((e) => e['id'] == expId);
               if (idx != -1) {
-                expenses[idx] = payload;
+                final localUpdated = DateTime.tryParse(expenses[idx]['updatedAt']?.toString() ?? '') ??
+                    DateTime.tryParse(expenses[idx]['createdAt']?.toString() ?? '') ??
+                    DateTime.fromMillisecondsSinceEpoch(0);
+                final remoteUpdated = DateTime.tryParse(payload['updatedAt']?.toString() ?? '') ??
+                    mutation.createdAt;
+
+                if (remoteUpdated.isAfter(localUpdated) || remoteUpdated.isAtSameMomentAs(localUpdated)) {
+                  expenses[idx] = {...expenses[idx], ...payload};
+                  await storage.saveExpenses(tripId, expenses);
+                }
               } else {
                 expenses.insert(0, payload);
+                await storage.saveExpenses(tripId, expenses);
               }
-              await storage.saveExpenses(tripId, expenses);
             }
           }
           break;
 
         case MutationType.deleteExpense:
           if (tripId != null) {
-            final expenses = storage.getSavedExpenses(tripId);
             final expId = payload['id'] as String? ?? payload['expenseId'] as String?;
             if (expId != null) {
+              await storage.markExpenseTombstoned(tripId, expId, mutation.createdAt);
+              final expenses = storage.getSavedExpenses(tripId);
               expenses.removeWhere((e) => e['id'] == expId);
               await storage.saveExpenses(tripId, expenses);
             }

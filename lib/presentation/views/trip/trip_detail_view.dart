@@ -47,6 +47,7 @@ import 'widgets/add_journey_moment_sheet.dart';
 import 'widgets/expense_detail_sheet.dart';
 import 'widgets/member_spend_breakdown_sheet.dart';
 import 'widgets/nearby_sync_badge.dart';
+import 'widgets/nearby_trip_friends_radar_sheet.dart';
 import 'widgets/trip_sync_sheet.dart';
 import 'widgets/settlement_sheet.dart';
 import 'widgets/trip_completion_verification_sheet.dart';
@@ -647,7 +648,19 @@ class _TripDetailViewState extends State<TripDetailView> {
             tooltip: 'Trip Options',
             shape: const RoundedRectangleBorder(borderRadius: AppRadius.mdBorder),
             onSelected: (val) {
-              if (val == 'sync_trip') {
+              if (val == 'nearby_radar') {
+                NearbyTripFriendsRadarSheet.show(
+                  context,
+                  trip: trip,
+                  syncService: context.read<SyncService>(),
+                  p2pService: context.read<P2PSyncService>(),
+                  onSyncCompleted: () {
+                    if (user != null) {
+                      tripDetailVm.loadTrip(trip.id, user.id);
+                    }
+                  },
+                );
+              } else if (val == 'sync_trip') {
                 TripSyncSheet.show(
                   context,
                   tripId: trip.id,
@@ -668,6 +681,16 @@ class _TripDetailViewState extends State<TripDetailView> {
               }
             },
             itemBuilder: (ctx) => [
+              const PopupMenuItem(
+                value: 'nearby_radar',
+                child: Row(
+                  children: [
+                    Icon(Icons.radar_rounded, size: 18, color: AppColors.emeraldPrimary),
+                    SizedBox(width: 10),
+                    Text('Nearby Trip Friends', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
               const PopupMenuItem(
                 value: 'sync_trip',
                 child: Row(
@@ -886,6 +909,7 @@ class _TripDetailViewState extends State<TripDetailView> {
                     p2pService: context.read<P2PSyncService>(),
                     syncService: context.read<SyncService>(),
                     tripId: trip.id,
+                    trip: trip,
                   ),
                   const SizedBox(width: 8),
                   InkWell(
@@ -893,9 +917,9 @@ class _TripDetailViewState extends State<TripDetailView> {
                       final authVm = context.read<AuthViewModel>();
                       final tripVm = context.read<TripDetailViewModel>();
                       final currentUser = authVm.currentUser;
-                      TripSyncSheet.show(
+                      NearbyTripFriendsRadarSheet.show(
                         context,
-                        tripId: trip.id,
+                        trip: trip,
                         syncService: context.read<SyncService>(),
                         p2pService: context.read<P2PSyncService>(),
                         onSyncCompleted: () {
