@@ -690,7 +690,7 @@ const Map<String, String> enTranslations = {
   'expense_sec_split': 'SPLIT METHOD & ALLOCATION',
   'expense_quick_add': 'Quick Add',
   'expense_select_all': 'Select All',
-  'expense_deselect_all': 'Deselect All',
+  'expense_deselect_all': 'Unselect All',
   'expense_you_tag': 'You',
   'expense_split_summary': 'Split across {count} members',
   'expense_split_matched': 'Allocations match total {amount} ✓',

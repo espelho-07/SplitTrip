@@ -1135,25 +1135,6 @@ class _AddExpenseViewState extends State<AddExpenseView> {
             ],
           ),
 
-          const SizedBox(height: 10),
-
-          // Split Type Selector Bar (Segmented Tabs)
-          Container(
-            padding: const EdgeInsets.all(3),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF141A21) : const Color(0xFFEDF2F7),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              children: [
-                _buildSplitTypeTab('🟰 ${l10n.expenseSplitEqually}', SplitType.equal, addVm.splitType, isDark, () => addVm.setSplitType(SplitType.equal)),
-                _buildSplitTypeTab('📊 ${l10n.expenseSplitExact}', SplitType.exact, addVm.splitType, isDark, () => addVm.setSplitType(SplitType.exact)),
-                _buildSplitTypeTab('💯 ${l10n.expenseSplitPercentages}', SplitType.percentage, addVm.splitType, isDark, () => addVm.setSplitType(SplitType.percentage)),
-                _buildSplitTypeTab('⚖️ ${l10n.expenseSplitShares}', SplitType.shares, addVm.splitType, isDark, () => addVm.setSplitType(SplitType.shares)),
-              ],
-            ),
-          ),
-
           const SizedBox(height: 12),
 
           // Header Row: Count + Toggle All
@@ -1187,7 +1168,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                   }
                 },
                 child: Text(
-                  allSelected ? l10n.translate('settlement_clear_all') : l10n.translate('settlement_select_all'),
+                  allSelected ? (l10n.expenseDeselectAll.isNotEmpty ? l10n.expenseDeselectAll : 'Unselect All') : (l10n.expenseSelectAll.isNotEmpty ? l10n.expenseSelectAll : 'Select All'),
                   style: TextStyle(
                     fontSize: 11.5,
                     fontWeight: FontWeight.w700,
@@ -1500,53 +1481,6 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     );
   }
 
-  Widget _buildSplitTypeTab(
-    String label,
-    SplitType type,
-    SplitType activeType,
-    bool isDark,
-    VoidCallback onTap,
-  ) {
-    final isSelected = type == activeType;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          HapticHelper.selection();
-          onTap();
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          height: 32,
-          decoration: BoxDecoration(
-            color: isSelected
-                ? (isDark ? const Color(0xFF222B35) : Colors.white)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.05),
-                      blurRadius: 3,
-                      offset: const Offset(0, 1),
-                    ),
-                  ]
-                : null,
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 11.5,
-              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-              color: isSelected
-                  ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
-                  : (isDark ? AppColors.darkTextSecondary : const Color(0xFF475569)),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _buildExactValidationBar(bool isDark, AddExpenseViewModel addVm, String currency) {
     final remaining = addVm.exactRemainingPaise;

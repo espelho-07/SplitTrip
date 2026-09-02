@@ -171,5 +171,32 @@ void main() {
       // Verify active split method changed to percentage
       expect(addVm.splitType.name, 'percentage');
     });
+
+    testWidgets('4. Verifies Unselect All / Select All toggle and absence of horizontal segmented tabs', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tripDetailVm.loadTrip('trip_add_expense_orig_test', 'user_darpan');
+      await tester.pumpWidget(createAddExpenseScreen());
+      await tester.pumpAndSettle();
+
+      // Initially all members are selected, so it should say 'Unselect All'
+      expect(find.text('Unselect All'), findsOneWidget);
+
+      // Tap 'Unselect All'
+      await tester.tap(find.text('Unselect All'));
+      await tester.pumpAndSettle();
+
+      // Now should show 'Select All'
+      expect(find.text('Select All'), findsOneWidget);
+
+      // Tap 'Select All'
+      await tester.tap(find.text('Select All'));
+      await tester.pumpAndSettle();
+
+      // Should show 'Unselect All' again
+      expect(find.text('Unselect All'), findsOneWidget);
+    });
   });
 }
