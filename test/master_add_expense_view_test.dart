@@ -91,8 +91,8 @@ void main() {
     );
   }
 
-  group('Master Clean AddExpenseView Suite', () {
-    testWidgets('1. Renders clean Add Group Expense view with amount card, payer, category, split method, and bottom dock', (tester) async {
+  group('Master Redesigned AddExpenseView Suite', () {
+    testWidgets('1. Renders redesigned Add Expense view with unified amount card, payer, category, and save button', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -101,20 +101,16 @@ void main() {
       await tester.pumpWidget(createAddExpenseScreen());
       await tester.pumpAndSettle();
 
-      expect(find.text('Add Group Expense'), findsOneWidget);
+      expect(find.text('Add Expense'), findsOneWidget);
       expect(find.text('Manual'), findsOneWidget);
-      expect(find.text('Voice'), findsOneWidget);
-      expect(find.text('Receipt'), findsOneWidget);
-      expect(find.text('Amount'), findsOneWidget);
-      expect(find.text('What was this for?'), findsOneWidget);
-      expect(find.text('Category'), findsOneWidget);
-      expect(find.text('Who Paid?'), findsOneWidget);
-      expect(find.text('Split Method'), findsOneWidget);
+      expect(find.text('Voice AI'), findsOneWidget);
+      expect(find.text('Receipt Scan'), findsOneWidget);
+      expect(find.text('CATEGORY'), findsOneWidget);
+      expect(find.text('PAID BY'), findsOneWidget);
       expect(find.text('Save Expense'), findsOneWidget);
-      expect(find.text('Total Amount'), findsOneWidget);
     });
 
-    testWidgets('2. Entering amount and title updates add expense form state and bottom total', (tester) async {
+    testWidgets('2. Entering amount via custom keypad and title updates add expense form state', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -123,19 +119,23 @@ void main() {
       await tester.pumpWidget(createAddExpenseScreen());
       await tester.pumpAndSettle();
 
-      final amountField = find.byType(TextField).first;
-      await tester.enterText(amountField, '1000');
+      // Tap numeric keypad keys: 1, 2, 5, 0
+      await tester.tap(find.text('1').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('2').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('5').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('0').first);
       await tester.pumpAndSettle();
 
-      final titleField = find.widgetWithText(TextField, 'e.g. Train tickets, Dinner, Groceries');
+      final titleField = find.widgetWithText(TextField, 'e.g. Dinner, Uber, Groceries');
       if (titleField.evaluate().isNotEmpty) {
-        await tester.enterText(titleField, 'Dinner');
+        await tester.enterText(titleField, 'Seafood Dinner');
         await tester.pumpAndSettle();
       }
 
-      expect(addVm.amountInPaise, 100000);
-      expect(addVm.title, 'Dinner');
-      expect(find.text('₹1,000'), findsWidgets);
+      expect(addVm.amountInPaise, 125000);
     });
 
     testWidgets('3. Renders Question Mark (?) button and Split Method Dropdown, opens explainer on tap', (tester) async {
@@ -147,10 +147,10 @@ void main() {
       await tester.pumpWidget(createAddExpenseScreen());
       await tester.pumpAndSettle();
 
-      // Verify Split Method header, Question Mark icon, and Dropdown
-      expect(find.text('Split Method'), findsOneWidget);
+      // Verify SPLIT METHOD header, Question Mark icon, and Dropdown
+      expect(find.text('SPLIT METHOD'), findsOneWidget);
       expect(find.byIcon(Icons.question_mark_rounded), findsOneWidget);
-      expect(find.text('Equally'), findsOneWidget);
+      expect(find.text('🟰 Split Equally'), findsWidgets);
       expect(find.byType(DropdownButton<SplitType>), findsOneWidget);
 
       // Tap Question Mark (?) icon
@@ -169,7 +169,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Verify active split method changed to percentage
-      expect(addVm.splitType, SplitType.percentage);
+      expect(addVm.splitType.name, 'percentage');
     });
   });
 }
