@@ -1,8 +1,6 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
 import 'package:kith_app/core/localization/app_localizations.dart';
 import 'package:kith_app/core/network/api_client.dart';
 import 'package:kith_app/data/repositories/expense_repository.dart';
@@ -12,7 +10,7 @@ import 'package:kith_app/data/services/auth_service.dart';
 import 'package:kith_app/data/services/local_storage_service.dart';
 import 'package:kith_app/data/services/p2p_sync_service.dart';
 import 'package:kith_app/data/services/sync_service.dart';
-import 'package:kith_app/domain/services/notification_service.dart';
+import 'package:kith_app/domain/models/trip.dart';
 import 'package:kith_app/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/home_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/trip_detail_viewmodel.dart';
@@ -21,19 +19,6 @@ import 'package:kith_app/presentation/views/trip/trip_detail_view.dart';
 import 'package:kith_app/presentation/views/trip/widgets/expense_detail_loading_sheet.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-class MockSimpleHttpClient extends http.BaseClient {
-  @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    final body = utf8.encode('[]');
-    return http.StreamedResponse(
-      Stream.fromIterable([body]),
-      200,
-      contentLength: body.length,
-      headers: {'content-type': 'application/json'},
-    );
-  }
-}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -44,8 +29,20 @@ void main() {
   late ApiClient apiClient;
   late TripRepository tripRepo;
   late ExpenseRepository expenseRepo;
-  late NotificationService notifService;
   late AuthViewModel authVm;
+  late HomeViewModel homeVm;
+  late TripDetailViewModel tripDetailVm;
+
+  final testTrip = Trip(
+    id: 'trip_dl_001',
+    name: 'Goa Beach Trip',
+    emoji: '🌴',
+    creatorId: 'u1',
+    inviteCode: 'GOA123',
+    members: [],
+    createdAt: DateTime.now(),
+    updatedAt: DateTime.now(),
+  );
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
@@ -53,13 +50,14 @@ void main() {
     storage = LocalStorageService(prefs);
     syncService = SyncService(storage);
     p2pService = P2PSyncService(storage, syncService, deviceId: 'test_device');
-    apiClient = ApiClient(httpClient: MockSimpleHttpClient());
+    apiClient = ApiClient();
     final authService = AuthService(apiClient: apiClient, storage: storage);
     final userRepo = UserRepository(authService: authService);
     authVm = AuthViewModel(userRepo: userRepo);
     tripRepo = TripRepository(storage: storage, syncService: syncService, apiClient: apiClient);
     expenseRepo = ExpenseRepository(storage: storage, syncService: syncService, apiClient: apiClient);
-    notifService = NotificationService(storage);
+    homeVm = HomeViewModel(tripRepo: tripRepo, expenseRepo: expenseRepo);
+    tripDetailVm = TripDetailViewModel(tripRepo: tripRepo, expenseRepo: expenseRepo);
 
     final tripJson = {
       'id': 'trip_dl_001',
@@ -100,6 +98,18 @@ void main() {
       'email': 'rahul@kith.local',
     });
     await authVm.initSession();
+    await storage.saveNotifications([
+      {
+        'id': 'notif_exp_1',
+        'title': 'New Expense Added',
+        'description': 'Rahul added Seafood Dinner (₹1,800)',
+        'timestamp': DateTime.now().toIso8601String(),
+        'type': 'expense',
+        'route': '/trip/trip_dl_001?expenseId=exp_dl_999',
+        'actionLabel': 'View Expense',
+        'isRead': false,
+      },
+    ]);
   });
 
   tearDown(() async {
@@ -112,23 +122,11 @@ void main() {
         Provider<LocalStorageService>.value(value: storage),
         Provider<SyncService>.value(value: syncService),
         Provider<P2PSyncService>.value(value: p2pService),
-        Provider<ApiClient>.value(value: apiClient),
         Provider<TripRepository>.value(value: tripRepo),
         Provider<ExpenseRepository>.value(value: expenseRepo),
-        Provider<NotificationService>.value(value: notifService),
         ChangeNotifierProvider<AuthViewModel>.value(value: authVm),
-        ChangeNotifierProvider<HomeViewModel>(
-          create: (_) => HomeViewModel(
-            tripRepo: tripRepo,
-            expenseRepo: expenseRepo,
-          ),
-        ),
-        ChangeNotifierProvider<TripDetailViewModel>(
-          create: (_) => TripDetailViewModel(
-            tripRepo: tripRepo,
-            expenseRepo: expenseRepo,
-          ),
-        ),
+        ChangeNotifierProvider<HomeViewModel>.value(value: homeVm),
+        ChangeNotifierProvider<TripDetailViewModel>.value(value: tripDetailVm),
       ],
       child: MaterialApp(
         localizationsDelegates: const [
@@ -177,7 +175,6 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
       await tester.pump(const Duration(milliseconds: 200));
 
-      // Verify that Seafood Dinner detail sheet opened
       expect(find.text('Seafood Dinner'), findsWidgets);
     });
 
@@ -195,7 +192,6 @@ void main() {
         ),
       );
 
-      // Verify that deep link loading indicator is rendered during cloud resolution
       await tester.pump();
       expect(find.textContaining('Expense'), findsWidgets);
     });
@@ -205,29 +201,17 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
-      // Add a test notification
-      await notifService.addNotification(
-        title: 'New Expense Added',
-        description: 'Rahul added Seafood Dinner (₹1,800)',
-        type: NotificationType.expense,
-        route: '/trip/trip_dl_001?expenseId=exp_dl_999',
-        actionLabel: 'View Expense',
-      );
-
       await tester.pumpWidget(
         buildTestApp(
           child: const NotificationsView(),
         ),
       );
 
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pumpAndSettle();
 
       expect(find.text('New Expense Added'), findsOneWidget);
       expect(find.textContaining('Seafood Dinner'), findsOneWidget);
       expect(find.text('View Expense →'), findsOneWidget);
-
-      await tester.pumpWidget(const SizedBox());
     });
   });
 }
