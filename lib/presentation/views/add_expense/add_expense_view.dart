@@ -420,6 +420,83 @@ class _AddExpenseViewState extends State<AddExpenseView> {
 
           // Custom In-App Keyboard (Numeric for amount or QWERTY Text for description/location)
           if (addVm.currentTab == 2 && _activeInput != AddExpenseActiveInput.none) ...[
+            Container(
+              height: 38,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF0F151C) : const Color(0xFFE2E8F0),
+                border: Border(
+                  top: BorderSide(
+                    color: isDark ? const Color(0xFF1E293B) : const Color(0xFFCBD5E1),
+                    width: 0.8,
+                  ),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        _activeInput == AddExpenseActiveInput.amount
+                            ? Icons.calculate_outlined
+                            : (_activeInput == AddExpenseActiveInput.title
+                                ? Icons.edit_note_rounded
+                                : Icons.location_on_outlined),
+                        size: 16,
+                        color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        _activeInput == AddExpenseActiveInput.amount
+                            ? 'AMOUNT'
+                            : (_activeInput == AddExpenseActiveInput.title
+                                ? 'TITLE'
+                                : 'LOCATION'),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.6,
+                          color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                  // Down Arrow to close/dismiss the in-app keyboard
+                  InkWell(
+                    onTap: () {
+                      HapticHelper.light();
+                      FocusScope.of(context).unfocus();
+                      FocusManager.instance.primaryFocus?.unfocus();
+                      setState(() => _activeInput = AddExpenseActiveInput.none);
+                    },
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Done',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.keyboard_arrow_down_rounded,
+                            size: 20,
+                            color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
             if (_activeInput == AddExpenseActiveInput.amount)
               KithNumericKeypad(
                 controller: _amountController,
@@ -697,7 +774,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                       color: isDark ? Colors.white : const Color(0xFF0F172A),
                     ),
                     decoration: KithInputDecoration.borderless(
-                      hintText: l10n.translate('add_expense_title_hint'),
+                      hintText: 'Expense title',
                       hintStyle: TextStyle(
                         color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
                         fontSize: 14,
@@ -752,7 +829,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                       color: isDark ? Colors.white : const Color(0xFF0F172A),
                     ),
                     decoration: KithInputDecoration.borderless(
-                      hintText: 'Where? (e.g. Starbucks, Airport)',
+                      hintText: 'Location (optional)',
                       hintStyle: TextStyle(
                         color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
                         fontSize: 13.5,
@@ -1124,8 +1201,11 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                     ],
                     onChanged: (SplitType? newType) {
                       if (newType != null) {
+                        FocusScope.of(context).unfocus();
+                        FocusManager.instance.primaryFocus?.unfocus();
                         HapticHelper.selection();
                         addVm.setSplitType(newType);
+                        setState(() => _activeInput = AddExpenseActiveInput.none);
                       }
                     },
                   ),
@@ -1370,6 +1450,8 @@ class _AddExpenseViewState extends State<AddExpenseView> {
       color: Colors.transparent,
       child: InkWell(
         onTap: () {
+          FocusScope.of(context).unfocus();
+          FocusManager.instance.primaryFocus?.unfocus();
           HapticHelper.selection();
           onSelect();
         },
@@ -1625,67 +1707,95 @@ class _AddExpenseViewState extends State<AddExpenseView> {
             ),
           )
         else if (addVm.splitType == SplitType.exact)
-          Container(
-            width: 80,
-            height: 30,
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF182028) : const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            alignment: Alignment.center,
-            child: TextField(
-              enabled: isChecked,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              textAlign: TextAlign.right,
-              style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-                color: isDark ? Colors.white : const Color(0xFF0F172A),
-              ),
-              decoration: KithInputDecoration.borderless(
-                prefixText: '₹ ',
-                prefixStyle: TextStyle(
-                  fontSize: 11,
-                  color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+          InkWell(
+            onTap: isChecked
+                ? () => _showMemberSplitKeypad(context, isDark, member, addVm, false)
+                : null,
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              height: 30,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: isChecked
+                    ? (isDark ? const Color(0xFF182028) : const Color(0xFFF1F5F9))
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: isChecked
+                      ? (isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle)
+                      : Colors.transparent,
+                  width: 0.8,
                 ),
               ),
-              onChanged: (val) {
-                final doubleVal = double.tryParse(val) ?? 0.0;
-                addVm.setMemberExactAmount(member.id, (doubleVal * 100).round());
-              },
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    CurrencyFormatter.formatPaise(addVm.exactAmountsInPaise[member.id] ?? 0, currencyCode: currency),
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: isChecked
+                          ? (isDark ? Colors.white : const Color(0xFF0F172A))
+                          : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.edit_rounded,
+                    size: 11,
+                    color: isChecked
+                        ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
+                        : Colors.transparent,
+                  ),
+                ],
+              ),
             ),
           )
         else if (addVm.splitType == SplitType.percentage)
-          Container(
-            width: 70,
-            height: 30,
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF182028) : const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            alignment: Alignment.center,
-            child: TextField(
-              enabled: isChecked,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              textAlign: TextAlign.right,
-              style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-                color: isDark ? Colors.white : const Color(0xFF0F172A),
-              ),
-              decoration: KithInputDecoration.borderless(
-                suffixText: ' %',
-                suffixStyle: TextStyle(
-                  fontSize: 11,
-                  color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+          InkWell(
+            onTap: isChecked
+                ? () => _showMemberSplitKeypad(context, isDark, member, addVm, true)
+                : null,
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              height: 30,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: isChecked
+                    ? (isDark ? const Color(0xFF182028) : const Color(0xFFF1F5F9))
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: isChecked
+                      ? (isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle)
+                      : Colors.transparent,
+                  width: 0.8,
                 ),
               ),
-              onChanged: (val) {
-                final doubleVal = double.tryParse(val) ?? 0.0;
-                addVm.setMemberPercentage(member.id, doubleVal);
-              },
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '${(addVm.percentages[member.id] ?? 0.0).toStringAsFixed(1)} %',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: isChecked
+                          ? (isDark ? Colors.white : const Color(0xFF0F172A))
+                          : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.edit_rounded,
+                    size: 11,
+                    color: isChecked
+                        ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
+                        : Colors.transparent,
+                  ),
+                ],
+              ),
             ),
           )
         else if (addVm.splitType == SplitType.shares)
@@ -1717,6 +1827,154 @@ class _AddExpenseViewState extends State<AddExpenseView> {
             ],
           ),
       ],
+    );
+  }
+
+  void _showMemberSplitKeypad(
+    BuildContext context,
+    bool isDark,
+    TripMember member,
+    AddExpenseViewModel addVm,
+    bool isPercentage,
+  ) {
+    FocusScope.of(context).unfocus();
+    FocusManager.instance.primaryFocus?.unfocus();
+    HapticHelper.light();
+
+    final currentVal = isPercentage
+        ? (addVm.percentages[member.id] ?? 0.0)
+        : ((addVm.exactAmountsInPaise[member.id] ?? 0) / 100.0);
+
+    final initialText = currentVal > 0
+        ? (currentVal % 1 == 0 ? currentVal.toInt().toString() : currentVal.toStringAsFixed(2))
+        : '';
+
+    final memberController = TextEditingController(text: initialText);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: isDark ? const Color(0xFF0F151C) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (modalCtx, setModalState) {
+            final text = memberController.text;
+
+            return SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Top Handle & Header Bar with Down Arrow
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 14, 16, 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            MemberAvatar(name: member.displayName, size: 28),
+                            const SizedBox(width: 10),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  member.displayName,
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
+                                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                  ),
+                                ),
+                                Text(
+                                  isPercentage ? 'Set percentage share (%)' : 'Set exact amount (₹)',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        // Down Arrow to close sheet
+                        IconButton(
+                          icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 26),
+                          color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Display Current Value
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF161E28) : const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          isPercentage ? 'Share' : 'Amount',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                          ),
+                        ),
+                        Text(
+                          isPercentage
+                              ? '${text.isEmpty ? '0' : text} %'
+                              : '₹ ${text.isEmpty ? '0' : text}',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // In-App Numeric Keypad
+                  KithNumericKeypad(
+                    controller: memberController,
+                    actionIcon: Icons.check_rounded,
+                    onExpressionChanged: (val) {
+                      setModalState(() {});
+                      final v = double.tryParse(val) ?? 0.0;
+                      if (isPercentage) {
+                        addVm.setMemberPercentage(member.id, v);
+                      } else {
+                        addVm.setMemberExactAmount(member.id, (v * 100).round());
+                      }
+                    },
+                    onDone: () {
+                      final v = double.tryParse(memberController.text) ?? 0.0;
+                      if (isPercentage) {
+                        addVm.setMemberPercentage(member.id, v);
+                      } else {
+                        addVm.setMemberExactAmount(member.id, (v * 100).round());
+                      }
+                      Navigator.pop(ctx);
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 

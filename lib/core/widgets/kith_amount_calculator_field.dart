@@ -101,10 +101,10 @@ class _KithAmountCalculatorFieldState extends State<KithAmountCalculatorField> {
                   color: isDark ? Colors.white : const Color(0xFF0F172A),
                 ),
                 decoration: KithInputDecoration.borderless(
-                  hintText: '0.00 or 30,000 + 742',
+                  hintText: '0',
                   hintStyle: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 26,
+                    fontWeight: FontWeight.w700,
                     color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
                   ),
                 ),

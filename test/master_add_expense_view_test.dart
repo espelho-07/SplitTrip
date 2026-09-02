@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kith_app/core/localization/app_localizations.dart';
 import 'package:kith_app/core/network/api_client.dart';
 import 'package:kith_app/core/services/kith_widget_service.dart';
+import 'package:kith_app/core/widgets/kith_numeric_keypad.dart';
 import 'package:kith_app/data/repositories/expense_repository.dart';
 import 'package:kith_app/data/repositories/trip_repository.dart';
 import 'package:kith_app/data/repositories/user_repository.dart';
@@ -119,21 +120,16 @@ void main() {
       await tester.pumpWidget(createAddExpenseScreen());
       await tester.pumpAndSettle();
 
-      // Tap numeric keypad keys: 1, 2, 5, 0
-      await tester.tap(find.text('1').first);
+      // Tap numeric keypad keys: 1, 2, 5, 0 inside KithNumericKeypad
+      final keypad = find.byType(KithNumericKeypad);
+      await tester.tap(find.descendant(of: keypad, matching: find.text('1')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('2').first);
+      await tester.tap(find.descendant(of: keypad, matching: find.text('2')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('5').first);
+      await tester.tap(find.descendant(of: keypad, matching: find.text('5')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('0').first);
+      await tester.tap(find.descendant(of: keypad, matching: find.text('0')));
       await tester.pumpAndSettle();
-
-      final titleField = find.widgetWithText(TextField, 'e.g. Dinner, Uber, Groceries');
-      if (titleField.evaluate().isNotEmpty) {
-        await tester.enterText(titleField, 'Seafood Dinner');
-        await tester.pumpAndSettle();
-      }
 
       expect(addVm.amountInPaise, 125000);
     });
