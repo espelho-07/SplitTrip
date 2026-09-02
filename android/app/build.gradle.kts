@@ -28,7 +28,7 @@ if (keystorePropertiesFile.exists()) {
 android {
     namespace = "com.nirniq.kith"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = "28.2.13676358"
+    ndkVersion = flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -69,6 +69,9 @@ android {
             }
             isMinifyEnabled = false
             isShrinkResources = false
+            ndk {
+                debugSymbolLevel = "none"
+            }
         }
     }
 
@@ -77,7 +80,7 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
         jniLibs {
-            // Unstripped debug symbols omitted in release to optimize APK package size
+            excludes += "/META-INF/**"
         }
     }
 }
