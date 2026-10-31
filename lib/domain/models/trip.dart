@@ -87,6 +87,86 @@ class Trip {
     );
   }
 
+
+  /// Safely merges this local trip aggregate with a remote or cached snapshot.
+  /// Guarantees:
+  /// 1. Virtual members and locally joined members are NEVER dropped.
+  /// 2. Member lists are merged union-wise by member ID and user ID.
+  /// 3. Existing member display names are preserved and never overwritten by generic fallbacks.
+  /// 4. Higher revision number and newest updatedAt are preserved.
+  Trip mergeWith(Trip other) {
+    if (other.id != id) return this;
+
+    final mergedMembersMap = <String, TripMember>{};
+    // 1. Seed with this trip's members
+    for (final m in members) {
+      mergedMembersMap[m.id] = m;
+    }
+
+    // 2. Union merge other trip's members
+    for (final otherMember in other.members) {
+      if (mergedMembersMap.containsKey(otherMember.id)) {
+        final existing = mergedMembersMap[otherMember.id]!;
+        final chosenDisplayName = (otherMember.displayName.isNotEmpty && otherMember.displayName != 'Member')
+            ? otherMember.displayName
+            : existing.displayName;
+        mergedMembersMap[otherMember.id] = existing.copyWith(
+          displayName: chosenDisplayName,
+          userId: otherMember.userId.isNotEmpty ? otherMember.userId : existing.userId,
+          avatarUrl: otherMember.avatarUrl ?? existing.avatarUrl,
+          role: otherMember.role != 'member' ? otherMember.role : existing.role,
+          upiId: otherMember.upiId ?? existing.upiId,
+          isClaimed: otherMember.isClaimed || existing.isClaimed,
+          status: otherMember.status ?? existing.status,
+          claimToken: otherMember.claimToken ?? existing.claimToken,
+          mergedIntoMemberId: otherMember.mergedIntoMemberId ?? existing.mergedIntoMemberId,
+          isVirtualMember: otherMember.isVirtual || existing.isVirtual,
+        );
+      } else {
+        // Check by authenticated userId if not unclaimed
+        final byUserId = mergedMembersMap.values.where(
+          (m) => m.userId.isNotEmpty && !m.userId.startsWith('unclaimed_') && m.userId == otherMember.userId,
+        ).firstOrNull;
+
+        if (byUserId != null) {
+          mergedMembersMap[byUserId.id] = byUserId.copyWith(
+            displayName: (otherMember.displayName.isNotEmpty && otherMember.displayName != 'Member')
+                ? otherMember.displayName
+                : byUserId.displayName,
+            avatarUrl: otherMember.avatarUrl ?? byUserId.avatarUrl,
+            upiId: otherMember.upiId ?? byUserId.upiId,
+          );
+        } else {
+          // Genuinely new member from other device/server
+          mergedMembersMap[otherMember.id] = otherMember;
+        }
+      }
+    }
+
+    final isOtherNewer = other.revision > revision || other.updatedAt.isAfter(updatedAt);
+
+    return Trip(
+      id: id,
+      name: isOtherNewer && other.name.isNotEmpty ? other.name : name,
+      description: isOtherNewer ? (other.description ?? description) : (description ?? other.description),
+      emoji: isOtherNewer ? other.emoji : emoji,
+      coverGradientIndex: isOtherNewer ? other.coverGradientIndex : coverGradientIndex,
+      currencyCode: other.currencyCode.isNotEmpty ? other.currencyCode : currencyCode,
+      creatorId: creatorId.isNotEmpty ? creatorId : other.creatorId,
+      members: mergedMembersMap.values.toList(),
+      lifecycleState: isOtherNewer ? other.lifecycleState : lifecycleState,
+      inviteCode: inviteCode.isNotEmpty ? inviteCode : other.inviteCode,
+      tripMode: isOtherNewer ? other.tripMode : tripMode,
+      revision: other.revision > revision ? other.revision : revision,
+      completionMode: other.completionMode ?? completionMode,
+      startedAt: startedAt.isBefore(other.startedAt) ? startedAt : other.startedAt,
+      completedAt: other.completedAt ?? completedAt,
+      completedBy: other.completedBy ?? completedBy,
+      createdAt: createdAt.isBefore(other.createdAt) ? createdAt : other.createdAt,
+      updatedAt: isOtherNewer ? other.updatedAt : updatedAt,
+    );
+  }
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,

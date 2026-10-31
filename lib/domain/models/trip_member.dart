@@ -14,6 +14,7 @@ class TripMember {
   final String? claimToken;
   final String? status;
   final String? mergedIntoMemberId;
+  final bool isVirtualMember;
 
   const TripMember({
     required this.id,
@@ -30,11 +31,19 @@ class TripMember {
     this.claimToken,
     this.status,
     this.mergedIntoMemberId,
+    this.isVirtualMember = false,
   });
 
   bool get isCreator => role.toLowerCase() == 'creator';
   bool get isUnclaimed => !isClaimed || status == 'unclaimed';
   bool get isMerged => status == 'merged' || mergedIntoMemberId != null;
+  bool get isVirtual =>
+      isVirtualMember ||
+      isUnclaimed ||
+      userId.startsWith('unclaimed_') ||
+      role == 'virtual' ||
+      !isClaimed;
+  bool get isRegistered => !isVirtual;
   String get currentStatus => status ?? (isClaimed ? 'claimed' : 'unclaimed');
 
   TripMember copyWith({
@@ -52,6 +61,7 @@ class TripMember {
     String? claimToken,
     String? status,
     String? mergedIntoMemberId,
+    bool? isVirtualMember,
   }) {
     return TripMember(
       id: id ?? this.id,
@@ -68,6 +78,7 @@ class TripMember {
       claimToken: claimToken ?? this.claimToken,
       status: status ?? this.status,
       mergedIntoMemberId: mergedIntoMemberId ?? this.mergedIntoMemberId,
+      isVirtualMember: isVirtualMember ?? this.isVirtualMember,
     );
   }
 
@@ -86,20 +97,29 @@ class TripMember {
     'claimToken': claimToken,
     'status': currentStatus,
     'mergedIntoMemberId': mergedIntoMemberId,
+    'isVirtual': isVirtual,
+    'isVirtualMember': isVirtual,
   };
 
   factory TripMember.fromJson(Map<String, dynamic> json) {
     final rawUserId = json['userId'] as String? ?? json['user_id'] as String? ?? '';
     final rawStatus = json['status'] as String?;
-    final isUnclaimed = json['isClaimed'] == false ||
+    final isExplicitVirtual = json['isVirtual'] == true ||
+        json['is_virtual'] == true ||
+        json['isVirtualMember'] == true;
+    final isUnclaimed = isExplicitVirtual ||
+        json['isClaimed'] == false ||
         json['is_claimed'] == false ||
         rawStatus == 'unclaimed' ||
         rawUserId.startsWith('unclaimed_');
 
+    final rawName = (json['displayName'] as String?) ?? (json['display_name'] as String?);
+    final cleanName = (rawName != null && rawName.trim().isNotEmpty) ? rawName.trim() : 'Member';
+
     return TripMember(
       id: (json['id'] as String?) ?? '',
       userId: rawUserId,
-      displayName: (json['displayName'] as String?) ?? (json['display_name'] as String?) ?? 'Member',
+      displayName: cleanName,
       avatarUrl: json['avatarUrl'] as String? ?? json['avatar_url'] as String?,
       role: json['role'] as String? ?? 'member',
       joinedAt: json['joinedAt'] != null
@@ -119,6 +139,7 @@ class TripMember {
       claimToken: json['claimToken'] as String? ?? json['claim_token'] as String?,
       status: rawStatus ?? (isUnclaimed ? 'unclaimed' : 'claimed'),
       mergedIntoMemberId: json['mergedIntoMemberId'] as String? ?? json['merged_into_member_id'] as String?,
+      isVirtualMember: isUnclaimed,
     );
   }
 }

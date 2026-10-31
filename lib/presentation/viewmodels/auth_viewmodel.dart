@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../data/repositories/user_repository.dart';
 import '../../domain/enums/app_experience_mode.dart';
+import '../../domain/enums/kith_app_mode.dart';
 import '../../domain/models/guest_user.dart';
 
 enum AuthState {
@@ -15,6 +16,7 @@ class AuthViewModel extends ChangeNotifier {
   final UserRepository userRepo;
   GuestUser? _currentUser;
   AppExperienceMode _appExperienceMode = AppExperienceMode.all;
+  KithAppMode _primaryAppMode = KithAppMode.trip;
   AuthState _authState = AuthState.uninitialized;
   bool _isLoading = false;
   String? _errorMessage;
@@ -23,6 +25,7 @@ class AuthViewModel extends ChangeNotifier {
 
   GuestUser? get currentUser => _currentUser;
   AppExperienceMode get appExperienceMode => _appExperienceMode;
+  KithAppMode get primaryAppMode => _primaryAppMode;
   AuthState get authState => _authState;
   bool get isAuthenticated => _currentUser != null;
   bool get isInitialized => _authState != AuthState.uninitialized;
@@ -41,6 +44,7 @@ class AuthViewModel extends ChangeNotifier {
       // then falls back to Keystore → Supabase to recover after reinstall.
       _currentUser = await userRepo.restoreGuestIfNeeded();
       _appExperienceMode = AppExperienceMode.fromKey(userRepo.getAppExperienceMode());
+      _primaryAppMode = KithAppMode.fromKey(userRepo.getPrimaryAppMode());
       _authState = _currentUser != null ? AuthState.authenticated : AuthState.signedOut;
       if (_currentUser != null) {
         userRepo.syncSession(_currentUser);
@@ -57,6 +61,12 @@ class AuthViewModel extends ChangeNotifier {
   Future<void> setAppExperienceMode(AppExperienceMode mode) async {
     _appExperienceMode = mode;
     await userRepo.saveAppExperienceMode(mode.key);
+    notifyListeners();
+  }
+
+  Future<void> setPrimaryAppMode(KithAppMode mode) async {
+    _primaryAppMode = mode;
+    await userRepo.savePrimaryAppMode(mode.key);
     notifyListeners();
   }
 

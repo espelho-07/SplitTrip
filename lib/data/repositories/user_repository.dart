@@ -136,6 +136,14 @@ class UserRepository {
     return authService.storage.saveAppExperienceMode(mode);
   }
 
+  String? getPrimaryAppMode() {
+    return authService.storage.getSavedPrimaryAppMode();
+  }
+
+  Future<bool> savePrimaryAppMode(String mode) {
+    return authService.storage.savePrimaryAppMode(mode);
+  }
+
   bool hasCompletedOnboarding() {
     return authService.storage.hasCompletedOnboarding();
   }

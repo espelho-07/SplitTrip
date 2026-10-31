@@ -332,6 +332,11 @@ class SupabaseCloudSync {
               'avatarUrl': m['avatar_url'],
               'role': m['role'],
               'upiId': m['upi_id'],
+              'isClaimed': m['is_claimed'] ?? true,
+              'isVirtual': m['is_virtual'] ?? false,
+              'claimToken': m['claim_token'],
+              'status': m['status'],
+              'mergedIntoMemberId': m['merged_into_member_id'],
               'joinedAt': m['joined_at'],
             }).toList();
 
@@ -445,6 +450,11 @@ class SupabaseCloudSync {
           'avatarUrl': m['avatar_url'],
           'role': m['role'],
           'upiId': m['upi_id'],
+          'isClaimed': m['is_claimed'] ?? true,
+          'isVirtual': m['is_virtual'] ?? false,
+          'claimToken': m['claim_token'],
+          'status': m['status'],
+          'mergedIntoMemberId': m['merged_into_member_id'],
           'joinedAt': m['joined_at'],
         }).toList();
 
@@ -528,15 +538,28 @@ class SupabaseCloudSync {
       final members = tripJson['members'] as List<dynamic>? ?? [];
       for (final m in members) {
         if (m is Map<String, dynamic>) {
+          final isVirtual = m['isVirtual'] == true ||
+              m['is_virtual'] == true ||
+              m['isClaimed'] == false ||
+              m['is_claimed'] == false ||
+              (m['userId'] as String? ?? '').startsWith('unclaimed_');
+
           await _client.from(tableMembers).upsert({
             'id': m['id'],
             'trip_id': tripId,
-            'user_id': m['userId'],
-            'display_name': m['displayName'] ?? 'Traveler',
-            'avatar_url': m['avatarUrl'],
+            'user_id': m['userId'] ?? 'unclaimed_',
+            'display_name': (m['displayName'] ?? m['display_name'] ?? 'Traveler').toString().trim().isNotEmpty
+                ? (m['displayName'] ?? m['display_name']).toString().trim()
+                : 'Traveler',
+            'avatar_url': m['avatarUrl'] ?? m['avatar_url'],
             'role': m['role'] ?? 'member',
             'upi_id': m['upi_id'] ?? m['upiId'],
-            'joined_at': m['joinedAt'] ?? DateTime.now().toIso8601String(),
+            'is_claimed': m['isClaimed'] ?? m['is_claimed'] ?? !isVirtual,
+            'is_virtual': isVirtual,
+            'claim_token': m['claimToken'] ?? m['claim_token'],
+            'status': m['status'] ?? (isVirtual ? 'unclaimed' : 'claimed'),
+            'merged_into_member_id': m['mergedIntoMemberId'] ?? m['merged_into_member_id'],
+            'joined_at': m['joinedAt'] ?? m['joined_at'] ?? DateTime.now().toIso8601String(),
           }, onConflict: 'id');
         }
       }
@@ -552,21 +575,23 @@ class SupabaseCloudSync {
   Future<bool> syncExpense(Map<String, dynamic> expenseJson, {required String accountId}) async {
     if (!isAvailable) return false;
     try {
+      final paidById = expenseJson['paidById'] ?? expenseJson['paid_by_id'] ?? expenseJson['paidByMemberId'] ?? expenseJson['paid_by_member_id'];
       await _client.from(tableExpenses).upsert({
         'id': expenseJson['id'],
-        'trip_id': expenseJson['tripId'],
+        'trip_id': expenseJson['tripId'] ?? expenseJson['trip_id'],
         'title': expenseJson['title'],
-        'amount_in_paise': expenseJson['amountInPaise'],
+        'amount_in_paise': expenseJson['amountInPaise'] ?? expenseJson['amount_in_paise'],
         'category': expenseJson['category'] ?? 'general',
-        'paid_by_member_id': expenseJson['paidByMemberId'],
-        'paid_by_user_id': expenseJson['paidByUserId'] ?? accountId,
-        'split_type': expenseJson['splitType'] ?? 'equal',
+        'paid_by_id': paidById,
+        'paid_by_member_id': paidById,
+        'paid_by_user_id': expenseJson['paidByUserId'] ?? expenseJson['paid_by_user_id'] ?? accountId,
+        'split_type': expenseJson['splitType'] ?? expenseJson['split_type'] ?? 'equal',
         'splits': expenseJson['splits'] ?? [],
         'location': expenseJson['location'],
-        'receipt_url': expenseJson['receiptUrl'],
-        'is_deleted': expenseJson['isDeleted'] ?? false,
-        'created_at': expenseJson['createdAt'] ?? DateTime.now().toIso8601String(),
-        'updated_at': expenseJson['updatedAt'] ?? DateTime.now().toIso8601String(),
+        'receipt_url': expenseJson['receiptUrl'] ?? expenseJson['receipt_url'],
+        'is_deleted': expenseJson['isDeleted'] ?? expenseJson['is_deleted'] ?? false,
+        'created_at': expenseJson['createdAt'] ?? expenseJson['created_at'] ?? DateTime.now().toIso8601String(),
+        'updated_at': expenseJson['updatedAt'] ?? expenseJson['updated_at'] ?? DateTime.now().toIso8601String(),
       }, onConflict: 'id');
       return true;
     } catch (e) {

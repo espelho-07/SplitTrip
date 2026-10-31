@@ -416,6 +416,17 @@ class LocalStorageService {
     return _prefs.setString(_appExperienceModeKey, mode);
   }
 
+  // --- Dual Mode Architecture (Trip Mode vs Financial Mode) ---
+  static const String _primaryAppModeKey = 'kith_primary_app_mode';
+
+  String? getSavedPrimaryAppMode() {
+    return _prefs.getString(_primaryAppModeKey);
+  }
+
+  Future<bool> savePrimaryAppMode(String mode) async {
+    return _prefs.setString(_primaryAppModeKey, mode);
+  }
+
   // --- Trip Journey Stops ---
   static const String _journeyStopsPrefix = 'kith_journey_';
 

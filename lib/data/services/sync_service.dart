@@ -7,11 +7,14 @@ import '../../core/network/api_client.dart';
 import '../../core/network/api_exceptions.dart';
 import '../../core/network/realtime_client.dart';
 import '../../domain/models/expense.dart';
+import '../../domain/models/trip.dart';
 import 'local_storage_service.dart';
 
 enum MutationType {
   createTrip,
   joinTrip,
+  addMember,
+  renameMember,
   updateTripLifecycle,
   addExpense,
   updateExpense,
@@ -250,6 +253,7 @@ class SyncMutation {
 class SyncService {
   final LocalStorageService _storage;
   final SupabaseCloudSync _cloudSync = SupabaseCloudSync();
+  SupabaseCloudSync get cloudSync => _cloudSync;
   final Uuid _uuid = const Uuid();
   bool _isProcessing = false;
   SyncStatus _currentStatus = SyncStatus.synced;
@@ -613,13 +617,14 @@ class SyncService {
 
       // Update local storage trip snapshot if returned
       if (data.containsKey('trip') && data['trip'] is Map<String, dynamic>) {
-        final serverTrip = data['trip'] as Map<String, dynamic>;
+        final serverTrip = Trip.fromJson(data['trip'] as Map<String, dynamic>);
         final trips = _storage.getSavedTrips();
         final idx = trips.indexWhere((t) => t['id'] == tripId);
         if (idx != -1) {
-          trips[idx] = serverTrip;
+          final localTrip = Trip.fromJson(trips[idx]);
+          trips[idx] = localTrip.mergeWith(serverTrip).toJson();
         } else {
-          trips.add(serverTrip);
+          trips.add(serverTrip.toJson());
         }
         await _storage.saveTrips(trips);
       }
@@ -919,7 +924,7 @@ class SyncService {
         activeTripIds: activeTrips,
       );
 
-      // Reconcile modified trips
+      // Reconcile modified trips with Non-Destructive Safe Union Merge
       final modifiedTrips = deltas['modifiedTrips'] as List<Map<String, dynamic>>? ?? [];
       if (modifiedTrips.isNotEmpty) {
         final existingTrips = _storage.getSavedTrips();
@@ -928,7 +933,14 @@ class SyncService {
           if (t['is_deleted'] == true) {
             tripMap.remove(t['id']);
           } else {
-            tripMap[t['id']] = t;
+            final existingJson = tripMap[t['id']];
+            if (existingJson != null) {
+              final localTrip = Trip.fromJson(existingJson);
+              final remoteTrip = Trip.fromJson(t);
+              tripMap[t['id']] = localTrip.mergeWith(remoteTrip).toJson();
+            } else {
+              tripMap[t['id']] = t;
+            }
           }
         }
         await _storage.saveTrips(tripMap.values.toList());
@@ -1109,6 +1121,17 @@ class SyncService {
 
       case MutationType.joinTrip:
         await apiClient.post('/trips/join', body: payload);
+        break;
+
+      case MutationType.addMember:
+        final tripId = mutation.payload['tripId'] as String;
+        await apiClient.post('/trips/$tripId/members', body: payload);
+        break;
+
+      case MutationType.renameMember:
+        final tripId = mutation.payload['tripId'] as String;
+        final memberId = payload['memberId'] as String? ?? payload['id'] as String;
+        await apiClient.patch('/trips/$tripId/members/$memberId', body: payload);
         break;
 
       case MutationType.updateTripLifecycle:

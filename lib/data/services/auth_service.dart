@@ -10,6 +10,7 @@ import '../../core/services/secure_id_service.dart';
 import '../../core/services/supabase_cloud_sync.dart';
 import '../../core/services/supabase_guest_sync.dart';
 import '../../domain/models/guest_user.dart';
+import '../../domain/models/trip.dart';
 import 'local_storage_service.dart';
 
 /// Manages Guest Anonymous identities, cryptographic recovery keys, and account linking.
@@ -177,13 +178,29 @@ class AuthService {
     try {
       final data = await _cloudSync.fetchFullAccountData(accountId);
 
-      // 1. Trips
+      // 1. Trips - Non-destructive merge preserving local virtual members and offline state
       final trips = data['trips'] as List<Map<String, dynamic>>? ?? [];
       if (trips.isNotEmpty) {
         final existingTrips = storage.getSavedTrips();
-        final tripMap = {for (final t in existingTrips) t['id']: t};
-        for (final t in trips) {
-          tripMap[t['id']] = t;
+        final tripMap = <String, Map<String, dynamic>>{};
+        for (final t in existingTrips) {
+          final id = t['id']?.toString();
+          if (id != null) tripMap[id] = t;
+        }
+        for (final remoteJson in trips) {
+          final id = remoteJson['id']?.toString();
+          if (id == null) continue;
+          if (tripMap.containsKey(id)) {
+            try {
+              final localTrip = Trip.fromJson(tripMap[id]!);
+              final remoteTrip = Trip.fromJson(remoteJson);
+              tripMap[id] = localTrip.mergeWith(remoteTrip).toJson();
+            } catch (_) {
+              tripMap[id] = remoteJson;
+            }
+          } else {
+            tripMap[id] = remoteJson;
+          }
         }
         await storage.saveTrips(tripMap.values.toList());
       }

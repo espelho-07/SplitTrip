@@ -47,12 +47,25 @@ class TripRepository {
     try {
       final res = await apiClient.get('/trips');
       if (res is List && res.isNotEmpty) {
-        // Only overwrite local cache when server returns actual trips.
-        // An empty server response (e.g. new guest ID after reinstall) must NOT
-        // wipe the locally cached trips — they may not have synced yet.
-        final trips = res.map((j) => Trip.fromJson(j as Map<String, dynamic>)).toList();
-        await storage.saveTrips(trips.map((t) => t.toJson()).toList());
-        return trips;
+        // Non-destructive merge: preserve local virtual members and offline additions
+        final serverTrips = res.map((j) => Trip.fromJson(j as Map<String, dynamic>)).toList();
+        final cached = getCachedTrips();
+        final cachedMap = {for (final t in cached) t.id: t};
+
+        final mergedTrips = <Trip>[];
+        for (final serverTrip in serverTrips) {
+          if (cachedMap.containsKey(serverTrip.id)) {
+            mergedTrips.add(cachedMap[serverTrip.id]!.mergeWith(serverTrip));
+            cachedMap.remove(serverTrip.id);
+          } else {
+            mergedTrips.add(serverTrip);
+          }
+        }
+        // Retain local trips that server didn't return yet
+        mergedTrips.addAll(cachedMap.values);
+
+        await storage.saveTrips(mergedTrips.map((t) => t.toJson()).toList());
+        return mergedTrips;
       }
     } catch (_) {
       // Offline fallback: load from persistent local cache
@@ -66,16 +79,18 @@ class TripRepository {
     try {
       final res = await apiClient.get('/trips/$tripId');
       if (res is Map<String, dynamic>) {
-        final trip = Trip.fromJson(res);
+        final serverTrip = Trip.fromJson(res);
         final currentTrips = getCachedTrips();
-        final idx = currentTrips.indexWhere((t) => t.id == trip.id);
+        final idx = currentTrips.indexWhere((t) => t.id == serverTrip.id);
+        Trip finalTrip = serverTrip;
         if (idx != -1) {
-          currentTrips[idx] = trip;
+          finalTrip = currentTrips[idx].mergeWith(serverTrip);
+          currentTrips[idx] = finalTrip;
         } else {
-          currentTrips.insert(0, trip);
+          currentTrips.insert(0, serverTrip);
         }
         await storage.saveTrips(currentTrips.map((t) => t.toJson()).toList());
-        return trip;
+        return finalTrip;
       }
     } catch (_) {
       // Offline fallback
@@ -268,16 +283,22 @@ class TripRepository {
     try {
       final res = await apiClient.post('/trips/join', body: payload);
       if (res is Map<String, dynamic>) {
-        final trip = Trip.fromJson(res);
+        final serverTrip = Trip.fromJson(res);
         final currentTrips = getCachedTrips();
-        final idx = currentTrips.indexWhere((t) => t.id == trip.id);
+        final idx = currentTrips.indexWhere((t) => t.id == serverTrip.id);
+        Trip finalTrip = serverTrip;
         if (idx != -1) {
-          currentTrips[idx] = trip;
+          finalTrip = currentTrips[idx].mergeWith(serverTrip);
+          currentTrips[idx] = finalTrip;
         } else {
-          currentTrips.insert(0, trip);
+          currentTrips.insert(0, serverTrip);
         }
         await storage.saveTrips(currentTrips.map((t) => t.toJson()).toList());
-        return trip;
+        try {
+          final accountId = storage.getSavedUser()?['id']?.toString() ?? finalTrip.creatorId;
+          syncService.cloudSync.syncTrip(finalTrip.toJson(), accountId: accountId);
+        } catch (_) {}
+        return finalTrip;
       }
     } on NotFoundException {
       // Check if trip is in local cache (e.g. newly created on this device / offline)
@@ -552,55 +573,80 @@ class TripRepository {
 
 
 
-  /// Adds an additional member to a trip.
+  /// Adds an additional member to a trip (virtual or unclaimed participant).
   Future<Trip> addMember({
     required String tripId,
     required String displayName,
   }) async {
-    try {
-      final res = await apiClient.post('/trips/$tripId/members', body: {
-        'displayName': displayName.trim(),
-      });
-      if (res is Map<String, dynamic>) {
-        final updatedTrip = Trip.fromJson(res);
-        final trips = await getTrips();
-        final idx = trips.indexWhere((t) => t.id == tripId);
-        if (idx != -1) {
-          trips[idx] = updatedTrip;
-          await storage.saveTrips(trips.map((t) => t.toJson()).toList());
-        }
-        return updatedTrip;
-      }
-    } catch (_) {
-      // Offline fallback
-    }
+    final memberId = 'mbr_${_uuid.v4().replaceAll('-', '').substring(0, 10)}';
+    final claimToken = 'clm_${_uuid.v4().replaceAll('-', '').substring(0, 10)}';
+    final userId = 'unclaimed_${_uuid.v4().replaceAll('-', '').substring(0, 8)}';
+    final now = DateTime.now();
 
-    final trips = await getTrips();
-    final index = trips.indexWhere((t) => t.id == tripId);
-    if (index == -1) throw StateError('Trip not found');
-
-    final updatedMembers = List<TripMember>.from(trips[index].members);
     final newMember = TripMember(
-      id: 'mbr_${_uuid.v4().replaceAll('-', '').substring(0, 10)}',
-      userId: 'unclaimed_${_uuid.v4().replaceAll('-', '').substring(0, 8)}',
+      id: memberId,
+      userId: userId,
       displayName: displayName.trim(),
       role: 'member',
       status: 'unclaimed',
       isClaimed: false,
-      claimToken: 'clm_${_uuid.v4().replaceAll('-', '').substring(0, 10)}',
-      joinedAt: DateTime.now(),
-    );
-    updatedMembers.add(newMember);
-
-    final updatedTrip = trips[index].copyWith(
-      members: updatedMembers,
-      updatedAt: DateTime.now(),
+      isVirtualMember: true,
+      claimToken: claimToken,
+      joinedAt: now,
     );
 
-    trips[index] = updatedTrip;
-    await storage.saveTrips(trips.map((t) => t.toJson()).toList());
+    // 1. Immediate local cache update to ensure zero-latency & offline safety
+    final trips = getCachedTrips();
+    final index = trips.indexWhere((t) => t.id == tripId);
+    Trip localTrip;
+    if (index != -1) {
+      final updatedMembers = List<TripMember>.from(trips[index].members)..add(newMember);
+      localTrip = trips[index].copyWith(
+        members: updatedMembers,
+        updatedAt: now,
+      );
+      trips[index] = localTrip;
+      await storage.saveTrips(trips.map((t) => t.toJson()).toList());
+    } else {
+      throw StateError('Trip not found');
+    }
 
-    return updatedTrip;
+    // 2. Enqueue mutation so offline additions are guaranteed to sync
+    final mutationPayload = {
+      'tripId': tripId,
+      'id': memberId,
+      'userId': userId,
+      'displayName': displayName.trim(),
+      'claimToken': claimToken,
+      'isVirtual': true,
+    };
+    await syncService.enqueueMutation(MutationType.addMember, mutationPayload);
+
+    // 3. Sync to Supabase directly
+    try {
+      final accountId = storage.getSavedUser()?['id']?.toString() ?? localTrip.creatorId;
+      await syncService.cloudSync.syncTrip(localTrip.toJson(), accountId: accountId);
+    } catch (_) {}
+
+    // 4. Attempt online post to API backend
+    try {
+      final res = await apiClient.post('/trips/$tripId/members', body: mutationPayload);
+      if (res is Map<String, dynamic>) {
+        final serverTrip = Trip.fromJson(res);
+        final finalTrip = localTrip.mergeWith(serverTrip);
+        final currentTrips = getCachedTrips();
+        final idx = currentTrips.indexWhere((t) => t.id == tripId);
+        if (idx != -1) {
+          currentTrips[idx] = finalTrip;
+          await storage.saveTrips(currentTrips.map((t) => t.toJson()).toList());
+        }
+        return finalTrip;
+      }
+    } catch (_) {
+      // Offline fallback: already saved and enqueued
+    }
+
+    return localTrip;
   }
 
   /// Renames an unclaimed member in a trip.
@@ -609,25 +655,7 @@ class TripRepository {
     required String memberId,
     required String newDisplayName,
   }) async {
-    try {
-      final res = await apiClient.patch('/trips/$tripId/members/$memberId', body: {
-        'displayName': newDisplayName.trim(),
-      });
-      if (res is Map<String, dynamic>) {
-        final updatedTrip = Trip.fromJson(res);
-        final trips = await getTrips();
-        final idx = trips.indexWhere((t) => t.id == tripId);
-        if (idx != -1) {
-          trips[idx] = updatedTrip;
-          await storage.saveTrips(trips.map((t) => t.toJson()).toList());
-        }
-        return updatedTrip;
-      }
-    } catch (_) {
-      // Offline fallback
-    }
-
-    final trips = await getTrips();
+    final trips = getCachedTrips();
     final index = trips.indexWhere((t) => t.id == tripId);
     if (index == -1) throw StateError('Trip not found');
 
@@ -645,6 +673,38 @@ class TripRepository {
 
     trips[index] = updatedTrip;
     await storage.saveTrips(trips.map((t) => t.toJson()).toList());
+
+    final mutationPayload = {
+      'tripId': tripId,
+      'memberId': memberId,
+      'displayName': newDisplayName.trim(),
+    };
+    await syncService.enqueueMutation(MutationType.renameMember, mutationPayload);
+
+    try {
+      final accountId = storage.getSavedUser()?['id']?.toString() ?? updatedTrip.creatorId;
+      await syncService.cloudSync.syncTrip(updatedTrip.toJson(), accountId: accountId);
+    } catch (_) {}
+
+    try {
+      final res = await apiClient.patch('/trips/$tripId/members/$memberId', body: {
+        'displayName': newDisplayName.trim(),
+      });
+      if (res is Map<String, dynamic>) {
+        final serverTrip = Trip.fromJson(res);
+        final finalTrip = updatedTrip.mergeWith(serverTrip);
+        final currentTrips = getCachedTrips();
+        final idx = currentTrips.indexWhere((t) => t.id == tripId);
+        if (idx != -1) {
+          currentTrips[idx] = finalTrip;
+          await storage.saveTrips(currentTrips.map((t) => t.toJson()).toList());
+        }
+        return finalTrip;
+      }
+    } catch (_) {
+      // Offline fallback
+    }
+
     return updatedTrip;
   }
 

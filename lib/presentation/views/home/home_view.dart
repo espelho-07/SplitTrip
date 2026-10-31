@@ -14,6 +14,7 @@ import '../../../data/services/local_storage_service.dart';
 import '../../../data/services/p2p_sync_service.dart';
 import '../../../data/services/sync_service.dart';
 import '../../../domain/enums/app_experience_mode.dart';
+import '../../../domain/enums/kith_app_mode.dart';
 import '../../../domain/services/notification_service.dart';
 import '../../router/app_router.dart';
 import '../../viewmodels/auth_viewmodel.dart';
@@ -413,134 +414,162 @@ class _HomeViewState extends State<HomeView> {
       );
     }
 
-    final mode = authVm.appExperienceMode;
+    final primaryMode = authVm.primaryAppMode;
     final List<Widget> pages;
     final List<NavigationDestination> destinations;
 
-    switch (mode) {
-      case AppExperienceMode.tripsOnly:
-        pages = const [
-          DashboardTab(),
-          TripsHomeTab(),
-          ProfileHomeTab(),
-        ];
-        destinations = [
-          NavigationDestination(
-            icon: const Icon(Icons.home_outlined, size: 22),
-            selectedIcon: const Icon(Icons.home_rounded, size: 22, color: Color(0xFF14B8A6)),
-            label: l10n.navHome,
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.flight_takeoff_outlined, size: 22),
-            selectedIcon: const Icon(Icons.flight_takeoff_rounded, size: 22, color: Color(0xFF14B8A6)),
-            label: l10n.navTrips,
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.person_outline_rounded, size: 22),
-            selectedIcon: const Icon(Icons.person_rounded, size: 22, color: Color(0xFF14B8A6)),
-            label: l10n.navProfile,
-          ),
-        ];
-        break;
+    if (primaryMode.isFinancial) {
+      // 1. FINANCIAL MODE: Section A (Personal Finance) + Section B (IPO Manager) + Profile
+      pages = const [
+        PersonalHomeTab(),
+        IpoHomeView(isEmbeddedTab: true),
+        ProfileHomeTab(),
+      ];
+      destinations = [
+        const NavigationDestination(
+          icon: Icon(Icons.account_balance_wallet_outlined, size: 22),
+          selectedIcon: Icon(Icons.account_balance_wallet_rounded, size: 22, color: Color(0xFF14B8A6)),
+          label: 'Finances',
+        ),
+        const NavigationDestination(
+          icon: Icon(Icons.candlestick_chart_outlined, size: 22),
+          selectedIcon: Icon(Icons.candlestick_chart_rounded, size: 22, color: Color(0xFF14B8A6)),
+          label: 'IPO',
+        ),
+        NavigationDestination(
+          icon: const Icon(Icons.person_outline_rounded, size: 22),
+          selectedIcon: const Icon(Icons.person_rounded, size: 22, color: Color(0xFF14B8A6)),
+          label: l10n.navProfile,
+        ),
+      ];
+    } else {
+      // 2. TRIP MODE: Respect granular mode settings (tripsOnly, all, etc.)
+      final mode = authVm.appExperienceMode;
+      switch (mode) {
+        case AppExperienceMode.tripsOnly:
+          pages = const [
+            DashboardTab(),
+            TripsHomeTab(),
+            ProfileHomeTab(),
+          ];
+          destinations = [
+            NavigationDestination(
+              icon: const Icon(Icons.home_outlined, size: 22),
+              selectedIcon: const Icon(Icons.home_rounded, size: 22, color: Color(0xFF14B8A6)),
+              label: l10n.navHome,
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.flight_takeoff_outlined, size: 22),
+              selectedIcon: const Icon(Icons.flight_takeoff_rounded, size: 22, color: Color(0xFF14B8A6)),
+              label: l10n.navTrips,
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.person_outline_rounded, size: 22),
+              selectedIcon: const Icon(Icons.person_rounded, size: 22, color: Color(0xFF14B8A6)),
+              label: l10n.navProfile,
+            ),
+          ];
+          break;
 
-      case AppExperienceMode.tripsAndExpenses:
-        pages = const [
-          DashboardTab(),
-          TripsHomeTab(),
-          PersonalHomeTab(),
-          ProfileHomeTab(),
-        ];
-        destinations = [
-          NavigationDestination(
-            icon: const Icon(Icons.home_outlined, size: 22),
-            selectedIcon: const Icon(Icons.home_rounded, size: 22, color: Color(0xFF14B8A6)),
-            label: l10n.navHome,
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.flight_takeoff_outlined, size: 22),
-            selectedIcon: const Icon(Icons.flight_takeoff_rounded, size: 22, color: Color(0xFF14B8A6)),
-            label: l10n.navTrips,
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.receipt_long_outlined, size: 22),
-            selectedIcon: const Icon(Icons.receipt_long_rounded, size: 22, color: Color(0xFF14B8A6)),
-            label: l10n.navPersonal,
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.person_outline_rounded, size: 22),
-            selectedIcon: const Icon(Icons.person_rounded, size: 22, color: Color(0xFF14B8A6)),
-            label: l10n.navProfile,
-          ),
-        ];
-        break;
+        case AppExperienceMode.tripsAndExpenses:
+          pages = const [
+            DashboardTab(),
+            TripsHomeTab(),
+            PersonalHomeTab(),
+            ProfileHomeTab(),
+          ];
+          destinations = [
+            NavigationDestination(
+              icon: const Icon(Icons.home_outlined, size: 22),
+              selectedIcon: const Icon(Icons.home_rounded, size: 22, color: Color(0xFF14B8A6)),
+              label: l10n.navHome,
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.flight_takeoff_outlined, size: 22),
+              selectedIcon: const Icon(Icons.flight_takeoff_rounded, size: 22, color: Color(0xFF14B8A6)),
+              label: l10n.navTrips,
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.receipt_long_outlined, size: 22),
+              selectedIcon: const Icon(Icons.receipt_long_rounded, size: 22, color: Color(0xFF14B8A6)),
+              label: l10n.navPersonal,
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.person_outline_rounded, size: 22),
+              selectedIcon: const Icon(Icons.person_rounded, size: 22, color: Color(0xFF14B8A6)),
+              label: l10n.navProfile,
+            ),
+          ];
+          break;
 
-      case AppExperienceMode.tripsAndIpo:
-        pages = const [
-          DashboardTab(),
-          TripsHomeTab(),
-          IpoHomeView(isEmbeddedTab: true),
-          ProfileHomeTab(),
-        ];
-        destinations = [
-          NavigationDestination(
-            icon: const Icon(Icons.home_outlined, size: 22),
-            selectedIcon: const Icon(Icons.home_rounded, size: 22, color: Color(0xFF14B8A6)),
-            label: l10n.navHome,
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.flight_takeoff_outlined, size: 22),
-            selectedIcon: const Icon(Icons.flight_takeoff_rounded, size: 22, color: Color(0xFF14B8A6)),
-            label: l10n.navTrips,
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.candlestick_chart_outlined, size: 22),
-            selectedIcon: Icon(Icons.candlestick_chart_rounded, size: 22, color: Color(0xFF14B8A6)),
-            label: 'IPO',
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.person_outline_rounded, size: 22),
-            selectedIcon: const Icon(Icons.person_rounded, size: 22, color: Color(0xFF14B8A6)),
-            label: l10n.navProfile,
-          ),
-        ];
-        break;
+        case AppExperienceMode.tripsAndIpo:
+          pages = const [
+            DashboardTab(),
+            TripsHomeTab(),
+            IpoHomeView(isEmbeddedTab: true),
+            ProfileHomeTab(),
+          ];
+          destinations = [
+            NavigationDestination(
+              icon: const Icon(Icons.home_outlined, size: 22),
+              selectedIcon: const Icon(Icons.home_rounded, size: 22, color: Color(0xFF14B8A6)),
+              label: l10n.navHome,
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.flight_takeoff_outlined, size: 22),
+              selectedIcon: const Icon(Icons.flight_takeoff_rounded, size: 22, color: Color(0xFF14B8A6)),
+              label: l10n.navTrips,
+            ),
+            const NavigationDestination(
+              icon: Icon(Icons.candlestick_chart_outlined, size: 22),
+              selectedIcon: Icon(Icons.candlestick_chart_rounded, size: 22, color: Color(0xFF14B8A6)),
+              label: 'IPO',
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.person_outline_rounded, size: 22),
+              selectedIcon: const Icon(Icons.person_rounded, size: 22, color: Color(0xFF14B8A6)),
+              label: l10n.navProfile,
+            ),
+          ];
+          break;
 
-      case AppExperienceMode.all:
-        pages = const [
-          DashboardTab(),
-          TripsHomeTab(),
-          PersonalHomeTab(),
-          IpoHomeView(isEmbeddedTab: true),
-          ProfileHomeTab(),
-        ];
-        destinations = [
-          NavigationDestination(
-            icon: const Icon(Icons.home_outlined, size: 22),
-            selectedIcon: const Icon(Icons.home_rounded, size: 22, color: Color(0xFF14B8A6)),
-            label: l10n.navHome,
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.flight_takeoff_outlined, size: 22),
-            selectedIcon: const Icon(Icons.flight_takeoff_rounded, size: 22, color: Color(0xFF14B8A6)),
-            label: l10n.navTrips,
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.receipt_long_outlined, size: 22),
-            selectedIcon: const Icon(Icons.receipt_long_rounded, size: 22, color: Color(0xFF14B8A6)),
-            label: l10n.navPersonal,
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.candlestick_chart_outlined, size: 22),
-            selectedIcon: Icon(Icons.candlestick_chart_rounded, size: 22, color: Color(0xFF14B8A6)),
-            label: 'IPO',
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.person_outline_rounded, size: 22),
-            selectedIcon: const Icon(Icons.person_rounded, size: 22, color: Color(0xFF14B8A6)),
-            label: l10n.navProfile,
-          ),
-        ];
-        break;
+        case AppExperienceMode.all:
+          pages = const [
+            DashboardTab(),
+            TripsHomeTab(),
+            PersonalHomeTab(),
+            IpoHomeView(isEmbeddedTab: true),
+            ProfileHomeTab(),
+          ];
+          destinations = [
+            NavigationDestination(
+              icon: const Icon(Icons.home_outlined, size: 22),
+              selectedIcon: const Icon(Icons.home_rounded, size: 22, color: Color(0xFF14B8A6)),
+              label: l10n.navHome,
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.flight_takeoff_outlined, size: 22),
+              selectedIcon: const Icon(Icons.flight_takeoff_rounded, size: 22, color: Color(0xFF14B8A6)),
+              label: l10n.navTrips,
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.receipt_long_outlined, size: 22),
+              selectedIcon: const Icon(Icons.receipt_long_rounded, size: 22, color: Color(0xFF14B8A6)),
+              label: l10n.navPersonal,
+            ),
+            const NavigationDestination(
+              icon: Icon(Icons.candlestick_chart_outlined, size: 22),
+              selectedIcon: Icon(Icons.candlestick_chart_rounded, size: 22, color: Color(0xFF14B8A6)),
+              label: 'IPO',
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.person_outline_rounded, size: 22),
+              selectedIcon: const Icon(Icons.person_rounded, size: 22, color: Color(0xFF14B8A6)),
+              label: l10n.navProfile,
+            ),
+          ];
+          break;
+      }
     }
 
     final activeIndex = _currentIndex.clamp(0, pages.length - 1);
@@ -548,17 +577,24 @@ class _HomeViewState extends State<HomeView> {
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF080C0E) : const Color(0xFFF8FAFC),
       body: SafeArea(
-        child: Stack(
+        child: Column(
           children: [
-            IndexedStack(
-              index: activeIndex,
-              children: pages,
-            ),
-            const Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: UpdateAvailableBanner(),
+            _buildModeSwitchHeader(context, authVm, isDark),
+            Expanded(
+              child: Stack(
+                children: [
+                  IndexedStack(
+                    index: activeIndex,
+                    children: pages,
+                  ),
+                  const Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: UpdateAvailableBanner(),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -586,6 +622,120 @@ class _HomeViewState extends State<HomeView> {
             }
           },
           destinations: destinations,
+        ),
+      ),
+    );
+  }
+
+
+  Widget _buildModeSwitchHeader(BuildContext context, AuthViewModel authVm, bool isDark) {
+    final mode = authVm.primaryAppMode;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF080C0E) : const Color(0xFFF8FAFC),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF131A20) : const Color(0xFFE2E8F0),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: isDark ? const Color(0x22FFFFFF) : const Color(0xFFCBD5E1),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildModePill(
+                  label: 'Trip Mode',
+                  icon: Icons.flight_takeoff_rounded,
+                  isSelected: mode.isTrip,
+                  isDark: isDark,
+                  onTap: () async {
+                    if (!mode.isTrip) {
+                      HapticHelper.medium();
+                      setState(() => _currentIndex = 0);
+                      await authVm.setPrimaryAppMode(KithAppMode.trip);
+                    }
+                  },
+                ),
+                _buildModePill(
+                  label: 'Financial Mode',
+                  icon: Icons.account_balance_wallet_rounded,
+                  isSelected: mode.isFinancial,
+                  isDark: isDark,
+                  onTap: () async {
+                    if (!mode.isFinancial) {
+                      HapticHelper.medium();
+                      setState(() => _currentIndex = 0);
+                      await authVm.setPrimaryAppMode(KithAppMode.financial);
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModePill({
+    required String label,
+    required IconData icon,
+    required bool isSelected,
+    required bool isDark,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? (isDark ? const Color(0xFF14B8A6) : const Color(0xFF0D9488))
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF14B8A6).withValues(alpha: isDark ? 0.35 : 0.25),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 15,
+              color: isSelected
+                  ? Colors.white
+                  : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected
+                    ? Colors.white
+                    : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+              ),
+            ),
+          ],
         ),
       ),
     );

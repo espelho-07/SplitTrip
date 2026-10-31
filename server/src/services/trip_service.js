@@ -39,6 +39,7 @@ class TripService {
           status: m.status || (isUnclaimed ? 'unclaimed' : 'claimed'),
           isClaimed: typeof m.isClaimed === 'boolean' ? m.isClaimed : !isUnclaimed,
           claimToken: m.claimToken || null,
+          isVirtual: m.isVirtual !== undefined ? m.isVirtual : isUnclaimed,
           mergedIntoMemberId: m.mergedIntoMemberId || null,
           joinedAt: m.joinedAt,
           lastSeenAt: m.lastSeenAt || m.joinedAt || null,
@@ -370,7 +371,7 @@ class TripService {
     return enriched;
   }
 
-  addMember(tripId, currentUserId, { displayName }, realtimeHub = null) {
+  addMember(tripId, currentUserId, { id: memberId, userId: explicitUserId, displayName, claimToken: explicitClaimToken, isVirtual = true }, realtimeHub = null) {
     if (!displayName || !displayName.trim()) {
       throw AppError.badRequest('Member display name is required');
     }
@@ -386,16 +387,25 @@ class TripService {
     }
 
     const now = new Date().toISOString();
+    const finalId = memberId || `mbr_${crypto.randomUUID().replace(/-/g, '').substring(0, 10)}`;
+
+    // Check if member already exists by ID (idempotency)
+    const existing = db.findOne('trip_members', (m) => m.tripId === tripId && m.id === finalId);
+    if (existing) {
+      return this._enrichTrip(trip);
+    }
+
     const newMember = {
-      id: `mbr_${crypto.randomUUID().replace(/-/g, '').substring(0, 10)}`,
+      id: finalId,
       tripId,
-      userId: `unclaimed_${crypto.randomUUID().replace(/-/g, '').substring(0, 8)}`,
+      userId: explicitUserId || `unclaimed_${crypto.randomUUID().replace(/-/g, '').substring(0, 8)}`,
       displayName: displayName.trim(),
       avatarUrl: null,
       role: 'member',
       status: 'unclaimed',
       isClaimed: false,
-      claimToken: `clm_${crypto.randomUUID().replace(/-/g, '').substring(0, 10)}`,
+      isVirtual: isVirtual !== false,
+      claimToken: explicitClaimToken || `clm_${crypto.randomUUID().replace(/-/g, '').substring(0, 10)}`,
       joinedAt: now,
       lastSeenAt: now,
       lastSyncedRevision: 1,
