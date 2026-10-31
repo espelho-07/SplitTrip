@@ -508,9 +508,12 @@ class P2PSyncService {
                 .toSet() ??
             {};
 
-        // 2. Identify local operations missing on peer
+        // 2. Identify local operations missing on peer and tag with current node ID
         final localQueue = _syncService.getPendingMutationsForTrip(tripId);
-        final missingOnPeer = localQueue.where((m) => !peerKnownOps.contains(m.id)).toList();
+        final missingOnPeer = localQueue.where((m) => !peerKnownOps.contains(m.id)).map((m) {
+          final updatedForwarded = m.forwardedBy.contains(_deviceId) ? m.forwardedBy : [...m.forwardedBy, _deviceId];
+          return m.copyWith(forwardedBy: updatedForwarded);
+        }).toList();
 
         // 3. Push missing operations to peer and receive any missing peer operations in the response
         final pushUri = Uri(
@@ -541,16 +544,21 @@ class P2PSyncService {
             await _syncService.markMutationP2PShared(m.id);
           }
 
-          // Apply returned peer mutations
+          // Apply returned peer mutations with hop limit & loop prevention
           final peerOps = resJson['returnOperations'] as List<dynamic>?;
           if (peerOps != null) {
             for (final rawOp in peerOps) {
               if (rawOp is Map<String, dynamic>) {
                 final mutation = SyncMutation.fromJson(rawOp);
+                if (mutation.forwardedBy.contains(_deviceId) || mutation.originDeviceId == _deviceId) {
+                  continue;
+                }
+                if (mutation.hopCount >= 5) {
+                  continue;
+                }
                 final applied = await _syncService.applyRemoteP2PMutation(mutation, _storage);
                 if (applied) {
                   receivedCount++;
-                  await _storage.markP2POperationProcessed(mutation.id);
                 }
               }
             }
@@ -679,18 +687,29 @@ class P2PSyncService {
         for (final rawOp in opsList) {
           if (rawOp is Map<String, dynamic>) {
             final mutation = SyncMutation.fromJson(rawOp);
+            if (mutation.forwardedBy.contains(_deviceId) || mutation.originDeviceId == _deviceId) {
+              continue;
+            }
+            if (mutation.hopCount >= 5) {
+              continue;
+            }
             final applied = await _syncService.applyRemoteP2PMutation(mutation, _storage);
             if (applied) {
               appliedCount++;
               processedIds.add(mutation.id);
-              await _storage.markP2POperationProcessed(mutation.id);
             }
           }
         }
 
-        // Return local operations for this trip that the peer doesn't have yet
+        // Return local operations for this trip that the peer doesn't have yet, tagging with current node ID
         final localQueue = _syncService.getPendingMutationsForTrip(tripId);
-        final returnOps = localQueue.where((m) => !knownLocalOps.contains(m.id)).map((m) => m.toJson()).toList();
+        final returnOps = localQueue
+            .where((m) => !knownLocalOps.contains(m.id))
+            .map((m) {
+              final updatedForwarded = m.forwardedBy.contains(_deviceId) ? m.forwardedBy : [...m.forwardedBy, _deviceId];
+              return m.copyWith(forwardedBy: updatedForwarded).toJson();
+            })
+            .toList();
 
         response.statusCode = HttpStatus.ok;
         response.write(jsonEncode({

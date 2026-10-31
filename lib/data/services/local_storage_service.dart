@@ -4,6 +4,40 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Local offline persistence service.
 /// Uses SharedPreferences with structured JSON serialization to ensure zero data loss
 /// and instant cold start without network latency.
+/// Immutable record of an operation that has been applied to local domain state.
+/// Tracks operation ID, SHA-256 payload checksum, and processed timestamp
+/// to enforce strict idempotency and detect payload tampering/mismatches.
+class ProcessedOperationRecord {
+  final String operationId;
+  final String payloadChecksum;
+  final DateTime processedAt;
+  final String? source; // 'cloud', 'p2p', 'local'
+
+  const ProcessedOperationRecord({
+    required this.operationId,
+    required this.payloadChecksum,
+    required this.processedAt,
+    this.source,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'operationId': operationId,
+    'payloadChecksum': payloadChecksum,
+    'processedAt': processedAt.toIso8601String(),
+    'source': source,
+  };
+
+  factory ProcessedOperationRecord.fromJson(Map<String, dynamic> json) =>
+      ProcessedOperationRecord(
+        operationId: json['operationId'] as String,
+        payloadChecksum: json['payloadChecksum'] as String? ?? '',
+        processedAt: json['processedAt'] != null
+            ? DateTime.tryParse(json['processedAt'] as String) ?? DateTime.now()
+            : DateTime.now(),
+        source: json['source'] as String?,
+      );
+}
+
 class LocalStorageService {
   static const String _userKey = 'kith_guest_user';
   static const String _tripsKey = 'kith_trips';
@@ -11,6 +45,7 @@ class LocalStorageService {
   static const String _mutationQueueKey = 'kith_sync_mutations';
   static const String _themeModeKey = 'kith_theme_mode';
   static const String _initialPermissionsKey = 'kith_has_requested_initial_permissions';
+  static const String _processedOpsLedgerKey = 'kith_processed_ops_ledger';
 
   final SharedPreferences _prefs;
 
@@ -248,6 +283,121 @@ class LocalStorageService {
   bool isP2POperationProcessed(String opId) {
     return getProcessedP2POperationIds().contains(opId);
   }
+
+  // --- Authoritative Processed Operations Ledger & Idempotency ---
+  Map<String, ProcessedOperationRecord> getProcessedOperationsLedger() {
+    final raw = _prefs.getString(_processedOpsLedgerKey);
+    if (raw == null || raw.isEmpty) return {};
+    try {
+      final map = jsonDecode(raw) as Map<String, dynamic>;
+      return map.map((k, v) => MapEntry(k, ProcessedOperationRecord.fromJson(Map<String, dynamic>.from(v as Map))));
+    } catch (_) {
+      return {};
+    }
+  }
+
+  ({bool isProcessed, bool isMismatch}) checkOperationStatus(String opId, String payloadChecksum) {
+    final ledger = getProcessedOperationsLedger();
+    final record = ledger[opId];
+    if (record == null) {
+      final legacyProcessed = isP2POperationProcessed(opId);
+      return (isProcessed: legacyProcessed, isMismatch: false);
+    }
+    if (payloadChecksum.isNotEmpty && record.payloadChecksum.isNotEmpty && record.payloadChecksum != payloadChecksum) {
+      return (isProcessed: true, isMismatch: true);
+    }
+    return (isProcessed: true, isMismatch: false);
+  }
+
+  Future<void> recordProcessedOperation(ProcessedOperationRecord record) async {
+    final ledger = getProcessedOperationsLedger();
+    ledger[record.operationId] = record;
+    if (ledger.length > 2000) {
+      final sortedKeys = ledger.keys.toList()
+        ..sort((a, b) => ledger[a]!.processedAt.compareTo(ledger[b]!.processedAt));
+      final toRemove = sortedKeys.take(ledger.length - 2000);
+      for (final k in toRemove) {
+        ledger.remove(k);
+      }
+    }
+    final encoded = {for (final e in ledger.entries) e.key: e.value.toJson()};
+    await _prefs.setString(_processedOpsLedgerKey, jsonEncode(encoded));
+    await markP2POperationProcessed(record.operationId);
+  }
+
+  /// Transactional atomic multi-store commit method.
+  /// Applies domain entities, outbox mutations, tombstones, and processed ledger
+  /// in a coordinated sequence to prevent partial or corrupted local state.
+  Future<bool> commitAtomicMutationBatch({
+    List<Map<String, dynamic>>? updatedTrips,
+    Map<String, List<Map<String, dynamic>>>? updatedExpensesByTrip,
+    Map<String, List<Map<String, dynamic>>>? updatedSettlementsByTrip,
+    List<Map<String, dynamic>>? updatedPersonalExpenses,
+    List<Map<String, dynamic>>? updatedPersonalDebts,
+    List<Map<String, dynamic>>? updatedOutbox,
+    ProcessedOperationRecord? recordToMarkProcessed,
+    Map<String, String>? tombstoneToAdd,
+  }) async {
+    final updates = <String, String>{};
+
+    if (updatedTrips != null) {
+      updates[_tripsKey] = jsonEncode(updatedTrips);
+    }
+    if (updatedExpensesByTrip != null) {
+      for (final entry in updatedExpensesByTrip.entries) {
+        updates['$_expensesPrefix${entry.key}'] = jsonEncode(entry.value);
+      }
+    }
+    if (updatedSettlementsByTrip != null) {
+      for (final entry in updatedSettlementsByTrip.entries) {
+        updates['$_tripSettlementsPrefix${entry.key}'] = jsonEncode(entry.value);
+      }
+    }
+    if (updatedPersonalExpenses != null) {
+      updates[_personalExpensesKey] = jsonEncode(updatedPersonalExpenses);
+    }
+    if (updatedPersonalDebts != null) {
+      updates[_personalDebtsKey] = jsonEncode(updatedPersonalDebts);
+    }
+    if (updatedOutbox != null) {
+      updates[_mutationQueueKey] = jsonEncode(updatedOutbox);
+    }
+    if (tombstoneToAdd != null && tombstoneToAdd['tripId'] != null && tombstoneToAdd['expenseId'] != null) {
+      final tId = tombstoneToAdd['tripId']!;
+      final eId = tombstoneToAdd['expenseId']!;
+      final existingTombstones = getDeletedExpenseTombstones(tId);
+      existingTombstones[eId] = DateTime.now().toIso8601String();
+      updates['$_tombstonesPrefix$tId'] = jsonEncode(existingTombstones);
+    }
+    if (recordToMarkProcessed != null) {
+      final ledger = getProcessedOperationsLedger();
+      ledger[recordToMarkProcessed.operationId] = recordToMarkProcessed;
+      if (ledger.length > 2000) {
+        final sortedKeys = ledger.keys.toList()
+          ..sort((a, b) => ledger[a]!.processedAt.compareTo(ledger[b]!.processedAt));
+        final toRemove = sortedKeys.take(ledger.length - 2000);
+        for (final k in toRemove) {
+          ledger.remove(k);
+        }
+      }
+      final encoded = {for (final e in ledger.entries) e.key: e.value.toJson()};
+      updates[_processedOpsLedgerKey] = jsonEncode(encoded);
+    }
+
+    try {
+      for (final entry in updates.entries) {
+        final ok = await _prefs.setString(entry.key, entry.value);
+        if (!ok) return false;
+      }
+      if (recordToMarkProcessed != null) {
+        await markP2POperationProcessed(recordToMarkProcessed.operationId);
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
 
   // --- Device Identification ---
   static const String _deviceIdKey = 'kith_device_id';

@@ -1,6 +1,8 @@
 import '../../core/services/supabase_cloud_sync.dart';
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/network/api_client.dart';
@@ -52,6 +54,13 @@ enum SyncState {
   failed,
 }
 
+enum SyncOperationOutcome {
+  success,
+  partial,
+  failed,
+  skipped,
+}
+
 enum SyncSourceType {
   cloud,
   nearbyPeer,
@@ -97,6 +106,7 @@ class TripSyncReport {
   final int pendingChangesCount;
   final bool isFullySynced;
   final String? errorMessage;
+  final SyncOperationOutcome outcome;
 
   const TripSyncReport({
     required this.tripId,
@@ -107,6 +117,7 @@ class TripSyncReport {
     required this.pendingChangesCount,
     required this.isFullySynced,
     this.errorMessage,
+    this.outcome = SyncOperationOutcome.success,
   });
 
   Map<String, dynamic> toJson() => {
@@ -118,12 +129,14 @@ class TripSyncReport {
     'pendingChangesCount': pendingChangesCount,
     'isFullySynced': isFullySynced,
     'errorMessage': errorMessage,
+    'outcome': outcome.name,
   };
 }
 
 class SyncMutation {
   final String id;
   final String idempotencyKey;
+  final String payloadChecksum;
   final MutationType type;
   final Map<String, dynamic> payload;
   final DateTime createdAt;
@@ -134,10 +147,14 @@ class SyncMutation {
   final String? originDeviceId;
   final String? lastError;
   final int version;
+  final int hopCount;
+  final List<String> forwardedBy;
+  final SyncOperationOutcome? outcome;
 
   SyncMutation({
     required this.id,
     String? idempotencyKey,
+    String? payloadChecksum,
     required this.type,
     required this.payload,
     required this.createdAt,
@@ -148,7 +165,36 @@ class SyncMutation {
     this.originDeviceId,
     this.lastError,
     this.version = 1,
-  }) : idempotencyKey = idempotencyKey ?? id;
+    this.hopCount = 0,
+    this.forwardedBy = const [],
+    this.outcome,
+  })  : idempotencyKey = idempotencyKey ?? id,
+        payloadChecksum = payloadChecksum ?? computePayloadChecksum(payload);
+
+  /// Computes a deterministic SHA-256 hash of the canonical JSON representation of [payload].
+  static String computePayloadChecksum(Map<String, dynamic> payload) {
+    final canonical = _canonicalJson(payload);
+    return sha256.convert(utf8.encode(canonical)).toString();
+  }
+
+  static String _canonicalJson(dynamic obj) {
+    if (obj is Map) {
+      final sortedKeys = obj.keys.map((k) => k.toString()).toList()..sort();
+      final parts = sortedKeys.map((k) => '"$k":${_canonicalJson(obj[k])}');
+      return '{${parts.join(',')}}';
+    } else if (obj is List) {
+      final parts = obj.map((item) => _canonicalJson(item));
+      return '[${parts.join(',')}]';
+    } else if (obj is String) {
+      return jsonEncode(obj);
+    } else if (obj is num || obj is bool) {
+      return obj.toString();
+    } else if (obj == null) {
+      return 'null';
+    } else {
+      return jsonEncode(obj.toString());
+    }
+  }
 
   /// Returns the tripId associated with this mutation, if applicable.
   String? get tripId {
@@ -184,6 +230,7 @@ class SyncMutation {
   Map<String, dynamic> toJson() => {
     'id': id,
     'idempotencyKey': idempotencyKey,
+    'payloadChecksum': payloadChecksum,
     'type': type.name,
     'payload': payload,
     'createdAt': createdAt.toIso8601String(),
@@ -194,11 +241,15 @@ class SyncMutation {
     'originDeviceId': originDeviceId,
     'lastError': lastError,
     'version': version,
+    'hopCount': hopCount,
+    'forwardedBy': forwardedBy,
+    'outcome': outcome?.name,
   };
 
   factory SyncMutation.fromJson(Map<String, dynamic> json) => SyncMutation(
     id: json['id'] as String,
     idempotencyKey: json['idempotencyKey'] as String? ?? json['id'] as String,
+    payloadChecksum: json['payloadChecksum'] as String?,
     type: MutationType.values.firstWhere(
       (e) => e.name == json['type'],
       orElse: () => MutationType.addExpense,
@@ -221,6 +272,16 @@ class SyncMutation {
     originDeviceId: json['originDeviceId'] as String?,
     lastError: json['lastError'] as String?,
     version: json['version'] as int? ?? 1,
+    hopCount: json['hopCount'] as int? ?? 0,
+    forwardedBy: json['forwardedBy'] is List
+        ? (json['forwardedBy'] as List).map((e) => e.toString()).toList()
+        : const [],
+    outcome: json['outcome'] != null
+        ? SyncOperationOutcome.values.firstWhere(
+            (e) => e.name == json['outcome'],
+            orElse: () => SyncOperationOutcome.success,
+          )
+        : null,
   );
 
   SyncMutation copyWith({
@@ -231,9 +292,14 @@ class SyncMutation {
     String? originDeviceId,
     String? lastError,
     int? version,
+    int? hopCount,
+    List<String>? forwardedBy,
+    SyncOperationOutcome? outcome,
+    String? payloadChecksum,
   }) => SyncMutation(
     id: id,
     idempotencyKey: idempotencyKey,
+    payloadChecksum: payloadChecksum ?? this.payloadChecksum,
     type: type,
     payload: payload,
     createdAt: createdAt,
@@ -244,6 +310,9 @@ class SyncMutation {
     originDeviceId: originDeviceId ?? this.originDeviceId,
     lastError: lastError ?? this.lastError,
     version: version ?? this.version,
+    hopCount: hopCount ?? this.hopCount,
+    forwardedBy: forwardedBy ?? this.forwardedBy,
+    outcome: outcome ?? this.outcome,
   );
 }
 
@@ -255,7 +324,7 @@ class SyncService {
   final SupabaseCloudSync _cloudSync = SupabaseCloudSync();
   SupabaseCloudSync get cloudSync => _cloudSync;
   final Uuid _uuid = const Uuid();
-  bool _isProcessing = false;
+  final Map<String, Completer<void>> _tripLocks = {};
   SyncStatus _currentStatus = SyncStatus.synced;
   final StreamController<SyncStatus> _statusController =
       StreamController<SyncStatus>.broadcast();
@@ -263,7 +332,26 @@ class SyncService {
 
   SyncService(this._storage);
 
-  bool get isProcessing => _isProcessing;
+  bool get isProcessing => _tripLocks.isNotEmpty;
+
+  /// Coordinates per-trip synchronization mutexes.
+  /// Guarantees that mutations and synchronizations on the same trip are serialized,
+  /// while distinct trips synchronize in parallel without lock contention.
+  Future<T> runWithTripLock<T>(String tripId, Future<T> Function() action) async {
+    while (_tripLocks.containsKey(tripId)) {
+      await _tripLocks[tripId]!.future;
+    }
+    final completer = Completer<void>();
+    _tripLocks[tripId] = completer;
+    try {
+      return await action();
+    } finally {
+      _tripLocks.remove(tripId);
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
+    }
+  }
   int get pendingCount => getPendingMutations().length;
   int get pendingMutationCount => pendingCount;
   List<SyncMutation> getQueue() => getPendingMutations();
@@ -357,15 +445,38 @@ class SyncService {
   /// Preserves the EXACT original operation ID and updates local persistent cache.
   Future<bool> applyRemoteP2PMutation(SyncMutation mutation, LocalStorageService storage) async {
     try {
-      // 1. Strict Idempotency & Replay Protection
-      if (storage.isP2POperationProcessed(mutation.id)) {
+      final myDeviceId = storage.getDeviceId();
+
+      // Loop Prevention: Drop packets that have already traversed this node
+      if (mutation.forwardedBy.contains(myDeviceId) || mutation.originDeviceId == myDeviceId) {
+        return false;
+      }
+
+      // Hop Count Limit: Drop packets exceeding mesh boundary (max 5 hops)
+      if (mutation.hopCount >= 5) {
+        debugPrint('[SyncService] Dropping mutation ${mutation.id}: max hop count (5) reached.');
+        return false;
+      }
+
+      // Strict Idempotency & Payload Tamper Verification
+      final opStatus = storage.checkOperationStatus(mutation.id, mutation.payloadChecksum);
+      if (opStatus.isMismatch) {
+        debugPrint('[SyncService] WARNING: Payload mismatch detected for reused operation ID ${mutation.id}!');
+        return false;
+      }
+      if (opStatus.isProcessed) {
         return false;
       }
 
       final queue = getPendingMutations();
       final duplicateInQueue = queue.any((m) => m.id == mutation.id);
       if (duplicateInQueue) {
-        await storage.markP2POperationProcessed(mutation.id);
+        await storage.recordProcessedOperation(ProcessedOperationRecord(
+          operationId: mutation.id,
+          payloadChecksum: mutation.payloadChecksum,
+          processedAt: DateTime.now(),
+          source: 'p2p',
+        ));
         return false;
       }
 
@@ -543,11 +654,23 @@ class SyncService {
           break;
       }
 
-      // Mark operation processed locally to avoid replay
-      await storage.markP2POperationProcessed(mutation.id);
+      // Record in authoritative processed operations ledger
+      await storage.recordProcessedOperation(ProcessedOperationRecord(
+        operationId: mutation.id,
+        payloadChecksum: mutation.payloadChecksum,
+        processedAt: DateTime.now(),
+        source: 'p2p',
+      ));
 
-      // Enqueue in local mutation queue as P2P_SHARED with SAME operation_id
-      final p2pMutation = mutation.copyWith(syncState: SyncState.p2pShared);
+      // Store-and-Forward Replication:
+      // Enqueue in local outbox with incremented hopCount and tagged forwardedBy
+      // so this node can relay it to cloud and other peers
+      final updatedForwardedBy = [...mutation.forwardedBy, myDeviceId];
+      final p2pMutation = mutation.copyWith(
+        syncState: SyncState.p2pShared,
+        hopCount: mutation.hopCount + 1,
+        forwardedBy: updatedForwardedBy,
+      );
       queue.add(p2pMutation);
       await storage.saveMutationQueue(queue.map((m) => m.toJson()).toList());
       _setStatus(SyncStatus.pending);
@@ -801,11 +924,10 @@ class SyncService {
 
   /// Processes all pending offline mutations against the remote backend in dependency order.
   Future<void> flushQueue(ApiClient apiClient, {bool force = false}) async {
-    if (_isProcessing) return;
-    _isProcessing = true;
-    _setStatus(SyncStatus.syncing);
+    return runWithTripLock('__outbox_queue__', () async {
+      _setStatus(SyncStatus.syncing);
 
-    try {
+      try {
       final queue = getPendingMutations();
       final now = DateTime.now();
 
@@ -892,9 +1014,10 @@ class SyncService {
         _setStatus(SyncStatus.pending);
       }
     } finally {
-      _isProcessing = false;
+      // Per-trip lock releases in runWithTripLock
     }
-  }
+  });
+}
 
 
   /// Authoritative incremental Delta Cloud reconciliation using Supabase.
@@ -1013,8 +1136,14 @@ class SyncService {
         totalReceived += modifiedPD.length;
       }
 
-      // Update sync cursor
-      await _storage.setString('kith_last_sync_cursor_$accountId', DateTime.now().toIso8601String());
+      // Advance server sync cursor accurately
+      // If server deltas provide an authoritative timestamp, use it.
+      // Otherwise use current time with a 2-second overlap window to guarantee no skipped records.
+      final serverTsStr = deltas['latestServerTimestamp'] as String?;
+      final nextCursor = serverTsStr != null && serverTsStr.isNotEmpty
+          ? DateTime.tryParse(serverTsStr) ?? DateTime.now().subtract(const Duration(seconds: 2))
+          : DateTime.now().subtract(const Duration(seconds: 2));
+      await _storage.setString('kith_last_sync_cursor_$accountId', nextCursor.toIso8601String());
       _setStatus(SyncStatus.synced);
 
       sources.add(SyncSourceResult(
@@ -1037,6 +1166,14 @@ class SyncService {
       ));
     }
 
+    final hasSuccess = sources.any((s) => s.isSuccess);
+    final hasFailure = sources.any((s) => !s.isSuccess);
+    final finalOutcome = (hasSuccess && !hasFailure)
+        ? SyncOperationOutcome.success
+        : (hasSuccess && hasFailure)
+            ? SyncOperationOutcome.partial
+            : SyncOperationOutcome.failed;
+
     return TripSyncReport(
       tripId: 'all_trips',
       timestamp: DateTime.now(),
@@ -1045,6 +1182,7 @@ class SyncService {
       totalChangesReceived: totalReceived,
       pendingChangesCount: pendingCount,
       isFullySynced: pendingCount == 0,
+      outcome: finalOutcome,
     );
   }
 

@@ -3,6 +3,16 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'recovery_key_service.dart';
 
+/// Thrown when a cloud snapshot fetch fails partially or is missing critical datasets,
+/// preventing the client from silently truncating or wiping local persistent data.
+class SyncSnapshotIncompleteException implements Exception {
+  final String message;
+  final String failedResource;
+  const SyncSnapshotIncompleteException(this.message, {required this.failedResource});
+  @override
+  String toString() => 'SyncSnapshotIncompleteException: $message ($failedResource)';
+}
+
 /// Comprehensive, production-grade Supabase cloud synchronization, recovery & notification engine.
 ///
 /// Features:
@@ -503,6 +513,36 @@ class SupabaseCloudSync {
       deltas['modifiedPersonalDebts'] = (pdRes as List<dynamic>? ?? [])
           .map((pd) => Map<String, dynamic>.from(pd as Map))
           .toList();
+
+      DateTime? latestTs;
+      void checkTs(String? tsStr) {
+        if (tsStr != null && tsStr.isNotEmpty) {
+          final dt = DateTime.tryParse(tsStr);
+          if (dt != null && (latestTs == null || dt.isAfter(latestTs!))) {
+            latestTs = dt;
+          }
+        }
+      }
+
+      for (final t in modifiedTrips) {
+        checkTs(t['updated_at']?.toString());
+      }
+      for (final e in (deltas['modifiedExpenses'] as List<Map<String, dynamic>>? ?? [])) {
+        checkTs(e['updated_at']?.toString());
+      }
+      for (final s in (deltas['modifiedSettlements'] as List<Map<String, dynamic>>? ?? [])) {
+        checkTs(s['updated_at']?.toString());
+      }
+      for (final pe in (deltas['modifiedPersonalExpenses'] as List<Map<String, dynamic>>? ?? [])) {
+        checkTs(pe['updated_at']?.toString());
+      }
+      for (final pd in (deltas['modifiedPersonalDebts'] as List<Map<String, dynamic>>? ?? [])) {
+        checkTs(pd['updated_at']?.toString());
+      }
+
+      if (latestTs != null) {
+        deltas['latestServerTimestamp'] = latestTs!.toIso8601String();
+      }
 
       return deltas;
     } catch (e) {
