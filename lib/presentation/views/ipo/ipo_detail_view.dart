@@ -152,11 +152,9 @@ class IpoDetailView extends StatelessWidget {
               // 3. 2x2 Metric Grid Card (Price Band, Lot Size, Min Invest, Issue Size)
               _buildKeyMetricsGrid(ipo, isDark),
 
-              // 3.5 Prominent GMP & Estimated Listing Profit Card
-              if (ipo.gmp != null && ipo.gmp! > 0) ...[
-                const SizedBox(height: 14),
-                _buildGmpInsightCard(ipo, isDark),
-              ],
+              // 3.5 Prominent GMP & Estimated Listing Profit Card (With Regulatory Disclaimer)
+              const SizedBox(height: 14),
+              _buildGmpInsightCard(ipo, isDark),
 
               const SizedBox(height: 18),
 
@@ -228,19 +226,19 @@ class IpoDetailView extends StatelessWidget {
                   Expanded(
                     child: SizedBox(
                       height: 48,
-                      child: OutlinedButton.icon(
+                      child: ElevatedButton.icon(
                         onPressed: () {
-                          HapticHelper.light();
+                          HapticHelper.medium();
                           context.push('/ipo/${ipo.id}/apply');
                         },
-                        icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
+                        icon: const Icon(Icons.playlist_add_check_rounded, size: 18),
                         label: Text(
-                          isApplied ? 'Edit Application' : 'I Applied',
+                          isApplied ? 'Edit Application Plan' : 'Plan Applications',
                           style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5),
                         ),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: isDark ? const Color(0xFF10B981) : forestGreen,
-                          side: BorderSide(color: isDark ? const Color(0xFF10B981) : forestGreen, width: 1.4),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isDark ? const Color(0xFF10B981) : forestGreen,
+                          foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         ),
                       ),
@@ -250,9 +248,9 @@ class IpoDetailView extends StatelessWidget {
                   Expanded(
                     child: SizedBox(
                       height: 48,
-                      child: ElevatedButton.icon(
+                      child: OutlinedButton.icon(
                         onPressed: () {
-                          HapticHelper.medium();
+                          HapticHelper.light();
                           _showAllotmentTracker(context, ipo, applications, ipoVm, isDark);
                         },
                         icon: const Icon(Icons.sync_rounded, size: 18),
@@ -260,9 +258,9 @@ class IpoDetailView extends StatelessWidget {
                           'Track Allotment',
                           style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5),
                         ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: isDark ? const Color(0xFF10B981) : forestGreen,
-                          foregroundColor: Colors.white,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: isDark ? const Color(0xFF10B981) : forestGreen,
+                          side: BorderSide(color: isDark ? const Color(0xFF10B981) : forestGreen, width: 1.4),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         ),
                       ),
@@ -316,6 +314,7 @@ class IpoDetailView extends StatelessWidget {
   }
 
   Widget _buildGmpInsightCard(Ipo ipo, bool isDark) {
+    final hasGmp = ipo.gmp != null && ipo.gmp! > 0;
     final gmp = ipo.gmp ?? 0;
     final maxPrice = ipo.maxPrice;
     final estListingPrice = maxPrice + gmp;
@@ -328,12 +327,16 @@ class IpoDetailView extends StatelessWidget {
         color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: const Color(0xFF10B981).withValues(alpha: 0.3),
+          color: hasGmp
+              ? const Color(0xFF10B981).withValues(alpha: 0.3)
+              : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
           width: 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF10B981).withValues(alpha: isDark ? 0.15 : 0.06),
+            color: hasGmp
+                ? const Color(0xFF10B981).withValues(alpha: isDark ? 0.15 : 0.05)
+                : Colors.black.withValues(alpha: isDark ? 0.2 : 0.02),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -347,7 +350,7 @@ class IpoDetailView extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const Text('🔥', style: TextStyle(fontSize: 16)),
+                  Text(hasGmp ? '🔥' : '📊', style: const TextStyle(fontSize: 16)),
                   const SizedBox(width: 6),
                   Text(
                     'Grey Market Premium (GMP)',
@@ -362,72 +365,118 @@ class IpoDetailView extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFDCFCE7),
+                  color: hasGmp
+                      ? const Color(0xFFDCFCE7)
+                      : (isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9)),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  '+$gmpPercent%',
-                  style: const TextStyle(
+                  hasGmp ? '+$gmpPercent%' : 'Not Available',
+                  style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w900,
-                    color: Color(0xFF15803D),
+                    color: hasGmp
+                        ? const Color(0xFF15803D)
+                        : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
                   ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'GMP Value',
-                      style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '₹$gmp',
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF10B981)),
-                    ),
-                  ],
+          if (hasGmp)
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'GMP Value',
+                        style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '₹$gmp',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF10B981)),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Est. Listing Price',
+                        style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '₹$estListingPrice',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: isDark ? Colors.white : const Color(0xFF0F172A)),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Profit / Lot',
+                        style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '+${CurrencyFormatter.formatPaise(estProfitPerLot * 100, currencyCode: 'INR')}',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF10B981)),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4.0),
+              child: Text(
+                'No unofficial grey market premium quotes published for this issue yet.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                 ),
               ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Est. Listing Price',
-                      style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '₹$estListingPrice',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: isDark ? Colors.white : const Color(0xFF0F172A)),
-                    ),
-                  ],
+            ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.info_outline_rounded,
+                  size: 13,
+                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                 ),
-              ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Profit / Lot',
-                      style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'GMP is an unofficial market indication, not a guaranteed listing price or return.',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      height: 1.3,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '+${CurrencyFormatter.formatPaise(estProfitPerLot * 100, currencyCode: 'INR')}',
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF10B981)),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),

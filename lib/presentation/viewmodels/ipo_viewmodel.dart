@@ -4,6 +4,7 @@ import '../../data/repositories/ipo_repository.dart';
 import '../../domain/models/ipo/ipo.dart';
 import '../../domain/models/ipo/ipo_account.dart';
 import '../../domain/models/ipo/ipo_application.dart';
+import '../../data/services/ipo/ipo_dtos.dart';
 import '../../domain/services/notification_service.dart';
 
 class IpoViewModel extends ChangeNotifier {
@@ -94,24 +95,26 @@ class IpoViewModel extends ChangeNotifier {
   }
   int get listedCount => _ipos.where((i) => i.dynamicStatus == IpoStatus.listed).length;
 
-  // --- My IPOs Summary Metrics ---
+  // --- Financial Calculation Engine: Exact Totals ---
+  int get totalPlannedPaise => ipoRepo.totalPlannedAmountInPaise;
+
   int get totalAppliedPaise {
     return _applications.fold<int>(0, (sum, a) => sum + a.applicationAmountInPaise);
   }
 
-  int get totalInvestedPaise {
-    return _applications.fold<int>(0, (sum, a) => sum + (a.actualInvestedAmountInPaise ?? 0));
-  }
+  int get totalInvestedPaise => ipoRepo.totalInvestedAmountInPaise;
+
+  int get totalBlockedPaise => ipoRepo.totalBlockedAmountInPaise;
+
+  int get totalPendingRefundPaise => ipoRepo.totalPendingRefundInPaise;
 
   int get totalReleasedPaise {
     return _applications.fold<int>(0, (sum, a) => sum + (a.releasedAmountInPaise ?? 0));
   }
 
-  int get totalBlockedPaise {
-    return _applications.where((a) {
-      return a.status == IpoApplicationStatus.applied || a.status == IpoApplicationStatus.fundsBlocked;
-    }).fold<int>(0, (sum, a) => sum + a.applicationAmountInPaise);
-  }
+  String get sourceAttribution => ipoRepo.ipoService?.sourceAttribution ?? 'NSE/BSE Public Feed';
+
+  bool get isApiConfigured => ipoRepo.ipoService?.isConfigured ?? true;
 
   /// Calculates total unrealized P&L in Paise for allotted/listed IPOs
   int get totalUnrealizedPnlPaise {
@@ -351,5 +354,44 @@ class IpoViewModel extends ChangeNotifier {
     _applications = ipoRepo.getCachedApplications();
     notifyListeners();
   }
-}
 
+
+  Future<void> updateApplicationStatus({
+    required String applicationId,
+    required IpoApplicationStatus newStatus,
+    String? title,
+    String? description,
+    int? actualInvestedAmountInPaise,
+    int? releasedAmountInPaise,
+    int? allottedLots,
+    int? allottedShares,
+    String? upiMandateStatus,
+  }) async {
+    final updated = await ipoRepo.updateApplicationStatus(
+      applicationId: applicationId,
+      newStatus: newStatus,
+      title: title,
+      description: description,
+      actualInvestedAmountInPaise: actualInvestedAmountInPaise,
+      releasedAmountInPaise: releasedAmountInPaise,
+      allottedLots: allottedLots,
+      allottedShares: allottedShares,
+      upiMandateStatus: upiMandateStatus,
+    );
+    _applications = ipoRepo.getCachedApplications();
+    notifyListeners();
+
+    if (notificationService != null && updated != null) {
+      await notificationService!.notifyIpoApplicationUpdated(
+        ipoId: updated.ipoId,
+        ipoName: updated.ipoName,
+        statusDisplayName: '${updated.accountName}: ${newStatus.displayName}',
+        applicationId: updated.id,
+      );
+    }
+  }
+
+  Future<List<IpoGmpHistoryDto>> getGmpHistory(String symbolOrId) async {
+    return await ipoRepo.ipoService?.getGmpHistory(symbolOrId) ?? const [];
+  }
+}

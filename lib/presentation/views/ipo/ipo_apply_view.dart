@@ -51,11 +51,15 @@ class _ContributorEntry {
   });
 }
 
+enum PriceSelectionMode { cutoff, lower, custom }
+
 class _IpoApplyViewState extends State<IpoApplyView> {
   late TextEditingController _bidPriceController;
   late TextEditingController _notesController;
   final Map<String, _AccountApplicationConfig> _selectedAccounts = {};
   final List<_ContributorEntry> _contributors = [];
+  PriceSelectionMode _priceMode = PriceSelectionMode.cutoff;
+  String? _priceErrorText;
 
   @override
   void initState() {
@@ -158,7 +162,7 @@ class _IpoApplyViewState extends State<IpoApplyView> {
           onPressed: () => context.pop(),
         ),
         title: Text(
-          'I Applied',
+          widget.existingApplication != null ? 'Edit Application Plan' : 'Plan Applications',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w800,
@@ -296,15 +300,103 @@ class _IpoApplyViewState extends State<IpoApplyView> {
           ),
           const SizedBox(height: 10),
 
+          // Price Mode Selection Options
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                ChoiceChip(
+                  label: Text('Cut-off / Upper (₹${widget.ipo.maxPrice})'),
+                  selected: _priceMode == PriceSelectionMode.cutoff,
+                  selectedColor: AppColors.emeraldPrimary.withValues(alpha: 0.18),
+                  labelStyle: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                    color: _priceMode == PriceSelectionMode.cutoff
+                        ? AppColors.emeraldPrimary
+                        : (isDark ? Colors.white70 : Colors.black87),
+                  ),
+                  onSelected: (val) {
+                    if (val) {
+                      setState(() {
+                        _priceMode = PriceSelectionMode.cutoff;
+                        _bidPriceController.text = widget.ipo.maxPrice.toString();
+                        _priceErrorText = null;
+                      });
+                    }
+                  },
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: Text('Lower Band (₹${widget.ipo.minPrice})'),
+                  selected: _priceMode == PriceSelectionMode.lower,
+                  selectedColor: AppColors.emeraldPrimary.withValues(alpha: 0.18),
+                  labelStyle: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                    color: _priceMode == PriceSelectionMode.lower
+                        ? AppColors.emeraldPrimary
+                        : (isDark ? Colors.white70 : Colors.black87),
+                  ),
+                  onSelected: (val) {
+                    if (val) {
+                      setState(() {
+                        _priceMode = PriceSelectionMode.lower;
+                        _bidPriceController.text = widget.ipo.minPrice.toString();
+                        _priceErrorText = null;
+                      });
+                    }
+                  },
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: const Text('Custom Price'),
+                  selected: _priceMode == PriceSelectionMode.custom,
+                  selectedColor: AppColors.emeraldPrimary.withValues(alpha: 0.18),
+                  labelStyle: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                    color: _priceMode == PriceSelectionMode.custom
+                        ? AppColors.emeraldPrimary
+                        : (isDark ? Colors.white70 : Colors.black87),
+                  ),
+                  onSelected: (val) {
+                    if (val) {
+                      setState(() {
+                        _priceMode = PriceSelectionMode.custom;
+                      });
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+
           // Bid Price Field
           TextField(
             controller: _bidPriceController,
             keyboardType: TextInputType.number,
-            onChanged: (_) => setState(() {}),
+            readOnly: _priceMode != PriceSelectionMode.custom,
+            onChanged: (val) {
+              final price = int.tryParse(val.trim());
+              setState(() {
+                if (price == null) {
+                  _priceErrorText = 'Please enter a valid price';
+                } else if (price < widget.ipo.minPrice || price > widget.ipo.maxPrice) {
+                  _priceErrorText = 'Must be between ₹${widget.ipo.minPrice} and ₹${widget.ipo.maxPrice}';
+                } else {
+                  _priceErrorText = null;
+                }
+              });
+            },
             decoration: InputDecoration(
               prefixText: '₹ ',
-              labelText: 'Bid / Cut-off Price per Share',
-              helperText: 'Default is cutoff (₹${widget.ipo.maxPrice})',
+              labelText: _priceMode == PriceSelectionMode.cutoff
+                  ? 'Bid Price (Cut-off Selected)'
+                  : (_priceMode == PriceSelectionMode.lower ? 'Bid Price (Lower Band Selected)' : 'Custom Bid Price per Share'),
+              errorText: _priceErrorText,
+              helperText: 'Valid band: ₹${widget.ipo.minPrice} – ₹${widget.ipo.maxPrice}',
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
             ),
           ),
@@ -455,46 +547,121 @@ class _IpoApplyViewState extends State<IpoApplyView> {
 
           const SizedBox(height: 14),
 
-          // Total Summary Banner
+          // Multi-Account Aggregate Summary Card
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(16),
+              color: isDark ? AppColors.darkSurfaceCard : Colors.white,
+              borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.3),
+                color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.4),
                 width: 1,
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.08),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                ),
+              ],
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Total Applications Required',
+                      'APPLICATION PLAN SUMMARY',
                       style: TextStyle(
                         fontSize: 11,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.6,
                         color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
                       ),
                     ),
-                    Text(
-                      '${_selectedAccounts.length} Account(s) • ${_selectedAccounts.values.fold<int>(0, (s, c) => s + c.lots)} Lots Total',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppColors.emeraldPrimary.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '${_selectedAccounts.length} Accounts',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.emeraldPrimary,
+                        ),
                       ),
                     ),
                   ],
                 ),
-                Text(
-                  CurrencyFormatter.formatPaise(_grandTotalApplicationAmountPaise, currencyCode: 'INR'),
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                    color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Planned Apps', style: TextStyle(fontSize: 10.5, color: isDark ? Colors.white60 : Colors.black54)),
+                          const SizedBox(height: 2),
+                          Text('${_selectedAccounts.length}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Total Lots', style: TextStyle(fontSize: 10.5, color: isDark ? Colors.white60 : Colors.black54)),
+                          const SizedBox(height: 2),
+                          Text('${_selectedAccounts.values.fold<int>(0, (s, c) => s + c.lots)}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Mandate Amount', style: TextStyle(fontSize: 10.5, color: isDark ? Colors.white60 : Colors.black54)),
+                          const SizedBox(height: 2),
+                          Text(
+                            CurrencyFormatter.formatPaise(_grandTotalApplicationAmountPaise, currencyCode: 'INR'),
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                              color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.shield_outlined, size: 14, color: isDark ? Colors.white60 : Colors.black54),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Planning & Tracking Mode: SplitTrip calculates block amounts and tracks mandates. Actual bids must be placed through your registered broker and authorized in your UPI app.',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            height: 1.35,
+                            color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -527,7 +694,7 @@ class _IpoApplyViewState extends State<IpoApplyView> {
               ),
               onPressed: _saveApplications,
               child: Text(
-                'Save ${_selectedAccounts.length == 1 ? 'Application' : '${_selectedAccounts.length} Applications'} & Update Ledger',
+                'Save Plan (${_selectedAccounts.length} ${_selectedAccounts.length == 1 ? 'Account' : 'Accounts'})',
                 style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
               ),
             ),

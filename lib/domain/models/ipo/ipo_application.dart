@@ -77,19 +77,44 @@ class IpoFunding {
 }
 
 enum IpoApplicationStatus {
-  applied,
-  fundsBlocked,
+  draft,
+  planned,
+  submitted,
+  applied, // Backward-compat alias for submitted
+  mandatePending,
+  mandateApproved,
+  mandateFailed,
+  fundsBlocked, // Backward-compat alias for mandateApproved
   allotted,
-  notAllotted,
   partiallyAllotted,
+  notAllotted,
   refundPending,
-  refunded,
+  refundInitiated,
+  refundCredited,
+  refunded, // Backward-compat alias for refundCredited
+  rejected,
+  cancelled,
   listed;
 
   static IpoApplicationStatus fromString(String? val) {
     switch (val?.toLowerCase()) {
+      case 'draft':
+        return IpoApplicationStatus.draft;
+      case 'planned':
+        return IpoApplicationStatus.planned;
+      case 'submitted':
+        return IpoApplicationStatus.submitted;
       case 'applied':
         return IpoApplicationStatus.applied;
+      case 'mandatepending':
+      case 'mandate_pending':
+        return IpoApplicationStatus.mandatePending;
+      case 'mandateapproved':
+      case 'mandate_approved':
+        return IpoApplicationStatus.mandateApproved;
+      case 'mandatefailed':
+      case 'mandate_failed':
+        return IpoApplicationStatus.mandateFailed;
       case 'fundsblocked':
       case 'funds_blocked':
         return IpoApplicationStatus.fundsBlocked;
@@ -104,8 +129,19 @@ enum IpoApplicationStatus {
       case 'refundpending':
       case 'refund_pending':
         return IpoApplicationStatus.refundPending;
+      case 'refundinitiated':
+      case 'refund_initiated':
+        return IpoApplicationStatus.refundInitiated;
+      case 'refundcredited':
+      case 'refund_credited':
+        return IpoApplicationStatus.refundCredited;
       case 'refunded':
         return IpoApplicationStatus.refunded;
+      case 'rejected':
+        return IpoApplicationStatus.rejected;
+      case 'cancelled':
+      case 'canceled':
+        return IpoApplicationStatus.cancelled;
       case 'listed':
         return IpoApplicationStatus.listed;
       default:
@@ -115,10 +151,20 @@ enum IpoApplicationStatus {
 
   String get displayName {
     switch (this) {
+      case IpoApplicationStatus.draft:
+        return 'Draft';
+      case IpoApplicationStatus.planned:
+        return 'Planned';
+      case IpoApplicationStatus.submitted:
       case IpoApplicationStatus.applied:
-        return 'Applied';
+        return 'Submitted';
+      case IpoApplicationStatus.mandatePending:
+        return 'Mandate Pending';
+      case IpoApplicationStatus.mandateApproved:
       case IpoApplicationStatus.fundsBlocked:
-        return 'Funds Blocked';
+        return 'Mandate Approved (Blocked)';
+      case IpoApplicationStatus.mandateFailed:
+        return 'Mandate Failed';
       case IpoApplicationStatus.allotted:
         return 'Allotted';
       case IpoApplicationStatus.notAllotted:
@@ -127,12 +173,28 @@ enum IpoApplicationStatus {
         return 'Partially Allotted';
       case IpoApplicationStatus.refundPending:
         return 'Refund Pending';
+      case IpoApplicationStatus.refundInitiated:
+        return 'Refund Initiated';
+      case IpoApplicationStatus.refundCredited:
       case IpoApplicationStatus.refunded:
-        return 'Refunded / Released';
+        return 'Refund Credited / Released';
+      case IpoApplicationStatus.rejected:
+        return 'Rejected';
+      case IpoApplicationStatus.cancelled:
+        return 'Cancelled';
       case IpoApplicationStatus.listed:
         return 'Listed';
     }
   }
+
+  bool get isCompleted =>
+      this == IpoApplicationStatus.allotted ||
+      this == IpoApplicationStatus.notAllotted ||
+      this == IpoApplicationStatus.refundCredited ||
+      this == IpoApplicationStatus.refunded ||
+      this == IpoApplicationStatus.rejected ||
+      this == IpoApplicationStatus.cancelled ||
+      this == IpoApplicationStatus.listed;
 }
 
 enum IpoMonitoringStatus {
@@ -238,6 +300,13 @@ class IpoApplication {
   final int? remainingAmountInPaise;
   final List<IpoFunding> fundings;
   final IpoApplicationStatus status;
+  final String? upiMandateStatus; // 'pending', 'approved', 'failed'
+  final String? bidPriceType; // 'cutoff', 'upper', 'lower', 'custom'
+  final int? mandateAmountInPaise;
+  final int? actualSubmittedAmountInPaise;
+  final int? refundInitiatedAmountInPaise;
+  final DateTime? refundInitiatedDate;
+  final DateTime? refundCreditedDate;
   final IpoMonitoringStatus monitoringStatus;
   final int? allottedLots;
   final int? allottedShares;
@@ -271,6 +340,13 @@ class IpoApplication {
     this.remainingAmountInPaise,
     required this.fundings,
     this.status = IpoApplicationStatus.applied,
+    this.upiMandateStatus,
+    this.bidPriceType,
+    this.mandateAmountInPaise,
+    this.actualSubmittedAmountInPaise,
+    this.refundInitiatedAmountInPaise,
+    this.refundInitiatedDate,
+    this.refundCreditedDate,
     this.monitoringStatus = IpoMonitoringStatus.monitoring,
     this.allottedLots,
     this.allottedShares,
@@ -298,6 +374,59 @@ class IpoApplication {
 
   /// Total shares applied
   int get totalSharesApplied => lotsApplied * lotSize;
+
+  /// Whether funds are currently blocked via active approved mandate
+  bool get isFundsBlocked =>
+      status == IpoApplicationStatus.fundsBlocked ||
+      status == IpoApplicationStatus.mandateApproved ||
+      (status == IpoApplicationStatus.applied && (upiMandateStatus == 'approved' || upiMandateStatus == null));
+
+  /// Amount currently blocked in bank account via mandate
+  int get currentBlockedAmountInPaise {
+    if (!isFundsBlocked) return 0;
+    if (status.isCompleted) return 0;
+    return mandateAmountInPaise ?? actualSubmittedAmountInPaise ?? applicationAmountInPaise;
+  }
+
+  /// Expected refundable amount based on allotment outcome
+  int get expectedRefundInPaise {
+    if (status == IpoApplicationStatus.notAllotted || status == IpoApplicationStatus.rejected) {
+      return actualSubmittedAmountInPaise ?? applicationAmountInPaise;
+    }
+    if (status == IpoApplicationStatus.partiallyAllotted) {
+      final total = actualSubmittedAmountInPaise ?? applicationAmountInPaise;
+      final invested = actualInvestedAmountInPaise ?? 0;
+      return (total - invested).clamp(0, total);
+    }
+    if (status == IpoApplicationStatus.allotted) {
+      return 0;
+    }
+    return 0;
+  }
+
+  /// Outstanding refund: Expected refund minus already confirmed/credited refund
+  int get outstandingRefundInPaise {
+    final expected = expectedRefundInPaise;
+    final credited = releasedAmountInPaise ?? 0;
+    return (expected - credited).clamp(0, expected);
+  }
+
+  /// True if shares have been allotted either fully or partially
+  bool get isAllotted => status == IpoApplicationStatus.allotted || status == IpoApplicationStatus.partiallyAllotted;
+
+  /// True if application has reached its terminal settlement status
+  bool get isTerminalState =>
+      status == IpoApplicationStatus.allotted ||
+      status == IpoApplicationStatus.notAllotted ||
+      status == IpoApplicationStatus.refundCredited ||
+      status == IpoApplicationStatus.rejected ||
+      status == IpoApplicationStatus.cancelled;
+
+  /// Alias for actual invested / allotted amount in paise
+  int get actualAllottedAmountInPaise => actualInvestedAmountInPaise ?? (isAllotted ? (mandateAmountInPaise ?? applicationAmountInPaise) : 0);
+
+  /// Alias for confirmed refund / released amount in paise
+  int get refundCreditedAmountInPaise => releasedAmountInPaise ?? 0;
 
   /// Total funding allocated in paise
   int get totalFundingAllocatedPaise {
@@ -374,11 +503,19 @@ class IpoApplication {
     int? remainingAmountInPaise,
     List<IpoFunding>? fundings,
     IpoApplicationStatus? status,
+    String? upiMandateStatus,
+    String? bidPriceType,
+    int? mandateAmountInPaise,
+    int? actualSubmittedAmountInPaise,
+    int? refundInitiatedAmountInPaise,
+    DateTime? refundInitiatedDate,
+    DateTime? refundCreditedDate,
     IpoMonitoringStatus? monitoringStatus,
     int? allottedLots,
     int? allottedShares,
     int? actualInvestedAmountInPaise,
     int? releasedAmountInPaise,
+    int? refundCreditedAmountInPaise,
     DateTime? lastCheckedAt,
     DateTime? nextCheckAt,
     int? checkCount,
@@ -407,11 +544,18 @@ class IpoApplication {
       remainingAmountInPaise: remainingAmountInPaise ?? this.remainingAmountInPaise,
       fundings: fundings ?? this.fundings,
       status: status ?? this.status,
+      upiMandateStatus: upiMandateStatus ?? this.upiMandateStatus,
+      bidPriceType: bidPriceType ?? this.bidPriceType,
+      mandateAmountInPaise: mandateAmountInPaise ?? this.mandateAmountInPaise,
+      actualSubmittedAmountInPaise: actualSubmittedAmountInPaise ?? this.actualSubmittedAmountInPaise,
+      refundInitiatedAmountInPaise: refundInitiatedAmountInPaise ?? this.refundInitiatedAmountInPaise,
+      refundInitiatedDate: refundInitiatedDate ?? this.refundInitiatedDate,
+      refundCreditedDate: refundCreditedDate ?? this.refundCreditedDate,
       monitoringStatus: monitoringStatus ?? this.monitoringStatus,
       allottedLots: allottedLots ?? this.allottedLots,
       allottedShares: allottedShares ?? this.allottedShares,
       actualInvestedAmountInPaise: actualInvestedAmountInPaise ?? this.actualInvestedAmountInPaise,
-      releasedAmountInPaise: releasedAmountInPaise ?? this.releasedAmountInPaise,
+      releasedAmountInPaise: refundCreditedAmountInPaise ?? releasedAmountInPaise ?? this.releasedAmountInPaise,
       lastCheckedAt: lastCheckedAt ?? this.lastCheckedAt,
       nextCheckAt: nextCheckAt ?? this.nextCheckAt,
       checkCount: checkCount ?? this.checkCount,
@@ -494,6 +638,13 @@ class IpoApplication {
       if (remainingAmountInPaise != null) 'remainingAmountInPaise': remainingAmountInPaise,
       'fundings': fundings.map((f) => f.toJson()).toList(),
       'status': status.name,
+      if (upiMandateStatus != null) 'upiMandateStatus': upiMandateStatus,
+      if (bidPriceType != null) 'bidPriceType': bidPriceType,
+      if (mandateAmountInPaise != null) 'mandateAmountInPaise': mandateAmountInPaise,
+      if (actualSubmittedAmountInPaise != null) 'actualSubmittedAmountInPaise': actualSubmittedAmountInPaise,
+      if (refundInitiatedAmountInPaise != null) 'refundInitiatedAmountInPaise': refundInitiatedAmountInPaise,
+      if (refundInitiatedDate != null) 'refundInitiatedDate': refundInitiatedDate!.toIso8601String(),
+      if (refundCreditedDate != null) 'refundCreditedDate': refundCreditedDate!.toIso8601String(),
       'monitoringStatus': monitoringStatus.name,
       'allottedLots': allottedLots,
       'allottedShares': allottedShares,

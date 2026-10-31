@@ -122,6 +122,7 @@ class Ipo {
   final DateTime closeDate;
   final DateTime? allotmentDate;
   final DateTime? listingDate;
+  final DateTime? refundDate;
   final int minPrice; // In Rupees (e.g. 450)
   final int maxPrice; // In Rupees (e.g. 475)
   final int lotSize; // Shares per lot (e.g. 30)
@@ -148,6 +149,7 @@ class Ipo {
     required this.closeDate,
     this.allotmentDate,
     this.listingDate,
+    this.refundDate,
     required this.minPrice,
     required this.maxPrice,
     required this.lotSize,
@@ -163,6 +165,22 @@ class Ipo {
     required this.lastUpdated,
     this.isTracked = false,
   });
+
+  /// Estimated listing price based on cutoff price + unofficial GMP
+  int? get estimatedListingPrice {
+    if (gmp == null) return null;
+    final basePrice = maxPrice > 0 ? maxPrice : minPrice;
+    if (basePrice <= 0) return null;
+    return basePrice + gmp!;
+  }
+
+  /// Estimated listing gain percentage based on unofficial GMP
+  double? get estimatedGainPercentage {
+    if (gmp == null) return null;
+    final basePrice = maxPrice > 0 ? maxPrice : minPrice;
+    if (basePrice <= 0) return null;
+    return (gmp! / basePrice) * 100.0;
+  }
 
   /// Minimum investment in Rupees for 1 lot at cutoff (max price)
   int get minInvestmentRupees => lotSize * (maxPrice > 0 ? maxPrice : minPrice);
@@ -325,6 +343,7 @@ class Ipo {
     DateTime? closeDate,
     DateTime? allotmentDate,
     DateTime? listingDate,
+    DateTime? refundDate,
     int? minPrice,
     int? maxPrice,
     int? lotSize,
@@ -351,6 +370,7 @@ class Ipo {
       closeDate: closeDate ?? this.closeDate,
       allotmentDate: allotmentDate ?? this.allotmentDate,
       listingDate: listingDate ?? this.listingDate,
+      refundDate: refundDate ?? this.refundDate,
       minPrice: minPrice ?? this.minPrice,
       maxPrice: maxPrice ?? this.maxPrice,
       lotSize: lotSize ?? this.lotSize,
@@ -375,6 +395,7 @@ class Ipo {
     final closeDateRaw = schedule?['endDate'] ?? json['closeDate'] ?? json['close_date'] ?? json['bidding_end_date'] ?? json['endDate'];
     final allotmentDateRaw = schedule?['allotmentFinalization'] ?? schedule?['allotmentDate'] ?? json['allotmentDate'] ?? json['allotment_date'];
     final listingDateRaw = schedule?['listingDate'] ?? json['listingDate'] ?? json['listing_date'];
+    final refundDateRaw = schedule?['refundDate'] ?? json['refundDate'] ?? json['refund_date'];
 
     // 2. Robust Price parsing (handles "₹408 – ₹429", "₹59", "450 - 475" strings or direct numbers)
     int minP = 0;
@@ -438,6 +459,7 @@ class Ipo {
       closeDate: parseIpoDate(closeDateRaw, parseIpoDate(openDateRaw).add(const Duration(days: 3))),
       allotmentDate: parseOptionalIpoDate(allotmentDateRaw),
       listingDate: parseOptionalIpoDate(listingDateRaw),
+      refundDate: parseOptionalIpoDate(refundDateRaw),
       minPrice: minP,
       maxPrice: maxP > 0 ? maxP : minP,
       lotSize: parsedLot > 0 ? parsedLot : 1,
@@ -467,6 +489,7 @@ class Ipo {
       'closeDate': closeDate.toIso8601String(),
       'allotmentDate': allotmentDate?.toIso8601String(),
       'listingDate': listingDate?.toIso8601String(),
+      'refundDate': refundDate?.toIso8601String(),
       'minPrice': minPrice,
       'maxPrice': maxPrice,
       'lotSize': lotSize,

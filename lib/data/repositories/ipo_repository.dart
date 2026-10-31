@@ -5,12 +5,14 @@ import '../../domain/models/ipo/ipo_account.dart';
 import '../../domain/models/ipo/ipo_application.dart';
 import '../../domain/models/personal_debt.dart';
 import '../services/ipo_data_provider.dart';
+import '../services/ipo/ipo_service.dart';
 import '../services/local_storage_service.dart';
 import 'personal_repository.dart';
 
 class IpoRepository {
   final LocalStorageService storage;
   final IpoDataProvider dataProvider;
+  final IpoService? ipoService;
   final PersonalRepository personalRepo;
 
   List<Ipo> _cachedIpos = [];
@@ -19,6 +21,7 @@ class IpoRepository {
   IpoRepository({
     required this.storage,
     required this.dataProvider,
+    this.ipoService,
     required this.personalRepo,
   }) {
     _loadLocalCache();
@@ -56,7 +59,9 @@ class IpoRepository {
     }
 
     try {
-      final freshIpos = await dataProvider.fetchIpos();
+      final freshIpos = ipoService != null
+          ? await ipoService!.fetchIpoCatalog(forceRefresh: forceRefresh)
+          : await dataProvider.fetchIpos();
       final trackedIds = storage.getTrackedIpoIds();
 
       if (freshIpos.isNotEmpty) {
@@ -410,9 +415,16 @@ class IpoRepository {
       totalPending += app.effectiveRemainingPaise;
 
       switch (app.status) {
+        case IpoApplicationStatus.draft:
+        case IpoApplicationStatus.planned:
+        case IpoApplicationStatus.submitted:
+        case IpoApplicationStatus.mandatePending:
+          break;
         case IpoApplicationStatus.applied:
         case IpoApplicationStatus.fundsBlocked:
+        case IpoApplicationStatus.mandateApproved:
         case IpoApplicationStatus.refundPending:
+        case IpoApplicationStatus.refundInitiated:
           moneyBlocked += app.applicationAmountInPaise;
           break;
         case IpoApplicationStatus.allotted:
@@ -428,6 +440,10 @@ class IpoRepository {
           break;
         case IpoApplicationStatus.notAllotted:
         case IpoApplicationStatus.refunded:
+        case IpoApplicationStatus.refundCredited:
+        case IpoApplicationStatus.mandateFailed:
+        case IpoApplicationStatus.rejected:
+        case IpoApplicationStatus.cancelled:
           moneyReleased += (app.releasedAmountInPaise ?? app.applicationAmountInPaise);
           break;
       }
@@ -486,5 +502,71 @@ class IpoRepository {
     _cachedApplications[idx] = updated;
     await storage.saveIpoApplications(_cachedApplications.map((a) => a.toJson()).toList());
     return updated;
+  }
+
+
+  /// Financial Engine: Total Planned Amount across draft and planned applications
+  int get totalPlannedAmountInPaise {
+    return _cachedApplications
+        .where((a) => a.status == IpoApplicationStatus.planned || a.status == IpoApplicationStatus.draft)
+        .fold<int>(0, (sum, a) => sum + a.applicationAmountInPaise);
+  }
+
+  /// Financial Engine: Total Blocked Amount across active approved mandates
+  int get totalBlockedAmountInPaise {
+    return _cachedApplications.fold<int>(0, (sum, a) => sum + a.currentBlockedAmountInPaise);
+  }
+
+  /// Financial Engine: Total Actual Invested Amount across debited allotments
+  int get totalInvestedAmountInPaise {
+    return _cachedApplications.fold<int>(0, (sum, a) => sum + (a.actualInvestedAmountInPaise ?? 0));
+  }
+
+  /// Financial Engine: Total Outstanding Pending Refund
+  int get totalPendingRefundInPaise {
+    return _cachedApplications.fold<int>(0, (sum, a) => sum + a.outstandingRefundInPaise);
+  }
+
+  /// Updates application status manually with audit history entry
+  Future<IpoApplication?> updateApplicationStatus({
+    required String applicationId,
+    required IpoApplicationStatus newStatus,
+    String? title,
+    String? description,
+    int? actualInvestedAmountInPaise,
+    int? releasedAmountInPaise,
+    int? allottedLots,
+    int? allottedShares,
+    String? upiMandateStatus,
+  }) async {
+    final idx = _cachedApplications.indexWhere((a) => a.id == applicationId);
+    if (idx == -1) return null;
+
+    final currentApp = _cachedApplications[idx];
+    final now = DateTime.now();
+
+    final auditEntry = IpoAuditEntry(
+      id: 'audit_${now.millisecondsSinceEpoch}',
+      timestamp: now,
+      title: title ?? 'Status Changed to ${newStatus.displayName}',
+      description: description ?? 'Application status updated to ${newStatus.displayName}',
+    );
+
+    final updatedTrail = List<IpoAuditEntry>.from(currentApp.auditTrail)..insert(0, auditEntry);
+
+    final updatedApp = currentApp.copyWith(
+      status: newStatus,
+      actualInvestedAmountInPaise: actualInvestedAmountInPaise ?? currentApp.actualInvestedAmountInPaise,
+      releasedAmountInPaise: releasedAmountInPaise ?? currentApp.releasedAmountInPaise,
+      allottedLots: allottedLots ?? currentApp.allottedLots,
+      allottedShares: allottedShares ?? currentApp.allottedShares,
+      upiMandateStatus: upiMandateStatus ?? currentApp.upiMandateStatus,
+      auditTrail: updatedTrail,
+      updatedAt: now,
+    );
+
+    _cachedApplications[idx] = updatedApp;
+    await storage.saveIpoApplications(_cachedApplications.map((a) => a.toJson()).toList());
+    return updatedApp;
   }
 }

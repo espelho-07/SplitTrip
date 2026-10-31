@@ -83,7 +83,15 @@ class _IpoHomeViewState extends State<IpoHomeView> {
             },
           ),
           IconButton(
-            icon: Icon(Icons.notifications_none_rounded, size: 22, color: isDark ? Colors.white : const Color(0xFF0F172A)),
+            icon: Icon(Icons.history_rounded, size: 22, color: isDark ? Colors.white : const Color(0xFF0F172A)),
+            tooltip: 'IPO History & Allotments',
+            onPressed: () {
+              HapticHelper.light();
+              context.push('/ipo-history');
+            },
+          ),
+          IconButton(
+            icon: Icon(Icons.account_balance_outlined, size: 22, color: isDark ? Colors.white : const Color(0xFF0F172A)),
             tooltip: 'Accounts & Balances',
             onPressed: () {
               HapticHelper.light();
@@ -124,6 +132,9 @@ class _IpoHomeViewState extends State<IpoHomeView> {
                     ),
                   ),
                 ],
+
+                // Portfolio Summary Banner (Total Blocked, Invested, Refund)
+                _buildPortfolioSummaryCard(ipoVm, isDark),
 
                 // Segmented Filter Pills (Open Now, Upcoming, Closed, etc.)
                 _buildSegmentedTabSelector(ipoVm, isDark),
@@ -523,6 +534,38 @@ class _IpoHomeViewState extends State<IpoHomeView> {
                   ],
                 ),
 
+                // Timeline Dates Row
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Icon(Icons.calendar_today_outlined, size: 11, color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                    const SizedBox(width: 5),
+                    Text(
+                      ipo.allotmentDate != null
+                          ? 'Allotment: ${DateFormatter.formatShortDate(ipo.allotmentDate!)}'
+                          : 'Allotment: Unannounced',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(width: 3, height: 3, decoration: BoxDecoration(shape: BoxShape.circle, color: isDark ? Colors.white38 : Colors.black26)),
+                    const SizedBox(width: 8),
+                    Text(
+                      ipo.listingDate != null
+                          ? 'Listing: ${DateFormatter.formatShortDate(ipo.listingDate!)}'
+                          : 'Listing: Unannounced',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+                      ),
+                    ),
+                  ],
+                ),
+
                 // Applied Accounts Row (if applied)
                 if (isApplied) ...[
                   const SizedBox(height: 12),
@@ -678,9 +721,208 @@ class _IpoHomeViewState extends State<IpoHomeView> {
     }
   }
 
+  Widget _buildPortfolioSummaryCard(IpoViewModel ipoVm, bool isDark) {
+    final blockedPaise = ipoVm.totalBlockedPaise;
+    final investedPaise = ipoVm.totalInvestedPaise;
+    final refundPaise = ipoVm.totalPendingRefundPaise;
+    final activeCount = ipoVm.openCount;
+    final upcomingCount = ipoVm.upcomingCount;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+          width: 0.8,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: forestGreen.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.account_balance_wallet_rounded, size: 16, color: darkGreenText),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'PORTFOLIO OVERVIEW',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.6,
+                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+              GestureDetector(
+                onTap: () {
+                  HapticHelper.light();
+                  context.push('/ipo-history');
+                },
+                child: Row(
+                  children: [
+                    Text(
+                      'History',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: isDark ? const Color(0xFF10B981) : forestGreen,
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    Icon(Icons.chevron_right_rounded, size: 16, color: isDark ? const Color(0xFF10B981) : forestGreen),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Blocked Mandates',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      CurrencyFormatter.formatPaise(blockedPaise, currencyCode: 'INR'),
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w900,
+                        color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Invested',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      CurrencyFormatter.formatPaise(investedPaise, currencyCode: 'INR'),
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w900,
+                        color: isDark ? const Color(0xFF10B981) : darkGreenText,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Pending Refund',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      CurrencyFormatter.formatPaise(refundPaise, currencyCode: 'INR'),
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w900,
+                        color: refundPaise > 0 ? const Color(0xFFF59E0B) : (isDark ? Colors.white60 : Colors.black45),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.insights_rounded, size: 14, color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                const SizedBox(width: 6),
+                Text(
+                  '$activeCount Active • $upcomingCount Upcoming',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: ipoVm.isApiConfigured
+                        ? const Color(0xFFDCFCE7)
+                        : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    ipoVm.sourceAttribution,
+                    style: TextStyle(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w800,
+                      color: ipoVm.isApiConfigured
+                          ? const Color(0xFF15803D)
+                          : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildEmptyState(bool isDark, IpoViewModel ipoVm) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 60.0),
+      padding: const EdgeInsets.symmetric(vertical: 40.0),
       child: Center(
         child: Column(
           children: [
@@ -693,6 +935,23 @@ class _IpoHomeViewState extends State<IpoHomeView> {
                 fontWeight: FontWeight.w700,
                 color: isDark ? Colors.white70 : const Color(0xFF475569),
               ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              ipoVm.isApiConfigured
+                  ? 'All IPO records are up to date.'
+                  : 'IPO Guru API not configured yet. Fallback cache is active.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+              ),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: () => ipoVm.loadData(forceRefresh: true),
+              icon: const Icon(Icons.refresh_rounded, size: 16),
+              label: const Text('Refresh Feed'),
             ),
           ],
         ),
