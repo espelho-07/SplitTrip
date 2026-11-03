@@ -19,7 +19,11 @@ class MainActivity : FlutterFragmentActivity() {
 
     private val CHANNEL = "com.nirniq.kith/widgets"
     private val CONTACTS_CHANNEL = "com.nirniq.kith/contacts"
+    private val MIGRATION_CHANNEL = "com.kith.migration/channel"
     private val REQUEST_CODE_PICK_CONTACT = 4242
+    private val REQUEST_CODE_SAF_CREATE = 4243
+    private var pendingSafCreateResult: MethodChannel.Result? = null
+    private var pendingSafCreateContent: String? = null
 
     private var initialDeepLink: String? = null
     private var pendingContactPickerResult: MethodChannel.Result? = null
@@ -52,6 +56,27 @@ class MainActivity : FlutterFragmentActivity() {
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_CODE_SAF_CREATE) {
+            val result = pendingSafCreateResult
+            val content = pendingSafCreateContent
+            pendingSafCreateResult = null
+            pendingSafCreateContent = null
+            if (resultCode == Activity.RESULT_OK && data != null && data.data != null && content != null) {
+                try {
+                    val uri: Uri = data.data!!
+                    contentResolver.openOutputStream(uri)?.use { os ->
+                        os.write(content.toByteArray(Charsets.UTF_8))
+                        os.flush()
+                    }
+                    result?.success(uri.toString())
+                } catch (e: Exception) {
+                    result?.error("WRITE_FAILED", e.message, null)
+                }
+            } else {
+                result?.success(null)
+            }
+            return
+        }
         if (requestCode == REQUEST_CODE_PICK_CONTACT) {
             val result = pendingContactPickerResult
             pendingContactPickerResult = null
@@ -99,6 +124,55 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        // Migration Channel for Cross-App SAF & Share Intent
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, MIGRATION_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "isAvailable" -> result.success(true)
+                "saveFileViaSAF" -> {
+                    val fileName = call.argument<String>("fileName") ?: "kith_finances_migration.json"
+                    val content = call.argument<String>("content")
+                    val mimeType = call.argument<String>("mimeType") ?: "application/json"
+                    if (content == null) {
+                        result.error("INVALID_ARGS", "Content cannot be null", null)
+                        return@setMethodCallHandler
+                    }
+                    try {
+                        pendingSafCreateResult = result
+                        pendingSafCreateContent = content
+                        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                            addCategory(Intent.CATEGORY_OPENABLE)
+                            type = mimeType
+                            putExtra(Intent.EXTRA_TITLE, fileName)
+                        }
+                        startActivityForResult(intent, REQUEST_CODE_SAF_CREATE)
+                    } catch (e: Exception) {
+                        pendingSafCreateResult = null
+                        pendingSafCreateContent = null
+                        result.error("SAF_ERROR", e.message, null)
+                    }
+                }
+                "sharePayload" -> {
+                    val title = call.argument<String>("title") ?: "Share Financial Migration Archive"
+                    val content = call.argument<String>("content") ?: ""
+                    val subject = call.argument<String>("subject") ?: "Kith Financial Migration Archive"
+                    try {
+                        val sendIntent = Intent().apply {
+                            action = Intent.ACTION_SEND
+                            putExtra(Intent.EXTRA_TEXT, content)
+                            putExtra(Intent.EXTRA_SUBJECT, subject)
+                            type = "text/plain"
+                        }
+                        val shareIntent = Intent.createChooser(sendIntent, title)
+                        startActivity(shareIntent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("SHARE_FAILED", e.message, null)
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
 
         // Contacts Channel
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CONTACTS_CHANNEL).setMethodCallHandler { call, result ->

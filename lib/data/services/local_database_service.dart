@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
+
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -42,12 +44,22 @@ class MigrationResult {
 class LocalDatabaseService {
   final Database _db;
   final bool isInMemory;
+  static LocalDatabaseService? _instance;
+  bool _isDisposed = false;
 
   LocalDatabaseService(this._db, {this.isInMemory = false});
 
   Database get rawDb => _db;
+  bool get isDisposed => _isDisposed;
+
+  /// Resets the static cached instance (for test isolation).
+  @visibleForTesting
+  static void resetStaticInstance() {
+    _instance = null;
+  }
 
   /// Initializes the SQLite production database with WAL mode and schema definitions.
+  /// Guarantees a single authoritative connection instance to prevent duplicate OS handles.
   static Future<LocalDatabaseService> init({String? customPath}) async {
     final String dbPath;
     if (customPath != null) {
@@ -57,9 +69,17 @@ class LocalDatabaseService {
       dbPath = p.join(docsDir.path, 'kith_production_v2.db');
     }
 
+    // Reuse active singleton instance if path is default
+    if (_instance != null && !_instance!._isDisposed && customPath == null) {
+      return _instance!;
+    }
+
     final db = sqlite3.open(dbPath);
     final service = LocalDatabaseService(db);
     service._configureAndCreateTables();
+    if (customPath == null) {
+      _instance = service;
+    }
     return service;
   }
 
@@ -246,6 +266,10 @@ class LocalDatabaseService {
 
   /// Closes database connection.
   void dispose() {
+    _isDisposed = true;
+    if (_instance == this) {
+      _instance = null;
+    }
     _db.close();
   }
 
@@ -635,13 +659,23 @@ class LocalDatabaseService {
       ''');
       try {
         for (final pe in personalExpensesList) {
+          final num? pePaise = pe['amountInPaise'] as num? ?? pe['amount_in_paise'] as num?;
+          final double peAmount = pePaise != null
+              ? pePaise.toDouble() / 100.0
+              : (pe['amount'] as num?)?.toDouble() ?? 0.0;
+          final String peSpentAt = pe['date']?.toString() ??
+              pe['spentAt']?.toString() ??
+              pe['spent_at']?.toString() ??
+              pe['createdAt']?.toString() ??
+              now.toIso8601String();
+
           peStmt.execute([
             pe['id']?.toString() ?? '',
             pe['title']?.toString() ?? 'Expense',
-            (pe['amount'] as num?)?.toDouble() ?? 0.0,
+            peAmount,
             pe['currency']?.toString() ?? 'INR',
             pe['category']?.toString() ?? 'general',
-            pe['spentAt'] ?? pe['spent_at'] ?? now.toIso8601String(),
+            peSpentAt,
             jsonEncode(pe),
           ]);
         }
@@ -657,12 +691,32 @@ class LocalDatabaseService {
       ''');
       try {
         for (final pd in personalDebtsList) {
+          final num? debtPaise = pd['initialAmountInPaise'] as num? ??
+              pd['amountInPaise'] as num? ??
+              pd['remainingAmountInPaise'] as num? ??
+              pd['amount_in_paise'] as num?;
+          final double debtAmount = debtPaise != null
+              ? debtPaise.toDouble() / 100.0
+              : (pd['amount'] as num?)?.toDouble() ?? 0.0;
+
+          int isOwedByMe = 1;
+          if (pd['debtType'] != null) {
+            isOwedByMe = pd['debtType'] == 'borrowed' ? 1 : 0;
+          } else if (pd['isOwedByMe'] != null) {
+            isOwedByMe = pd['isOwedByMe'] == true ? 1 : 0;
+          } else if (pd['is_owed_by_me'] != null) {
+            isOwedByMe = (pd['is_owed_by_me'] == true || pd['is_owed_by_me'] == 1) ? 1 : 0;
+          }
+
+          final int isSettled =
+              (pd['isSettled'] == true || pd['is_settled'] == true || pd['isSettled'] == 1) ? 1 : 0;
+
           pdStmt.execute([
             pd['id']?.toString() ?? '',
             pd['personName'] ?? pd['person_name'] ?? 'Friend',
-            (pd['amount'] as num?)?.toDouble() ?? 0.0,
-            pd['isOwedByMe'] == false ? 0 : 1,
-            pd['isSettled'] == true ? 1 : 0,
+            debtAmount,
+            isOwedByMe,
+            isSettled,
             jsonEncode(pd),
           ]);
         }
@@ -929,13 +983,23 @@ class LocalDatabaseService {
         ''');
         try {
           for (final pe in updatedPersonalExpenses) {
+            final num? pePaise = pe['amountInPaise'] as num? ?? pe['amount_in_paise'] as num?;
+            final double peAmount = pePaise != null
+                ? pePaise.toDouble() / 100.0
+                : (pe['amount'] as num?)?.toDouble() ?? 0.0;
+            final String peSpentAt = pe['date']?.toString() ??
+                pe['spentAt']?.toString() ??
+                pe['spent_at']?.toString() ??
+                pe['createdAt']?.toString() ??
+                nowIso;
+
             peStmt.execute([
               pe['id']?.toString() ?? '',
               pe['title']?.toString() ?? 'Expense',
-              (pe['amount'] as num?)?.toDouble() ?? 0.0,
+              peAmount,
               pe['currency']?.toString() ?? 'INR',
               pe['category']?.toString() ?? 'general',
-              pe['spentAt'] ?? pe['spent_at'] ?? nowIso,
+              peSpentAt,
               jsonEncode(pe),
             ]);
           }
@@ -954,12 +1018,32 @@ class LocalDatabaseService {
         ''');
         try {
           for (final pd in updatedPersonalDebts) {
+            final num? debtPaise = pd['initialAmountInPaise'] as num? ??
+                pd['amountInPaise'] as num? ??
+                pd['remainingAmountInPaise'] as num? ??
+                pd['amount_in_paise'] as num?;
+            final double debtAmount = debtPaise != null
+                ? debtPaise.toDouble() / 100.0
+                : (pd['amount'] as num?)?.toDouble() ?? 0.0;
+
+            int isOwedByMe = 1;
+            if (pd['debtType'] != null) {
+              isOwedByMe = pd['debtType'] == 'borrowed' ? 1 : 0;
+            } else if (pd['isOwedByMe'] != null) {
+              isOwedByMe = pd['isOwedByMe'] == true ? 1 : 0;
+            } else if (pd['is_owed_by_me'] != null) {
+              isOwedByMe = (pd['is_owed_by_me'] == true || pd['is_owed_by_me'] == 1) ? 1 : 0;
+            }
+
+            final int isSettled =
+                (pd['isSettled'] == true || pd['is_settled'] == true || pd['isSettled'] == 1) ? 1 : 0;
+
             pdStmt.execute([
               pd['id']?.toString() ?? '',
               pd['personName'] ?? pd['person_name'] ?? 'Friend',
-              (pd['amount'] as num?)?.toDouble() ?? 0.0,
-              pd['isOwedByMe'] == false ? 0 : 1,
-              pd['isSettled'] == true ? 1 : 0,
+              debtAmount,
+              isOwedByMe,
+              isSettled,
               jsonEncode(pd),
             ]);
           }

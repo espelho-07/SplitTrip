@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/localization/app_localizations.dart';
+import '../../../core/services/platform_migration_channel.dart';
 import '../../../core/services/security_lock_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
@@ -464,6 +465,7 @@ class _MasterSettingsViewState extends State<MasterSettingsView> {
                 ),
               ),
               const SizedBox(height: 16),
+              // 1. Storage Access Framework (SAF) - Device Storage
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: Container(
@@ -472,24 +474,63 @@ class _MasterSettingsViewState extends State<MasterSettingsView> {
                     color: AppColors.emeraldPrimary.withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.copy_rounded, color: AppColors.emeraldPrimary, size: 20),
+                  child: const Icon(Icons.folder_shared_rounded, color: AppColors.emeraldPrimary, size: 20),
                 ),
-                title: const Text('Copy Migration Code', style: TextStyle(fontWeight: FontWeight.w700)),
-                subtitle: Text('Paste directly in Finances (${(jsonString.length / 1024).toStringAsFixed(1)} KB)'),
+                title: const Text('Save via Device Storage (SAF)', style: TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: const Text('Save to Downloads or Documents so Finances can open it directly'),
                 trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.emeraldPrimary),
-                onTap: () {
-                  Clipboard.setData(ClipboardData(text: jsonString));
-                  HapticHelper.success();
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Migration Code copied! Open Finances app and select Import ✓'),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
+                onTap: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  try {
+                    final fileName = 'kith_finances_export_${DateTime.now().millisecondsSinceEpoch}.json';
+                    final uri = await PlatformMigrationChannel.saveFileViaSAF(
+                      fileName: fileName,
+                      content: jsonString,
+                    );
+                    if (uri != null) {
+                      HapticHelper.success();
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      if (!mounted) return;
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text('Archive saved via Storage Access Framework! Open Finances and select Browse File ✓'),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (!mounted) return;
+                    messenger.showSnackBar(
+                      SnackBar(content: Text('SAF Save Error: $e'), backgroundColor: Colors.redAccent),
+                    );
+                  }
                 },
               ),
-              const Divider(height: 16),
+              const Divider(height: 12),
+              // 2. Share Directly to Finances App
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.amberAccent.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.share_rounded, color: AppColors.amberAccent, size: 20),
+                ),
+                title: const Text('Share to Finances App', style: TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: const Text('Directly transfer payload via Android System Share Sheet'),
+                trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.amberAccent),
+                onTap: () async {
+                  await PlatformMigrationChannel.sharePayload(
+                    title: 'Transfer to Finances',
+                    content: jsonString,
+                  );
+                  if (ctx.mounted) Navigator.pop(ctx);
+                },
+              ),
+              const Divider(height: 12),
+              // 3. Copy Code to Clipboard (with Privacy Alert)
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: Container(
@@ -498,34 +539,42 @@ class _MasterSettingsViewState extends State<MasterSettingsView> {
                     color: AppColors.indigoAccent.withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.save_alt_rounded, color: AppColors.indigoAccent, size: 20),
+                  child: const Icon(Icons.copy_rounded, color: AppColors.indigoAccent, size: 20),
                 ),
-                title: const Text('Save Migration File', style: TextStyle(fontWeight: FontWeight.w700)),
-                subtitle: const Text('Save JSON archive into app exports directory'),
+                title: const Text('Copy Migration Code', style: TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: Text('Paste directly into Finances (${(jsonString.length / 1024).toStringAsFixed(1)} KB)'),
                 trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.indigoAccent),
-                onTap: () async {
-                  final messenger = ScaffoldMessenger.of(context);
-                  try {
-                    final res = await exportService.exportToFile();
-                    HapticHelper.success();
-                    if (ctx.mounted) Navigator.pop(ctx);
-                    if (!mounted) return;
-                    messenger.showSnackBar(
-                      SnackBar(
-                        content: Text('Saved to: ${res.filePath}'),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  } catch (e) {
-                    if (!mounted) return;
-                    messenger.showSnackBar(
-                      SnackBar(
-                        content: Text('Save error: $e'),
-                        backgroundColor: Colors.redAccent,
-                      ),
-                    );
-                  }
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: jsonString));
+                  HapticHelper.success();
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Migration Code copied! Note: Clear clipboard after pasting for privacy.'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
                 },
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.privacy_tip_outlined, size: 16, color: Colors.amber),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Migration data contains personal finances. Always clear clipboard after pasting in Finances.',
+                        style: TextStyle(fontSize: 11, color: Colors.amber),
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 12),
             ],

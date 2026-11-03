@@ -840,6 +840,23 @@ class LocalStorageService {
     return _prefs.setString(_personalDebtsKey, jsonEncode(debtsJson));
   }
 
+  /// Atomically commits both personal expenses and debts within a single SQLite transaction
+  /// and updates SharedPreferences caches simultaneously.
+  Future<bool> savePersonalExpensesAndDebts({
+    required List<Map<String, dynamic>> expensesJson,
+    required List<Map<String, dynamic>> debtsJson,
+  }) async {
+    if (databaseService != null) {
+      databaseService!.commitAtomicMutationBatch(
+        updatedPersonalExpenses: expensesJson,
+        updatedPersonalDebts: debtsJson,
+      );
+    }
+    final p1 = await _prefs.setString(_personalExpensesKey, jsonEncode(expensesJson));
+    final p2 = await _prefs.setString(_personalDebtsKey, jsonEncode(debtsJson));
+    return p1 && p2;
+  }
+
   // --- Personal Budget ---
 
   Map<String, dynamic>? getSavedPersonalBudget(String monthYear) {
