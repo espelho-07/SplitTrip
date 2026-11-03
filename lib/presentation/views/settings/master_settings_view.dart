@@ -8,6 +8,7 @@ import '../../../core/services/security_lock_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
+import '../../../data/services/finance_export_bridge_service.dart';
 import '../../../data/services/local_storage_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
@@ -325,6 +326,215 @@ class _MasterSettingsViewState extends State<MasterSettingsView> {
     );
   }
 
+  Widget _buildStatPill(String label, int count, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        children: [
+          Text(
+            count.toString(),
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: isDark ? Colors.white : Colors.black87,
+            ),
+          ),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
+              color: isDark ? Colors.white60 : Colors.black54,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showFinancesMigrationExportSheet(bool isDark) {
+    HapticHelper.light();
+    final storage = context.read<LocalStorageService>();
+    final exportService = FinanceExportBridgeService(storage: storage);
+    final summary = exportService.inspectLocalFinancialRecords();
+    final jsonString = exportService.exportToJsonString();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: isDark ? const Color(0xFF0F1418) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 18.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.emeraldPrimary.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.swap_horiz_rounded, color: AppColors.emeraldPrimary, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Export Data for Finances',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                        const Text(
+                          'kith_finance_bridge_v1 (SHA-256 Verified)',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.emeraldPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Safely transfer your personal expenses, debts, budgets, and IPO records into the standalone Finances app. Group trips and settlements remain safe in SplitTrip.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isDark ? Colors.white70 : Colors.black87,
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF181F26) : const Color(0xFFF3F4F6),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _buildStatPill('Expenses', summary.personalExpensesCount, isDark),
+                        _buildStatPill('Debts', summary.personalDebtsCount, isDark),
+                        _buildStatPill('Budgets', summary.personalBudgetsCount, isDark),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _buildStatPill('IPO Accounts', summary.ipoAccountsCount, isDark),
+                        _buildStatPill('Applications', summary.ipoApplicationsCount, isDark),
+                        _buildStatPill('Tracked IPOs', summary.trackedIposCount, isDark),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.emeraldPrimary.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.copy_rounded, color: AppColors.emeraldPrimary, size: 20),
+                ),
+                title: const Text('Copy Migration Code', style: TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: Text('Paste directly in Finances (${(jsonString.length / 1024).toStringAsFixed(1)} KB)'),
+                trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.emeraldPrimary),
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: jsonString));
+                  HapticHelper.success();
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Migration Code copied! Open Finances app and select Import ✓'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+              ),
+              const Divider(height: 16),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.indigoAccent.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.save_alt_rounded, color: AppColors.indigoAccent, size: 20),
+                ),
+                title: const Text('Save Migration File', style: TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: const Text('Save JSON archive into app exports directory'),
+                trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.indigoAccent),
+                onTap: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  try {
+                    final res = await exportService.exportToFile();
+                    HapticHelper.success();
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    if (!mounted) return;
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text('Saved to: ${res.filePath}'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  } catch (e) {
+                    if (!mounted) return;
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text('Save error: $e'),
+                        backgroundColor: Colors.redAccent,
+                      ),
+                    );
+                  }
+                },
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showExportDataSheet(bool isDark) {
     HapticHelper.light();
     final homeVm = context.read<HomeViewModel>();
@@ -584,6 +794,13 @@ class _MasterSettingsViewState extends State<MasterSettingsView> {
 
           _buildSectionHeader(l10n.settingsSecData, isDark),
           _buildSettingsGroup(isDark, [
+            _buildSettingTile(
+              'Export Data for Finances App',
+              'Transfer personal expenses, debts, budgets & IPO records to Finances',
+              Icons.swap_horiz_rounded,
+              isDark,
+              () => _showFinancesMigrationExportSheet(isDark),
+            ),
             _buildSettingTile(l10n.settingsExportData, l10n.settingsExportDataSub, Icons.file_download_outlined, isDark, () => _showExportDataSheet(isDark)),
             _buildSettingTile(l10n.settingsClearCache, _cacheSizeMb > 0 ? '${_cacheSizeMb.toStringAsFixed(1)} MB temporary cache' : '0.0 KB (Clean)', Icons.cleaning_services_outlined, isDark, () => _showClearCacheDialog(isDark)),
             _buildSettingTile(l10n.settingsAppVersion, l10n.settingsAppVersionSub, Icons.info_outline_rounded, isDark, () => _showAboutSheet(isDark)),

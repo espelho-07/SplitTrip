@@ -120,6 +120,10 @@ class LocalStorageService {
 
   Future<bool> remove(String key) => _prefs.remove(key);
 
+  Set<String> getKeys() => _prefs.getKeys();
+
+  SharedPreferences get rawPrefs => _prefs;
+
   static const String _recoveryVaultKey = 'kith_recovery_vault';
 
   static const String _deletedRecoveryKeysKey = 'kith_deleted_recovery_keys';
