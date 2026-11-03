@@ -1,8 +1,6 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
-import '../../core/config/app_config.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/config/supabase_config.dart';
 import '../../domain/models/ipo/ipo.dart';
 import '../../domain/models/ipo/ipo_application.dart';
@@ -14,265 +12,140 @@ abstract class IpoDataProvider {
   Future<List<IpoApplication>> syncUserAllotments(String userId);
 }
 
-/// Fetches real-time Indian IPO market data & manages allotment checks via Kith IPO API service.
+/// Centralized PostgreSQL Cache Data Provider for KITH IPO Management.
 ///
-/// High Availability Strategy:
-/// 1. Primary: Dedicated Kith IPO API (`${AppConfig.ipoApiBaseUrl}/v1/ipos` with `x-api-key`).
-/// 2. Fallback 1: SplitTrip backend proxy (`${AppConfig.baseUrl}/ipos`).
-/// 3. Fallback 2: Direct FinAPI market feed (`https://finapi.upvaly.com/api/ipo`).
-/// 4. Fallback 3: Supabase Edge Function (`/ipo-data`).
-///
-/// Zero hardcoded or mock IPOs in production. Returns empty list if all live services are unreachable.
-class LiveIpoDataProvider implements IpoDataProvider {
-  final http.Client _client;
+/// ZERO Direct External Calls:
+/// Never makes outbound requests to IPO Guru, FinAPI, or external market scrapers.
+/// Reads directly from PostgreSQL `ipo_master` and `ipo_gmp_cache` in KITH-STAGING.
+class SupabaseIpoDataProvider implements IpoDataProvider {
+  final SupabaseClient? client;
 
-  LiveIpoDataProvider({http.Client? client}) : _client = client ?? http.Client();
+  SupabaseIpoDataProvider({this.client});
 
-  Map<String, String> get _ipoApiHeaders => {
-    'Accept': 'application/json',
-    'x-api-key': AppConfig.ipoApiKey,
-  };
+  SupabaseClient? get _supabase {
+    if (client != null) return client;
+    if (SupabaseConfig.isConfigured) {
+      return Supabase.instance.client;
+    }
+    return null;
+  }
 
   @override
   Future<List<Ipo>> fetchIpos() async {
-    // 1. Try Dedicated Kith IPO API Service (/v1/ipos)
-    try {
-      final ipoApiUri = Uri.parse('${AppConfig.ipoApiBaseUrl}/v1/ipos?limit=100');
-      final response = await _client.get(
-        ipoApiUri,
-        headers: _ipoApiHeaders,
-      ).timeout(const Duration(seconds: 5));
-
-      final items = _parseResponse(response);
-      if (items.isNotEmpty) {
-        return items;
-      }
-    } catch (e) {
-      debugPrint('[LiveIpoDataProvider] Dedicated Kith IPO API fetch notice: $e');
+    final sClient = _supabase;
+    if (sClient == null) {
+      debugPrint('[SupabaseIpoDataProvider] Supabase is not configured. Returning empty IPO list.');
+      return const [];
     }
 
-    // 2. Fallback: SplitTrip Cloud Backend proxy
     try {
-      final backendUri = Uri.parse('${AppConfig.baseUrl}/ipos');
-      final response = await _client.get(
-        backendUri,
-        headers: {'Accept': 'application/json'},
-      ).timeout(const Duration(seconds: 5));
+      final response = await sClient
+          .from('ipo_master')
+          .select('*, ipo_gmp_cache(*)')
+          .order('open_date', ascending: false);
 
-      final items = _parseResponse(response);
-      if (items.isNotEmpty) {
-        return items;
-      }
-    } catch (e) {
-      debugPrint('[LiveIpoDataProvider] Backend proxy fetch notice: $e');
-    }
-
-    // 3. Fallback: Direct FinAPI Market Feed
-    try {
-      final finApiUri = Uri.parse('https://finapi.upvaly.com/api/ipo');
-      final response = await _client.get(
-        finApiUri,
-        headers: {
-          'Accept': 'application/json',
-          'User-Agent': 'Kith-Mobile/1.0',
-        },
-      ).timeout(const Duration(seconds: 6));
-
-      final items = _parseResponse(response);
-      if (items.isNotEmpty) {
-        return items;
-      }
-    } catch (e) {
-      debugPrint('[LiveIpoDataProvider] Direct FinAPI fetch notice: $e');
-    }
-
-    // 4. Fallback: Supabase Edge Function proxy
-    if (SupabaseConfig.isConfigured) {
-      try {
-        final edgeUri = Uri.parse('${SupabaseConfig.url}/functions/v1/ipo-data');
-        final response = await _client.get(
-          edgeUri,
-          headers: {
-            'Accept': 'application/json',
-            'apikey': SupabaseConfig.anonKey,
-            'Authorization': 'Bearer ${SupabaseConfig.anonKey}',
-          },
-        ).timeout(const Duration(seconds: 5));
-
-        final items = _parseResponse(response);
-        if (items.isNotEmpty) {
-          return items;
-        }
-      } catch (e) {
-        debugPrint('[LiveIpoDataProvider] Supabase Edge Function fetch notice: $e');
-      }
-    }
-
-    // Zero fake data: return empty list on provider failure.
-    return const [];
-  }
-
-  List<Ipo> _parseResponse(http.Response response) {
-    if (response.statusCode != 200) return const [];
-    try {
-      final decoded = jsonDecode(response.body);
-      List? rawList;
-      if (decoded is List) {
-        rawList = decoded;
-      } else if (decoded is Map<String, dynamic>) {
-        if (decoded['data'] is List) {
-          rawList = decoded['data'] as List;
-        } else if (decoded['ipos'] is List) {
-          rawList = decoded['ipos'] as List;
-        } else if (decoded['result'] is List) {
-          rawList = decoded['result'] as List;
-        }
-      }
-
-      if (rawList != null && rawList.isNotEmpty) {
+      if (response.isNotEmpty) {
         final items = <Ipo>[];
-        for (final item in rawList) {
-          if (item is Map<String, dynamic>) {
-            try {
-              items.add(Ipo.fromJson(item));
-            } catch (e) {
-              debugPrint('[LiveIpoDataProvider] JSON item parse notice: $e');
-            }
+        for (final row in response) {
+          try {
+            items.add(Ipo.fromJson(row));
+          } catch (e) {
+            debugPrint('[SupabaseIpoDataProvider] Error parsing row into Ipo: $e');
           }
         }
         return items;
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[SupabaseIpoDataProvider] Database fetch notice: $e');
+    }
     return const [];
   }
 
   @override
   Future<bool> registerApplicationMonitoring(IpoApplication app) async {
-    // 1. Try Dedicated Kith IPO API Service
+    final sClient = _supabase;
+    if (sClient == null) return false;
+
     try {
-      final ipoApiUri = Uri.parse('${AppConfig.ipoApiBaseUrl}/v1/allotments/register');
-      final response = await _client.post(
-        ipoApiUri,
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'x-api-key': AppConfig.ipoApiKey,
-        },
-        body: jsonEncode(app.toJson()),
-      ).timeout(const Duration(seconds: 5));
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return true;
-      }
+      await sClient.from('ipo_applications').upsert({
+        'id': app.id,
+        'ipo_id': app.ipoId,
+        'ipo_name': app.ipoName,
+        'user_id': app.userId,
+        'application_account_id': app.applicationAccountId,
+        'account_display_name': app.accountDisplayName,
+        'account_masked_pan': app.accountMaskedPan,
+        'application_number': app.applicationNumber,
+        'registrar': app.registrar,
+        'application_date': app.applicationDate.toIso8601String(),
+        'lots_applied': app.lotsApplied,
+        'lot_size': app.lotSize,
+        'bid_price_in_rupees': app.bidPriceInRupees,
+        'bid_price_type': app.bidPriceType,
+        'application_amount_in_paise': app.applicationAmountInPaise,
+        'actual_submitted_amount_in_paise': app.actualSubmittedAmountInPaise,
+        'mandate_amount_in_paise': app.mandateAmountInPaise,
+        'upi_mandate_status': app.upiMandateStatus,
+        'status': app.status.name,
+        'allotted_lots': app.allottedLots,
+        'allotted_shares': app.allottedShares,
+        'actual_invested_amount_in_paise': app.actualInvestedAmountInPaise,
+        'released_amount_in_paise': app.releasedAmountInPaise,
+        'refund_initiated_amount_in_paise': app.refundInitiatedAmountInPaise,
+        'notes': app.notes,
+        'updated_at': DateTime.now().toIso8601String(),
+      });
+      return true;
     } catch (e) {
-      debugPrint('[LiveIpoDataProvider] Dedicated API register notice: $e');
-    }
-
-    // 2. Fallback to SplitTrip backend proxy
-    try {
-      final backendUri = Uri.parse('${AppConfig.baseUrl}/ipos/applications/register');
-      final response = await _client.post(
-        backendUri,
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: jsonEncode(app.toJson()),
-      ).timeout(const Duration(seconds: 5));
-
-      return response.statusCode == 200 || response.statusCode == 201;
-    } catch (e) {
-      debugPrint('[LiveIpoDataProvider] Register monitoring notice: $e');
+      debugPrint('[SupabaseIpoDataProvider] Register application error: $e');
       return false;
     }
   }
 
   @override
   Future<IpoApplication?> checkApplicationAllotment(String applicationId) async {
-    // 1. Try Dedicated Kith IPO API Service
-    try {
-      final ipoApiUri = Uri.parse('${AppConfig.ipoApiBaseUrl}/v1/allotments/$applicationId/check');
-      final response = await _client.post(
-        ipoApiUri,
-        headers: {
-          'Accept': 'application/json',
-          'x-api-key': AppConfig.ipoApiKey,
-        },
-      ).timeout(const Duration(seconds: 7));
+    final sClient = _supabase;
+    if (sClient == null) return null;
 
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body);
-        if (body is Map<String, dynamic> && body['data'] is Map<String, dynamic>) {
-          return IpoApplication.fromJson(body['data'] as Map<String, dynamic>);
-        }
+    try {
+      final response = await sClient
+          .from('ipo_applications')
+          .select()
+          .eq('id', applicationId)
+          .maybeSingle();
+
+      if (response != null) {
+        return IpoApplication.fromJson(response);
       }
     } catch (e) {
-      debugPrint('[LiveIpoDataProvider] Dedicated API check allotment notice: $e');
-    }
-
-    // 2. Fallback to SplitTrip backend proxy
-    try {
-      final backendUri = Uri.parse('${AppConfig.baseUrl}/ipos/applications/$applicationId/check-now');
-      final response = await _client.post(
-        backendUri,
-        headers: {'Accept': 'application/json'},
-      ).timeout(const Duration(seconds: 8));
-
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body);
-        if (body is Map<String, dynamic> && body['data'] is Map<String, dynamic>) {
-          return IpoApplication.fromJson(body['data'] as Map<String, dynamic>);
-        }
-      }
-    } catch (e) {
-      debugPrint('[LiveIpoDataProvider] Check allotment notice: $e');
+      debugPrint('[SupabaseIpoDataProvider] Check allotment error: $e');
     }
     return null;
   }
 
   @override
   Future<List<IpoApplication>> syncUserAllotments(String userId) async {
-    // 1. Try Dedicated Kith IPO API Service
-    try {
-      final ipoApiUri = Uri.parse('${AppConfig.ipoApiBaseUrl}/v1/allotments/user/$userId');
-      final response = await _client.get(
-        ipoApiUri,
-        headers: _ipoApiHeaders,
-      ).timeout(const Duration(seconds: 5));
+    final sClient = _supabase;
+    if (sClient == null) return const [];
 
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body);
-        if (body is Map<String, dynamic> && body['data'] is List) {
-          final list = body['data'] as List;
-          return list.whereType<Map<String, dynamic>>().map((m) => IpoApplication.fromJson(m)).toList();
-        }
+    try {
+      final response = await sClient
+          .from('ipo_applications')
+          .select()
+          .eq('user_id', userId)
+          .order('application_date', ascending: false);
+
+      if (response.isNotEmpty) {
+        return response.map((m) => IpoApplication.fromJson(m)).toList();
       }
     } catch (e) {
-      debugPrint('[LiveIpoDataProvider] Dedicated API sync user allotments notice: $e');
-    }
-
-    // 2. Fallback to SplitTrip backend proxy
-    try {
-      final backendUri = Uri.parse('${AppConfig.baseUrl}/ipos/user/$userId/allotments');
-      final response = await _client.get(
-        backendUri,
-        headers: {'Accept': 'application/json'},
-      ).timeout(const Duration(seconds: 5));
-
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body);
-        if (body is Map<String, dynamic> && body['data'] is List) {
-          final list = body['data'] as List;
-          return list.whereType<Map<String, dynamic>>().map((m) => IpoApplication.fromJson(m)).toList();
-        }
-      }
-    } catch (e) {
-      debugPrint('[LiveIpoDataProvider] Sync user allotments notice: $e');
+      debugPrint('[SupabaseIpoDataProvider] Sync user allotments error: $e');
     }
     return const [];
   }
 }
 
-
-
-
+/// Backward-compatible alias for existing service locators
+class LiveIpoDataProvider extends SupabaseIpoDataProvider {
+  LiveIpoDataProvider({super.client});
+}

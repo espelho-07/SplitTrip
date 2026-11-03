@@ -1,3 +1,4 @@
+import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -151,6 +152,8 @@ class _IpoHomeViewState extends State<IpoHomeView> {
                   _buildEmptyState(isDark, ipoVm)
                 else
                   ...ipos.map((ipo) => _buildIpoCard(context, ipo, ipoVm, isDark)),
+                const SizedBox(height: 12),
+                _buildDataAttributionFooter(isDark, ipoVm),
               ],
             ),
           ),
@@ -518,15 +521,36 @@ class _IpoHomeViewState extends State<IpoHomeView> {
                             ),
                           ),
                           const SizedBox(height: 2),
-                          Text(
-                            ipo.gmp != null && ipo.gmp! > 0 ? '₹${ipo.gmp}' : 'N/A',
-                            style: TextStyle(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w900,
-                              color: ipo.gmp != null && ipo.gmp! > 0
-                                  ? const Color(0xFF10B981)
-                                  : (isDark ? Colors.white60 : Colors.black45),
-                            ),
+                          Builder(
+                            builder: (context) {
+                              final gmp = ipo.currentGmp;
+                              final String gmpText;
+                              final Color gmpColor;
+                              if (ipo.isGmpExpired) {
+                                gmpText = ipo.dynamicStatus == IpoStatus.listed ? '-' : 'Expired';
+                                gmpColor = isDark ? Colors.white38 : Colors.black38;
+                              } else if (gmp == null) {
+                                gmpText = 'N/A';
+                                gmpColor = isDark ? Colors.white38 : Colors.black38;
+                              } else if (gmp > 0) {
+                                gmpText = '+₹$gmp';
+                                gmpColor = const Color(0xFF10B981);
+                              } else if (gmp < 0) {
+                                gmpText = '-₹${gmp.abs()}';
+                                gmpColor = const Color(0xFFEF4444);
+                              } else {
+                                gmpText = '₹0 (Flat)';
+                                gmpColor = isDark ? Colors.white70 : const Color(0xFF475569);
+                              }
+                              return Text(
+                                gmpText,
+                                style: TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w900,
+                                  color: gmpColor,
+                                ),
+                              );
+                            },
                           ),
                         ],
                       ),
@@ -893,22 +917,34 @@ class _IpoHomeViewState extends State<IpoHomeView> {
                   ),
                 ),
                 const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: ipoVm.isApiConfigured
-                        ? const Color(0xFFDCFCE7)
-                        : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    ipoVm.sourceAttribution,
-                    style: TextStyle(
-                      fontSize: 9.5,
-                      fontWeight: FontWeight.w800,
-                      color: ipoVm.isApiConfigured
-                          ? const Color(0xFF15803D)
-                          : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                InkWell(
+                  onTap: () async {
+                    final uri = Uri.parse(ipoVm.attributionUrl);
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFDCFCE7),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          ipoVm.sourceAttribution,
+                          style: const TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF15803D),
+                          ),
+                        ),
+                        const SizedBox(width: 3),
+                        const Icon(Icons.open_in_new_rounded, size: 9, color: Color(0xFF15803D)),
+                      ],
                     ),
                   ),
                 ),
@@ -954,6 +990,52 @@ class _IpoHomeViewState extends State<IpoHomeView> {
               label: const Text('Refresh Feed'),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDataAttributionFooter(bool isDark, IpoViewModel ipoVm) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, bottom: 20),
+      child: Center(
+        child: InkWell(
+          onTap: () async {
+            final uri = Uri.parse(ipoVm.attributionUrl);
+            if (await canLaunchUrl(uri)) {
+              await launchUrl(uri, mode: LaunchMode.externalApplication);
+            }
+          },
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.verified_outlined,
+                  size: 13,
+                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  "Data: IPO Guru",
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB),
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+                const SizedBox(width: 3),
+                Icon(
+                  Icons.open_in_new_rounded,
+                  size: 11,
+                  color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

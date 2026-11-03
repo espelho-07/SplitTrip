@@ -13,6 +13,7 @@ class Trip {
   final List<TripMember> members;
   final TripLifecycle lifecycleState;
   final String inviteCode;
+  final String? p2pTripSecret;
   final String tripMode; // 'split_only' or 'split_and_journey'
   final int revision;
   final String? completionMode;
@@ -35,6 +36,7 @@ class Trip {
     required this.members,
     this.lifecycleState = TripLifecycle.active,
     required this.inviteCode,
+    this.p2pTripSecret,
     this.tripMode = 'split_only',
     this.revision = 1,
     this.completionMode,
@@ -56,6 +58,7 @@ class Trip {
     List<TripMember>? members,
     TripLifecycle? lifecycleState,
     String? inviteCode,
+    String? p2pTripSecret,
     String? tripMode,
     int? revision,
     String? completionMode,
@@ -76,6 +79,7 @@ class Trip {
       members: members ?? this.members,
       lifecycleState: lifecycleState ?? this.lifecycleState,
       inviteCode: inviteCode ?? this.inviteCode,
+      p2pTripSecret: p2pTripSecret ?? this.p2pTripSecret,
       tripMode: tripMode ?? this.tripMode,
       revision: revision ?? this.revision,
       completionMode: completionMode ?? this.completionMode,
@@ -86,7 +90,6 @@ class Trip {
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
-
 
   /// Safely merges this local trip aggregate with a remote or cached snapshot.
   /// Guarantees:
@@ -107,30 +110,51 @@ class Trip {
     for (final otherMember in other.members) {
       if (mergedMembersMap.containsKey(otherMember.id)) {
         final existing = mergedMembersMap[otherMember.id]!;
-        final chosenDisplayName = (otherMember.displayName.isNotEmpty && otherMember.displayName != 'Member')
+        final chosenDisplayName =
+            (otherMember.displayName.isNotEmpty &&
+                otherMember.displayName != 'Member')
             ? otherMember.displayName
             : existing.displayName;
+
+        final bool isNowClaimed = otherMember.isClaimed || existing.isClaimed;
+        final String chosenUserId;
+        if (!existing.userId.startsWith('unclaimed_') && existing.userId.isNotEmpty) {
+          chosenUserId = existing.userId;
+        } else if (!otherMember.userId.startsWith('unclaimed_') && otherMember.userId.isNotEmpty) {
+          chosenUserId = otherMember.userId;
+        } else {
+          chosenUserId = existing.userId.isNotEmpty ? existing.userId : otherMember.userId;
+        }
+
         mergedMembersMap[otherMember.id] = existing.copyWith(
           displayName: chosenDisplayName,
-          userId: otherMember.userId.isNotEmpty ? otherMember.userId : existing.userId,
+          userId: chosenUserId,
           avatarUrl: otherMember.avatarUrl ?? existing.avatarUrl,
-          role: otherMember.role != 'member' ? otherMember.role : existing.role,
+          role: otherMember.role != 'member' && otherMember.role != 'virtual' ? otherMember.role : existing.role,
           upiId: otherMember.upiId ?? existing.upiId,
-          isClaimed: otherMember.isClaimed || existing.isClaimed,
-          status: otherMember.status ?? existing.status,
+          isClaimed: isNowClaimed,
+          status: isNowClaimed ? 'claimed' : (otherMember.status ?? existing.status),
           claimToken: otherMember.claimToken ?? existing.claimToken,
-          mergedIntoMemberId: otherMember.mergedIntoMemberId ?? existing.mergedIntoMemberId,
-          isVirtualMember: otherMember.isVirtual || existing.isVirtual,
+          mergedIntoMemberId:
+              otherMember.mergedIntoMemberId ?? existing.mergedIntoMemberId,
+          isVirtualMember: !isNowClaimed,
         );
       } else {
         // Check by authenticated userId if not unclaimed
-        final byUserId = mergedMembersMap.values.where(
-          (m) => m.userId.isNotEmpty && !m.userId.startsWith('unclaimed_') && m.userId == otherMember.userId,
-        ).firstOrNull;
+        final byUserId = mergedMembersMap.values
+            .where(
+              (m) =>
+                  m.userId.isNotEmpty &&
+                  !m.userId.startsWith('unclaimed_') &&
+                  m.userId == otherMember.userId,
+            )
+            .firstOrNull;
 
         if (byUserId != null) {
           mergedMembersMap[byUserId.id] = byUserId.copyWith(
-            displayName: (otherMember.displayName.isNotEmpty && otherMember.displayName != 'Member')
+            displayName:
+                (otherMember.displayName.isNotEmpty &&
+                    otherMember.displayName != 'Member')
                 ? otherMember.displayName
                 : byUserId.displayName,
             avatarUrl: otherMember.avatarUrl ?? byUserId.avatarUrl,
@@ -143,26 +167,49 @@ class Trip {
       }
     }
 
-    final isOtherNewer = other.revision > revision || other.updatedAt.isAfter(updatedAt);
+    final isOtherNewer =
+        other.revision > revision || other.updatedAt.isAfter(updatedAt);
+
+    final String? mergedSecret;
+    if (other.revision > revision &&
+        other.p2pTripSecret != null &&
+        other.p2pTripSecret!.isNotEmpty) {
+      mergedSecret = other.p2pTripSecret;
+    } else if (p2pTripSecret != null && p2pTripSecret!.isNotEmpty) {
+      mergedSecret = p2pTripSecret;
+    } else {
+      mergedSecret = other.p2pTripSecret;
+    }
 
     return Trip(
       id: id,
       name: isOtherNewer && other.name.isNotEmpty ? other.name : name,
-      description: isOtherNewer ? (other.description ?? description) : (description ?? other.description),
+      description: isOtherNewer
+          ? (other.description ?? description)
+          : (description ?? other.description),
       emoji: isOtherNewer ? other.emoji : emoji,
-      coverGradientIndex: isOtherNewer ? other.coverGradientIndex : coverGradientIndex,
-      currencyCode: other.currencyCode.isNotEmpty ? other.currencyCode : currencyCode,
+      coverGradientIndex: isOtherNewer
+          ? other.coverGradientIndex
+          : coverGradientIndex,
+      currencyCode: other.currencyCode.isNotEmpty
+          ? other.currencyCode
+          : currencyCode,
       creatorId: creatorId.isNotEmpty ? creatorId : other.creatorId,
       members: mergedMembersMap.values.toList(),
       lifecycleState: isOtherNewer ? other.lifecycleState : lifecycleState,
       inviteCode: inviteCode.isNotEmpty ? inviteCode : other.inviteCode,
+      p2pTripSecret: mergedSecret,
       tripMode: isOtherNewer ? other.tripMode : tripMode,
       revision: other.revision > revision ? other.revision : revision,
       completionMode: other.completionMode ?? completionMode,
-      startedAt: startedAt.isBefore(other.startedAt) ? startedAt : other.startedAt,
+      startedAt: startedAt.isBefore(other.startedAt)
+          ? startedAt
+          : other.startedAt,
       completedAt: other.completedAt ?? completedAt,
       completedBy: other.completedBy ?? completedBy,
-      createdAt: createdAt.isBefore(other.createdAt) ? createdAt : other.createdAt,
+      createdAt: createdAt.isBefore(other.createdAt)
+          ? createdAt
+          : other.createdAt,
       updatedAt: isOtherNewer ? other.updatedAt : updatedAt,
     );
   }
@@ -178,6 +225,7 @@ class Trip {
     'members': members.map((m) => m.toJson()).toList(),
     'lifecycleState': lifecycleState.name,
     'inviteCode': inviteCode,
+    'p2pTripSecret': p2pTripSecret,
     'tripMode': tripMode,
     'revision': revision,
     'completionMode': completionMode,
@@ -192,15 +240,18 @@ class Trip {
     final parsedCreatedAt = json['createdAt'] != null
         ? DateTime.tryParse(json['createdAt'] as String) ?? DateTime.now()
         : (json['created_at'] != null
-            ? DateTime.tryParse(json['created_at'] as String) ?? DateTime.now()
-            : DateTime.now());
+              ? DateTime.tryParse(json['created_at'] as String) ??
+                    DateTime.now()
+              : DateTime.now());
     final parsedStartedAt = json['startedAt'] != null
         ? DateTime.tryParse(json['startedAt'] as String) ?? parsedCreatedAt
         : (json['started_at'] != null
-            ? DateTime.tryParse(json['started_at'] as String) ?? parsedCreatedAt
-            : parsedCreatedAt);
+              ? DateTime.tryParse(json['started_at'] as String) ??
+                    parsedCreatedAt
+              : parsedCreatedAt);
 
-    final rawLifecycle = json['lifecycleState'] as String? ??
+    final rawLifecycle =
+        json['lifecycleState'] as String? ??
         json['lifecycle_state'] as String? ??
         json['status'] as String? ??
         'active';
@@ -208,28 +259,50 @@ class Trip {
     final rawCompletedAt = json['completedAt'] != null
         ? DateTime.tryParse(json['completedAt'] as String)
         : (json['completed_at'] != null
-            ? DateTime.tryParse(json['completed_at'] as String)
-            : null);
+              ? DateTime.tryParse(json['completed_at'] as String)
+              : null);
 
-    final rawCompletedBy = json['completedBy'] as String? ?? json['completed_by'] as String?;
+    final rawCompletedBy =
+        json['completedBy'] as String? ?? json['completed_by'] as String?;
 
     return Trip(
       id: (json['id'] as String?) ?? '',
       name: (json['name'] as String?) ?? 'Trip',
       description: json['description'] as String?,
       emoji: json['emoji'] as String? ?? '✈️',
-      coverGradientIndex: json['coverGradientIndex'] as int? ?? json['cover_gradient_index'] as int? ?? 0,
-      currencyCode: json['currencyCode'] as String? ?? json['currency_code'] as String? ?? 'INR',
-      creatorId: (json['creatorId'] as String?) ?? (json['creator_id'] as String?) ?? '',
-      members: (json['members'] as List<dynamic>?)
+      coverGradientIndex:
+          json['coverGradientIndex'] as int? ??
+          json['cover_gradient_index'] as int? ??
+          0,
+      currencyCode:
+          json['currencyCode'] as String? ??
+          json['currency_code'] as String? ??
+          'INR',
+      creatorId:
+          (json['creatorId'] as String?) ??
+          (json['creator_id'] as String?) ??
+          '',
+      members:
+          (json['members'] as List<dynamic>?)
               ?.map((e) => TripMember.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],
       lifecycleState: TripLifecycle.fromString(rawLifecycle),
-      inviteCode: json['inviteCode'] as String? ?? json['invite_code'] as String? ?? 'KITH00',
-      tripMode: json['tripMode'] as String? ?? json['trip_mode'] as String? ?? 'split_only',
+      inviteCode:
+          json['inviteCode'] as String? ??
+          json['invite_code'] as String? ??
+          'KITH00',
+      p2pTripSecret:
+          json['p2pTripSecret'] as String? ??
+          json['p2p_trip_secret'] as String?,
+      tripMode:
+          json['tripMode'] as String? ??
+          json['trip_mode'] as String? ??
+          'split_only',
       revision: json['revision'] as int? ?? 1,
-      completionMode: json['completionMode'] as String? ?? json['completion_mode'] as String?,
+      completionMode:
+          json['completionMode'] as String? ??
+          json['completion_mode'] as String?,
       startedAt: parsedStartedAt,
       completedAt: rawCompletedAt,
       completedBy: rawCompletedBy,
@@ -237,8 +310,9 @@ class Trip {
       updatedAt: json['updatedAt'] != null
           ? DateTime.tryParse(json['updatedAt'] as String) ?? parsedCreatedAt
           : (json['updated_at'] != null
-              ? DateTime.tryParse(json['updated_at'] as String) ?? parsedCreatedAt
-              : parsedCreatedAt),
+                ? DateTime.tryParse(json['updated_at'] as String) ??
+                      parsedCreatedAt
+                : parsedCreatedAt),
     );
   }
 }

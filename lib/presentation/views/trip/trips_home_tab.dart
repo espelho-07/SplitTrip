@@ -56,7 +56,6 @@ class _TripsHomeTabState extends State<TripsHomeTab> {
     final l10n = context.l10n;
     final homeVm = context.watch<HomeViewModel>();
     final authVm = context.watch<AuthViewModel>();
-    final expenseRepo = homeVm.expenseRepo;
     final syncService = Provider.of<SyncService?>(context);
     final user = authVm.currentUser;
 
@@ -69,22 +68,9 @@ class _TripsHomeTabState extends State<TripsHomeTab> {
         .where((t) => t.lifecycleState.isCompleted)
         .toList();
 
-    // Compute expense stats per trip
-    final tripTotalsPaise = <String, int>{};
-    final tripExpenseCounts = <String, int>{};
-    for (final trip in allTrips) {
-      final cachedExpenses = expenseRepo.getCachedExpenses(trip.id);
-      int sum = 0;
-      int count = 0;
-      for (final exp in cachedExpenses) {
-        if (!exp.isDeleted) {
-          sum += exp.amountInPaise;
-          count++;
-        }
-      }
-      tripTotalsPaise[trip.id] = sum;
-      tripExpenseCounts[trip.id] = count;
-    }
+    // Fast O(1) read from HomeViewModel pre-computed cache
+    final tripTotalsPaise = homeVm.tripTotalsPaise;
+    final tripExpenseCounts = homeVm.tripExpenseCounts;
 
     // Apply smart filters & search to ALL TRIPS section
     var displayedCompletedTrips = _filterCriteria.filterAndSort(

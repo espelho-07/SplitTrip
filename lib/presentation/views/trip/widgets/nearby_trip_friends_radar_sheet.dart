@@ -133,7 +133,7 @@ class _NearbyTripFriendsRadarSheetState extends State<NearbyTripFriendsRadarShee
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    final members = widget.trip.members;
+    final eligibleMembers = widget.trip.members.where((m) => !m.isVirtual && m.isClaimed).toList();
 
     final nearbyPeersForTrip = _peers.where((p) => p.sharedTripIds.contains(widget.trip.id)).toList();
 
@@ -250,7 +250,7 @@ class _NearbyTripFriendsRadarSheetState extends State<NearbyTripFriendsRadarShee
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'TRIP MEMBERS (${members.length})',
+                          'ELIGIBLE KITH MEMBERS (${eligibleMembers.length})',
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w800,
@@ -284,21 +284,21 @@ class _NearbyTripFriendsRadarSheetState extends State<NearbyTripFriendsRadarShee
 
                     const SizedBox(height: 8),
 
-                    // List of Members with status
+                    // List of Eligible Linked KITH Members with status (Virtual members excluded)
                     ListView.separated(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
-                      itemCount: members.length,
+                      itemCount: eligibleMembers.length,
                       separatorBuilder: (_, _) => Divider(
                         height: 10,
                         thickness: 0.5,
                         color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.04),
                       ),
                       itemBuilder: (ctx, idx) {
-                        final member = members[idx];
-                        // Match member with discovered peers by displayName
+                        final member = eligibleMembers[idx];
+                        // Match member strictly by authenticated userId identity, never by displayName
                         final matchedPeer = nearbyPeersForTrip.where(
-                          (p) => p.displayName.trim().toLowerCase() == member.displayName.trim().toLowerCase(),
+                          (p) => p.userId != null && p.userId == member.userId,
                         ).firstOrNull;
 
                         return _buildMemberStatusRow(isDark, member, matchedPeer);
@@ -534,7 +534,7 @@ class _NearbyTripFriendsRadarSheetState extends State<NearbyTripFriendsRadarShee
                     Text(
                       isNearby
                           ? (peer.lastSyncedAt != null ? 'Nearby • Synced' : 'Nearby • In Range')
-                          : 'Out of Range',
+                          : 'Not in Range',
                       style: TextStyle(
                         fontSize: 11.5,
                         color: isNearby

@@ -42,6 +42,7 @@ import '../add_expense/add_expense_view.dart';
 import '../payment/payment_verification_dialog.dart';
 import '../payment/payment_verification_view.dart';
 import 'manage_members_view.dart';
+import 'trip_members_view.dart';
 import 'widgets/activity_log_sheet.dart';
 import 'widgets/add_journey_moment_sheet.dart';
 import 'widgets/expense_detail_sheet.dart';
@@ -1443,7 +1444,31 @@ class _TripDetailViewState extends State<TripDetailView> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(l10n.tripDetailMembersCount(trip.members.where((m) => !m.isMerged).length), style: AppTypography.bodySmall(isDark: isDark)),
+                  InkWell(
+                    onTap: () {
+                      HapticHelper.light();
+                      Navigator.push(context, TripMembersView.route(trip.id));
+                    },
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          l10n.tripDetailMembersCount(trip.members.where((m) => !m.isMerged).length),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                          ),
+                        ),
+                        const SizedBox(width: 2),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          size: 16,
+                          color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                        ),
+                      ],
+                    ),
+                  ),
                   Row(
                     children: [
                       if (isCreator) ...[
@@ -1495,28 +1520,60 @@ class _TripDetailViewState extends State<TripDetailView> {
                 spacing: 8,
                 runSpacing: 6,
                 children: trip.members.where((m) => !m.isMerged).map((m) {
-
                   final isSelf = m.userId == currentUserId || m.id == currentUserId;
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        MemberAvatar(name: m.displayName, size: 16),
-                        const SizedBox(width: 6),
-                        Text(
-                          isSelf ? '${m.displayName} ${l10n.tripDetailYouSuffix}' : m.displayName,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: isSelf ? FontWeight.w700 : FontWeight.w500,
-                            color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                  final isVirtual = m.isVirtual;
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: () {
+                      HapticHelper.light();
+                      Navigator.push(context, TripMembersView.route(trip.id));
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isVirtual
+                            ? (isDark ? Colors.amber.withValues(alpha: 0.12) : Colors.amber.withValues(alpha: 0.15))
+                            : (isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle),
+                        borderRadius: BorderRadius.circular(16),
+                        border: isVirtual
+                            ? Border.all(color: Colors.amber.withValues(alpha: 0.35), width: 1)
+                            : null,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          MemberAvatar(name: m.displayName, size: 16),
+                          const SizedBox(width: 6),
+                          Text(
+                            isSelf ? '${m.displayName} ${l10n.tripDetailYouSuffix}' : m.displayName,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: isSelf ? FontWeight.w700 : FontWeight.w500,
+                              color: isVirtual
+                                  ? Colors.amber.shade700
+                                  : (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
+                            ),
                           ),
-                        ),
-                      ],
+                          if (isVirtual) ...[
+                            const SizedBox(width: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                'VIRTUAL',
+                                style: TextStyle(
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.amber.shade800,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
                   );
                 }).toList(),
@@ -2809,6 +2866,23 @@ class _TripDetailViewState extends State<TripDetailView> {
                                   ),
                                 ),
                               ),
+                            ] else if (member.isVirtual) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.withValues(alpha: 0.15),
+                                  borderRadius: AppRadius.smBorder,
+                                ),
+                                child: Text(
+                                  'VIRTUAL',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.amber.shade700,
+                                  ),
+                                ),
+                              ),
                             ],
                           ],
                         ),
@@ -2924,15 +2998,39 @@ class _TripDetailViewState extends State<TripDetailView> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            member.displayName,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14,
-                              color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  member.displayName,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14,
+                                    color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (member.isVirtual) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber.withValues(alpha: 0.15),
+                                    borderRadius: AppRadius.smBorder,
+                                  ),
+                                  child: Text(
+                                    'VIRTUAL',
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.amber.shade700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                           const SizedBox(height: 2),
                           Row(

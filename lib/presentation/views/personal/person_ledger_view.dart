@@ -6,8 +6,6 @@ import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/utils/whatsapp_share_helper.dart';
-import '../../../core/widgets/kith_numeric_keypad.dart';
-import '../../../core/widgets/kith_text_keypad.dart';
 import '../../../domain/models/person_ledger_item.dart';
 import '../../../domain/models/personal_debt.dart';
 import '../../viewmodels/auth_viewmodel.dart';
@@ -1456,7 +1454,6 @@ class _LedgerQuickAddSheet extends StatefulWidget {
 class _LedgerQuickAddSheetState extends State<_LedgerQuickAddSheet> {
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _noteController = TextEditingController();
-  bool _isEditingNote = false;
   bool _isSaving = false;
 
   @override
@@ -1577,103 +1574,88 @@ class _LedgerQuickAddSheetState extends State<_LedgerQuickAddSheet> {
             ),
             const SizedBox(height: 8),
 
-            // Amount Display Field
-            GestureDetector(
-              onTap: () => setState(() => _isEditingNote = false),
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 20),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF0B1014) : const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: !_isEditingNote ? primaryColor : Colors.transparent,
-                    width: 1.5,
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      '₹ ',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w800,
-                        color: primaryColor,
-                      ),
-                    ),
-                    Text(
-                      _amountController.text.isEmpty ? '0' : _amountController.text,
-                      style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w900,
-                        color: isDark ? Colors.white : const Color(0xFF0F172A),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            // Note Display / Input Trigger
-            GestureDetector(
-              onTap: () => setState(() => _isEditingNote = true),
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 20),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF0B1014) : const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: _isEditingNote ? primaryColor : (isDark ? Colors.white12 : Colors.black12),
-                    width: 1,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.notes_rounded, size: 16, color: primaryColor),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _noteController.text.isEmpty ? 'Add a note (e.g. Dinner, Rent, Fuel)...' : _noteController.text,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: _noteController.text.isEmpty ? FontWeight.w400 : FontWeight.w600,
-                          color: _noteController.text.isEmpty
-                              ? (isDark ? Colors.white38 : Colors.black38)
-                              : (isDark ? Colors.white : const Color(0xFF0F172A)),
-                        ),
-                      ),
-                    ),
-                    if (_isEditingNote)
-                      IconButton(
-                        icon: const Icon(Icons.dialpad_rounded, size: 18),
-                        tooltip: 'Switch to numeric keypad',
-                        onPressed: () => setState(() => _isEditingNote = false),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            // In-App Keypad
-            if (!_isEditingNote)
-              KithNumericKeypad(
+            // Native Amount Input Field
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: TextField(
                 controller: _amountController,
-                actionIcon: Icons.check_rounded,
-                onExpressionChanged: (_) => setState(() {}),
-                onDone: _handleSave,
-                onNext: () => setState(() => _isEditingNote = true),
-              )
-            else
-              KithTextKeypad(
-                controller: _noteController,
-                actionLabel: 'SAVE',
-                onDone: _handleSave,
-                onChanged: (_) => setState(() {}),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                autofocus: true,
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                ),
+                decoration: InputDecoration(
+                  prefixText: '₹ ',
+                  prefixStyle: TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w800,
+                    color: primaryColor,
+                  ),
+                  hintText: '0',
+                  filled: true,
+                  fillColor: isDark ? const Color(0xFF0B1014) : const Color(0xFFF1F5F9),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(color: primaryColor.withValues(alpha: 0.3)),
+                  ),
+                ),
               ),
+            ),
+            const SizedBox(height: 12),
+
+            // Note Input Field
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: TextField(
+                controller: _noteController,
+                textCapitalization: TextCapitalization.sentences,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                ),
+                decoration: InputDecoration(
+                  prefixIcon: Icon(Icons.notes_rounded, size: 18, color: primaryColor),
+                  hintText: 'Add a note (e.g. Dinner, Rent, Fuel)...',
+                  filled: true,
+                  fillColor: isDark ? const Color(0xFF0B1014) : const Color(0xFFF8FAFC),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Save Action Button
+            Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+              ),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor,
+                    foregroundColor: isDark ? Colors.black : Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: _handleSave,
+                  child: const Text(
+                    'SAVE TRANSACTION',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),

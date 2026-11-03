@@ -81,15 +81,23 @@ function getTodayIstString() {
 }
 
 /**
- * Primary Provider: IPO Guru API (ipoguru.in)
+ * Primary Provider: IPO Guru API v2 (ipoguru.in)
  *
  * Characteristics:
- * - Free Tier: 300 req/day, 15 req/min
+ * - Free Tier: 10 req/day, 1 req/min (Strict limits, IST calendar day)
  * - Coverage: Mainboard + SME, Open, Upcoming, Closed, Listed
- * - Details: Price Band, Lot Size, Issue Size, Subscriptions, GMP
+ * - Details: Price Band, Lot Size, Issue Size, Subscriptions, Current GMP
  * - Authentication: X-API-KEY header (read securely from server-side environment)
  */
 class IpoGuruProvider extends IpoProvider {
+  constructor() {
+    super();
+    this.lastRateLimit = {
+      retryAfter: null,
+      remaining: null,
+    };
+  }
+
   get id() {
     return "ipo_guru";
   }
@@ -107,6 +115,23 @@ class IpoGuruProvider extends IpoProvider {
     );
   }
 
+  /**
+   * Helper to parse Retry-After header (seconds or HTTP date)
+   */
+  parseRetryAfter(header) {
+    if (!header) return null;
+    const str = String(header).trim();
+    const secs = parseInt(str, 10);
+    if (!isNaN(secs) && String(secs) === str) {
+      return Math.max(0, secs);
+    }
+    const dateMs = Date.parse(str);
+    if (!isNaN(dateMs)) {
+      return Math.max(0, Math.ceil((dateMs - Date.now()) / 1000));
+    }
+    return null;
+  }
+
   async fetchIpos() {
     if (!this.isConfigured) {
       return null;
@@ -119,18 +144,33 @@ class IpoGuruProvider extends IpoProvider {
       const fetchFn = fetch ?? globalThis.fetch;
       if (!fetchFn) return null;
 
-      const response = await fetchFn("https://www.ipoguru.in/api/v1/ipos", {
+      const response = await fetchFn("https://www.ipoguru.in/api/v2/ipos", {
         method: "GET",
         headers: {
           "X-API-KEY": this.apiKey,
           Accept: "application/json",
-          "User-Agent": "Kith-Backend-Proxy/1.0",
+          "User-Agent": "Kith-Backend-Proxy/2.0",
         },
         signal: AbortSignal.timeout(7000),
       });
 
+      // Capture rate limit headers
+      const retryHeader = response.headers?.get?.("retry-after") || response.headers?.get?.("Retry-After");
+      const remainingHeader =
+        response.headers?.get?.("x-ratelimit-remaining") || response.headers?.get?.("X-RateLimit-Remaining");
+
+      const retryAfter = this.parseRetryAfter(retryHeader);
+      const remaining = remainingHeader ? parseInt(remainingHeader, 10) : null;
+
+      this.lastRateLimit = {
+        retryAfter,
+        remaining: isNaN(remaining) ? null : remaining,
+      };
+
       if (response.status === 429) {
-        console.warn("[IpoGuruProvider] Rate limit (429) reached from upstream API");
+        console.warn(
+          `[IpoGuruProvider] Rate limit (429) reached from upstream API. Retry-After: ${retryAfter}s, Remaining: ${remaining}`
+        );
         return null;
       }
 
@@ -158,17 +198,57 @@ class IpoGuruProvider extends IpoProvider {
   }
 
   /**
+   * Robust GMP value extraction handling v2 objects and diverse formats
+   */
+  extractGmp(item) {
+    if (!item) return null;
+
+    let raw = item.gmp;
+    if (raw !== null && typeof raw === "object") {
+      raw = raw.price ?? raw.gmp ?? raw.current_gmp ?? null;
+    }
+    if (raw === undefined || raw === null) {
+      raw = item.grey_market_premium ?? item.current_gmp ?? item.gmp_raw;
+    }
+    if (raw === undefined || raw === null) return null;
+
+    if (typeof raw === "number") {
+      return isNaN(raw) ? null : Math.round(raw);
+    }
+
+    const str = String(raw).trim();
+    if (
+      !str ||
+      str.toLowerCase() === "null" ||
+      str.toLowerCase() === "n/a" ||
+      str.toLowerCase() === "tbd" ||
+      str === "--" ||
+      str.toLowerCase() === "[object object]"
+    ) {
+      return null;
+    }
+
+    const clean = str.replace(/[₹\s,]/g, "");
+    const match = clean.match(/^([+-]?\d+(?:\.\d+)?)/);
+    if (!match) return null;
+
+    const parsed = parseFloat(match[1]);
+    return isNaN(parsed) ? null : Math.round(parsed);
+  }
+
+  /**
    * Normalizes raw IPO Guru response item into canonical Kith domain structure
    */
   normalizeItem(item, index) {
     if (!item) return null;
 
-    const rawId = item.id ?? item.symbol ?? item.slug ?? `ipo_${index}`;
+    const rawId = item.id ?? item.slug ?? item.symbol ?? `ipo_${index}`;
     const id = String(rawId).toLowerCase().replace(/[^a-z0-9_-]/g, "_");
+    const slug = String(item.slug || id).trim();
     const name = item.company_name ?? item.name ?? item.ipo_name ?? "Unknown IPO";
-    const companyName = item.company_name ?? item.issuer_company ?? name;
+    const companyName = item.company_name ?? item.issuer_company ?? item.issuer ?? name;
     const symbol = item.symbol ?? item.bse_code ?? item.nse_code ?? "";
-    const category = (item.category ?? item.type ?? "mainboard").toLowerCase();
+    const category = (item.category ?? item.market_type ?? item.type ?? "mainboard").toLowerCase();
     const marketType = category.includes("sme") ? "sme" : "mainboard";
 
     const openDate = normalizeDateStr(item.open_date ?? item.bidding_start_date ?? item.openDate);
@@ -200,34 +280,49 @@ class IpoGuruProvider extends IpoProvider {
       status = "closed";
     }
 
-    const minPrice = parseFloat(item.price_band_min ?? item.min_price ?? item.floor_price ?? 0) || 0;
-    const maxPrice = parseFloat(item.price_band_max ?? item.max_price ?? item.cap_price ?? minPrice) || minPrice;
-    const lotSize = parseInt(item.lot_size ?? item.market_lot ?? item.shares_per_lot ?? 1, 10) || 1;
+    const minPrice =
+      parseFloat(item.price_min ?? item.price_band_min ?? item.min_price ?? item.floor_price ?? 0) || 0;
+    const maxPrice =
+      parseFloat(item.price_max ?? item.price_band_max ?? item.max_price ?? item.cap_price ?? minPrice) ||
+      minPrice;
+    const lotSize =
+      parseInt(item.lot_size ?? item.market_lot ?? item.shares_per_lot ?? 1, 10) || 1;
 
-    const issueSizeCrores = parseFloat(item.issue_size ?? item.total_issue_size_cr ?? item.issue_size_crores ?? 0) || null;
-    const freshIssueCrores = parseFloat(item.fresh_issue ?? item.fresh_issue_cr ?? 0) || null;
-    const ofsCrores = parseFloat(item.ofs ?? item.offer_for_sale_cr ?? 0) || null;
+    const issueSizeCrores =
+      parseFloat(item.issue_size ?? item.total_issue_size_cr ?? item.issue_size_crores ?? 0) || null;
+    const freshIssueCrores =
+      parseFloat(item.fresh_issue ?? item.fresh_issue_cr ?? 0) || null;
+    const ofsCrores =
+      parseFloat(item.ofs ?? item.offer_for_sale_cr ?? 0) || null;
 
-    const gmp = parseFloat(item.gmp ?? item.grey_market_premium ?? item.current_gmp ?? 0) || null;
+    const gmp = this.extractGmp(item);
 
     const subQib = parseFloat(item.qib_subscription ?? item.qib ?? 0) || null;
     const subNii = parseFloat(item.nii_subscription ?? item.nii ?? item.hni ?? 0) || null;
     const subRetail = parseFloat(item.retail_subscription ?? item.retail ?? item.rii ?? 0) || null;
     const subEmp = parseFloat(item.employee_subscription ?? item.employee ?? item.emp ?? 0) || null;
     const subSh = parseFloat(item.shareholder_subscription ?? item.shareholder ?? 0) || null;
-    const subOverall = parseFloat(item.subscription_overall ?? item.total_subscription ?? item.overall ?? 0) || null;
+    const subOverall =
+      parseFloat(item.subscription_overall ?? item.total_subscription ?? item.overall ?? 0) || null;
 
-    const subscription = (subQib || subNii || subRetail || subEmp || subSh || subOverall) ? {
-      qib: subQib,
-      nii: subNii,
-      retail: subRetail,
-      employee: subEmp,
-      shareholder: subSh,
-      total: subOverall,
-    } : null;
+    const subscription =
+      subQib || subNii || subRetail || subEmp || subSh || subOverall
+        ? {
+            qib: subQib,
+            nii: subNii,
+            retail: subRetail,
+            employee: subEmp,
+            shareholder: subSh,
+            total: subOverall,
+          }
+        : null;
+
+    const sourceUpdatedAt =
+      item.updated_at ?? item.source_updated_at ?? item.last_updated ?? item.gmp?.updated_at_label ?? new Date().toISOString();
 
     return {
       id,
+      slug,
       name,
       companyName,
       symbol,
@@ -246,14 +341,15 @@ class IpoGuruProvider extends IpoProvider {
       subscription,
       subscriptionOverall: subOverall,
       gmp,
+      gmpLastValidAt: gmp !== null ? new Date().toISOString() : null,
       issuePrice: parseFloat(item.issue_price ?? item.cutoff_price ?? 0) || null,
       listingPrice: parseFloat(item.listing_price ?? 0) || null,
       currentPrice: parseFloat(item.current_price ?? 0) || null,
-      lastUpdated: new Date().toISOString(),
+      lastUpdated: sourceUpdatedAt,
       source: "ipo_guru",
       isLive: true,
     };
   }
 }
 
-module.exports = { IpoGuruProvider };
+module.exports = { IpoGuruProvider, normalizeDateStr };

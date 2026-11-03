@@ -117,6 +117,9 @@ void main() {
 
   group('Master OLED Obsidian Dark Theme Suite', () {
     testWidgets('1. Renders 5-tab HomeView in Dark Mode cleanly', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
       await tester.pumpWidget(createDarkModeHomeScreen());
       await tester.pumpAndSettle();
 

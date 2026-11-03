@@ -7,7 +7,6 @@ import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/widgets/kith_components.dart';
-import '../../../core/widgets/kith_text_keypad.dart';
 import '../../../core/widgets/trip_cover_background.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/create_trip_viewmodel.dart';
@@ -24,7 +23,6 @@ class CreateTripView extends StatefulWidget {
   State<CreateTripView> createState() => _CreateTripViewState();
 }
 
-enum CreateTripActiveInput { tripName, friendName, none }
 
 class _CreateTripViewState extends State<CreateTripView> {
   final TextEditingController _nameController = TextEditingController();
@@ -32,7 +30,6 @@ class _CreateTripViewState extends State<CreateTripView> {
   bool _showManualFriends = false;
   bool _showEmojiTray = false;
   int _bgStyleTab = 0;
-  CreateTripActiveInput _activeInput = CreateTripActiveInput.tripName;
 
   List<Map<String, String>> _getTripIdeas(AppLocalizations l10n) => [
     {'name': l10n.translate('trip_idea_goa'), 'emoji': '🏖️', 'gradient': '0'},
@@ -61,6 +58,24 @@ class _CreateTripViewState extends State<CreateTripView> {
   ];
 
 
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController.addListener(() {
+      if (mounted) {
+        final createVm = context.read<CreateTripViewModel>();
+        if (createVm.name != _nameController.text) {
+          createVm.setName(_nameController.text);
+        }
+      }
+    });
+    _friendController.addListener(() {
+      if (mounted) {
+        setState(() {});
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -289,27 +304,7 @@ class _CreateTripViewState extends State<CreateTripView> {
                 ),
               ),
 
-              // 3. IN-APP QWERTY TEXT KEYPAD
-              if (_activeInput == CreateTripActiveInput.tripName)
-                KithTextKeypad(
-                  controller: _nameController,
-                  actionLabel: 'Done',
-                  actionIcon: Icons.check_rounded,
-                  onChanged: (val) => createVm.setName(val),
-                  onDone: () => setState(() => _activeInput = CreateTripActiveInput.none),
-                )
-              else if (_activeInput == CreateTripActiveInput.friendName)
-                KithTextKeypad(
-                  controller: _friendController,
-                  actionLabel: 'Add',
-                  actionIcon: Icons.add_rounded,
-                  onDone: () {
-                    _addFriend();
-                  },
-                  onNext: () {
-                    _addFriend();
-                  },
-                ),
+
 
               // 4. STICKY BOTTOM ACTION DECK
               _buildStickyBottomDeck(context, createVm, isDark, l10n),
@@ -605,11 +600,12 @@ class _CreateTripViewState extends State<CreateTripView> {
                   alignment: Alignment.center,
                   child: TextField(
                     controller: _nameController,
-                    readOnly: true,
+                    keyboardType: TextInputType.text,
+                    textInputAction: TextInputAction.next,
                     showCursor: true,
                     enableInteractiveSelection: true,
-                    onTap: () => setState(() => _activeInput = CreateTripActiveInput.tripName),
                     textCapitalization: TextCapitalization.words,
+                    onChanged: (val) => createVm.setName(val),
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
@@ -622,7 +618,6 @@ class _CreateTripViewState extends State<CreateTripView> {
                         color: isDark ? AppColors.darkTextMuted : const Color(0xFF94A3B8),
                       ),
                     ),
-                    onChanged: (val) => createVm.setName(val),
                   ),
                 ),
               ),
@@ -1170,10 +1165,10 @@ class _CreateTripViewState extends State<CreateTripView> {
                     alignment: Alignment.center,
                     child: TextField(
                       controller: _friendController,
-                      readOnly: true,
+                      keyboardType: TextInputType.text,
+                      textInputAction: TextInputAction.done,
                       showCursor: true,
                       enableInteractiveSelection: true,
-                      onTap: () => setState(() => _activeInput = CreateTripActiveInput.friendName),
                       textCapitalization: TextCapitalization.words,
                       style: TextStyle(
                         fontSize: 13.5,

@@ -112,9 +112,11 @@ class IpoViewModel extends ChangeNotifier {
     return _applications.fold<int>(0, (sum, a) => sum + (a.releasedAmountInPaise ?? 0));
   }
 
-  String get sourceAttribution => ipoRepo.ipoService?.sourceAttribution ?? 'NSE/BSE Public Feed';
+  String get sourceAttribution => 'Data: IPO Guru';
+  String get attributionUrl => 'https://ipoguru.in';
+  String get gmpDisclaimer => 'Grey Market Premium (GMP) is indicative, unofficial, and intended solely for tracking. Not financial advice.';
 
-  bool get isApiConfigured => ipoRepo.ipoService?.isConfigured ?? true;
+  bool get isApiConfigured => true;
 
   /// Calculates total unrealized P&L in Paise for allotted/listed IPOs
   int get totalUnrealizedPnlPaise {

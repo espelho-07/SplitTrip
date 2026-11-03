@@ -1,10 +1,13 @@
 import '../../core/services/supabase_cloud_sync.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
+
 import '../../core/network/api_client.dart';
 import '../../core/network/api_exceptions.dart';
 import '../../core/network/realtime_client.dart';
@@ -37,35 +40,13 @@ enum MutationType {
   submitSettlementProof,
 }
 
-enum SyncStatus {
-  synced,
-  syncing,
-  pending,
-  offline,
-  reconnecting,
-  error,
-}
+enum SyncStatus { synced, syncing, pending, offline, reconnecting, error }
 
-enum SyncState {
-  localPending,
-  p2pShared,
-  serverPending,
-  serverAcked,
-  failed,
-}
+enum SyncState { localPending, p2pShared, serverPending, serverAcked, failed }
 
-enum SyncOperationOutcome {
-  success,
-  partial,
-  failed,
-  skipped,
-}
+enum SyncOperationOutcome { success, partial, failed, skipped }
 
-enum SyncSourceType {
-  cloud,
-  nearbyPeer,
-  local,
-}
+enum SyncSourceType { cloud, nearbyPeer, local }
 
 class SyncSourceResult {
   final String name;
@@ -168,8 +149,8 @@ class SyncMutation {
     this.hopCount = 0,
     this.forwardedBy = const [],
     this.outcome,
-  })  : idempotencyKey = idempotencyKey ?? id,
-        payloadChecksum = payloadChecksum ?? computePayloadChecksum(payload);
+  }) : idempotencyKey = idempotencyKey ?? id,
+       payloadChecksum = payloadChecksum ?? computePayloadChecksum(payload);
 
   /// Computes a deterministic SHA-256 hash of the canonical JSON representation of [payload].
   static String computePayloadChecksum(Map<String, dynamic> payload) {
@@ -201,7 +182,9 @@ class SyncMutation {
     if (payload.containsKey('tripId') && payload['tripId'] != null) {
       return payload['tripId'] as String;
     }
-    if (type == MutationType.createTrip && payload.containsKey('id') && payload['id'] != null) {
+    if (type == MutationType.createTrip &&
+        payload.containsKey('id') &&
+        payload['id'] != null) {
       return payload['id'] as String;
     }
     return null;
@@ -218,7 +201,8 @@ class SyncMutation {
     if (payload.containsKey('debtId') && payload['debtId'] != null) {
       return payload['debtId'] as String;
     }
-    if (payload.containsKey('settlementId') && payload['settlementId'] != null) {
+    if (payload.containsKey('settlementId') &&
+        payload['settlementId'] != null) {
       return payload['settlementId'] as String;
     }
     if (payload.containsKey('momentId') && payload['momentId'] != null) {
@@ -254,7 +238,9 @@ class SyncMutation {
       (e) => e.name == json['type'],
       orElse: () => MutationType.addExpense,
     ),
-    payload: json['payload'] is Map<String, dynamic> ? json['payload'] as Map<String, dynamic> : {},
+    payload: json['payload'] is Map<String, dynamic>
+        ? json['payload'] as Map<String, dynamic>
+        : {},
     createdAt: json['createdAt'] != null
         ? DateTime.tryParse(json['createdAt'] as String) ?? DateTime.now()
         : DateTime.now(),
@@ -337,7 +323,10 @@ class SyncService {
   /// Coordinates per-trip synchronization mutexes.
   /// Guarantees that mutations and synchronizations on the same trip are serialized,
   /// while distinct trips synchronize in parallel without lock contention.
-  Future<T> runWithTripLock<T>(String tripId, Future<T> Function() action) async {
+  Future<T> runWithTripLock<T>(
+    String tripId,
+    Future<T> Function() action,
+  ) async {
     while (_tripLocks.containsKey(tripId)) {
       await _tripLocks[tripId]!.future;
     }
@@ -352,6 +341,7 @@ class SyncService {
       }
     }
   }
+
   int get pendingCount => getPendingMutations().length;
   int get pendingMutationCount => pendingCount;
   List<SyncMutation> getQueue() => getPendingMutations();
@@ -443,25 +433,36 @@ class SyncService {
 
   /// Applies a mutation received from a nearby peer device or cloud delta idempotently.
   /// Preserves the EXACT original operation ID and updates local persistent cache.
-  Future<bool> applyRemoteP2PMutation(SyncMutation mutation, LocalStorageService storage) async {
+  Future<bool> applyRemoteP2PMutation(
+    SyncMutation mutation,
+    LocalStorageService storage,
+  ) async {
     try {
       final myDeviceId = storage.getDeviceId();
 
       // Loop Prevention: Drop packets that have already traversed this node
-      if (mutation.forwardedBy.contains(myDeviceId) || mutation.originDeviceId == myDeviceId) {
+      if (mutation.forwardedBy.contains(myDeviceId) ||
+          mutation.originDeviceId == myDeviceId) {
         return false;
       }
 
       // Hop Count Limit: Drop packets exceeding mesh boundary (max 5 hops)
       if (mutation.hopCount >= 5) {
-        debugPrint('[SyncService] Dropping mutation ${mutation.id}: max hop count (5) reached.');
+        debugPrint(
+          '[SyncService] Dropping mutation ${mutation.id}: max hop count (5) reached.',
+        );
         return false;
       }
 
       // Strict Idempotency & Payload Tamper Verification
-      final opStatus = storage.checkOperationStatus(mutation.id, mutation.payloadChecksum);
+      final opStatus = storage.checkOperationStatus(
+        mutation.id,
+        mutation.payloadChecksum,
+      );
       if (opStatus.isMismatch) {
-        debugPrint('[SyncService] WARNING: Payload mismatch detected for reused operation ID ${mutation.id}!');
+        debugPrint(
+          '[SyncService] WARNING: Payload mismatch detected for reused operation ID ${mutation.id}!',
+        );
         return false;
       }
       if (opStatus.isProcessed) {
@@ -471,12 +472,14 @@ class SyncService {
       final queue = getPendingMutations();
       final duplicateInQueue = queue.any((m) => m.id == mutation.id);
       if (duplicateInQueue) {
-        await storage.recordProcessedOperation(ProcessedOperationRecord(
-          operationId: mutation.id,
-          payloadChecksum: mutation.payloadChecksum,
-          processedAt: DateTime.now(),
-          source: 'p2p',
-        ));
+        await storage.recordProcessedOperation(
+          ProcessedOperationRecord(
+            operationId: mutation.id,
+            payloadChecksum: mutation.payloadChecksum,
+            processedAt: DateTime.now(),
+            source: 'p2p',
+          ),
+        );
         return false;
       }
 
@@ -498,10 +501,16 @@ class SyncService {
             final idx = expenses.indexWhere((e) => e['id'] == expId);
             if (idx != -1) {
               // Existing expense: LWW reconciliation by timestamp
-              final localUpdated = DateTime.tryParse(expenses[idx]['updatedAt']?.toString() ?? '') ??
-                  DateTime.tryParse(expenses[idx]['createdAt']?.toString() ?? '') ??
+              final localUpdated =
+                  DateTime.tryParse(
+                    expenses[idx]['updatedAt']?.toString() ?? '',
+                  ) ??
+                  DateTime.tryParse(
+                    expenses[idx]['createdAt']?.toString() ?? '',
+                  ) ??
                   DateTime.fromMillisecondsSinceEpoch(0);
-              final remoteUpdated = DateTime.tryParse(payload['updatedAt']?.toString() ?? '') ??
+              final remoteUpdated =
+                  DateTime.tryParse(payload['updatedAt']?.toString() ?? '') ??
                   DateTime.tryParse(payload['createdAt']?.toString() ?? '') ??
                   mutation.createdAt;
 
@@ -518,7 +527,8 @@ class SyncService {
 
         case MutationType.updateExpense:
           if (tripId != null) {
-            final expId = payload['id'] as String? ?? payload['expenseId'] as String?;
+            final expId =
+                payload['id'] as String? ?? payload['expenseId'] as String?;
             if (expId != null) {
               // Tombstone check: Never resurrect deleted expenses
               if (storage.isExpenseTombstoned(tripId, expId)) {
@@ -529,13 +539,20 @@ class SyncService {
               final expenses = storage.getSavedExpenses(tripId);
               final idx = expenses.indexWhere((e) => e['id'] == expId);
               if (idx != -1) {
-                final localUpdated = DateTime.tryParse(expenses[idx]['updatedAt']?.toString() ?? '') ??
-                    DateTime.tryParse(expenses[idx]['createdAt']?.toString() ?? '') ??
+                final localUpdated =
+                    DateTime.tryParse(
+                      expenses[idx]['updatedAt']?.toString() ?? '',
+                    ) ??
+                    DateTime.tryParse(
+                      expenses[idx]['createdAt']?.toString() ?? '',
+                    ) ??
                     DateTime.fromMillisecondsSinceEpoch(0);
-                final remoteUpdated = DateTime.tryParse(payload['updatedAt']?.toString() ?? '') ??
+                final remoteUpdated =
+                    DateTime.tryParse(payload['updatedAt']?.toString() ?? '') ??
                     mutation.createdAt;
 
-                if (remoteUpdated.isAfter(localUpdated) || remoteUpdated.isAtSameMomentAs(localUpdated)) {
+                if (remoteUpdated.isAfter(localUpdated) ||
+                    remoteUpdated.isAtSameMomentAs(localUpdated)) {
                   expenses[idx] = {...expenses[idx], ...payload};
                   await storage.saveExpenses(tripId, expenses);
                 }
@@ -549,9 +566,14 @@ class SyncService {
 
         case MutationType.deleteExpense:
           if (tripId != null) {
-            final expId = payload['id'] as String? ?? payload['expenseId'] as String?;
+            final expId =
+                payload['id'] as String? ?? payload['expenseId'] as String?;
             if (expId != null) {
-              await storage.markExpenseTombstoned(tripId, expId, mutation.createdAt);
+              await storage.markExpenseTombstoned(
+                tripId,
+                expId,
+                mutation.createdAt,
+              );
               final expenses = storage.getSavedExpenses(tripId);
               expenses.removeWhere((e) => e['id'] == expId);
               await storage.saveExpenses(tripId, expenses);
@@ -574,14 +596,12 @@ class SyncService {
         case MutationType.submitSettlementProof:
           if (tripId != null) {
             final settlements = storage.getSavedTripSettlements(tripId);
-            final stlId = payload['id'] as String? ?? payload['settlementId'] as String?;
+            final stlId =
+                payload['id'] as String? ?? payload['settlementId'] as String?;
             if (stlId != null) {
               final idx = settlements.indexWhere((s) => s['id'] == stlId);
               if (idx != -1) {
-                settlements[idx] = {
-                  ...settlements[idx],
-                  ...payload,
-                };
+                settlements[idx] = {...settlements[idx], ...payload};
                 await storage.saveTripSettlements(tripId, settlements);
               }
             }
@@ -598,11 +618,14 @@ class SyncService {
 
         case MutationType.recordPersonalRepayment:
           final debts = storage.getPersonalDebts();
-          final debtId = payload['debtId'] as String? ?? payload['id'] as String?;
+          final debtId =
+              payload['debtId'] as String? ?? payload['id'] as String?;
           if (debtId != null) {
             final idx = debts.indexWhere((d) => d['id'] == debtId);
             if (idx != -1) {
-              final repayments = List<Map<String, dynamic>>.from(debts[idx]['repayments'] ?? []);
+              final repayments = List<Map<String, dynamic>>.from(
+                debts[idx]['repayments'] ?? [],
+              );
               repayments.insert(0, payload);
               debts[idx]['repayments'] = repayments;
               await storage.savePersonalDebts(debts);
@@ -623,7 +646,8 @@ class SyncService {
         case MutationType.deleteJourneyMoment:
           if (tripId != null) {
             final moments = storage.getSavedJourneyMoments(tripId);
-            final momentId = payload['id'] as String? ?? payload['momentId'] as String?;
+            final momentId =
+                payload['id'] as String? ?? payload['momentId'] as String?;
             if (momentId != null) {
               moments.removeWhere((m) => m['id'] == momentId);
               await storage.saveJourneyMoments(tripId, moments);
@@ -635,14 +659,14 @@ class SyncService {
         case MutationType.joinTrip:
         case MutationType.updateTripLifecycle:
           final trips = storage.getSavedTrips();
-          final tId = payload['id'] as String? ?? payload['tripId'] as String? ?? mutation.tripId;
+          final tId =
+              payload['id'] as String? ??
+              payload['tripId'] as String? ??
+              mutation.tripId;
           if (tId != null) {
             final idx = trips.indexWhere((t) => t['id'] == tId);
             if (idx != -1) {
-              trips[idx] = {
-                ...trips[idx],
-                ...payload,
-              };
+              trips[idx] = {...trips[idx], ...payload};
             } else {
               trips.insert(0, payload);
             }
@@ -655,12 +679,14 @@ class SyncService {
       }
 
       // Record in authoritative processed operations ledger
-      await storage.recordProcessedOperation(ProcessedOperationRecord(
-        operationId: mutation.id,
-        payloadChecksum: mutation.payloadChecksum,
-        processedAt: DateTime.now(),
-        source: 'p2p',
-      ));
+      await storage.recordProcessedOperation(
+        ProcessedOperationRecord(
+          operationId: mutation.id,
+          payloadChecksum: mutation.payloadChecksum,
+          processedAt: DateTime.now(),
+          source: 'p2p',
+        ),
+      );
 
       // Store-and-Forward Replication:
       // Enqueue in local outbox with incremented hopCount and tagged forwardedBy
@@ -676,7 +702,9 @@ class SyncService {
       _setStatus(SyncStatus.pending);
       return true;
     } catch (e) {
-      debugPrint('[SyncService] Failed to apply remote P2P mutation ${mutation.id}: $e');
+      debugPrint(
+        '[SyncService] Failed to apply remote P2P mutation ${mutation.id}: $e',
+      );
       return false;
     }
   }
@@ -701,16 +729,17 @@ class SyncService {
   }
 
   /// Batch reconciles all pending mutations for a trip against the authoritative server endpoint.
-  Future<int> syncTripBatchWithServer(ApiClient apiClient, String tripId) async {
+  Future<int> syncTripBatchWithServer(
+    ApiClient apiClient,
+    String tripId,
+  ) async {
     final tripMutations = getPendingMutationsForTrip(tripId);
     if (tripMutations.isEmpty) return 0;
 
     try {
       final res = await apiClient.post(
         '/trips/$tripId/sync-operations',
-        body: {
-          'operations': tripMutations.map((m) => m.toJson()).toList(),
-        },
+        body: {'operations': tripMutations.map((m) => m.toJson()).toList()},
       );
 
       final data = res is Map<String, dynamic> && res.containsKey('data')
@@ -724,14 +753,17 @@ class SyncService {
         if (r is Map<String, dynamic>) {
           final opId = r['operationId'] as String?;
           final status = r['status'] as String?;
-          if (opId != null && (status == 'APPLIED' || status == 'ALREADY_PROCESSED')) {
+          if (opId != null &&
+              (status == 'APPLIED' || status == 'ALREADY_PROCESSED')) {
             await removeMutation(opId);
             ackedCount++;
           } else if (opId != null && status == 'FAILED') {
             await _updateMutationAttempt(
               opId,
               1,
-              errorMessage: r['errorMessage'] as String? ?? 'Operation rejected by server',
+              errorMessage:
+                  r['errorMessage'] as String? ??
+                  'Operation rejected by server',
               syncState: SyncState.failed,
             );
           }
@@ -781,18 +813,26 @@ class SyncService {
         try {
           final res = await apiClient.get('/trips/$tripId/expenses');
           if (res is List) {
-            final serverExpenses = res.map((j) => Expense.fromJson(j as Map<String, dynamic>)).toList();
+            final serverExpenses = res
+                .map((j) => Expense.fromJson(j as Map<String, dynamic>))
+                .toList();
             final localExpensesRaw = _storage.getSavedExpenses(tripId);
-            final localExpenses = localExpensesRaw.map((j) => Expense.fromJson(j)).toList();
+            final localExpenses = localExpensesRaw
+                .map((j) => Expense.fromJson(j))
+                .toList();
 
             final pendingAfterBatch = getPendingMutationsForTrip(tripId);
             final pendingDeletedIds = pendingAfterBatch
                 .where((m) => m.type == MutationType.deleteExpense)
-                .map((m) => (m.payload['id'] ?? m.payload['expenseId']).toString())
+                .map(
+                  (m) => (m.payload['id'] ?? m.payload['expenseId']).toString(),
+                )
                 .toSet();
             final pendingUpdateIds = pendingAfterBatch
                 .where((m) => m.type == MutationType.updateExpense)
-                .map((m) => (m.payload['id'] ?? m.payload['expenseId']).toString())
+                .map(
+                  (m) => (m.payload['id'] ?? m.payload['expenseId']).toString(),
+                )
                 .toSet();
 
             final mergedMap = <String, Expense>{};
@@ -809,7 +849,8 @@ class SyncService {
               if (pendingUpdateIds.contains(server.id)) {
                 // Keep local pending edit unless server is strictly newer
                 final localExisting = mergedMap[server.id];
-                if (localExisting != null && localExisting.updatedAt.isAfter(server.updatedAt)) {
+                if (localExisting != null &&
+                    localExisting.updatedAt.isAfter(server.updatedAt)) {
                   continue;
                 }
               }
@@ -825,44 +866,55 @@ class SyncService {
 
             final mergedList = mergedMap.values.toList();
             mergedList.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-            await _storage.saveExpenses(tripId, mergedList.map((e) => e.toJson()).toList());
+            await _storage.saveExpenses(
+              tripId,
+              mergedList.map((e) => e.toJson()).toList(),
+            );
           }
         } catch (_) {}
 
         totalReceived += receivedCount;
-        sources.add(SyncSourceResult(
-          name: 'Kith Cloud (Supabase)',
-          type: SyncSourceType.cloud,
-          status: 'synced',
-          changesSent: sentCount,
-          changesReceived: receivedCount,
-          isSuccess: true,
-        ));
+        sources.add(
+          SyncSourceResult(
+            name: 'Kith Cloud (Supabase)',
+            type: SyncSourceType.cloud,
+            status: 'synced',
+            changesSent: sentCount,
+            changesReceived: receivedCount,
+            isSuccess: true,
+          ),
+        );
       } on NetworkException catch (_) {
-        sources.add(const SyncSourceResult(
+        sources.add(
+          const SyncSourceResult(
+            name: 'Kith Cloud (Supabase)',
+            type: SyncSourceType.cloud,
+            status: 'offline',
+            errorMessage: 'No internet connection',
+            isSuccess: false,
+          ),
+        );
+      } catch (e) {
+        sources.add(
+          SyncSourceResult(
+            name: 'Kith Cloud (Supabase)',
+            type: SyncSourceType.cloud,
+            status: 'failed',
+            errorMessage: e.toString(),
+            isSuccess: false,
+          ),
+        );
+      }
+    } else {
+      sources.add(
+        const SyncSourceResult(
           name: 'Kith Cloud (Supabase)',
           type: SyncSourceType.cloud,
           status: 'offline',
-          errorMessage: 'No internet connection',
+          errorMessage: 'Device offline • Changes queued locally',
           isSuccess: false,
-        ));
-      } catch (e) {
-        sources.add(SyncSourceResult(
-          name: 'Kith Cloud (Supabase)',
-          type: SyncSourceType.cloud,
-          status: 'failed',
-          errorMessage: e.toString(),
-          isSuccess: false,
-        ));
-      }
-    } else {
-      sources.add(const SyncSourceResult(
-        name: 'Kith Cloud (Supabase)',
-        type: SyncSourceType.cloud,
-        status: 'offline',
-        errorMessage: 'Device offline • Changes queued locally',
-        isSuccess: false,
-      ));
+        ),
+      );
     }
 
     // ── 2. Nearby P2P Peers Reconciliation ──────────────────────────────────
@@ -876,15 +928,17 @@ class SyncService {
             totalSent += p2pResult.operationsSent as int? ?? 0;
             totalReceived += p2pResult.operationsReceived as int? ?? 0;
 
-            sources.add(SyncSourceResult(
-              name: peer.displayName as String? ?? 'Nearby Friend',
-              type: SyncSourceType.nearbyPeer,
-              status: p2pResult.success ? 'synced' : 'failed',
-              changesSent: p2pResult.operationsSent as int? ?? 0,
-              changesReceived: p2pResult.operationsReceived as int? ?? 0,
-              errorMessage: p2pResult.errorMessage as String?,
-              isSuccess: p2pResult.success as bool? ?? false,
-            ));
+            sources.add(
+              SyncSourceResult(
+                name: peer.displayName as String? ?? 'Nearby Friend',
+                type: SyncSourceType.nearbyPeer,
+                status: p2pResult.success ? 'synced' : 'failed',
+                changesSent: p2pResult.operationsSent as int? ?? 0,
+                changesReceived: p2pResult.operationsReceived as int? ?? 0,
+                errorMessage: p2pResult.errorMessage as String?,
+                isSuccess: p2pResult.success as bool? ?? false,
+              ),
+            );
           }
         }
       } catch (e) {
@@ -893,7 +947,8 @@ class SyncService {
     }
 
     final remainingPending = getPendingCountForTrip(tripId);
-    final isFullySynced = sources.isNotEmpty &&
+    final isFullySynced =
+        sources.isNotEmpty &&
         remainingPending == 0 &&
         sources.every((s) => s.isSuccess);
 
@@ -905,7 +960,8 @@ class SyncService {
       changesSent: totalSent,
       changesReceived: totalReceived,
       tripId: tripId,
-      details: '$totalSent sent, $totalReceived received, $remainingPending pending',
+      details:
+          '$totalSent sent, $totalReceived received, $remainingPending pending',
     );
 
     return TripSyncReport(
@@ -928,101 +984,117 @@ class SyncService {
       _setStatus(SyncStatus.syncing);
 
       try {
-      final queue = getPendingMutations();
-      final now = DateTime.now();
+        final queue = getPendingMutations();
+        final now = DateTime.now();
 
-      final blockedTripIds = <String>{};
-      final completedMutationIds = <String>{};
+        final blockedTripIds = <String>{};
+        final completedMutationIds = <String>{};
 
-      for (final mutation in queue) {
-        final tId = mutation.tripId;
+        for (final mutation in queue) {
+          final tId = mutation.tripId;
 
-        // If trip is blocked due to prior failure in this cycle, skip
-        if (tId != null && blockedTripIds.contains(tId)) {
-          continue;
-        }
-
-        // Dependency check
-        final pendingIds = queue.map((m) => m.id).toSet();
-        final hasUnresolvedDependencies = mutation.dependsOn.any(
-          (depId) => pendingIds.contains(depId) && !completedMutationIds.contains(depId),
-        );
-        if (hasUnresolvedDependencies) {
-          continue;
-        }
-
-        // Jittered exponential backoff check
-        if (!force && mutation.lastAttemptAt != null && mutation.retryCount > 0) {
-          final backoffSeconds = min(30, pow(2, mutation.retryCount).toInt());
-          final nextAllowed = mutation.lastAttemptAt!.add(Duration(seconds: backoffSeconds));
-          if (now.isBefore(nextAllowed)) {
-            if (tId != null) blockedTripIds.add(tId);
+          // If trip is blocked due to prior failure in this cycle, skip
+          if (tId != null && blockedTripIds.contains(tId)) {
             continue;
           }
-        }
 
-        try {
-          await _executeMutation(apiClient, mutation);
-          completedMutationIds.add(mutation.id);
-          await removeMutation(mutation.id);
+          // Dependency check
+          final pendingIds = queue.map((m) => m.id).toSet();
+          final hasUnresolvedDependencies = mutation.dependsOn.any(
+            (depId) =>
+                pendingIds.contains(depId) &&
+                !completedMutationIds.contains(depId),
+          );
+          if (hasUnresolvedDependencies) {
+            continue;
+          }
 
-          if (mutation.type == MutationType.updateTripLifecycle && tId != null) {
-            final targetLifecycle = mutation.payload['lifecycleState'] as String?;
-            if (targetLifecycle == 'completed' || targetLifecycle == 'settled') {
-              _promoteLocalTripLifecycle(tId, targetLifecycle!);
+          // Jittered exponential backoff check
+          if (!force &&
+              mutation.lastAttemptAt != null &&
+              mutation.retryCount > 0) {
+            final backoffSeconds = min(30, pow(2, mutation.retryCount).toInt());
+            final nextAllowed = mutation.lastAttemptAt!.add(
+              Duration(seconds: backoffSeconds),
+            );
+            if (now.isBefore(nextAllowed)) {
+              if (tId != null) blockedTripIds.add(tId);
+              continue;
             }
           }
-        } on NetworkException catch (_) {
-          await _updateMutationAttempt(mutation.id, mutation.retryCount + 1);
-          if (tId != null) blockedTripIds.add(tId);
-          _setStatus(SyncStatus.offline);
-          break;
-        } on ApiException catch (e) {
-          debugPrint('[SyncService] Client error ${e.statusCode} for mutation ${mutation.id}: ${e.message}');
-          if (e.statusCode == 409) {
-            // Already resolved conflict / duplicate -> acknowledge safely
+
+          try {
+            await _executeMutation(apiClient, mutation);
             completedMutationIds.add(mutation.id);
             await removeMutation(mutation.id);
-          } else {
-            // Record failure reason and retry with backoff, NEVER silently drop financial mutations!
+
+            if (mutation.type == MutationType.updateTripLifecycle &&
+                tId != null) {
+              final targetLifecycle =
+                  mutation.payload['lifecycleState'] as String?;
+              if (targetLifecycle == 'completed' ||
+                  targetLifecycle == 'settled') {
+                _promoteLocalTripLifecycle(tId, targetLifecycle!);
+              }
+            }
+          } on NetworkException catch (_) {
+            await _updateMutationAttempt(mutation.id, mutation.retryCount + 1);
+            if (tId != null) blockedTripIds.add(tId);
+            _setStatus(SyncStatus.offline);
+            break;
+          } on ApiException catch (e) {
+            debugPrint(
+              '[SyncService] Client error ${e.statusCode} for mutation ${mutation.id}: ${e.message}',
+            );
+            if (e.statusCode == 409) {
+              // Already resolved conflict / duplicate -> acknowledge safely
+              completedMutationIds.add(mutation.id);
+              await removeMutation(mutation.id);
+            } else {
+              // Record failure reason and retry with backoff, NEVER silently drop financial mutations!
+              await _updateMutationAttempt(
+                mutation.id,
+                mutation.retryCount + 1,
+                errorMessage: e.message,
+                syncState: SyncState.failed,
+              );
+              if (tId != null) blockedTripIds.add(tId);
+            }
+          } catch (e) {
+            debugPrint(
+              '[SyncService] Unexpected error on mutation ${mutation.id}: $e',
+            );
             await _updateMutationAttempt(
               mutation.id,
               mutation.retryCount + 1,
-              errorMessage: e.message,
+              errorMessage: e.toString(),
               syncState: SyncState.failed,
             );
             if (tId != null) blockedTripIds.add(tId);
+            _setStatus(SyncStatus.error);
+            break;
           }
-        } catch (e) {
-          debugPrint('[SyncService] Unexpected error on mutation ${mutation.id}: $e');
-          await _updateMutationAttempt(
-            mutation.id,
-            mutation.retryCount + 1,
-            errorMessage: e.toString(),
-            syncState: SyncState.failed,
-          );
-          if (tId != null) blockedTripIds.add(tId);
-          _setStatus(SyncStatus.error);
-          break;
         }
-      }
 
-      final remaining = getPendingMutations();
-      if (remaining.isEmpty) {
-        _setStatus(SyncStatus.synced);
-      } else if (_currentStatus != SyncStatus.offline && _currentStatus != SyncStatus.error) {
-        _setStatus(SyncStatus.pending);
+        final remaining = getPendingMutations();
+        if (remaining.isEmpty) {
+          _setStatus(SyncStatus.synced);
+        } else if (_currentStatus != SyncStatus.offline &&
+            _currentStatus != SyncStatus.error) {
+          _setStatus(SyncStatus.pending);
+        }
+      } finally {
+        // Per-trip lock releases in runWithTripLock
       }
-    } finally {
-      // Per-trip lock releases in runWithTripLock
-    }
-  });
-}
-
+    });
+  }
 
   /// Authoritative incremental Delta Cloud reconciliation using Supabase.
   /// Fetches only changes that occurred after the last sync cursor to protect Supabase Free Tier.
-  Future<TripSyncReport> reconcileWithCloud(String accountId, {ApiClient? apiClient}) async {
+  Future<TripSyncReport> reconcileWithCloud(
+    String accountId, {
+    ApiClient? apiClient,
+  }) async {
     _setStatus(SyncStatus.syncing);
     final sources = <SyncSourceResult>[];
     int totalSent = 0;
@@ -1034,136 +1106,295 @@ class SyncService {
         await flushQueue(apiClient);
       }
 
-      // 2. Fetch delta changes from Supabase
-      final rawCursor = _storage.getString('kith_last_sync_cursor_$accountId');
-      final cursor = rawCursor != null && rawCursor.isNotEmpty
-          ? (DateTime.tryParse(rawCursor) ?? DateTime.now().subtract(const Duration(days: 30)))
-          : DateTime.now().subtract(const Duration(days: 30));
-
-      final activeTrips = _storage.getSavedTrips().map((t) => t['id'] as String).toList();
-      final deltas = await _cloudSync.fetchDeltaChanges(
+      // 2. Fetch change events using PostgreSQL serialized monotonic sequence RPC
+      final lastSeq = _storage.getInt('kith_last_sync_seq_$accountId') ?? 0;
+      final syncEvents = await _cloudSync.fetchSyncEvents(
         accountId: accountId,
-        sinceCursor: cursor,
-        activeTripIds: activeTrips,
+        lastSeq: lastSeq,
       );
 
-      // Reconcile modified trips with Non-Destructive Safe Union Merge
-      final modifiedTrips = deltas['modifiedTrips'] as List<Map<String, dynamic>>? ?? [];
-      if (modifiedTrips.isNotEmpty) {
-        final existingTrips = _storage.getSavedTrips();
-        final tripMap = {for (final t in existingTrips) t['id']: t};
-        for (final t in modifiedTrips) {
-          if (t['is_deleted'] == true) {
-            tripMap.remove(t['id']);
-          } else {
-            final existingJson = tripMap[t['id']];
-            if (existingJson != null) {
-              final localTrip = Trip.fromJson(existingJson);
-              final remoteTrip = Trip.fromJson(t);
-              tripMap[t['id']] = localTrip.mergeWith(remoteTrip).toJson();
-            } else {
-              tripMap[t['id']] = t;
+      if (syncEvents.isNotEmpty) {
+        int maxSeq = lastSeq;
+        final workingTrips = Map<String, Map<String, dynamic>>.fromEntries(
+          _storage.getSavedTrips().map((t) => MapEntry(t['id'] as String, t)),
+        );
+        final workingExpensesByTrip =
+            <String, Map<String, Map<String, dynamic>>>{};
+        final workingSettlementsByTrip =
+            <String, Map<String, Map<String, dynamic>>>{};
+        final workingPE = Map<String, Map<String, dynamic>>.fromEntries(
+          _storage.getSavedPersonalExpenses().map(
+            (pe) => MapEntry(pe['id'] as String, pe),
+          ),
+        );
+        final workingPD = Map<String, Map<String, dynamic>>.fromEntries(
+          _storage.getSavedPersonalDebts().map(
+            (pd) => MapEntry(pd['id'] as String, pd),
+          ),
+        );
+        final tombstonesToAdd = <Map<String, String>>[];
+
+        for (final ev in syncEvents) {
+          final seq = (ev['seq'] as num?)?.toInt() ?? 0;
+          if (seq > maxSeq) maxSeq = seq;
+
+          final table = ev['table_name'] as String?;
+          final action = ev['action'] as String?;
+          final recordId = ev['record_id'] as String?;
+          final tripId = ev['trip_id'] as String?;
+          final rawPayload = ev['payload'];
+          final payload = rawPayload is Map
+              ? Map<String, dynamic>.from(rawPayload)
+              : <String, dynamic>{};
+
+          if (table == 'trips' && recordId != null) {
+            if (action == 'DELETE') {
+              workingTrips.remove(recordId);
+            } else if (payload.isNotEmpty) {
+              final existingJson = workingTrips[recordId];
+              if (existingJson != null) {
+                final localTrip = Trip.fromJson(existingJson);
+                final remoteTrip = Trip.fromJson(payload);
+                workingTrips[recordId] = localTrip
+                    .mergeWith(remoteTrip)
+                    .toJson();
+              } else {
+                workingTrips[recordId] = payload;
+              }
+            }
+          } else if (table == 'expenses' &&
+              tripId != null &&
+              recordId != null) {
+            workingExpensesByTrip.putIfAbsent(
+              tripId,
+              () => Map.fromEntries(
+                _storage
+                    .getSavedExpenses(tripId)
+                    .map((e) => MapEntry(e['id'] as String, e)),
+              ),
+            );
+            if (action == 'DELETE') {
+              workingExpensesByTrip[tripId]!.remove(recordId);
+              tombstonesToAdd.add({'tripId': tripId, 'expenseId': recordId});
+            } else if (payload.isNotEmpty) {
+              workingExpensesByTrip[tripId]![recordId] = payload;
+            }
+          } else if (table == 'settlements' &&
+              tripId != null &&
+              recordId != null) {
+            workingSettlementsByTrip.putIfAbsent(
+              tripId,
+              () => Map.fromEntries(
+                _storage
+                    .getSavedTripSettlements(tripId)
+                    .map((s) => MapEntry(s['id'] as String, s)),
+              ),
+            );
+            if (action == 'DELETE') {
+              workingSettlementsByTrip[tripId]!.remove(recordId);
+            } else if (payload.isNotEmpty) {
+              workingSettlementsByTrip[tripId]![recordId] = payload;
+            }
+          } else if (table == 'personal_expenses' && recordId != null) {
+            if (action == 'DELETE') {
+              workingPE.remove(recordId);
+            } else if (payload.isNotEmpty) {
+              workingPE[recordId] = payload;
+            }
+          } else if (table == 'personal_debts' && recordId != null) {
+            if (action == 'DELETE') {
+              workingPD.remove(recordId);
+            } else if (payload.isNotEmpty) {
+              workingPD[recordId] = payload;
             }
           }
         }
-        await _storage.saveTrips(tripMap.values.toList());
-        totalReceived += modifiedTrips.length;
-      }
 
-      // Reconcile modified expenses
-      final modifiedExpenses = deltas['modifiedExpenses'] as List<Map<String, dynamic>>? ?? [];
-      for (final exp in modifiedExpenses) {
-        final tripId = exp['trip_id'] as String? ?? exp['tripId'] as String?;
-        if (tripId != null && tripId.isNotEmpty) {
-          final existingExp = _storage.getSavedExpenses(tripId);
-          final expId = exp['id'] as String;
-          final isDeleted = exp['is_deleted'] == true || exp['isDeleted'] == true;
-          existingExp.removeWhere((e) => e['id'] == expId);
-          if (!isDeleted) {
-            existingExp.insert(0, exp);
+        // Apply entire event page atomically before advancing cursor
+        final commitOk = await _storage.commitAtomicMutationBatch(
+          updatedTrips: workingTrips.values.toList(),
+          updatedExpensesByTrip: workingExpensesByTrip.map(
+            (k, v) => MapEntry(k, v.values.toList()),
+          ),
+          updatedSettlementsByTrip: workingSettlementsByTrip.map(
+            (k, v) => MapEntry(k, v.values.toList()),
+          ),
+          updatedPersonalExpenses: workingPE.values.toList(),
+          updatedPersonalDebts: workingPD.values.toList(),
+        );
+
+        if (commitOk) {
+          for (final t in tombstonesToAdd) {
+            await _storage.markExpenseTombstoned(t['tripId']!, t['expenseId']!);
           }
-          await _storage.saveExpenses(tripId, existingExp);
-          totalReceived++;
+          await _storage.setInt('kith_last_sync_seq_$accountId', maxSeq);
+          totalReceived += syncEvents.length;
+        } else {
+          throw StateError(
+            'Atomic commit failed for sync events batch up to seq $maxSeq',
+          );
         }
       }
 
-      // Reconcile modified settlements
-      final modifiedSettlements = deltas['modifiedSettlements'] as List<Map<String, dynamic>>? ?? [];
-      for (final stl in modifiedSettlements) {
-        final tripId = stl['trip_id'] as String? ?? stl['tripId'] as String?;
-        if (tripId != null && tripId.isNotEmpty) {
-          final existingStl = _storage.getSavedTripSettlements(tripId);
-          final stlId = stl['id'] as String;
-          final isDeleted = stl['is_deleted'] == true || stl['isDeleted'] == true;
-          existingStl.removeWhere((s) => s['id'] == stlId);
-          if (!isDeleted) {
-            existingStl.insert(0, stl);
+      // 3. Fallback / Cold Start Bootstrap:
+      // Keyset pagination delta changes run ONLY when lastSeq == 0 AND syncEvents.isEmpty
+      // (e.g. cold start on an older backend or when event changelog has not been initialized).
+      // Once lastSeq > 0, an empty syncEvents simply means "zero new changes", NOT a fallback!
+      final shouldRunColdStartFallback = (lastSeq == 0 && syncEvents.isEmpty);
+
+      if (shouldRunColdStartFallback) {
+        final rawCursor = _storage.getString(
+          'kith_last_sync_cursor_$accountId',
+        );
+        final cursor = rawCursor != null && rawCursor.isNotEmpty
+            ? (DateTime.tryParse(rawCursor) ??
+                  DateTime.now().subtract(const Duration(days: 30)))
+            : DateTime.now().subtract(const Duration(days: 30));
+
+        final activeTrips = _storage
+            .getSavedTrips()
+            .map((t) => t['id'] as String)
+            .toList();
+        final deltas = await _cloudSync.fetchDeltaChanges(
+          accountId: accountId,
+          sinceCursor: cursor,
+          activeTripIds: activeTrips,
+        );
+
+        // Reconcile modified trips with Non-Destructive Safe Union Merge
+        final modifiedTrips =
+            deltas['modifiedTrips'] as List<Map<String, dynamic>>? ?? [];
+        if (modifiedTrips.isNotEmpty) {
+          final existingTrips = _storage.getSavedTrips();
+          final tripMap = {for (final t in existingTrips) t['id']: t};
+          for (final t in modifiedTrips) {
+            if (t['is_deleted'] == true) {
+              tripMap.remove(t['id']);
+            } else {
+              final existingJson = tripMap[t['id']];
+              if (existingJson != null) {
+                final localTrip = Trip.fromJson(existingJson);
+                final remoteTrip = Trip.fromJson(t);
+                tripMap[t['id']] = localTrip.mergeWith(remoteTrip).toJson();
+              } else {
+                tripMap[t['id']] = t;
+              }
+            }
           }
-          await _storage.saveTripSettlements(tripId, existingStl);
-          totalReceived++;
+          await _storage.saveTrips(tripMap.values.toList());
+          totalReceived += modifiedTrips.length;
         }
+
+        // Reconcile modified expenses
+        final modifiedExpenses =
+            deltas['modifiedExpenses'] as List<Map<String, dynamic>>? ?? [];
+        for (final exp in modifiedExpenses) {
+          final tripId = exp['trip_id'] as String? ?? exp['tripId'] as String?;
+          if (tripId != null && tripId.isNotEmpty) {
+            final existingExp = _storage.getSavedExpenses(tripId);
+            final expId = exp['id'] as String;
+            final isDeleted =
+                exp['is_deleted'] == true || exp['isDeleted'] == true;
+            existingExp.removeWhere((e) => e['id'] == expId);
+            if (!isDeleted) {
+              existingExp.insert(0, exp);
+            }
+            await _storage.saveExpenses(tripId, existingExp);
+            totalReceived++;
+          }
+        }
+
+        // Reconcile modified settlements
+        final modifiedSettlements =
+            deltas['modifiedSettlements'] as List<Map<String, dynamic>>? ?? [];
+        for (final stl in modifiedSettlements) {
+          final tripId = stl['trip_id'] as String? ?? stl['tripId'] as String?;
+          if (tripId != null && tripId.isNotEmpty) {
+            final existingStl = _storage.getSavedTripSettlements(tripId);
+            final stlId = stl['id'] as String;
+            final isDeleted =
+                stl['is_deleted'] == true || stl['isDeleted'] == true;
+            existingStl.removeWhere((s) => s['id'] == stlId);
+            if (!isDeleted) {
+              existingStl.insert(0, stl);
+            }
+            await _storage.saveTripSettlements(tripId, existingStl);
+            totalReceived++;
+          }
+        }
+
+        // Reconcile modified personal expenses
+        final modifiedPE =
+            deltas['modifiedPersonalExpenses'] as List<Map<String, dynamic>>? ??
+            [];
+        if (modifiedPE.isNotEmpty) {
+          final existingPE = _storage.getSavedPersonalExpenses();
+          final peMap = {for (final pe in existingPE) pe['id']: pe};
+          for (final pe in modifiedPE) {
+            if (pe['is_deleted'] == true) {
+              peMap.remove(pe['id']);
+            } else {
+              peMap[pe['id']] = pe;
+            }
+          }
+          await _storage.savePersonalExpenses(peMap.values.toList());
+          totalReceived += modifiedPE.length;
+        }
+
+        // Reconcile modified personal debts
+        final modifiedPD =
+            deltas['modifiedPersonalDebts'] as List<Map<String, dynamic>>? ??
+            [];
+        if (modifiedPD.isNotEmpty) {
+          final existingPD = _storage.getSavedPersonalDebts();
+          final pdMap = {for (final pd in existingPD) pd['id']: pd};
+          for (final pd in modifiedPD) {
+            if (pd['is_deleted'] == true) {
+              pdMap.remove(pd['id']);
+            } else {
+              pdMap[pd['id']] = pd;
+            }
+          }
+          await _storage.savePersonalDebts(pdMap.values.toList());
+          totalReceived += modifiedPD.length;
+        }
+
+        // Advance server sync cursor accurately
+        final serverTsStr = deltas['latestServerTimestamp'] as String?;
+        final nextCursor = serverTsStr != null && serverTsStr.isNotEmpty
+            ? DateTime.tryParse(serverTsStr) ??
+                  DateTime.now().subtract(const Duration(seconds: 2))
+            : DateTime.now().subtract(const Duration(seconds: 2));
+        await _storage.setString(
+          'kith_last_sync_cursor_$accountId',
+          nextCursor.toIso8601String(),
+        );
       }
 
-      // Reconcile modified personal expenses
-      final modifiedPE = deltas['modifiedPersonalExpenses'] as List<Map<String, dynamic>>? ?? [];
-      if (modifiedPE.isNotEmpty) {
-        final existingPE = _storage.getSavedPersonalExpenses();
-        final peMap = {for (final pe in existingPE) pe['id']: pe};
-        for (final pe in modifiedPE) {
-          if (pe['is_deleted'] == true) {
-            peMap.remove(pe['id']);
-          } else {
-            peMap[pe['id']] = pe;
-          }
-        }
-        await _storage.savePersonalExpenses(peMap.values.toList());
-        totalReceived += modifiedPE.length;
-      }
-
-      // Reconcile modified personal debts
-      final modifiedPD = deltas['modifiedPersonalDebts'] as List<Map<String, dynamic>>? ?? [];
-      if (modifiedPD.isNotEmpty) {
-        final existingPD = _storage.getSavedPersonalDebts();
-        final pdMap = {for (final pd in existingPD) pd['id']: pd};
-        for (final pd in modifiedPD) {
-          if (pd['is_deleted'] == true) {
-            pdMap.remove(pd['id']);
-          } else {
-            pdMap[pd['id']] = pd;
-          }
-        }
-        await _storage.savePersonalDebts(pdMap.values.toList());
-        totalReceived += modifiedPD.length;
-      }
-
-      // Advance server sync cursor accurately
-      // If server deltas provide an authoritative timestamp, use it.
-      // Otherwise use current time with a 2-second overlap window to guarantee no skipped records.
-      final serverTsStr = deltas['latestServerTimestamp'] as String?;
-      final nextCursor = serverTsStr != null && serverTsStr.isNotEmpty
-          ? DateTime.tryParse(serverTsStr) ?? DateTime.now().subtract(const Duration(seconds: 2))
-          : DateTime.now().subtract(const Duration(seconds: 2));
-      await _storage.setString('kith_last_sync_cursor_$accountId', nextCursor.toIso8601String());
       _setStatus(SyncStatus.synced);
 
-      sources.add(SyncSourceResult(
-        name: 'Kith Authoritative Cloud (Supabase)',
-        type: SyncSourceType.cloud,
-        status: 'synced',
-        changesSent: totalSent,
-        changesReceived: totalReceived,
-        isSuccess: true,
-      ));
+      sources.add(
+        SyncSourceResult(
+          name: 'Kith Authoritative Cloud (Supabase)',
+          type: SyncSourceType.cloud,
+          status: 'synced',
+          changesSent: totalSent,
+          changesReceived: totalReceived,
+          isSuccess: true,
+        ),
+      );
     } catch (e) {
       debugPrint('[SyncService] Cloud reconciliation notice: $e');
       _setStatus(SyncStatus.error);
-      sources.add(SyncSourceResult(
-        name: 'Kith Authoritative Cloud (Supabase)',
-        type: SyncSourceType.cloud,
-        status: 'failed',
-        errorMessage: e.toString(),
-        isSuccess: false,
-      ));
+      sources.add(
+        SyncSourceResult(
+          name: 'Kith Authoritative Cloud (Supabase)',
+          type: SyncSourceType.cloud,
+          status: 'failed',
+          errorMessage: e.toString(),
+          isSuccess: false,
+        ),
+      );
     }
 
     final hasSuccess = sources.any((s) => s.isSuccess);
@@ -1171,8 +1402,8 @@ class SyncService {
     final finalOutcome = (hasSuccess && !hasFailure)
         ? SyncOperationOutcome.success
         : (hasSuccess && hasFailure)
-            ? SyncOperationOutcome.partial
-            : SyncOperationOutcome.failed;
+        ? SyncOperationOutcome.partial
+        : SyncOperationOutcome.failed;
 
     return TripSyncReport(
       tripId: 'all_trips',
@@ -1194,7 +1425,8 @@ class SyncService {
         trips[idx] = {
           ...trips[idx],
           'lifecycleState': targetLifecycle,
-          'completedAt': targetLifecycle == 'completed' || targetLifecycle == 'settled'
+          'completedAt':
+              targetLifecycle == 'completed' || targetLifecycle == 'settled'
               ? (trips[idx]['completedAt'] ?? DateTime.now().toIso8601String())
               : trips[idx]['completedAt'],
         };
@@ -1203,10 +1435,14 @@ class SyncService {
     } catch (_) {}
   }
 
-  Future<void> _executeMutation(ApiClient apiClient, SyncMutation mutation) async {
+  Future<void> _executeMutation(
+    ApiClient apiClient,
+    SyncMutation mutation,
+  ) async {
     final payload = mutation.payload;
     final user = _storage.getSavedUser();
-    final accountId = user?['accountId'] as String? ?? user?['id'] as String? ?? 'guest_acc';
+    final accountId =
+        user?['accountId'] as String? ?? user?['id'] as String? ?? 'guest_acc';
 
     // 1. Authoritative Supabase Cloud Sync Direct Push
     if (_cloudSync.isAvailable) {
@@ -1222,7 +1458,10 @@ class SyncService {
             break;
           case MutationType.deleteExpense:
             final tripId = mutation.payload['tripId'] as String? ?? '';
-            final expenseId = payload['id'] as String? ?? payload['expenseId'] as String? ?? '';
+            final expenseId =
+                payload['id'] as String? ??
+                payload['expenseId'] as String? ??
+                '';
             if (expenseId.isNotEmpty) {
               await _cloudSync.markExpenseDeleted(expenseId, tripId);
             }
@@ -1268,8 +1507,12 @@ class SyncService {
 
       case MutationType.renameMember:
         final tripId = mutation.payload['tripId'] as String;
-        final memberId = payload['memberId'] as String? ?? payload['id'] as String;
-        await apiClient.patch('/trips/$tripId/members/$memberId', body: payload);
+        final memberId =
+            payload['memberId'] as String? ?? payload['id'] as String;
+        await apiClient.patch(
+          '/trips/$tripId/members/$memberId',
+          body: payload,
+        );
         break;
 
       case MutationType.updateTripLifecycle:
@@ -1284,13 +1527,18 @@ class SyncService {
 
       case MutationType.updateExpense:
         final tripId = mutation.payload['tripId'] as String;
-        final expenseId = payload['id'] as String? ?? payload['expenseId'] as String;
-        await apiClient.put('/trips/$tripId/expenses/$expenseId', body: payload);
+        final expenseId =
+            payload['id'] as String? ?? payload['expenseId'] as String;
+        await apiClient.put(
+          '/trips/$tripId/expenses/$expenseId',
+          body: payload,
+        );
         break;
 
       case MutationType.deleteExpense:
         final tripId = mutation.payload['tripId'] as String;
-        final expenseId = payload['id'] as String? ?? payload['expenseId'] as String;
+        final expenseId =
+            payload['id'] as String? ?? payload['expenseId'] as String;
         await apiClient.delete('/trips/$tripId/expenses/$expenseId');
         break;
 
@@ -1299,12 +1547,14 @@ class SyncService {
         break;
 
       case MutationType.updatePersonalExpense:
-        final expenseId = payload['id'] as String? ?? payload['expenseId'] as String;
+        final expenseId =
+            payload['id'] as String? ?? payload['expenseId'] as String;
         await apiClient.put('/personal/expenses/$expenseId', body: payload);
         break;
 
       case MutationType.deletePersonalExpense:
-        final expenseId = payload['id'] as String? ?? payload['expenseId'] as String;
+        final expenseId =
+            payload['id'] as String? ?? payload['expenseId'] as String;
         await apiClient.delete('/personal/expenses/$expenseId');
         break;
 
@@ -1319,7 +1569,10 @@ class SyncService {
 
       case MutationType.recordPersonalRepayment:
         final debtId = payload['debtId'] as String? ?? payload['id'] as String;
-        await apiClient.post('/personal/debts/$debtId/repayments', body: payload);
+        await apiClient.post(
+          '/personal/debts/$debtId/repayments',
+          body: payload,
+        );
         break;
 
       case MutationType.deletePersonalDebt:
@@ -1342,7 +1595,8 @@ class SyncService {
 
       case MutationType.deleteJourneyMoment:
         final tripId = mutation.payload['tripId'] as String;
-        final momentId = payload['id'] as String? ?? payload['momentId'] as String;
+        final momentId =
+            payload['id'] as String? ?? payload['momentId'] as String;
         await apiClient.delete('/trips/$tripId/moments/$momentId');
         break;
 
@@ -1353,26 +1607,41 @@ class SyncService {
 
       case MutationType.confirmTripSettlement:
         final tripId = mutation.payload['tripId'] as String;
-        final settlementId = payload['id'] as String? ?? payload['settlementId'] as String;
-        await apiClient.post('/trips/$tripId/settlements/$settlementId/confirm', body: payload);
+        final settlementId =
+            payload['id'] as String? ?? payload['settlementId'] as String;
+        await apiClient.post(
+          '/trips/$tripId/settlements/$settlementId/confirm',
+          body: payload,
+        );
         break;
 
       case MutationType.disputeTripSettlement:
         final tripId = mutation.payload['tripId'] as String;
-        final settlementId = payload['id'] as String? ?? payload['settlementId'] as String;
-        await apiClient.post('/trips/$tripId/settlements/$settlementId/dispute', body: payload);
+        final settlementId =
+            payload['id'] as String? ?? payload['settlementId'] as String;
+        await apiClient.post(
+          '/trips/$tripId/settlements/$settlementId/dispute',
+          body: payload,
+        );
         break;
 
       case MutationType.submitSettlementProof:
         final tripId = mutation.payload['tripId'] as String;
-        final settlementId = payload['id'] as String? ?? payload['settlementId'] as String;
-        await apiClient.post('/trips/$tripId/settlements/$settlementId/proof', body: payload);
+        final settlementId =
+            payload['id'] as String? ?? payload['settlementId'] as String;
+        await apiClient.post(
+          '/trips/$tripId/settlements/$settlementId/proof',
+          body: payload,
+        );
         break;
     }
   }
 
   /// Attaches a realtime client to automatically trigger local queue flush when sync is requested.
-  void attachRealtimeClient(RealtimeClient realtimeClient, {ApiClient? apiClient}) {
+  void attachRealtimeClient(
+    RealtimeClient realtimeClient, {
+    ApiClient? apiClient,
+  }) {
     _realtimeSubscription?.cancel();
     _realtimeSubscription = realtimeClient.events.listen((event) {
       if (event.type == 'trip_sync_requested') {

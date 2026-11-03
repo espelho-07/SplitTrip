@@ -12,8 +12,6 @@ import '../../../core/utils/kith_calculator_engine.dart';
 import '../../../core/services/location_service.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/kith_amount_calculator_field.dart';
-import '../../../core/widgets/kith_numeric_keypad.dart';
-import '../../../core/widgets/kith_text_keypad.dart';
 import '../../../core/widgets/kith_components.dart';
 import '../../../core/widgets/member_avatar.dart';
 import '../../../domain/enums/expense_category.dart';
@@ -56,7 +54,6 @@ class AddExpenseView extends StatefulWidget {
   State<AddExpenseView> createState() => _AddExpenseViewState();
 }
 
-enum AddExpenseActiveInput { amount, title, location, none }
 
 class _AddExpenseViewState extends State<AddExpenseView> {
   final TextEditingController _amountController = TextEditingController();
@@ -65,7 +62,6 @@ class _AddExpenseViewState extends State<AddExpenseView> {
   bool _isFetchingLocation = false;
   DateTime _selectedDate = DateTime.now();
   bool _isLoadingTrip = true;
-  AddExpenseActiveInput _activeInput = AddExpenseActiveInput.amount;
 
   @override
   void initState() {
@@ -418,136 +414,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                     : _buildManualExpenseForm(context, isDark, addVm, trip, currency, l10n)),
           ),
 
-          // Custom In-App Keyboard (Numeric for amount or QWERTY Text for description/location)
-          if (addVm.currentTab == 2 && _activeInput != AddExpenseActiveInput.none) ...[
-            Container(
-              height: 38,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF0F151C) : const Color(0xFFE2E8F0),
-                border: Border(
-                  top: BorderSide(
-                    color: isDark ? const Color(0xFF1E293B) : const Color(0xFFCBD5E1),
-                    width: 0.8,
-                  ),
-                ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        _activeInput == AddExpenseActiveInput.amount
-                            ? Icons.calculate_outlined
-                            : (_activeInput == AddExpenseActiveInput.title
-                                ? Icons.edit_note_rounded
-                                : Icons.location_on_outlined),
-                        size: 16,
-                        color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        _activeInput == AddExpenseActiveInput.amount
-                            ? 'AMOUNT'
-                            : (_activeInput == AddExpenseActiveInput.title
-                                ? 'TITLE'
-                                : 'LOCATION'),
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.6,
-                          color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                        ),
-                      ),
-                    ],
-                  ),
-                  // Down Arrow to close/dismiss the in-app keyboard
-                  InkWell(
-                    onTap: () {
-                      HapticHelper.light();
-                      FocusScope.of(context).unfocus();
-                      FocusManager.instance.primaryFocus?.unfocus();
-                      setState(() => _activeInput = AddExpenseActiveInput.none);
-                    },
-                    borderRadius: BorderRadius.circular(8),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'Done',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Icon(
-                            Icons.keyboard_arrow_down_rounded,
-                            size: 20,
-                            color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (_activeInput == AddExpenseActiveInput.amount)
-              KithNumericKeypad(
-                controller: _amountController,
-                actionIcon: Icons.arrow_forward_rounded,
-                onExpressionChanged: (val) {
-                  final evaluated = KithCalculatorEngine.evaluateToPaise(val);
-                  addVm.setAmountInPaise(evaluated);
-                },
-                onNext: () {
-                  final evaluated = KithCalculatorEngine.evaluateToPaise(_amountController.text);
-                  if (evaluated > 0) {
-                    final rupees = evaluated / 100.0;
-                    _amountController.text = rupees % 1 == 0 ? rupees.toInt().toString() : rupees.toStringAsFixed(2);
-                    addVm.setAmountInPaise(evaluated);
-                  }
-                  setState(() => _activeInput = AddExpenseActiveInput.title);
-                },
-                onDone: () {
-                  final evaluated = KithCalculatorEngine.evaluateToPaise(_amountController.text);
-                  if (evaluated > 0) {
-                    final rupees = evaluated / 100.0;
-                    _amountController.text = rupees % 1 == 0 ? rupees.toInt().toString() : rupees.toStringAsFixed(2);
-                    addVm.setAmountInPaise(evaluated);
-                  }
-                  setState(() => _activeInput = AddExpenseActiveInput.title);
-                },
-              )
-            else if (_activeInput == AddExpenseActiveInput.title)
-              KithTextKeypad(
-                controller: _titleController,
-                actionLabel: 'Next',
-                actionIcon: Icons.arrow_forward_rounded,
-                onChanged: (val) => addVm.setTitle(val),
-                onNext: () {
-                  setState(() => _activeInput = AddExpenseActiveInput.location);
-                },
-                onDone: () {
-                  setState(() => _activeInput = AddExpenseActiveInput.none);
-                },
-              )
-            else if (_activeInput == AddExpenseActiveInput.location)
-              KithTextKeypad(
-                controller: _locationController,
-                actionLabel: 'Done',
-                actionIcon: Icons.check_rounded,
-                onChanged: (val) => addVm.setLocation(val),
-                onDone: () {
-                  setState(() => _activeInput = AddExpenseActiveInput.none);
-                },
-              ),
-          ],
+
 
           // Bottom Action Dock
           if (addVm.currentTab == 2)
@@ -733,8 +600,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
             child: KithAmountCalculatorField(
               controller: _amountController,
               currencyCode: currency,
-              useInAppKeypad: true,
-              onTap: () => setState(() => _activeInput = AddExpenseActiveInput.amount),
+              useInAppKeypad: false,
               onAmountChanged: (evaluatedPaise) {
                 addVm.setAmountInPaise(evaluatedPaise);
               },
@@ -754,19 +620,17 @@ class _AddExpenseViewState extends State<AddExpenseView> {
               children: [
                 Icon(
                   Icons.edit_note_rounded,
-                  color: _activeInput == AddExpenseActiveInput.title
-                      ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
-                      : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                  color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
                   size: 20,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: TextField(
                     controller: _titleController,
-                    readOnly: true,
+                    readOnly: false,
                     showCursor: true,
                     enableInteractiveSelection: true,
-                    onTap: () => setState(() => _activeInput = AddExpenseActiveInput.title),
+                    textInputAction: TextInputAction.next,
                     textCapitalization: TextCapitalization.sentences,
                     style: TextStyle(
                       fontSize: 14.5,
@@ -809,19 +673,17 @@ class _AddExpenseViewState extends State<AddExpenseView> {
               children: [
                 Icon(
                   Icons.location_on_outlined,
-                  color: _activeInput == AddExpenseActiveInput.location
-                      ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
-                      : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                  color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
                   size: 19,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: TextField(
                     controller: _locationController,
-                    readOnly: true,
+                    readOnly: false,
                     showCursor: true,
                     enableInteractiveSelection: true,
-                    onTap: () => setState(() => _activeInput = AddExpenseActiveInput.location),
+                    textInputAction: TextInputAction.done,
                     textCapitalization: TextCapitalization.words,
                     style: TextStyle(
                       fontSize: 14,
@@ -1205,7 +1067,6 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                         FocusManager.instance.primaryFocus?.unfocus();
                         HapticHelper.selection();
                         addVm.setSplitType(newType);
-                        setState(() => _activeInput = AddExpenseActiveInput.none);
                       }
                     },
                   ),
@@ -1946,28 +1807,77 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                     ),
                   ),
 
-                  // In-App Numeric Keypad
-                  KithNumericKeypad(
-                    controller: memberController,
-                    actionIcon: Icons.check_rounded,
-                    onExpressionChanged: (val) {
-                      setModalState(() {});
-                      final v = double.tryParse(val) ?? 0.0;
-                      if (isPercentage) {
-                        addVm.setMemberPercentage(member.id, v);
-                      } else {
-                        addVm.setMemberExactAmount(member.id, (v * 100).round());
-                      }
-                    },
-                    onDone: () {
-                      final v = double.tryParse(memberController.text) ?? 0.0;
-                      if (isPercentage) {
-                        addVm.setMemberPercentage(member.id, v);
-                      } else {
-                        addVm.setMemberExactAmount(member.id, (v * 100).round());
-                      }
-                      Navigator.pop(ctx);
-                    },
+                  // Native Numeric Input Field & Action
+                  Padding(
+                    padding: EdgeInsets.only(
+                      left: 20,
+                      right: 20,
+                      top: 8,
+                      bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: memberController,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            autofocus: true,
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? Colors.white : const Color(0xFF0F172A),
+                            ),
+                            decoration: InputDecoration(
+                              hintText: isPercentage ? 'Enter percentage' : 'Enter amount',
+                              filled: true,
+                              fillColor: isDark ? const Color(0xFF161E28) : const Color(0xFFF1F5F9),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
+                            ),
+                            onChanged: (val) {
+                              setModalState(() {});
+                              final v = double.tryParse(val) ?? 0.0;
+                              if (isPercentage) {
+                                addVm.setMemberPercentage(member.id, v);
+                              } else {
+                                addVm.setMemberExactAmount(member.id, (v * 100).round());
+                              }
+                            },
+                            onSubmitted: (val) {
+                              final v = double.tryParse(val) ?? 0.0;
+                              if (isPercentage) {
+                                addVm.setMemberPercentage(member.id, v);
+                              } else {
+                                addVm.setMemberExactAmount(member.id, (v * 100).round());
+                              }
+                              Navigator.pop(ctx);
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                            foregroundColor: isDark ? Colors.black : Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: () {
+                            final v = double.tryParse(memberController.text) ?? 0.0;
+                            if (isPercentage) {
+                              addVm.setMemberPercentage(member.id, v);
+                            } else {
+                              addVm.setMemberExactAmount(member.id, (v * 100).round());
+                            }
+                            Navigator.pop(ctx);
+                          },
+                          child: const Icon(Icons.check_rounded, size: 22),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),

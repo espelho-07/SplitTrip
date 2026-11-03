@@ -1,17 +1,20 @@
-# kith_app
+# Kith (SplitTrip)
 
-A new Flutter project.
+High-performance, offline-first group travel & expense sharing engine with real-time offline sync, exact paise arithmetic, and live Indian IPO portfolio management.
 
 ## Getting Started
 
-This project is a starting point for a Flutter application.
+This project is a Flutter application targeting Android, iOS, and Web.
 
-A few resources to get you started if this is your first Flutter project:
+- Run Flutter unit and widget tests: `flutter test`
+- Run static analysis: `flutter analyze`
+- Run backend tests: `cd server && npm test`
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Market & Financial Data Attribution
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+All Indian Initial Public Offering (IPO) market data—including upcoming and active IPO schedules, price bands, issue sizes, allotment dates, subscription metrics, and indicative Grey Market Premium (GMP) data—are provided by:
+
+**Data: IPO Guru**  
+Website: [https://ipoguru.in](https://ipoguru.in)
+
+> *Disclaimer: Grey Market Premium (GMP) is an unofficial, indicative market observation and does not constitute financial advice, investment advice, or guaranteed listing gains.*

@@ -8,6 +8,7 @@ import '../../domain/models/expense.dart';
 import '../../domain/models/trip.dart';
 import '../services/local_storage_service.dart';
 import '../services/sync_service.dart';
+import 'package:uuid/uuid.dart';
 
 class ExpenseRepository {
   final LocalStorageService storage;
@@ -22,10 +23,26 @@ class ExpenseRepository {
     this.realtimeClient,
   });
 
+  final Map<String, List<Expense>> _cachedExpensesInMemory = {};
+
+  /// Invalidates in-memory expense cache. If [tripId] is provided, only that trip's cache is invalidated.
+  void invalidateCache([String? tripId]) {
+    if (tripId != null) {
+      _cachedExpensesInMemory.remove(tripId);
+    } else {
+      _cachedExpensesInMemory.clear();
+    }
+  }
+
   /// Synchronously returns cached expenses for a trip without network latency.
   List<Expense> getCachedExpenses(String tripId) {
+    if (_cachedExpensesInMemory.containsKey(tripId)) {
+      return _cachedExpensesInMemory[tripId]!;
+    }
     final raw = storage.getSavedExpenses(tripId);
-    return raw.map((json) => Expense.fromJson(json)).toList();
+    final list = raw.map((json) => Expense.fromJson(json)).toList();
+    _cachedExpensesInMemory[tripId] = list;
+    return list;
   }
 
   /// Loads all expenses recorded for a specific trip.
@@ -83,6 +100,7 @@ class ExpenseRepository {
         mergedList.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
         await storage.saveExpenses(tripId, mergedList.map((e) => e.toJson()).toList());
+        _cachedExpensesInMemory[tripId] = mergedList;
         return mergedList;
       }
     } catch (_) {
@@ -100,15 +118,31 @@ class ExpenseRepository {
       throw ArgumentError('The sum of expense splits must strictly equal the total expense amount');
     }
 
-    // 1. FAST LOCAL HYDRATION: Write to local persistent cache instantly (< 5ms)
+    // 1. FAST LOCAL HYDRATION & ATOMIC COMMIT:
+    // Staging domain state and outbox mutation atomically in a single coordinated batch
     final currentExpenses = getCachedExpenses(expense.tripId);
     currentExpenses.removeWhere((e) => e.id == expense.id);
     currentExpenses.insert(0, expense);
 
-    await storage.saveExpenses(
-      expense.tripId,
-      currentExpenses.map((e) => e.toJson()).toList(),
+    final queue = syncService.getPendingMutations();
+    final mutation = SyncMutation(
+      id: const Uuid().v4(),
+      idempotencyKey: expense.id,
+      type: MutationType.addExpense,
+      payload: expense.toJson(),
+      createdAt: DateTime.now(),
+      syncState: SyncState.localPending,
+      originDeviceId: storage.getDeviceId(),
     );
+    queue.add(mutation);
+
+    await storage.commitAtomicMutationBatch(
+      updatedExpensesByTrip: {
+        expense.tripId: currentExpenses.map((e) => e.toJson()).toList(),
+      },
+      updatedOutbox: queue.map((m) => m.toJson()).toList(),
+    );
+    _cachedExpensesInMemory[expense.tripId] = currentExpenses;
 
     _logLocalActivity(
       tripId: expense.tripId,
@@ -117,14 +151,7 @@ class ExpenseRepository {
       metadata: {'expenseId': expense.id, 'amountInPaise': expense.amountInPaise},
     );
 
-    // 2. Enqueue mutation and trigger non-blocking background network synchronization
-    await syncService.enqueueMutation(
-      MutationType.addExpense,
-      expense.toJson(),
-      idempotencyKey: expense.id,
-      backgroundApiClient: apiClient,
-    );
-
+    unawaited(syncService.flushQueue(apiClient));
     return expense;
   }
 
@@ -135,7 +162,7 @@ class ExpenseRepository {
       throw ArgumentError('The sum of expense splits must strictly equal the total expense amount');
     }
 
-    // 1. Update local persistent cache instantly
+    // 1. Update local persistent cache & outbox atomically
     final currentExpenses = getCachedExpenses(expense.tripId);
     final idx = currentExpenses.indexWhere((e) => e.id == expense.id);
     if (idx != -1) {
@@ -144,10 +171,25 @@ class ExpenseRepository {
       currentExpenses.insert(0, expense);
     }
 
-    await storage.saveExpenses(
-      expense.tripId,
-      currentExpenses.map((e) => e.toJson()).toList(),
+    final queue = syncService.getPendingMutations();
+    final mutation = SyncMutation(
+      id: const Uuid().v4(),
+      idempotencyKey: expense.id,
+      type: MutationType.updateExpense,
+      payload: expense.toJson(),
+      createdAt: DateTime.now(),
+      syncState: SyncState.localPending,
+      originDeviceId: storage.getDeviceId(),
     );
+    queue.add(mutation);
+
+    await storage.commitAtomicMutationBatch(
+      updatedExpensesByTrip: {
+        expense.tripId: currentExpenses.map((e) => e.toJson()).toList(),
+      },
+      updatedOutbox: queue.map((m) => m.toJson()).toList(),
+    );
+    _cachedExpensesInMemory[expense.tripId] = currentExpenses;
 
     _logLocalActivity(
       tripId: expense.tripId,
@@ -156,14 +198,7 @@ class ExpenseRepository {
       metadata: {'expenseId': expense.id, 'amountInPaise': expense.amountInPaise},
     );
 
-    // 2. Enqueue mutation and trigger non-blocking background network synchronization
-    await syncService.enqueueMutation(
-      MutationType.updateExpense,
-      expense.toJson(),
-      idempotencyKey: expense.id,
-      backgroundApiClient: apiClient,
-    );
-
+    unawaited(syncService.flushQueue(apiClient));
     return expense;
   }
 
@@ -180,11 +215,27 @@ class ExpenseRepository {
     if (index != -1) {
       deletedTitle = currentExpenses[index].title;
       currentExpenses.removeAt(index);
-      await storage.saveExpenses(
-        tripId,
-        currentExpenses.map((e) => e.toJson()).toList(),
-      );
     }
+
+    final queue = syncService.getPendingMutations();
+    final mutation = SyncMutation(
+      id: const Uuid().v4(),
+      idempotencyKey: 'del_$expenseId',
+      type: MutationType.deleteExpense,
+      payload: {'tripId': tripId, 'expenseId': expenseId},
+      createdAt: DateTime.now(),
+      syncState: SyncState.localPending,
+      originDeviceId: storage.getDeviceId(),
+    );
+    queue.add(mutation);
+
+    await storage.commitAtomicMutationBatch(
+      updatedExpensesByTrip: {
+        tripId: currentExpenses.map((e) => e.toJson()).toList(),
+      },
+      updatedOutbox: queue.map((m) => m.toJson()).toList(),
+      tombstoneToAdd: {'tripId': tripId, 'expenseId': expenseId},
+    );
 
     _logLocalActivity(
       tripId: tripId,
@@ -193,12 +244,7 @@ class ExpenseRepository {
       metadata: {'expenseId': expenseId},
     );
 
-    await syncService.enqueueMutation(
-      MutationType.deleteExpense,
-      {'tripId': tripId, 'expenseId': expenseId},
-      idempotencyKey: 'del_$expenseId',
-      backgroundApiClient: apiClient,
-    );
+    unawaited(syncService.flushQueue(apiClient));
   }
 
   /// Computes the live balance summary for a trip.

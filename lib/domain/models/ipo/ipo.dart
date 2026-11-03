@@ -132,11 +132,16 @@ class Ipo {
   final IpoSubscription? subscription;
   final double? subscriptionOverall; // e.g. 63.6x
   final int? gmp; // Unofficial GMP in Rupees (e.g. 75)
+  final DateTime? gmpLastValidAt; // Timestamp when GMP was last received from upstream API
+  final DateTime? fetchedAt; // Timestamp when record was fetched from upstream API
   final int? issuePrice; // Final issue/cutoff price in Rupees (e.g. 475)
   final int? listingPrice; // Listing day opening price in Rupees
   final int? currentPrice; // Current trading market price in Rupees
   final DateTime lastUpdated;
   final bool isTracked;
+  final String? slug;
+  final DateTime? sourceUpdatedAt;
+  final bool isStale;
 
   const Ipo({
     required this.id,
@@ -159,27 +164,95 @@ class Ipo {
     this.subscription,
     this.subscriptionOverall,
     this.gmp,
+    this.gmpLastValidAt,
+    this.fetchedAt,
     this.issuePrice,
     this.listingPrice,
     this.currentPrice,
     required this.lastUpdated,
     this.isTracked = false,
+    this.slug,
+    this.sourceUpdatedAt,
+    this.isStale = false,
   });
 
-  /// Estimated listing price based on cutoff price + unofficial GMP
-  int? get estimatedListingPrice {
-    if (gmp == null) return null;
-    final basePrice = maxPrice > 0 ? maxPrice : minPrice;
-    if (basePrice <= 0) return null;
-    return basePrice + gmp!;
+  /// Max allowable clock skew into the future for upstream timestamps (5 minutes).
+  static const Duration maxFutureClockSkew = Duration(minutes: 5);
+
+  /// Maximum validity duration for a Grey Market Premium quote (24 hours).
+  static const Duration gmpValidityDuration = Duration(hours: 24);
+
+  /// Whether the GMP quote is expired, untrusted, or inapplicable.
+  ///
+  /// Criteria for expiration / invalidity:
+  /// 1. Listed: Once an IPO is listed on stock exchanges, pre-listing GMP is void.
+  /// 2. Missing timestamp (Legacy Policy): If [gmpLastValidAt] is missing/null, freshness
+  ///    cannot be established. In accordance with user protection policy, unverified
+  ///    legacy quotes are never presented as current quotes.
+  /// 3. Future timestamps: Timestamps more than [maxFutureClockSkew] in the future are
+  ///    deemed corrupt/untrusted and expired.
+  /// 4. Age: Quotes older than [gmpValidityDuration] (24 hours) from [gmpLastValidAt] are expired.
+  ///
+  /// Returns `false` if [gmp] is `null` (unquoted, not expired).
+  bool get isGmpExpired {
+    if (gmp == null) return false;
+
+    // 1. Listed IPOs have no active GMP
+    if (status == IpoStatus.listed || dynamicStatus == IpoStatus.listed) {
+      return true;
+    }
+
+    // 2. Authoritative timestamp check (Legacy Record Policy)
+    // If gmpLastValidAt is null, freshness cannot be established.
+    // sourceUpdatedAt is explicitly NOT trusted as proof of fresh GMP.
+    if (gmpLastValidAt == null) {
+      return true;
+    }
+
+    final validTimestamp = gmpLastValidAt!.toUtc();
+    final nowUtc = DateTime.now().toUtc();
+
+    // 3. Safety check for invalid/corrupt dates (e.g. year before 2020 or epoch 0)
+    if (validTimestamp.year < 2020 || validTimestamp.millisecondsSinceEpoch <= 0) {
+      return true;
+    }
+
+    // 4. Handle future timestamps (clock skew protection)
+    final diff = nowUtc.difference(validTimestamp);
+    if (diff.isNegative) {
+      // Future timestamp: if skew exceeds tolerance, treat as untrusted/expired
+      if (diff.abs() > maxFutureClockSkew) {
+        return true;
+      }
+      return false; // Within minor clock skew tolerance, consider fresh
+    }
+
+    // 5. Normal age check: must not exceed 24 hours
+    return diff > gmpValidityDuration;
   }
 
-  /// Estimated listing gain percentage based on unofficial GMP
-  double? get estimatedGainPercentage {
-    if (gmp == null) return null;
+  /// Current valid GMP. Returns `null` if GMP is absent or expired (>24h / listed).
+  /// Preserves valid 0 (flat/par).
+  int? get currentGmp => isGmpExpired ? null : gmp;
+
+  /// Estimated listing price based on cutoff price + current valid GMP.
+  /// Returns null if GMP is expired (>24h / listed) or missing.
+  int? get estimatedListingPrice {
+    final validGmp = currentGmp;
+    if (validGmp == null) return null;
     final basePrice = maxPrice > 0 ? maxPrice : minPrice;
     if (basePrice <= 0) return null;
-    return (gmp! / basePrice) * 100.0;
+    return basePrice + validGmp;
+  }
+
+  /// Estimated listing gain percentage based on current valid GMP.
+  /// Returns null if GMP is expired (>24h / listed) or missing.
+  double? get estimatedGainPercentage {
+    final validGmp = currentGmp;
+    if (validGmp == null) return null;
+    final basePrice = maxPrice > 0 ? maxPrice : minPrice;
+    if (basePrice <= 0) return null;
+    return (validGmp / basePrice) * 100.0;
   }
 
   /// Minimum investment in Rupees for 1 lot at cutoff (max price)
@@ -353,11 +426,16 @@ class Ipo {
     IpoSubscription? subscription,
     double? subscriptionOverall,
     int? gmp,
+    DateTime? gmpLastValidAt,
+    DateTime? fetchedAt,
     int? issuePrice,
     int? listingPrice,
     int? currentPrice,
     DateTime? lastUpdated,
     bool? isTracked,
+    String? slug,
+    DateTime? sourceUpdatedAt,
+    bool? isStale,
   }) {
     return Ipo(
       id: id ?? this.id,
@@ -380,12 +458,59 @@ class Ipo {
       subscription: subscription ?? this.subscription,
       subscriptionOverall: subscriptionOverall ?? this.subscriptionOverall,
       gmp: gmp ?? this.gmp,
+      gmpLastValidAt: gmpLastValidAt ?? this.gmpLastValidAt,
+      fetchedAt: fetchedAt ?? this.fetchedAt,
       issuePrice: issuePrice ?? this.issuePrice,
       listingPrice: listingPrice ?? this.listingPrice,
       currentPrice: currentPrice ?? this.currentPrice,
       lastUpdated: lastUpdated ?? this.lastUpdated,
       isTracked: isTracked ?? this.isTracked,
+      slug: slug ?? this.slug,
+      sourceUpdatedAt: sourceUpdatedAt ?? this.sourceUpdatedAt,
+      isStale: isStale ?? this.isStale,
     );
+  }
+
+  static DateTime? _extractGmpLastValidAt(Map<String, dynamic> json) {
+    if (json['ipo_gmp_cache'] is List && (json['ipo_gmp_cache'] as List).isNotEmpty) {
+      final first = (json['ipo_gmp_cache'] as List).first;
+      if (first is Map<String, dynamic> && first['gmp_last_valid_at'] != null) {
+        return DateTime.tryParse(first['gmp_last_valid_at'].toString());
+      }
+    } else if (json['ipo_gmp_cache'] is Map<String, dynamic>) {
+      final map = json['ipo_gmp_cache'] as Map<String, dynamic>;
+      if (map['gmp_last_valid_at'] != null) {
+        return DateTime.tryParse(map['gmp_last_valid_at'].toString());
+      }
+    }
+    final raw = json['gmp_last_valid_at'] ?? json['gmpLastValidAt'];
+    if (raw != null) {
+      return DateTime.tryParse(raw.toString());
+    }
+    return null;
+  }
+
+  static DateTime? _extractFetchedAt(Map<String, dynamic> json) {
+    final raw = json['fetched_at'] ?? json['fetchedAt'];
+    if (raw != null) {
+      return DateTime.tryParse(raw.toString());
+    }
+    return null;
+  }
+
+  static int? _extractGmp(Map<String, dynamic> json) {
+    if (json['ipo_gmp_cache'] is List && (json['ipo_gmp_cache'] as List).isNotEmpty) {
+      final first = (json['ipo_gmp_cache'] as List).first;
+      if (first is Map<String, dynamic> && first.containsKey('gmp_raw')) {
+        return (first['gmp_raw'] as num?)?.toInt();
+      }
+    } else if (json['ipo_gmp_cache'] is Map<String, dynamic>) {
+      final map = json['ipo_gmp_cache'] as Map<String, dynamic>;
+      if (map.containsKey('gmp_raw')) {
+        return (map['gmp_raw'] as num?)?.toInt();
+      }
+    }
+    return (json['gmp'] ?? json['grey_market_premium'] as num?)?.toInt();
   }
 
   factory Ipo.fromJson(Map<String, dynamic> json) {
@@ -468,7 +593,12 @@ class Ipo {
       ofsCrores: (json['ofsCrores'] ?? json['ofs_crores'] ?? json['ofs'] as num?)?.toDouble(),
       subscription: sub,
       subscriptionOverall: totalSub,
-      gmp: (json['gmp'] ?? json['grey_market_premium'] as num?)?.toInt(),
+      gmp: _extractGmp(json),
+      gmpLastValidAt: _extractGmpLastValidAt(json),
+      fetchedAt: _extractFetchedAt(json),
+      slug: json['slug'] as String?,
+      sourceUpdatedAt: json['source_updated_at'] != null ? DateTime.tryParse(json['source_updated_at'] as String) : null,
+      isStale: json['is_stale'] as bool? ?? false,
       issuePrice: (json['issuePrice'] ?? json['issue_price'] as num?)?.toInt(),
       listingPrice: (json['listingPrice'] ?? json['listing_price'] as num?)?.toInt(),
       currentPrice: (json['currentPrice'] ?? json['current_price'] as num?)?.toInt(),
@@ -499,11 +629,16 @@ class Ipo {
       'subscription': subscription?.toJson(),
       'subscriptionOverall': subscriptionOverall,
       'gmp': gmp,
+      'gmp_last_valid_at': gmpLastValidAt?.toIso8601String(),
+      'fetched_at': fetchedAt?.toIso8601String(),
       'issuePrice': issuePrice,
       'listingPrice': listingPrice,
       'currentPrice': currentPrice,
       'lastUpdated': lastUpdated.toIso8601String(),
       'isTracked': isTracked,
+      'slug': slug,
+      'sourceUpdatedAt': sourceUpdatedAt?.toIso8601String(),
+      'isStale': isStale,
     };
   }
 }

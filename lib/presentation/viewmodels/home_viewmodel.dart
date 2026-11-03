@@ -15,6 +15,8 @@ class HomeViewModel extends ChangeNotifier {
 
   List<Trip> _trips = [];
   final Map<String, BalanceSummary> _tripBalances = {};
+  final Map<String, int> _tripTotalsPaise = {};
+  final Map<String, int> _tripExpenseCounts = {};
   int _overallNetBalanceInPaise = 0;
   int _totalSpentOnTripsInPaise = 0;
   bool _isLoading = false;
@@ -32,6 +34,8 @@ class HomeViewModel extends ChangeNotifier {
 
   List<Trip> get trips => _trips;
   Map<String, BalanceSummary> get tripBalances => _tripBalances;
+  Map<String, int> get tripTotalsPaise => _tripTotalsPaise;
+  Map<String, int> get tripExpenseCounts => _tripExpenseCounts;
   int get overallNetBalanceInPaise => _overallNetBalanceInPaise;
   int get totalSpentOnTripsInPaise => _totalSpentOnTripsInPaise;
   bool get isLoading => _isLoading;
@@ -96,6 +100,8 @@ class HomeViewModel extends ChangeNotifier {
 
   void _computeLocalBalances(List<Trip> tripsList, String currentUserId) {
     _tripBalances.clear();
+    _tripTotalsPaise.clear();
+    _tripExpenseCounts.clear();
     int netSum = 0;
     int totalSpent = 0;
 
@@ -111,6 +117,9 @@ class HomeViewModel extends ChangeNotifier {
       _tripBalances[trip.id] = summary;
       netSum += summary.currentUserNetBalanceInPaise;
 
+      int tripSum = 0;
+      int tripCount = 0;
+
       // Compute user's actual consumed share across all expenses in this trip
       final memberIds = <String>{currentUserId};
       for (final m in trip.members) {
@@ -125,12 +134,16 @@ class HomeViewModel extends ChangeNotifier {
 
       for (final exp in cachedExpenses) {
         if (exp.isDeleted) continue;
+        tripSum += exp.amountInPaise;
+        tripCount++;
         for (final split in exp.splits) {
           if (memberIds.contains(split.memberId)) {
             totalSpent += split.amountInPaise;
           }
         }
       }
+      _tripTotalsPaise[trip.id] = tripSum;
+      _tripExpenseCounts[trip.id] = tripCount;
     }
 
     _overallNetBalanceInPaise = netSum;

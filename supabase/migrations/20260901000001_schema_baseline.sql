@@ -1,5 +1,5 @@
 -- ==============================================================================
--- Kith Supabase Migration: 20260901_schema_baseline.sql (Self-Healing & Idempotent)
+-- Kith Supabase Migration: 20260901000001_schema_baseline.sql (Self-Healing & Idempotent)
 -- Creates all tables and ensures all missing columns exist before creating indexes.
 -- ==============================================================================
 

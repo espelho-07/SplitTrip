@@ -10,7 +10,6 @@ import 'package:kith_app/data/services/auth_service.dart';
 import 'package:kith_app/data/services/local_storage_service.dart';
 import 'package:kith_app/data/services/p2p_sync_service.dart';
 import 'package:kith_app/data/services/sync_service.dart';
-import 'package:kith_app/domain/models/trip.dart';
 import 'package:kith_app/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/home_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/trip_detail_viewmodel.dart';
@@ -32,17 +31,6 @@ void main() {
   late AuthViewModel authVm;
   late HomeViewModel homeVm;
   late TripDetailViewModel tripDetailVm;
-
-  final testTrip = Trip(
-    id: 'trip_dl_001',
-    name: 'Goa Beach Trip',
-    emoji: '🌴',
-    creatorId: 'u1',
-    inviteCode: 'GOA123',
-    members: [],
-    createdAt: DateTime.now(),
-    updatedAt: DateTime.now(),
-  );
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});

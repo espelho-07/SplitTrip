@@ -1,5 +1,5 @@
 -- ==============================================================================
--- Kith Supabase Migration: 20261031_virtual_members_and_data_integrity.sql
+-- Kith Supabase Migration: 20261031000001_virtual_members_and_data_integrity.sql
 -- Fixes Data Integrity, Virtual Member Persistence, and Sync Field Invariants
 -- ==============================================================================
 

@@ -83,6 +83,20 @@ class RecoveryKeyService {
     return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   }
 
+  /// Generates a high-entropy 256-bit cryptographically secure session token (64 hex characters).
+  static String generateSessionToken() {
+    final bytes = List<int>.generate(32, (_) => _secureRandom.nextInt(256));
+    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  }
+
+  /// Computes the SHA-256 hash of a session token for secure server-side storage and verification.
+  static String hashSessionToken(String token) {
+    return sha256.convert(utf8.encode(token)).toString();
+  }
+
+  /// Constant-time string equality comparison to protect against timing attacks.
+  static bool constantTimeEquals(String a, String b) => _constantTimeEquals(a, b);
+
   /// Computes a salted HMAC-SHA256 hash of the normalized recovery key.
   /// Plaintext recovery keys are never transmitted to the database.
   static String hashKey(String rawKey, String salt) {

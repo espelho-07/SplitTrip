@@ -20,6 +20,8 @@ class IpoDto {
   final num? ofsCrores;
   final int? gmp;
   final num? gmpUpdatedTime;
+  final String? gmpLastValidAt;
+  final String? fetchedAt;
   final num? issuePrice;
   final num? listingPrice;
   final num? currentPrice;
@@ -46,6 +48,8 @@ class IpoDto {
     this.ofsCrores,
     this.gmp,
     this.gmpUpdatedTime,
+    this.gmpLastValidAt,
+    this.fetchedAt,
     this.issuePrice,
     this.listingPrice,
     this.currentPrice,
@@ -74,6 +78,8 @@ class IpoDto {
       ofsCrores: json['ofs_crores'] as num?,
       gmp: (json['gmp'] as num?)?.toInt(),
       gmpUpdatedTime: json['gmp_updated_time'] as num?,
+      gmpLastValidAt: json['gmp_last_valid_at']?.toString() ?? json['gmpLastValidAt']?.toString(),
+      fetchedAt: json['fetched_at']?.toString() ?? json['fetchedAt']?.toString(),
       issuePrice: json['issue_price'] as num?,
       listingPrice: json['listing_price'] as num?,
       currentPrice: json['current_price'] as num?,
@@ -105,6 +111,8 @@ class IpoDto {
       'ofs_crores': ofsCrores,
       'gmp': gmp,
       'gmp_updated_time': gmpUpdatedTime,
+      'gmp_last_valid_at': gmpLastValidAt,
+      'fetched_at': fetchedAt,
       'issue_price': issuePrice,
       'listing_price': listingPrice,
     };

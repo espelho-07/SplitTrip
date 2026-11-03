@@ -19,6 +19,8 @@ import 'package:kith_app/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/locale_viewmodel.dart';
 import 'package:kith_app/presentation/views/onboarding/onboarding_view.dart';
 import 'package:provider/provider.dart';
+import 'dart:io';
+import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -38,7 +40,7 @@ void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     storage = await LocalStorageService.init();
-    apiClient = ApiClient();
+    apiClient = ApiClient(httpClient: MockClient((req) async => throw const SocketException("No Internet")));
     authService = AuthService(apiClient: apiClient, storage: storage);
     userRepo = UserRepository(authService: authService);
     authVm = AuthViewModel(userRepo: userRepo);

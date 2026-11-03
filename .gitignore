@@ -65,3 +65,7 @@ server/data_storage/
 /android/build/
 *.aab
 *.apk
+
+# Supabase temp & test reports
+supabase/.temp/
+test_reports/

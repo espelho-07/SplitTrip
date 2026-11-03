@@ -39,7 +39,7 @@ CREATE INDEX IF NOT EXISTS idx_ipo_master_symbol ON ipo_master(symbol);
 -- 2. User Demat Accounts (Multi-Account Demat Profiles)
 CREATE TABLE IF NOT EXISTS user_demat_accounts (
     id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL REFERENCES user_accounts(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     display_name TEXT NOT NULL,
     masked_pan TEXT NOT NULL DEFAULT '',
     account_holder_name TEXT,
@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS ipo_applications (
     id TEXT PRIMARY KEY,
     ipo_id TEXT NOT NULL REFERENCES ipo_master(id) ON DELETE CASCADE,
     ipo_name TEXT NOT NULL,
-    user_id TEXT NOT NULL REFERENCES user_accounts(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     application_account_id TEXT REFERENCES user_demat_accounts(id) ON DELETE SET NULL,
     account_display_name TEXT,
     account_masked_pan TEXT,
@@ -94,7 +94,7 @@ CREATE INDEX IF NOT EXISTS idx_ipo_applications_account ON ipo_applications(appl
 CREATE TABLE IF NOT EXISTS ipo_application_audits (
     id TEXT PRIMARY KEY,
     application_id TEXT NOT NULL REFERENCES ipo_applications(id) ON DELETE CASCADE,
-    user_id TEXT NOT NULL REFERENCES user_accounts(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
     description TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

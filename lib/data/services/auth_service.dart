@@ -328,9 +328,7 @@ class AuthService {
     } catch (_) {}
 
     // Anchor in Android Keystore
-    try {
-      await _secureId.persistGuestIdentity(user.id, recoveryKey);
-    } catch (_) {}
+    unawaited(_secureId.persistGuestIdentity(user.id, recoveryKey));
 
     return user;
   }
@@ -363,40 +361,56 @@ class AuthService {
     }
 
     // 2. Query Supabase using salted cryptographic verification
+    Map<String, dynamic>? supabaseRow;
     try {
-      final supabaseRow = await _cloudSync.recoverAccount(cleanKey, deviceId: deviceId);
-      if (supabaseRow != null) {
-        final accountId = (supabaseRow['id'] ?? supabaseRow['accountId']) as String;
-        final rawDisplayName = supabaseRow['displayName'] as String? ??
-            supabaseRow['display_name'] as String? ??
-            supabaseRow['name'] as String?;
-        final displayName = (rawDisplayName != null && rawDisplayName.trim().isNotEmpty)
-            ? rawDisplayName.trim()
-            : 'Traveler';
-        final token = 'kith_sess_${accountId.replaceAll('usr_', '')}';
-
-        final user = GuestUser(
-          id: accountId,
-          accountId: accountId,
-          displayName: displayName,
-          recoveryKey: cleanKey,
-          anonymousToken: token,
-          createdAt: DateTime.tryParse(supabaseRow['created_at'] as String? ?? '') ?? DateTime.now(),
-          isLinkedToAccount: false,
-        );
-
-        apiClient.setAuthToken(token);
-        realtimeClient?.setAuthToken(token);
-        await storage.saveUser(user.toJson());
-        await _secureId.persistGuestIdentity(user.id, cleanKey);
-
-        // Fetch and merge all account data from Supabase
-        await _restoreAccountDataFromCloud(accountId);
-
-        return user;
-      }
+      supabaseRow = await _cloudSync.recoverAccount(cleanKey, deviceId: deviceId);
     } catch (e) {
       debugPrint('[AuthService] Supabase cloud recovery notice: $e');
+    }
+
+    if (supabaseRow == null) {
+      try {
+        supabaseRow = await _supabaseSync.recoverByRecoveryKey(cleanKey);
+      } catch (e) {
+        debugPrint('[AuthService] Supabase guest sync recovery notice: $e');
+      }
+    }
+
+    if (supabaseRow != null) {
+      final accountId = (supabaseRow['id'] ?? supabaseRow['accountId'] ?? supabaseRow['account_id']) as String;
+      final rawDisplayName = supabaseRow['displayName'] as String? ??
+          supabaseRow['display_name'] as String? ??
+          supabaseRow['name'] as String?;
+      final displayName = (rawDisplayName != null && rawDisplayName.trim().isNotEmpty)
+          ? rawDisplayName.trim()
+          : 'Traveler';
+      final token = (supabaseRow['anonymous_token'] as String?) ??
+          (supabaseRow['token'] as String?) ??
+          'kith_sess_${accountId.replaceAll('usr_', '')}';
+
+      final user = GuestUser(
+        id: accountId,
+        accountId: accountId,
+        displayName: displayName,
+        recoveryKey: cleanKey,
+        anonymousToken: token,
+        createdAt: DateTime.tryParse(supabaseRow['created_at'] as String? ?? '') ?? DateTime.now(),
+        isLinkedToAccount: false,
+      );
+
+      apiClient.setAuthToken(token);
+      realtimeClient?.setAuthToken(token);
+      await storage.saveUser(user.toJson());
+      await _secureId.persistGuestIdentity(user.id, cleanKey);
+
+      // Fetch and merge all account data from Supabase
+      try {
+        await _restoreAccountDataFromCloud(accountId);
+      } catch (e) {
+        debugPrint('[AuthService] Restore account data notice: $e');
+      }
+
+      return user;
     }
 
     // 3. Query Render backend /auth/recover

@@ -37,6 +37,8 @@ import '../views/ipo/ipo_apply_view.dart';
 import '../views/ipo/ipo_accounts_view.dart';
 import '../views/ipo/ipo_history_view.dart';
 import '../viewmodels/ipo_viewmodel.dart';
+import '../views/admin/admin_shell_view.dart';
+import '../viewmodels/admin/admin_dashboard_viewmodel.dart';
 import 'package:provider/provider.dart';
 
 class AppRouter {
@@ -257,6 +259,18 @@ class AppRouter {
       GoRoute(
         path: '/settle-up',
         builder: (context, state) => const SettleUpView(),
+      ),
+      GoRoute(
+        path: '/admin',
+        builder: (context, state) => const AdminShellView(initialSection: AdminSection.overview),
+      ),
+      GoRoute(
+        path: '/admin/:section',
+        builder: (context, state) {
+          final sectionParam = state.pathParameters['section'];
+          final section = AdminSection.fromRoute(sectionParam);
+          return AdminShellView(initialSection: section);
+        },
       ),
       GoRoute(
         path: '/analytics',

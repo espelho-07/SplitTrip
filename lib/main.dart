@@ -43,6 +43,18 @@ import 'presentation/viewmodels/theme_viewmodel.dart';
 import 'presentation/viewmodels/trip_detail_viewmodel.dart';
 import 'presentation/viewmodels/version_viewmodel.dart';
 import 'presentation/views/security/app_lock_screen.dart';
+import 'data/services/admin/admin_audit_service.dart';
+import 'data/services/admin/admin_service.dart';
+import 'data/services/admin/admin_user_service.dart';
+import 'data/services/admin/analytics_service.dart';
+import 'data/services/admin/announcement_service.dart';
+import 'data/services/admin/feature_request_service.dart';
+import 'data/services/admin/feedback_service.dart';
+import 'presentation/viewmodels/admin/admin_announcements_viewmodel.dart';
+import 'presentation/viewmodels/admin/admin_audit_logs_viewmodel.dart';
+import 'presentation/viewmodels/admin/admin_dashboard_viewmodel.dart';
+import 'presentation/viewmodels/admin/admin_feedback_viewmodel.dart';
+import 'presentation/viewmodels/admin/admin_users_viewmodel.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -176,6 +188,15 @@ void main() async {
   // Non-blocking: FCM init failure must not prevent app from launching
   unawaited(fcmService.init());
 
+  // Initialize Administration Services
+  final adminService = AdminService();
+  final adminUserService = AdminUserService();
+  final feedbackService = FeedbackService();
+  final featureRequestService = FeatureRequestService();
+  final announcementService = AnnouncementService();
+  final adminAuditService = AdminAuditService();
+  final analyticsService = AnalyticsService();
+
   runApp(
     MultiProvider(
       providers: [
@@ -242,6 +263,42 @@ void main() async {
         ChangeNotifierProvider(create: (_) => CreateTripViewModel(tripRepo: tripRepo)),
         ChangeNotifierProvider(create: (_) => JoinTripViewModel(tripRepo: tripRepo)),
         ChangeNotifierProvider(create: (_) => AddExpenseViewModel(expenseRepo: expenseRepo)),
+        Provider<AdminService>.value(value: adminService),
+        Provider<AdminUserService>.value(value: adminUserService),
+        Provider<FeedbackService>.value(value: feedbackService),
+        Provider<FeatureRequestService>.value(value: featureRequestService),
+        Provider<AnnouncementService>.value(value: announcementService),
+        Provider<AdminAuditService>.value(value: adminAuditService),
+        Provider<AnalyticsService>.value(value: analyticsService),
+        ChangeNotifierProvider(
+          create: (_) => AdminDashboardViewModel(
+            adminService: adminService,
+            analyticsService: analyticsService,
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => AdminUsersViewModel(
+            userService: adminUserService,
+            auditService: adminAuditService,
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => AdminFeedbackViewModel(
+            feedbackService: feedbackService,
+            auditService: adminAuditService,
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => AdminAnnouncementsViewModel(
+            announcementService: announcementService,
+            auditService: adminAuditService,
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => AdminAuditLogsViewModel(
+            auditService: adminAuditService,
+          ),
+        ),
       ],
       child: const KithApp(),
     ),

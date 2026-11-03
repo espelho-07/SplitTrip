@@ -1,5 +1,5 @@
 -- ==============================================================================
--- Kith Supabase RLS Migration: 20260901_rls_security_policies.sql
+-- Kith Supabase RLS Migration: 20260901000002_rls_security_policies.sql
 -- Enables Row Level Security (RLS) across all user & collaborative tables.
 -- Guarantees:
 -- 1. User A CANNOT read, insert, update, or delete User B's personal data.

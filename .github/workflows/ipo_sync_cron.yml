@@ -1,0 +1,64 @@
+name: IPO Guru Centralized Data Ingestion Sync
+
+on:
+  schedule:
+    # 04:30 UTC = 10:00 AM IST (Market Open, Monday - Friday)
+    - cron: '30 4 * * 1-5'
+    # 11:30 UTC = 05:00 PM IST (Market Close, Monday - Friday)
+    - cron: '30 11 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      target_env:
+        description: 'Target Supabase Environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  sync_ipo_data:
+    name: Trigger Centralized IPO Ingestion
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Privileged Cron Sync Request
+        env:
+          STAGING_REF: 'qfuptgzksecgyjgohtxi'
+          STAGING_CRON_SECRET: ${{ secrets.STAGING_CRON_SECRET }}
+          PROD_REF: ${{ secrets.PROD_SUPABASE_PROJECT_REF }}
+          PROD_CRON_SECRET: ${{ secrets.PROD_CRON_SECRET }}
+          TARGET: ${{ inputs.target_env || 'staging' }}
+        run: |
+          if [ "$TARGET" = "production" ]; then
+            PROJECT_REF="$PROD_REF"
+            SECRET="$PROD_CRON_SECRET"
+          else
+            PROJECT_REF="$STAGING_REF"
+            SECRET="$STAGING_CRON_SECRET"
+          fi
+
+          if [ -z "$SECRET" ]; then
+            echo "Error: Cron secret for $TARGET is not configured in repository secrets."
+            exit 1
+          fi
+
+          echo "Triggering centralized IPO ingestion on $TARGET ($PROJECT_REF)..."
+          
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "https://${PROJECT_REF}.supabase.co/functions/v1/ipo-data?sync=true" \
+            -H "Authorization: Bearer ${SECRET}" \
+            -H "Content-Type: application/json")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n 1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+
+          echo "HTTP Response Code: $HTTP_CODE"
+          echo "Response Body: $BODY"
+
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "IPO Ingestion sync completed successfully."
+          else
+            echo "IPO Ingestion sync failed with HTTP status $HTTP_CODE."
+            exit 1
+          fi

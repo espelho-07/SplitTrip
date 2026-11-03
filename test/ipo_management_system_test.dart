@@ -87,7 +87,7 @@ void main() {
     });
 
     test('IpoDataMapper maps DTO to domain model with exact attributes', () {
-      final dto = const IpoDto(
+      final dto = IpoDto(
         id: 'ipo_2',
         name: 'Apex Innovations',
         companyName: 'Apex Innovations',
@@ -102,6 +102,7 @@ void main() {
         refundDate: '2026-11-07',
         listingDate: '2026-11-09',
         gmp: 65,
+        gmpLastValidAt: DateTime.now().toUtc().toIso8601String(),
       );
 
       final domain = IpoDataMapper.mapDtoToDomain(dto);
@@ -114,6 +115,19 @@ void main() {
       expect(domain.gmp, 65);
       expect(domain.estimatedListingPrice, 215 + 65); // 280
       expect(domain.estimatedGainPercentage, closeTo(30.23, 0.05));
+
+      // Legacy DTO with no timestamp cannot establish freshness
+      final legacyDto = const IpoDto(
+        id: 'ipo_legacy',
+        name: 'Legacy Unverified Co',
+        maxPrice: 100,
+        gmp: 30,
+      );
+      final legacyDomain = IpoDataMapper.mapDtoToDomain(legacyDto);
+      expect(legacyDomain.gmp, equals(30), reason: 'Raw GMP is preserved');
+      expect(legacyDomain.isGmpExpired, isTrue, reason: 'Legacy records without gmpLastValidAt cannot establish freshness');
+      expect(legacyDomain.currentGmp, isNull);
+      expect(legacyDomain.estimatedListingPrice, isNull);
     });
 
     test('IpoGuruApiAdapter throws IpoApiNotConfiguredException when unconfigured', () async {

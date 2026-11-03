@@ -1,3 +1,4 @@
+import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -314,12 +315,47 @@ class IpoDetailView extends StatelessWidget {
   }
 
   Widget _buildGmpInsightCard(Ipo ipo, bool isDark) {
-    final hasGmp = ipo.gmp != null && ipo.gmp! > 0;
-    final gmp = ipo.gmp ?? 0;
+    final isListed = ipo.status == IpoStatus.listed || ipo.dynamicStatus == IpoStatus.listed;
+    final isExpired = ipo.isGmpExpired;
+    final currentGmp = ipo.currentGmp;
+    final hasValidGmp = currentGmp != null && !isListed;
+    final gmp = currentGmp ?? 0;
     final maxPrice = ipo.maxPrice;
-    final estListingPrice = maxPrice + gmp;
-    final gmpPercent = maxPrice > 0 ? ((gmp / maxPrice) * 100).toStringAsFixed(1) : '0.0';
+    final estListingPrice = ipo.estimatedListingPrice ?? (maxPrice + gmp);
+    final gmpPercent = ipo.estimatedGainPercentage != null
+        ? ipo.estimatedGainPercentage!.toStringAsFixed(1)
+        : (maxPrice > 0 ? ((gmp / maxPrice) * 100).toStringAsFixed(1) : '0.0');
     final estProfitPerLot = gmp * ipo.lotSize;
+
+    final String badgeText;
+    final Color badgeBg;
+    final Color badgeFg;
+
+    if (isListed) {
+      badgeText = 'Listed';
+      badgeBg = isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9);
+      badgeFg = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+    } else if (isExpired) {
+      badgeText = 'Expired (>24h)';
+      badgeBg = isDark ? const Color(0xFF451A03) : const Color(0xFFFEF3C7);
+      badgeFg = isDark ? const Color(0xFFF59E0B) : const Color(0xFFD97706);
+    } else if (!hasValidGmp) {
+      badgeText = 'Not Available';
+      badgeBg = isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9);
+      badgeFg = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+    } else if (gmp > 0) {
+      badgeText = '+$gmpPercent%';
+      badgeBg = const Color(0xFFDCFCE7);
+      badgeFg = const Color(0xFF15803D);
+    } else if (gmp < 0) {
+      badgeText = '$gmpPercent%';
+      badgeBg = const Color(0xFFFEE2E2);
+      badgeFg = const Color(0xFFB91C1C);
+    } else {
+      badgeText = '0.0% (Flat)';
+      badgeBg = isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9);
+      badgeFg = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+    }
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -327,14 +363,14 @@ class IpoDetailView extends StatelessWidget {
         color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: hasGmp
+          color: hasValidGmp
               ? const Color(0xFF10B981).withValues(alpha: 0.3)
               : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
           width: 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: hasGmp
+            color: hasValidGmp
                 ? const Color(0xFF10B981).withValues(alpha: isDark ? 0.15 : 0.05)
                 : Colors.black.withValues(alpha: isDark ? 0.2 : 0.02),
             blurRadius: 10,
@@ -350,7 +386,7 @@ class IpoDetailView extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Text(hasGmp ? '🔥' : '📊', style: const TextStyle(fontSize: 16)),
+                  Text(hasValidGmp && gmp > 0 ? '🔥' : '📊', style: const TextStyle(fontSize: 16)),
                   const SizedBox(width: 6),
                   Text(
                     'Grey Market Premium (GMP)',
@@ -365,26 +401,22 @@ class IpoDetailView extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: hasGmp
-                      ? const Color(0xFFDCFCE7)
-                      : (isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9)),
+                  color: badgeBg,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  hasGmp ? '+$gmpPercent%' : 'Not Available',
+                  badgeText,
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w900,
-                    color: hasGmp
-                        ? const Color(0xFF15803D)
-                        : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                    color: badgeFg,
                   ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          if (hasGmp)
+          if (hasValidGmp)
             Row(
               children: [
                 Expanded(
@@ -441,7 +473,11 @@ class IpoDetailView extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 4.0),
               child: Text(
-                'No unofficial grey market premium quotes published for this issue yet.',
+                isListed
+                    ? 'This issue has listed on stock exchanges. Unofficial pre-listing quotes are no longer active.'
+                    : (isExpired
+                        ? 'GMP quote has expired. No fresh market indications published in the last 24 hours.'
+                        : 'No unofficial grey market premium quotes published for this issue yet.'),
                 style: TextStyle(
                   fontSize: 12,
                   color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
@@ -476,6 +512,47 @@ class IpoDetailView extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Center(
+            child: InkWell(
+              onTap: () async {
+                final uri = Uri.parse("https://ipoguru.in");
+                if (await canLaunchUrl(uri)) {
+                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                }
+              },
+              borderRadius: BorderRadius.circular(6),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.verified_outlined,
+                      size: 13,
+                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      "Data: IPO Guru",
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB),
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                    const SizedBox(width: 3),
+                    Icon(
+                      Icons.open_in_new_rounded,
+                      size: 11,
+                      color: isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ],

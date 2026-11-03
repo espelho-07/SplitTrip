@@ -29,6 +29,14 @@ class IpoDataMapper {
       );
     }
 
+    DateTime? validAt = dto.gmpLastValidAt != null ? DateTime.tryParse(dto.gmpLastValidAt!) : null;
+    if (validAt == null && dto.gmpUpdatedTime != null && dto.gmpUpdatedTime! > 0) {
+      final val = dto.gmpUpdatedTime!.toInt();
+      validAt = val > 100000000000
+          ? DateTime.fromMillisecondsSinceEpoch(val, isUtc: true)
+          : DateTime.fromMillisecondsSinceEpoch(val * 1000, isUtc: true);
+    }
+
     return Ipo(
       id: dto.id.trim(),
       name: dto.name.trim(),
@@ -50,10 +58,15 @@ class IpoDataMapper {
       subscription: subscription,
       subscriptionOverall: dto.subscription?.total,
       gmp: dto.gmp,
+      gmpLastValidAt: validAt,
+      fetchedAt: dto.fetchedAt != null ? DateTime.tryParse(dto.fetchedAt!) : null,
       issuePrice: dto.issuePrice?.toInt(),
       listingPrice: dto.listingPrice?.toInt(),
       currentPrice: dto.currentPrice?.toInt(),
       lastUpdated: now,
+      slug: dto.rawAttributes['slug'] as String?,
+      sourceUpdatedAt: dto.rawAttributes['source_updated_at'] != null ? DateTime.tryParse(dto.rawAttributes['source_updated_at'].toString()) : null,
+      isStale: dto.rawAttributes['is_stale'] as bool? ?? false,
     );
   }
 

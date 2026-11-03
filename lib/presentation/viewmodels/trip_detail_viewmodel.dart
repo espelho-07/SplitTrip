@@ -381,15 +381,26 @@ class TripDetailViewModel extends ChangeNotifier {
     realtimeClient?.subscribeToTrip(tripId);
 
     try {
-      final remoteTrip = await tripRepo.getTripById(tripId);
+      final results = await Future.wait([
+        tripRepo.getTripById(tripId),
+        expenseRepo.getExpenses(tripId),
+        tripRepo.getJourneyMoments(tripId),
+      ]);
+      final remoteTrip = results[0] as Trip?;
+      final remoteExpenses = results[1] as List<Expense>;
+      final remoteMoments = results[2] as List<JourneyMoment>;
+
       if (remoteTrip != null) {
         _trip = remoteTrip;
-        _expenses = await expenseRepo.getExpenses(tripId);
+        _expenses = remoteExpenses;
         _journeyStops = tripRepo.getCachedJourneyStops(tripId);
         _tripMemories = tripRepo.getCachedTripMemories(tripId);
-        _journeyMoments = await tripRepo.getJourneyMoments(tripId);
-        _balanceSummary = await expenseRepo.getBalanceSummary(
-          trip: remoteTrip,
+        _journeyMoments = remoteMoments;
+        final cachedSettlements = expenseRepo.getCachedSettlements(tripId);
+        _balanceSummary = BalanceEngine.calculateBalances(
+          members: remoteTrip.members,
+          expenses: remoteExpenses,
+          settlements: cachedSettlements,
           currentUserId: currentUserId,
         );
         await fetchActivityLogs();
@@ -413,13 +424,24 @@ class TripDetailViewModel extends ChangeNotifier {
       _tripMemories = tripRepo.getCachedTripMemories(_trip!.id);
       _journeyMoments = tripRepo.getCachedJourneyMoments(_trip!.id);
       try {
-        final updatedTrip = await tripRepo.getTripById(_trip!.id);
+        final results = await Future.wait([
+          tripRepo.getTripById(_trip!.id),
+          expenseRepo.getExpenses(_trip!.id),
+          tripRepo.getJourneyMoments(_trip!.id),
+        ]);
+        final updatedTrip = results[0] as Trip?;
+        final updatedExpenses = results[1] as List<Expense>;
+        final updatedMoments = results[2] as List<JourneyMoment>;
+
         if (updatedTrip != null) {
           _trip = updatedTrip;
-          _expenses = await expenseRepo.getExpenses(_trip!.id);
-          _journeyMoments = await tripRepo.getJourneyMoments(_trip!.id);
-          _balanceSummary = await expenseRepo.getBalanceSummary(
-            trip: _trip!,
+          _expenses = updatedExpenses;
+          _journeyMoments = updatedMoments;
+          final cachedSettlements = expenseRepo.getCachedSettlements(_trip!.id);
+          _balanceSummary = BalanceEngine.calculateBalances(
+            members: updatedTrip.members,
+            expenses: updatedExpenses,
+            settlements: cachedSettlements,
             currentUserId: currentUserId,
           );
           await fetchActivityLogs();

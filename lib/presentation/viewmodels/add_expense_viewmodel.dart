@@ -43,6 +43,7 @@ class AddExpenseViewModel extends ChangeNotifier {
   ExpenseDraft? _activeDraft;
   bool _isEditMode = false;
   String? _editingExpenseId;
+  String? _draftExpenseId;
   DateTime? _createdAt;
 
   bool _isSaving = false;
@@ -478,8 +479,9 @@ class AddExpenseViewModel extends ChangeNotifier {
         final saved = await expenseRepo.updateExpense(updatedExpense);
         return saved;
       } else {
+        _draftExpenseId ??= _uuid.v4();
         final expense = Expense(
-          id: _uuid.v4(),
+          id: _draftExpenseId!,
           tripId: tripId,
           title: _title.trim(),
           amountInPaise: _amountInPaise,
@@ -494,6 +496,7 @@ class AddExpenseViewModel extends ChangeNotifier {
         );
 
         final saved = await expenseRepo.addExpense(expense);
+        _draftExpenseId = null;
         return saved;
       }
     } catch (e) {

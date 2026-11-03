@@ -89,8 +89,9 @@ class _KithAmountCalculatorFieldState extends State<KithAmountCalculatorField> {
             Expanded(
               child: TextField(
                 controller: widget.controller,
-                keyboardType: widget.useInAppKeypad ? TextInputType.none : TextInputType.text,
-                readOnly: widget.useInAppKeypad,
+                keyboardType: TextInputType.text,
+                textInputAction: TextInputAction.next,
+                readOnly: false,
                 showCursor: true,
                 onTap: widget.onTap,
                 autofocus: widget.autoFocus,
