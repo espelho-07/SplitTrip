@@ -3,9 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import '../../domain/enums/trip_lifecycle.dart';
 import '../../domain/models/guest_user.dart';
-import '../../domain/models/personal_budget.dart';
-import '../../domain/models/personal_debt.dart';
-import '../../domain/models/personal_expense.dart';
 import '../../domain/models/trip.dart';
 import '../../domain/models/balance_summary.dart';
 import '../../data/services/local_storage_service.dart';
@@ -228,9 +225,6 @@ class KithWidgetService extends ChangeNotifier {
   /// Builds a complete snapshot of current financial data and syncs with Android AppWidgets.
   Future<void> syncSnapshot({
     GuestUser? currentUser,
-    List<PersonalExpense>? personalExpenses,
-    PersonalBudget? budget,
-    PersonalDebtsSummary? debtsSummary,
     List<Trip>? trips,
     Map<String, BalanceSummary>? tripBalances,
     String localeCode = 'en',
@@ -248,78 +242,37 @@ class KithWidgetService extends ChangeNotifier {
     ];
     final monthName = (now.month >= 1 && now.month <= 12) ? months[now.month - 1] : 'This Month';
 
-    // 1. Current Month Expenses Calculation
-    final effectiveExpenses = personalExpenses ?? [];
-    final currentMonthExpenses = effectiveExpenses.where((e) {
-      return e.date.year == now.year && e.date.month == now.month && !e.isDeleted;
-    }).toList();
-
+    // 1. Trip Expenses Calculation
     int totalSpentPaise = 0;
-    for (final e in currentMonthExpenses) {
-      totalSpentPaise += e.amountInPaise;
-    }
-
-    // Previous Month Spent for Comparison
-    final prevMonthDate = DateTime(now.year, now.month - 1, 1);
-    final prevMonthExpenses = effectiveExpenses.where((e) {
-      return e.date.year == prevMonthDate.year &&
-          e.date.month == prevMonthDate.month &&
-          !e.isDeleted;
-    }).toList();
-    int prevMonthSpentPaise = 0;
-    for (final e in prevMonthExpenses) {
-      prevMonthSpentPaise += e.amountInPaise;
-    }
-
-    String comparisonText = 'Spent this month';
-    if (prevMonthSpentPaise > 0) {
-      final diffPaise = totalSpentPaise - prevMonthSpentPaise;
-      final diffRupees = (diffPaise.abs() / 100).toStringAsFixed(0);
-      if (diffPaise < 0) {
-        comparisonText = '₹$diffRupees less than last month';
-      } else if (diffPaise > 0) {
-        comparisonText = '₹$diffRupees more than last month';
-      } else {
-        comparisonText = 'Same as last month';
+    if (tripBalances != null) {
+      for (final summary in tripBalances.values) {
+        totalSpentPaise += summary.totalTripSpentInPaise;
       }
     }
 
-    // 2. Budget & Runway
-    final budgetPaise = budget?.monthlyLimitInPaise ?? 0;
-    final remainingPaise = budgetPaise > 0 ? (budgetPaise - totalSpentPaise) : 0;
+    String comparisonText = 'Trip expenses';
 
-    final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
-    final daysRemaining = (daysInMonth - now.day) + 1;
-    final dailyRunwayPaise = (remainingPaise > 0 && daysRemaining > 0)
-        ? (remainingPaise ~/ daysRemaining)
-        : 0;
+    // 2. Budget & Runway (Trip only defaults)
+    const budgetPaise = 0;
+    const remainingPaise = 0;
+    const dailyRunwayPaise = 0;
 
-    // 3. Debts (Owed to User & Owed by User)
-    final debts = debtsSummary ?? PersonalDebtsSummary.empty();
-    final owedTotalPaise = debts.totalLentPaise;
-    final youOweTotalPaise = debts.totalBorrowedPaise;
+    // 3. Debts & Balances across Trips
+    int owedTotalPaise = 0;
+    int youOweTotalPaise = 0;
+    if (tripBalances != null) {
+      for (final summary in tripBalances.values) {
+        final net = summary.currentUserNetBalanceInPaise;
+        if (net > 0) {
+          owedTotalPaise += net;
+        } else if (net < 0) {
+          youOweTotalPaise += net.abs();
+        }
+      }
+    }
 
     final topDebtsList = <Map<String, dynamic>>[];
-    for (final d in debts.debts.where((d) => d.debtType == PersonalDebtType.lent && !d.isSettled && !d.isDeleted)) {
-      if (d.remainingAmountInPaise > 0) {
-        topDebtsList.add({
-          'name': d.personName,
-          'amountPaise': d.remainingAmountInPaise,
-        });
-      }
-    }
-    topDebtsList.sort((a, b) => (b['amountPaise'] as int).compareTo(a['amountPaise'] as int));
-
     final topYouOweList = <Map<String, dynamic>>[];
-    for (final d in debts.debts.where((d) => d.debtType == PersonalDebtType.borrowed && !d.isSettled && !d.isDeleted)) {
-      if (d.remainingAmountInPaise > 0) {
-        topYouOweList.add({
-          'name': d.personName,
-          'amountPaise': d.remainingAmountInPaise,
-        });
-      }
-    }
-    topYouOweList.sort((a, b) => (b['amountPaise'] as int).compareTo(a['amountPaise'] as int));
 
     // 4. Active Trip
     String activeTripId = '';
@@ -348,41 +301,14 @@ class KithWidgetService extends ChangeNotifier {
 
     // 5. Smart Kith Intelligence Ranking
     String smartHeadline = 'Everything is up to date ✓';
-    String smartSubtext = 'All expenses and debts are settled';
-    String smartActionLabel = 'Open Kith';
-    String smartActionDeepLink = 'kith://home';
+    String smartSubtext = 'Plan your next adventure with friends';
+    String smartActionLabel = 'New Trip';
+    String smartActionDeepLink = 'kith://create-trip';
 
-    if (topDebtsList.isNotEmpty && (topDebtsList.first['amountPaise'] as int) >= 50000) {
-      final top = topDebtsList.first;
-      final name = top['name'] as String;
-      final amt = ((top['amountPaise'] as int) / 100).toStringAsFixed(0);
-      smartHeadline = '$name owes you ₹$amt';
-      smartSubtext = 'Tap to view lending record & settle';
-      smartActionLabel = 'View';
-      smartActionDeepLink = 'kith://personal/debts';
-    } else if (topYouOweList.isNotEmpty && (topYouOweList.first['amountPaise'] as int) >= 50000) {
-      final top = topYouOweList.first;
-      final name = top['name'] as String;
-      final amt = ((top['amountPaise'] as int) / 100).toStringAsFixed(0);
-      smartHeadline = 'You owe $name ₹$amt';
-      smartSubtext = 'Record repayment when settled';
-      smartActionLabel = 'Pay';
-      smartActionDeepLink = 'kith://personal/debts';
-    } else if (budgetPaise > 0 && totalSpentPaise >= (budgetPaise * 0.85).toInt()) {
-      final remRupees = (remainingPaise.abs() / 100).toStringAsFixed(0);
-      if (remainingPaise >= 0) {
-        smartHeadline = '₹$remRupees left in your $monthName budget';
-        smartSubtext = 'You have used ${((totalSpentPaise / budgetPaise) * 100).toInt()}% of budget';
-      } else {
-        smartHeadline = 'Budget exceeded by ₹$remRupees';
-        smartSubtext = 'Review recent spends in $monthName';
-      }
-      smartActionLabel = 'View Budget';
-      smartActionDeepLink = 'kith://budget';
-    } else if (activeTripId.isNotEmpty && activeTripUserBalancePaise.abs() > 0) {
+    if (activeTripId.isNotEmpty && activeTripUserBalancePaise.abs() > 0) {
       final balRupees = (activeTripUserBalancePaise.abs() / 100).toStringAsFixed(0);
       if (activeTripUserBalancePaise > 0) {
-        smartHeadline = 'You\'re owed ₹$balRupees in $activeTripTitle';
+        smartHeadline = "You're owed ₹$balRupees in $activeTripTitle";
         smartSubtext = 'Unsettled balances pending from friends';
       } else {
         smartHeadline = 'You owe ₹$balRupees in $activeTripTitle';
@@ -390,12 +316,11 @@ class KithWidgetService extends ChangeNotifier {
       }
       smartActionLabel = 'Settle';
       smartActionDeepLink = 'kith://trip/$activeTripId';
-    } else if (totalSpentPaise > 0) {
-      final spentRupees = (totalSpentPaise / 100).toStringAsFixed(0);
-      smartHeadline = '₹$spentRupees spent in $monthName';
-      smartSubtext = comparisonText;
-      smartActionLabel = '+ Expense';
-      smartActionDeepLink = 'kith://expense/add';
+    } else if (activeTripId.isNotEmpty) {
+      smartHeadline = '$activeTripTitle: Everything settled ✓';
+      smartSubtext = '$activeTripMemberCount members · Tap to view trip';
+      smartActionLabel = 'View Trip';
+      smartActionDeepLink = 'kith://trip/$activeTripId';
     }
 
     final snapshot = KithWidgetSnapshot(

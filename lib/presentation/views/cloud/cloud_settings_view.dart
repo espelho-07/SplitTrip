@@ -15,7 +15,6 @@ import '../../../data/services/sync_service.dart';
 import '../../router/app_router.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
-import '../../viewmodels/personal_expense_viewmodel.dart';
 import '../../widgets/progress/kith_success_toast.dart';
 import 'cloud_sync_sheet.dart';
 
@@ -36,7 +35,6 @@ class CloudSettingsView extends StatelessWidget {
   void _showSignOutDialog(BuildContext context) async {
     final authVm = context.read<AuthViewModel>();
     final homeVm = context.read<HomeViewModel>();
-    final personalVm = context.read<PersonalExpenseViewModel>();
     final l10n = context.l10n;
 
     final confirm = await showDialog<bool>(
@@ -63,7 +61,6 @@ class CloudSettingsView extends StatelessWidget {
       AppRouter.router.go('/onboarding');
       await authVm.logout();
       homeVm.clearData();
-      personalVm.clearData();
 
       final rootCtx = AppRouter.navigatorKey.currentContext;
       if (rootCtx != null && rootCtx.mounted) {

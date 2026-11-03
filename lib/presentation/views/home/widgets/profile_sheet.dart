@@ -14,12 +14,10 @@ import '../../../../core/widgets/surface_card.dart';
 import '../../../../core/localization/app_localizations.dart';
 import '../../../../data/services/local_storage_service.dart';
 import '../../../../data/services/sync_service.dart';
-import '../../../../domain/enums/app_experience_mode.dart';
 import '../../../router/app_router.dart';
 import '../../../viewmodels/auth_viewmodel.dart';
 import '../../../viewmodels/home_viewmodel.dart';
 import '../../../viewmodels/locale_viewmodel.dart';
-import '../../../viewmodels/personal_expense_viewmodel.dart';
 import '../../../viewmodels/theme_viewmodel.dart';
 import '../../../widgets/progress/progress.dart';
 import '../../cloud/cloud_sync_sheet.dart';
@@ -71,7 +69,6 @@ class ProfileSheet extends StatelessWidget {
     final nav = Navigator.of(context);
     final authVm = context.read<AuthViewModel>();
     final homeVm = context.read<HomeViewModel>();
-    final personalVm = context.read<PersonalExpenseViewModel>();
     final storage = context.read<LocalStorageService>();
 
     final confirm = await showDialog<bool>(
@@ -102,7 +99,6 @@ class ProfileSheet extends StatelessWidget {
       await authVm.logout();
       await storage.clearAllUserData();
       homeVm.clearData();
-      personalVm.clearData();
 
       final rootCtx = AppRouter.navigatorKey.currentContext;
       if (rootCtx != null && rootCtx.mounted) {
@@ -116,7 +112,6 @@ class ProfileSheet extends StatelessWidget {
     final nav = Navigator.of(context);
     final authVm = context.read<AuthViewModel>();
     final homeVm = context.read<HomeViewModel>();
-    final personalVm = context.read<PersonalExpenseViewModel>();
     final storage = context.read<LocalStorageService>();
 
     final confirm = await showDialog<bool>(
@@ -146,7 +141,6 @@ class ProfileSheet extends StatelessWidget {
       await authVm.deleteAccount();
       await storage.clearAllUserData();
       homeVm.clearData();
-      personalVm.clearData();
 
       final rootCtx = AppRouter.navigatorKey.currentContext;
       if (rootCtx != null && rootCtx.mounted) {
@@ -494,45 +488,7 @@ class ProfileSheet extends StatelessWidget {
 
             const SizedBox(height: AppSpacing.lg),
 
-            // SECTION 4: APP EXPERIENCE & MODES
-            _buildSectionHeader(l10n.profileSecExperience, isDark),
-            const SizedBox(height: AppSpacing.xs),
-            SurfaceCard(
-              backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
-              padding: const EdgeInsets.all(4),
-              child: Column(
-                children: [
-                  _buildModeOption(
-                    title: l10n.onboardingModeTripsOnly,
-                    subtitle: l10n.onboardingModeTripsSub,
-                    emoji: '✈️',
-                    isSelected: authVm.appExperienceMode == AppExperienceMode.tripsOnly,
-                    isDark: isDark,
-                    onTap: () async {
-                      HapticHelper.selection();
-                      await authVm.setAppExperienceMode(AppExperienceMode.tripsOnly);
-                      onSwitchToTrips?.call();
-                    },
-                  ),
-                  Divider(height: 1, color: isDark ? Colors.white10 : Colors.black12),
-                  _buildModeOption(
-                    title: l10n.onboardingModeAll,
-                    subtitle: l10n.onboardingModeAllSub,
-                    emoji: '💼',
-                    isSelected: authVm.appExperienceMode == AppExperienceMode.all,
-                    isDark: isDark,
-                    onTap: () async {
-                      HapticHelper.selection();
-                      await authVm.setAppExperienceMode(AppExperienceMode.all);
-                    },
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: AppSpacing.lg),
-
-            // SECTION 5: PREFERENCES
+// SECTION 5: PREFERENCES
             _buildSectionHeader(l10n.profileSecPreferences, isDark),
             const SizedBox(height: AppSpacing.xs),
             SurfaceCard(
@@ -859,49 +815,4 @@ class ProfileSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildModeOption({
-    required String title,
-    required String subtitle,
-    required String emoji,
-    required bool isSelected,
-    required bool isDark,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: AppRadius.smBorder,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-        child: Row(
-          children: [
-            Text(emoji, style: const TextStyle(fontSize: 20)),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                    ),
-                  ),
-                  Text(
-                    subtitle,
-                    style: AppTypography.bodySmall(isDark: isDark),
-                  ),
-                ],
-              ),
-            ),
-            if (isSelected)
-              const Icon(Icons.check_circle_rounded, color: AppColors.emeraldPrimary, size: 20)
-            else
-              const Icon(Icons.radio_button_unchecked_rounded, color: Colors.grey, size: 20),
-          ],
-        ),
-      ),
-    );
-  }
 }

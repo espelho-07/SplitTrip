@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kith_app/core/network/api_client.dart';
 import 'package:kith_app/data/repositories/expense_repository.dart';
-import 'package:kith_app/data/repositories/personal_repository.dart';
 import 'package:kith_app/data/repositories/trip_repository.dart';
 import 'package:kith_app/data/services/auth_service.dart';
 import 'package:kith_app/data/services/local_storage_service.dart';
@@ -15,7 +14,6 @@ import 'package:kith_app/domain/enums/trip_lifecycle.dart';
 import 'package:kith_app/domain/models/expense.dart';
 import 'package:kith_app/domain/models/expense_split.dart';
 import 'package:kith_app/domain/models/guest_user.dart';
-import 'package:kith_app/domain/models/personal_debt.dart';
 import 'package:kith_app/domain/models/trip.dart';
 import 'package:kith_app/domain/models/trip_member.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -29,7 +27,6 @@ void main() {
     late ApiClient apiClient;
     late TripRepository tripRepo;
     late ExpenseRepository expenseRepo;
-    late PersonalRepository personalRepo;
     late AuthService authService;
 
     final userA = GuestUser(
@@ -68,11 +65,6 @@ void main() {
         apiClient: apiClient,
       );
       expenseRepo = ExpenseRepository(
-        storage: storage,
-        syncService: syncService,
-        apiClient: apiClient,
-      );
-      personalRepo = PersonalRepository(
         storage: storage,
         syncService: syncService,
         apiClient: apiClient,
@@ -398,9 +390,9 @@ void main() {
     // -------------------------------------------------------------
     test('8. Interrupted Sync and Retry Idempotency', () async {
       await syncService.enqueueMutation(
-        MutationType.createPersonalExpense,
+        MutationType.addExpense,
         {
-          'id': 'pexp_chaos_01',
+          'id': 'exp_chaos_01',
           'title': 'Metro Card Recharge',
           'amountInPaise': 50000,
           'category': 'transport',
@@ -408,12 +400,10 @@ void main() {
       );
 
       await syncService.enqueueMutation(
-        MutationType.createPersonalDebt,
+        MutationType.createTrip,
         {
-          'id': 'pdebt_chaos_01',
-          'personName': 'Rohit',
-          'debtType': 'lent',
-          'amountInPaise': 100000,
+          'id': 'trip_chaos_01',
+          'name': 'Rohit Trip',
         },
       );
 
@@ -424,7 +414,7 @@ void main() {
       await syncService.removeMutation(firstMutation.id);
 
       expect(syncService.pendingCount, equals(1));
-      expect(syncService.getPendingMutations().first.payload['id'], equals('pdebt_chaos_01'));
+      expect(syncService.getPendingMutations().first.payload['id'], equals('trip_chaos_01'));
     });
 
     // -------------------------------------------------------------
@@ -479,32 +469,25 @@ void main() {
     });
 
     // -------------------------------------------------------------
-    // 11. PERSONAL ACCOUNT DATA ISOLATION
+    // 11. TRIP ACCOUNT DATA ISOLATION
     // -------------------------------------------------------------
-    test('11. Personal Data Isolation: Zero Cross-User Leakage', () async {
-      await personalRepo.createPersonalExpense(
-        userId: userA.id,
-        title: 'Alice Private Groceries',
-        amountInPaise: 245000,
-        category: ExpenseCategory.groceries,
+    test('11. Trip Data Isolation: Zero Cross-User Leakage', () async {
+      final createdTrip = await tripRepo.createTrip(
+        name: 'Alice Private Trip',
+        creator: userA,
       );
 
-      await personalRepo.createPersonalDebt(
-        userId: userA.id,
-        personName: 'Suresh',
-        debtType: PersonalDebtType.lent,
-        amountInPaise: 500000,
-      );
-
-      // User A cached expenses
-      final cachedA = personalRepo.getCachedPersonalExpenses();
+      // User A cached trips
+      final cachedA = tripRepo.getCachedTrips();
       expect(cachedA.length, equals(1));
-      expect(cachedA.first.userId, equals(userA.id));
+      expect(createdTrip.id, isNotEmpty);
+      expect(cachedA.first.creatorId, equals(userA.id));
 
       // User B logs in (simulate logout/clear)
       await storage.clearAllUserData();
+      tripRepo.invalidateCache();
 
-      final cachedAfterLogout = personalRepo.getCachedPersonalExpenses();
+      final cachedAfterLogout = tripRepo.getCachedTrips();
       expect(cachedAfterLogout, isEmpty);
     });
 

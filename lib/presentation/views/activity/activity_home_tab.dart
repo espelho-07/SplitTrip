@@ -5,7 +5,6 @@ import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/utils/haptic_feedback_helper.dart';
 import '../../../../core/widgets/member_avatar.dart';
 import '../../viewmodels/home_viewmodel.dart';
-import '../../viewmodels/personal_expense_viewmodel.dart';
 
 class ActivityHomeTab extends StatefulWidget {
   const ActivityHomeTab({super.key});
@@ -21,9 +20,6 @@ class _ActivityHomeTabState extends State<ActivityHomeTab> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final homeVm = context.watch<HomeViewModel>();
-    final personalVm = context.watch<PersonalExpenseViewModel>();
-
-    final personalExpenses = personalVm.expenses;
 
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
@@ -76,7 +72,7 @@ class _ActivityHomeTabState extends State<ActivityHomeTab> {
 
         const SizedBox(height: 20),
 
-        if (personalExpenses.isEmpty && homeVm.trips.isEmpty)
+        if (homeVm.trips.isEmpty)
           _buildEmptyActivityState(isDark)
         else ...[
           // Sample chronological activities

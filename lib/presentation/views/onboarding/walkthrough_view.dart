@@ -72,11 +72,11 @@ class _WalkthroughViewState extends State<WalkthroughView> {
         visualBuilder: (isDark) => _buildTripSplitVisual(isDark),
       ),
       _WalkthroughSlideData(
-        badge: 'PERSONAL FINANCES & AI',
+        badge: 'OFFLINE P2P RADAR',
         badgeColor: AppColors.indigoAccent,
-        title: 'Track Expenses &\nMonthly Runway',
-        description: 'Log daily expenses with instant voice AI, track monthly budgets, and manage what you owe and what you\'re owed.',
-        visualBuilder: (isDark) => _buildPersonalBudgetVisual(isDark),
+        title: 'Nearby Friends &\nOffline P2P Sync',
+        description: 'Discover nearby travel companions via Bluetooth & Wi-Fi radar, and sync expenses seamlessly without internet.',
+        visualBuilder: (isDark) => _buildP2pRadarVisual(isDark),
       ),
       _WalkthroughSlideData(
         badge: 'INSTANT UPI PAYMENTS',
@@ -391,8 +391,8 @@ class _WalkthroughViewState extends State<WalkthroughView> {
     );
   }
 
-  // ─── SLIDE 2 VISUAL: PERSONAL BUDGET & VOICE AI ──────────────────────────
-  Widget _buildPersonalBudgetVisual(bool isDark) {
+  // ─── SLIDE 2 VISUAL: OFFLINE P2P RADAR ──────────────────────────
+  Widget _buildP2pRadarVisual(bool isDark) {
     return Container(
       width: double.infinity,
       constraints: const BoxConstraints(maxWidth: 340),
@@ -415,67 +415,87 @@ class _WalkthroughViewState extends State<WalkthroughView> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Voice AI Bubble
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-            decoration: BoxDecoration(
-              color: AppColors.indigoAccent.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.indigoAccent.withValues(alpha: 0.25)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.mic_rounded, color: AppColors.indigoAccent, size: 16),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '"Dinner at Social ₹1,450"',
-                    style: TextStyle(
-                      fontStyle: FontStyle.italic,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.white : AppColors.darkSurfaceCard,
-                    ),
-                  ),
-                ),
-                const Text(
-                  'Auto-logged ✓',
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.emeraldPrimary),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          // Monthly Runway Bar
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Flexible(
-                child: Text(
-                  'August Budget Runway',
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                  ),
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: AppColors.emeraldPrimary,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        'Nearby Friends Radar',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(width: 8),
-              const Text(
-                '₹32,500 / ₹50,000',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.emeraldPrimary),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.emeraldPrimary.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'P2P Mesh',
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.emeraldPrimary),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: LinearProgressIndicator(
-              value: 0.65,
-              minHeight: 7,
-              backgroundColor: isDark ? Colors.white12 : Colors.black12,
-              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.emeraldPrimary),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF131A20) : const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.wifi_tethering_rounded, size: 20, color: AppColors.indigoAccent),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Direct Sync Active',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? Colors.white : const Color(0xFF0F172A),
+                        ),
+                      ),
+                      Text(
+                        '3 peers connected without internet',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.check_circle_rounded, size: 16, color: AppColors.emeraldPrimary),
+              ],
             ),
           ),
         ],

@@ -9,14 +9,12 @@ import '../../../../core/theme/app_radius.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/utils/haptic_feedback_helper.dart';
 import '../../../../core/widgets/member_avatar.dart';
-import '../../../../domain/enums/kith_app_mode.dart';
 import '../../../../data/services/local_storage_service.dart';
 import '../../../../data/services/sync_service.dart';
 import '../../router/app_router.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/locale_viewmodel.dart';
-import '../../viewmodels/personal_expense_viewmodel.dart';
 import '../../viewmodels/theme_viewmodel.dart';
 import '../../widgets/progress/progress.dart';
 import '../cloud/cloud_sync_sheet.dart';
@@ -175,7 +173,6 @@ class ProfileHomeTab extends StatelessWidget {
     final l10n = context.l10n;
     final authVm = context.read<AuthViewModel>();
     final homeVm = context.read<HomeViewModel>();
-    final personalVm = context.read<PersonalExpenseViewModel>();
     final storage = context.read<LocalStorageService>();
 
     final confirm = await showDialog<bool>(
@@ -203,7 +200,6 @@ class ProfileHomeTab extends StatelessWidget {
       await authVm.logout();
       await storage.clearAllUserData();
       homeVm.clearData();
-      personalVm.clearData();
 
       final rootCtx = AppRouter.navigatorKey.currentContext;
       if (rootCtx != null && rootCtx.mounted) {
@@ -216,7 +212,6 @@ class ProfileHomeTab extends StatelessWidget {
     final l10n = context.l10n;
     final authVm = context.read<AuthViewModel>();
     final homeVm = context.read<HomeViewModel>();
-    final personalVm = context.read<PersonalExpenseViewModel>();
     final storage = context.read<LocalStorageService>();
 
     final confirm = await showDialog<bool>(
@@ -244,7 +239,6 @@ class ProfileHomeTab extends StatelessWidget {
       await authVm.deleteAccount();
       await storage.clearAllUserData();
       homeVm.clearData();
-      personalVm.clearData();
 
       final rootCtx = AppRouter.navigatorKey.currentContext;
       if (rootCtx != null && rootCtx.mounted) {
@@ -258,7 +252,6 @@ class ProfileHomeTab extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final authVm = context.watch<AuthViewModel>();
     final homeVm = context.watch<HomeViewModel>();
-    final personalVm = context.watch<PersonalExpenseViewModel>();
     final themeVm = context.watch<ThemeViewModel>();
 
     LocaleViewModel? localeVm;
@@ -280,8 +273,8 @@ class ProfileHomeTab extends StatelessWidget {
     final pendingCount = syncService?.pendingCount ?? 0;
 
     final tripsCount = homeVm.trips.length;
-    final expensesCount = personalVm.expenses.length;
-    final totalSpentPaise = homeVm.totalSpentOnTripsInPaise + personalVm.totalSpentInPaise;
+    final activeTripsCount = homeVm.trips.where((t) => t.lifecycleState.isActive || t.lifecycleState.isCompleting).length;
+    final totalSpentPaise = homeVm.totalSpentOnTripsInPaise;
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -417,7 +410,7 @@ class ProfileHomeTab extends StatelessWidget {
             children: [
               _buildStatItem('$tripsCount', l10n.profileStatsTrips, isDark),
               _buildStatDivider(isDark),
-              _buildStatItem('$expensesCount', l10n.profileStatsExpenses, isDark),
+              _buildStatItem('$activeTripsCount', 'Active Trips', isDark),
               _buildStatDivider(isDark),
               _buildStatItem(
                 CurrencyFormatter.formatPaise(totalSpentPaise, currencyCode: 'INR'),
@@ -542,14 +535,7 @@ class ProfileHomeTab extends StatelessWidget {
               isDark: isDark,
               onTap: () => LanguageSelectSheet.show(context),
             ),
-            _buildMenuItem(
-              icon: Icons.auto_awesome_mosaic_rounded,
-              title: 'Primary App Mode',
-              subtitle: authVm.primaryAppMode.title,
-              isDark: isDark,
-              onTap: () => _showExperienceModeSheet(context, authVm, isDark),
-            ),
-            _buildMenuItem(
+_buildMenuItem(
               icon: Icons.notifications_none_rounded,
               title: l10n.profileNotifsTitle,
               subtitle: l10n.profileNotifsSub,
@@ -887,191 +873,4 @@ class ProfileHomeTab extends StatelessWidget {
     );
   }
 
-  void _showExperienceModeSheet(BuildContext context, AuthViewModel authVm, bool isDark) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (bCtx) => Container(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF0F1418) : Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          border: Border.all(
-            color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
-            width: 1,
-          ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.white24 : Colors.black12,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              'App Experience Mode',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Choose your preferred focus between full ledger or trip-only experience',
-              style: TextStyle(
-                fontSize: 13,
-                color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
-              ),
-            ),
-            const SizedBox(height: 20),
-            _buildExperienceModeOption(
-              context: context,
-              title: 'Trip Mode',
-              subtitle: 'Dedicated focus on group trips, expense splitting, invite codes & settlements',
-              icon: Icons.flight_takeoff_rounded,
-              isSelected: authVm.primaryAppMode.isTrip,
-              isDark: isDark,
-              onTap: () async {
-                HapticHelper.selection();
-                await authVm.setPrimaryAppMode(KithAppMode.trip);
-                if (bCtx.mounted) Navigator.pop(bCtx);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Switched to Trip Mode'),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                }
-              },
-            ),
-            const SizedBox(height: 12),
-            _buildExperienceModeOption(
-              context: context,
-              title: 'Financial Mode',
-              subtitle: 'Section A: Personal Financial Management & Section B: IPO Allotment Manager',
-              icon: Icons.account_balance_wallet_rounded,
-              isSelected: authVm.primaryAppMode.isFinancial,
-              isDark: isDark,
-              onTap: () async {
-                HapticHelper.selection();
-                await authVm.setPrimaryAppMode(KithAppMode.financial);
-                if (bCtx.mounted) Navigator.pop(bCtx);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Switched to Financial Mode'),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                }
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildExperienceModeOption({
-    required BuildContext context,
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required bool isSelected,
-    required bool isDark,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? const Color(0xFF14B8A6).withValues(alpha: isDark ? 0.18 : 0.08)
-                : (isDark ? const Color(0xFF161D24) : const Color(0xFFF8FAFC)),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isSelected
-                  ? const Color(0xFF14B8A6)
-                  : (isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0)),
-              width: isSelected ? 1.8 : 1.0,
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? const Color(0xFF14B8A6).withValues(alpha: 0.2)
-                      : (isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  icon,
-                  size: 22,
-                  color: isSelected
-                      ? const Color(0xFF14B8A6)
-                      : (isDark ? AppColors.darkTextSecondary : const Color(0xFF475569)),
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
-                        height: 1.3,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              if (isSelected)
-                const Icon(
-                  Icons.check_circle_rounded,
-                  color: Color(0xFF14B8A6),
-                  size: 22,
-                )
-              else
-                Icon(
-                  Icons.radio_button_unchecked_rounded,
-                  color: isDark ? Colors.white24 : const Color(0xFFCBD5E1),
-                  size: 22,
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }

@@ -113,6 +113,8 @@ void main() {
       }
 
       // Verify final converged state on BOTH devices without internet
+      expenseRepoA.invalidateCache(tripId);
+      expenseRepoB.invalidateCache(tripId);
       final finalA = expenseRepoA.getCachedExpenses(tripId);
       final finalB = expenseRepoB.getCachedExpenses(tripId);
 

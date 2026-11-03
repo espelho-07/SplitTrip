@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
@@ -9,11 +7,8 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/widgets/surface_card.dart';
-import '../../viewmodels/personal_expense_viewmodel.dart';
 import '../home/widgets/profile_sheet.dart';
 import '../language/language_select_sheet.dart';
-import '../personal/widgets/add_personal_expense_sheet.dart';
-import '../personal/widgets/set_budget_dialog.dart';
 
 class GuideItem {
   final String title;
@@ -105,57 +100,6 @@ class _SetupGuideViewState extends State<SetupGuideView> {
         ],
       ),
       GuideSection(
-        title: l10n.guideSecPersonal,
-        emoji: '💰',
-        items: [
-          GuideItem(
-            title: l10n.guideItem2_1Title,
-            description: l10n.guideItem2_1Desc,
-            location: l10n.guideItem2_1Loc,
-            actionLabel: l10n.guideItem2_1Act,
-            icon: Icons.add_circle_outline_rounded,
-            iconColor: AppColors.emeraldPrimary,
-            onAction: (ctx) => AddPersonalExpenseSheet.show(ctx),
-          ),
-          GuideItem(
-            title: l10n.guideItem2_2Title,
-            description: l10n.guideItem2_2Desc,
-            location: l10n.guideItem2_2Loc,
-            actionLabel: l10n.guideItem2_2Act,
-            icon: Icons.savings_outlined,
-            iconColor: Colors.amber,
-            onAction: (ctx) {
-              final personalVm = ctx.read<PersonalExpenseViewModel>();
-              final monthYear = DateFormat('yyyy-MM').format(personalVm.selectedMonth);
-              final limit = personalVm.budget.monthlyLimitInPaise;
-              SetBudgetDialog.show(
-                ctx,
-                currentBudgetPaise: limit,
-                monthYear: monthYear,
-              );
-            },
-          ),
-          GuideItem(
-            title: l10n.guideItem2_3Title,
-            description: l10n.guideItem2_3Desc,
-            location: l10n.guideItem2_3Loc,
-            actionLabel: l10n.guideItem2_3Act,
-            icon: Icons.handshake_outlined,
-            iconColor: AppColors.indigoAccent,
-            onAction: (ctx) => ctx.push('/personal/debts'),
-          ),
-          GuideItem(
-            title: l10n.guideItem2_4Title,
-            description: l10n.guideItem2_4Desc,
-            location: l10n.guideItem2_4Loc,
-            actionLabel: l10n.guideItem2_4Act,
-            icon: Icons.donut_large_rounded,
-            iconColor: Colors.purpleAccent,
-            onAction: (ctx) => ctx.push('/personal/categories'),
-          ),
-        ],
-      ),
-      GuideSection(
         title: l10n.guideSecTrips,
         emoji: '🏖️',
         items: [
@@ -239,13 +183,13 @@ class _SetupGuideViewState extends State<SetupGuideView> {
             },
           ),
           GuideItem(
-            title: l10n.guideItem5_2Title,
-            description: l10n.guideItem5_2Desc,
-            location: l10n.guideItem5_2Loc,
-            actionLabel: l10n.guideItem5_2Act,
-            icon: Icons.receipt_long_rounded,
+            title: l10n.tripsCreate,
+            description: l10n.guideItem3_1Desc,
+            location: l10n.navTrips,
+            actionLabel: l10n.tripsCreate,
+            icon: Icons.flight_takeoff_rounded,
             iconColor: Colors.cyan,
-            onAction: (ctx) => AddPersonalExpenseSheet.show(ctx),
+            onAction: (ctx) => ctx.push('/create-trip'),
           ),
         ],
       ),

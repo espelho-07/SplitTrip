@@ -15,7 +15,7 @@ enum AuthState {
 class AuthViewModel extends ChangeNotifier {
   final UserRepository userRepo;
   GuestUser? _currentUser;
-  AppExperienceMode _appExperienceMode = AppExperienceMode.all;
+  AppExperienceMode _appExperienceMode = AppExperienceMode.tripsOnly;
   KithAppMode _primaryAppMode = KithAppMode.trip;
   AuthState _authState = AuthState.uninitialized;
   bool _isLoading = false;
@@ -43,8 +43,9 @@ class AuthViewModel extends ChangeNotifier {
       // restoreGuestIfNeeded() checks SharedPreferences first (fast path),
       // then falls back to Keystore → Supabase to recover after reinstall.
       _currentUser = await userRepo.restoreGuestIfNeeded();
-      _appExperienceMode = AppExperienceMode.fromKey(userRepo.getAppExperienceMode());
-      _primaryAppMode = KithAppMode.fromKey(userRepo.getPrimaryAppMode());
+      // SplitTrip is locked to dedicated Trip Mode
+      _appExperienceMode = AppExperienceMode.tripsOnly;
+      _primaryAppMode = KithAppMode.trip;
       _authState = _currentUser != null ? AuthState.authenticated : AuthState.signedOut;
       if (_currentUser != null) {
         userRepo.syncSession(_currentUser);
@@ -59,24 +60,24 @@ class AuthViewModel extends ChangeNotifier {
   }
 
   Future<void> setAppExperienceMode(AppExperienceMode mode) async {
-    _appExperienceMode = mode;
-    await userRepo.saveAppExperienceMode(mode.key);
+    // SplitTrip is locked to dedicated Trip Mode
+    _appExperienceMode = AppExperienceMode.tripsOnly;
+    await userRepo.saveAppExperienceMode(AppExperienceMode.tripsOnly.key);
     notifyListeners();
   }
 
   Future<void> setPrimaryAppMode(KithAppMode mode) async {
-    _primaryAppMode = mode;
-    await userRepo.savePrimaryAppMode(mode.key);
+    // SplitTrip is locked to dedicated Trip Mode
+    _primaryAppMode = KithAppMode.trip;
+    await userRepo.savePrimaryAppMode(KithAppMode.trip.key);
     notifyListeners();
   }
 
   Future<GuestUser> createGuestSession(String displayName, [AppExperienceMode? mode]) async {
     _isLoading = true;
     _errorMessage = null;
-    if (mode != null) {
-      _appExperienceMode = mode;
-      await userRepo.saveAppExperienceMode(mode.key);
-    }
+    _appExperienceMode = AppExperienceMode.tripsOnly;
+    await userRepo.saveAppExperienceMode(AppExperienceMode.tripsOnly.key);
     notifyListeners();
 
     try {

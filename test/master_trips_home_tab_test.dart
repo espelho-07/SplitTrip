@@ -6,7 +6,6 @@ import 'package:kith_app/core/network/api_client.dart';
 import 'package:kith_app/core/services/kith_widget_service.dart';
 import 'package:kith_app/core/widgets/kith_brand.dart';
 import 'package:kith_app/data/repositories/expense_repository.dart';
-import 'package:kith_app/data/repositories/personal_repository.dart';
 import 'package:kith_app/data/repositories/trip_repository.dart';
 import 'package:kith_app/data/repositories/user_repository.dart';
 import 'package:kith_app/data/services/auth_service.dart';
@@ -19,11 +18,7 @@ import 'package:kith_app/domain/models/trip_member.dart';
 import 'package:kith_app/domain/services/notification_service.dart';
 import 'package:kith_app/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/home_viewmodel.dart';
-import 'package:kith_app/presentation/viewmodels/personal_expense_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/theme_viewmodel.dart';
-import 'package:kith_app/data/repositories/ipo_repository.dart';
-import 'package:kith_app/data/services/ipo_data_provider.dart';
-import 'package:kith_app/presentation/viewmodels/ipo_viewmodel.dart';
 import 'package:kith_app/presentation/views/home/home_view.dart';
 import 'package:kith_app/presentation/views/trip/trips_home_tab.dart';
 import 'package:provider/provider.dart';
@@ -38,11 +33,9 @@ void main() {
   late SyncService syncService;
   late TripRepository tripRepo;
   late ExpenseRepository expenseRepo;
-  late PersonalRepository personalRepo;
   late KithWidgetService widgetService;
   late AuthViewModel authVm;
   late HomeViewModel homeVm;
-  late PersonalExpenseViewModel personalVm;
   late ThemeViewModel themeVm;
   late GuestUser testUser;
 
@@ -65,18 +58,8 @@ void main() {
       syncService: syncService,
       apiClient: apiClient,
     );
-    personalRepo = PersonalRepository(
-      storage: storage,
-      syncService: syncService,
-      apiClient: apiClient,
-    );
     widgetService = KithWidgetService(storage: storage);
     homeVm = HomeViewModel(
-      tripRepo: tripRepo,
-      expenseRepo: expenseRepo,
-    );
-    personalVm = PersonalExpenseViewModel(
-      personalRepo: personalRepo,
       tripRepo: tripRepo,
       expenseRepo: expenseRepo,
     );
@@ -95,26 +78,18 @@ void main() {
   });
 
   Widget createTripsHomeScreen({Widget? child}) {
-    final ipoRepo = IpoRepository(
-      storage: storage,
-      dataProvider: LiveIpoDataProvider(),
-      personalRepo: personalRepo,
-    );
-    final ipoVm = IpoViewModel(ipoRepo: ipoRepo);
-
     return MultiProvider(
       providers: [
         Provider<LocalStorageService>.value(value: storage),
         Provider<NotificationService>.value(value: notificationService),
         ChangeNotifierProvider.value(value: authVm),
         ChangeNotifierProvider.value(value: homeVm),
-        ChangeNotifierProvider.value(value: personalVm),
         ChangeNotifierProvider.value(value: themeVm),
         ChangeNotifierProvider.value(value: widgetService),
-        ChangeNotifierProvider.value(value: ipoVm),
         Provider.value(value: apiClient),
         Provider.value(value: syncService),
-        Provider.value(value: ipoRepo),
+        Provider.value(value: tripRepo),
+        Provider.value(value: expenseRepo),
       ],
       child: Consumer<ThemeViewModel>(
         builder: (context, theme, _) {
@@ -215,8 +190,8 @@ void main() {
       expect(find.byIcon(Icons.notifications_outlined), findsOneWidget);
       expect(find.text('Home'), findsOneWidget);
       expect(find.text('Trips'), findsOneWidget);
-      expect(find.text('Expenses'), findsOneWidget);
-      expect(find.text('IPO'), findsOneWidget);
+      expect(find.text('Expenses'), findsNothing);
+      expect(find.text('IPO'), findsNothing);
       expect(find.text('Profile'), findsOneWidget);
     });
 

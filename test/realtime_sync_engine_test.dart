@@ -2,7 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kith_app/core/network/api_client.dart';
 import 'package:kith_app/core/network/realtime_client.dart';
 import 'package:kith_app/data/repositories/expense_repository.dart';
-import 'package:kith_app/data/repositories/personal_repository.dart';
 import 'package:kith_app/data/repositories/trip_repository.dart';
 import 'package:kith_app/data/services/local_storage_service.dart';
 import 'package:kith_app/data/services/sync_service.dart';
@@ -22,7 +21,6 @@ void main() {
     late SyncService syncService;
     late TripRepository tripRepo;
     late ExpenseRepository expenseRepo;
-    late PersonalRepository personalRepo;
 
     setUp(() async {
       SharedPreferences.setMockInitialValues({});
@@ -36,11 +34,6 @@ void main() {
         apiClient: apiClient,
       );
       expenseRepo = ExpenseRepository(
-        storage: storage,
-        syncService: syncService,
-        apiClient: apiClient,
-      );
-      personalRepo = PersonalRepository(
         storage: storage,
         syncService: syncService,
         apiClient: apiClient,
@@ -212,29 +205,5 @@ void main() {
       expect(cached?.lifecycleState, TripLifecycle.completed);
     });
 
-    test('6. PersonalRepository creates personal expenses and computes budgets locally', () async {
-      final pexp = await personalRepo.createPersonalExpense(
-        userId: 'usr_me',
-        title: 'Groceries',
-        amountInPaise: 150000,
-        category: ExpenseCategory.food,
-      );
-
-      expect(pexp.title, 'Groceries');
-      expect(pexp.amountInPaise, 150000);
-
-      final cachedExpenses = personalRepo.getCachedPersonalExpenses();
-      expect(cachedExpenses.length, 1);
-      expect(cachedExpenses.first.id, pexp.id);
-
-      final now = DateTime.now();
-      final monthKey = '${now.year}-${now.month.toString().padLeft(2, '0')}';
-      final budget = await personalRepo.setPersonalBudget(monthKey, 500000);
-
-      expect(budget.monthlyLimitInPaise, 500000);
-      expect(budget.spentInPaise, 150000);
-      expect(budget.remainingInPaise, 350000);
-      expect(budget.percentageUsed, 30);
-    });
   });
 }

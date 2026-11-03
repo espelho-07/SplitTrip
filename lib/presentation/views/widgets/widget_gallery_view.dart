@@ -12,7 +12,6 @@ import '../../../core/widgets/kith_brand.dart';
 import '../../../core/widgets/surface_card.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
-import '../../viewmodels/personal_expense_viewmodel.dart';
 
 /// Master Interactive Widget Studio for Android Home Screen Widgets.
 /// Provides live interactive previews, privacy mode toggles, and 1-tap launcher pinning.
@@ -72,7 +71,6 @@ class _WidgetGalleryViewState extends State<WidgetGalleryView> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final widgetService = context.watch<KithWidgetService>();
     final authVm = context.watch<AuthViewModel>();
-    final personalVm = context.watch<PersonalExpenseViewModel>();
     final homeVm = context.watch<HomeViewModel>();
     final l10n = context.l10n;
 
@@ -134,7 +132,7 @@ class _WidgetGalleryViewState extends State<WidgetGalleryView> {
                       const SizedBox(height: AppSpacing.lg),
 
                       // Control Strip: Privacy Mode & Data Mode Switcher
-                      _buildControlStrip(context, isDark, widgetService, authVm, personalVm, homeVm, l10n),
+                      _buildControlStrip(context, isDark, widgetService, authVm, homeVm, l10n),
 
                       const SizedBox(height: AppSpacing.xl),
 
@@ -150,7 +148,7 @@ class _WidgetGalleryViewState extends State<WidgetGalleryView> {
                         badgeColor: AppColors.emeraldLight,
                         sizeLabel: '4 × 2 · Medium',
                         description: l10n.widgetsCardSnapshotDesc,
-                        previewContent: _buildSnapshotPreview(isDark, widgetService.isPrivacyMode, personalVm),
+                        previewContent: _buildSnapshotPreview(isDark, widgetService.isPrivacyMode, homeVm),
                         onPin: () => _handlePinWidget('snapshot', l10n.widgetsCardSnapshotTitle),
                       ),
                       const SizedBox(height: AppSpacing.lg),
@@ -176,7 +174,7 @@ class _WidgetGalleryViewState extends State<WidgetGalleryView> {
                         badgeColor: AppColors.amberAccent,
                         sizeLabel: '3 × 2 · Medium',
                         description: l10n.widgetsCardBudgetDesc,
-                        previewContent: _buildBudgetPreview(isDark, widgetService.isPrivacyMode, personalVm),
+                        previewContent: _buildBudgetPreview(isDark, widgetService.isPrivacyMode),
                         onPin: () => _handlePinWidget('budget', l10n.widgetsCardBudgetTitle),
                       ),
                       const SizedBox(height: AppSpacing.lg),
@@ -189,7 +187,7 @@ class _WidgetGalleryViewState extends State<WidgetGalleryView> {
                         badgeColor: AppColors.positiveGreenLight,
                         sizeLabel: '3 × 2 · Medium',
                         description: l10n.widgetsCardDebtsDesc,
-                        previewContent: _buildDebtsPreview(isDark, widgetService.isPrivacyMode, personalVm),
+                        previewContent: _buildDebtsPreview(isDark, widgetService.isPrivacyMode),
                         onPin: () => _handlePinWidget('debts', l10n.widgetsCardDebtsTitle),
                       ),
                       const SizedBox(height: AppSpacing.lg),
@@ -343,7 +341,6 @@ class _WidgetGalleryViewState extends State<WidgetGalleryView> {
     bool isDark,
     KithWidgetService widgetService,
     AuthViewModel authVm,
-    PersonalExpenseViewModel personalVm,
     HomeViewModel homeVm,
     AppLocalizations l10n,
   ) {
@@ -395,9 +392,6 @@ class _WidgetGalleryViewState extends State<WidgetGalleryView> {
               await widgetService.setPrivacyMode(val);
               await widgetService.syncSnapshot(
                 currentUser: authVm.currentUser,
-                personalExpenses: personalVm.expenses,
-                budget: personalVm.budget,
-                debtsSummary: personalVm.debtsSummary,
                 trips: homeVm.trips,
                 tripBalances: homeVm.tripBalances,
               );
@@ -580,14 +574,12 @@ class _WidgetGalleryViewState extends State<WidgetGalleryView> {
     );
   }
 
-  Widget _buildSnapshotPreview(bool isDark, bool isPrivacy, PersonalExpenseViewModel personalVm) {
+  Widget _buildSnapshotPreview(bool isDark, bool isPrivacy, HomeViewModel homeVm) {
     final amountStr = _useLiveData
-        ? (isPrivacy ? '₹••••' : CurrencyFormatter.formatPaise(personalVm.totalSpentInPaise, currencyCode: 'INR'))
+        ? (isPrivacy ? '₹••••' : CurrencyFormatter.formatPaise(homeVm.totalSpentOnTripsInPaise, currencyCode: 'INR'))
         : (isPrivacy ? '₹••••' : '₹12,450');
 
-    final progressVal = _useLiveData
-        ? (personalVm.budget.hasBudget ? (personalVm.budget.percentageUsed / 100.0).clamp(0.0, 1.0) : 0.62)
-        : 0.62;
+    final progressVal = 0.62;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -731,7 +723,7 @@ class _WidgetGalleryViewState extends State<WidgetGalleryView> {
     );
   }
 
-  Widget _buildBudgetPreview(bool isDark, bool isPrivacy, PersonalExpenseViewModel personalVm) {
+  Widget _buildBudgetPreview(bool isDark, bool isPrivacy) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -806,7 +798,7 @@ class _WidgetGalleryViewState extends State<WidgetGalleryView> {
     );
   }
 
-  Widget _buildDebtsPreview(bool isDark, bool isPrivacy, PersonalExpenseViewModel personalVm) {
+  Widget _buildDebtsPreview(bool isDark, bool isPrivacy) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

@@ -9,14 +9,6 @@ import '../views/language/language_select_view.dart';
 import '../views/legal/privacy_policy_view.dart';
 import '../views/onboarding/onboarding_view.dart';
 import '../views/onboarding/walkthrough_view.dart';
-import '../views/personal/category_breakdown_view.dart';
-import '../views/personal/budgets_view.dart';
-import '../views/personal/spend_analytics_view.dart';
-import '../views/personal/balances_overall_view.dart';
-import '../views/trip/settle_up_view.dart';
-import '../views/personal/lending_borrowing_view.dart';
-import '../views/personal/person_ledger_view.dart';
-import '../views/personal/widgets/add_personal_expense_sheet.dart';
 import '../views/splash/splash_view.dart';
 import '../views/trip/create_trip_view.dart';
 import '../views/trip/join_trip_view.dart';
@@ -31,15 +23,8 @@ import '../views/notifications/notifications_view.dart';
 import '../views/payment/payment_methods_view.dart';
 import '../views/trip/trip_preview_view.dart';
 import '../views/version/update_required_view.dart';
-import '../views/ipo/ipo_home_view.dart';
-import '../views/ipo/ipo_detail_view.dart';
-import '../views/ipo/ipo_apply_view.dart';
-import '../views/ipo/ipo_accounts_view.dart';
-import '../views/ipo/ipo_history_view.dart';
-import '../viewmodels/ipo_viewmodel.dart';
 import '../views/admin/admin_shell_view.dart';
 import '../viewmodels/admin/admin_dashboard_viewmodel.dart';
-import 'package:provider/provider.dart';
 
 class AppRouter {
   AppRouter._();
@@ -63,33 +48,10 @@ class AppRouter {
         final path = uri.path.toLowerCase();
         final fullPath = (host.isNotEmpty ? '/$host' : '') + path;
 
-        // If it's an expense action, schedule the bottom sheet and redirect to /home
-        if (host == 'expense' || path.contains('expense') || fullPath.contains('expense')) {
-          final action = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : host;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            final ctx = navigatorKey.currentContext;
-            if (ctx != null) {
-              if (action == 'voice' || uri.queryParameters['mode'] == 'voice') {
-                AddPersonalExpenseSheet.show(ctx, initialVoice: true);
-              } else if (action == 'receipt' || uri.queryParameters['mode'] == 'receipt') {
-                AddPersonalExpenseSheet.show(ctx);
-              } else {
-                final amount = uri.queryParameters['amount'];
-                AddPersonalExpenseSheet.show(ctx, initialAmount: amount);
-              }
-            }
-          });
-          return '/home';
-        }
+
 
         if (host == 'create-trip' || fullPath.contains('create-trip')) {
           return '/create-trip';
-        }
-        if (host == 'debts' || fullPath.contains('debts')) {
-          return '/personal/debts';
-        }
-        if (host == 'categories' || fullPath.contains('categories')) {
-          return '/personal/categories';
         }
         if (host == 'widgets' || fullPath.contains('widgets')) {
           return '/widgets';
@@ -199,68 +161,6 @@ class AppRouter {
         builder: (context, state) => const CloudSettingsView(),
       ),
       GoRoute(
-        path: '/personal/debts',
-        builder: (context, state) => const LendingBorrowingView(),
-      ),
-      GoRoute(
-        path: '/person-ledger',
-        builder: (context, state) {
-          final personName = state.uri.queryParameters['name'] ?? state.uri.queryParameters['person'] ?? 'Member';
-          final personUserId = state.uri.queryParameters['userId'];
-          final personPhone = state.uri.queryParameters['phone'];
-          return PersonLedgerView(
-            personName: personName,
-            personUserId: personUserId,
-            personPhone: personPhone,
-          );
-        },
-      ),
-      GoRoute(
-        path: '/person/:personName',
-        builder: (context, state) {
-          final personName = state.pathParameters['personName'] ?? 'Member';
-          final personUserId = state.uri.queryParameters['userId'];
-          final personPhone = state.uri.queryParameters['phone'];
-          return PersonLedgerView(
-            personName: Uri.decodeComponent(personName),
-            personUserId: personUserId,
-            personPhone: personPhone,
-          );
-        },
-      ),
-      GoRoute(
-        path: '/add-expense',
-        builder: (context, state) {
-          final tabStr = state.uri.queryParameters['tab'];
-          final initialTab = tabStr != null ? (int.tryParse(tabStr) ?? 2) : 2;
-          final personName = state.uri.queryParameters['person'] ?? state.uri.queryParameters['personName'];
-          final memberId = state.uri.queryParameters['memberId'];
-          final title = state.uri.queryParameters['title'];
-          final amountStr = state.uri.queryParameters['amount'];
-          final amountInPaise = amountStr != null ? int.tryParse(amountStr) : null;
-          return AddExpenseView(
-            tripId: state.uri.queryParameters['tripId'] ?? '',
-            initialTab: initialTab,
-            initialPersonName: personName,
-            initialMemberId: memberId,
-            initialTitle: title,
-            initialAmountInPaise: amountInPaise,
-          );
-        },
-      ),
-      GoRoute(
-        path: '/budgets',
-        builder: (context, state) => const BudgetsView(),
-      ),
-      GoRoute(
-        path: '/balances',
-        builder: (context, state) => const BalancesOverallView(),
-      ),
-      GoRoute(
-        path: '/settle-up',
-        builder: (context, state) => const SettleUpView(),
-      ),
-      GoRoute(
         path: '/admin',
         builder: (context, state) => const AdminShellView(initialSection: AdminSection.overview),
       ),
@@ -270,49 +170,6 @@ class AppRouter {
           final sectionParam = state.pathParameters['section'];
           final section = AdminSection.fromRoute(sectionParam);
           return AdminShellView(initialSection: section);
-        },
-      ),
-      GoRoute(
-        path: '/analytics',
-        builder: (context, state) => const SpendAnalyticsView(),
-      ),
-      GoRoute(
-        path: '/personal/categories',
-        builder: (context, state) => const CategoryBreakdownView(),
-      ),
-      GoRoute(
-        path: '/ipos',
-        builder: (context, state) => const IpoHomeView(),
-      ),
-      GoRoute(
-        path: '/ipo-accounts',
-        builder: (context, state) => const IpoAccountsView(),
-      ),
-      GoRoute(
-        path: '/ipo-history',
-        builder: (context, state) => const IpoHistoryView(),
-      ),
-      GoRoute(
-        path: '/ipo/:id',
-        builder: (context, state) {
-          final id = state.pathParameters['id']!;
-          return IpoDetailView(ipoId: id);
-        },
-      ),
-      GoRoute(
-        path: '/ipo/:id/apply',
-        builder: (context, state) {
-          final id = state.pathParameters['id']!;
-          final ipoVm = context.read<IpoViewModel>();
-          final ipo = ipoVm.getIpoById(id);
-          if (ipo == null) {
-            return const IpoHomeView();
-          }
-          final app = ipoVm.getApplicationForIpo(id);
-          return IpoApplyView(
-            ipo: ipo,
-            existingApplication: app,
-          );
         },
       ),
       GoRoute(
@@ -399,30 +256,15 @@ class AppRouter {
 
       debugPrint('[AppRouter] handleDeepLink: $cleanUri (host: $host, path: $path, full: $fullPath)');
 
-      if (host == 'expense' || path.contains('expense') || fullPath.contains('expense')) {
-        final action = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : host;
-        router.go('/home');
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          final ctx = navigatorKey.currentContext;
-          if (ctx != null) {
-            if (action == 'voice' || uri.queryParameters['mode'] == 'voice') {
-              AddPersonalExpenseSheet.show(ctx, initialVoice: true);
-            } else if (action == 'receipt' || uri.queryParameters['mode'] == 'receipt') {
-              AddPersonalExpenseSheet.show(ctx);
-            } else {
-              final amount = uri.queryParameters['amount'];
-              AddPersonalExpenseSheet.show(ctx, initialAmount: amount);
-            }
-          }
-        });
-      } else if (host == 'create-trip' || fullPath.contains('create-trip')) {
+      if (host == 'create-trip' || fullPath.contains('create-trip')) {
         router.push('/create-trip');
-      } else if (host == 'debts' || fullPath.contains('debts')) {
-        router.push('/personal/debts');
-      } else if (host == 'categories' || fullPath.contains('categories')) {
-        router.push('/personal/categories');
-      } else if (host == 'budget' || path.startsWith('/budget')) {
-        router.go('/home');
+      } else if (host == 'expense' || path.contains('expense') || fullPath.contains('expense')) {
+        final tripId = uri.queryParameters['tripId'];
+        if (tripId != null && tripId.isNotEmpty) {
+          router.push('/trip/$tripId/add-expense');
+        } else {
+          router.go('/home');
+        }
       } else if (host == 'widgets' || fullPath.contains('widgets')) {
         router.push('/widgets');
       } else if (host == 'guide' || fullPath.contains('guide')) {

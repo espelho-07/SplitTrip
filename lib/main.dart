@@ -18,12 +18,9 @@ import 'core/services/kith_widget_service.dart';
 import 'core/services/security_lock_service.dart';
 import 'core/theme/app_theme.dart';
 import 'data/repositories/expense_repository.dart';
-import 'data/repositories/ipo_repository.dart';
-import 'data/repositories/personal_repository.dart';
 import 'data/repositories/trip_repository.dart';
 import 'data/repositories/user_repository.dart';
 import 'data/services/auth_service.dart';
-import 'data/services/ipo_data_provider.dart';
 import 'data/services/local_migration_runner.dart';
 import 'data/services/local_storage_service.dart';
 import 'data/services/p2p_sync_service.dart';
@@ -34,11 +31,8 @@ import 'presentation/viewmodels/add_expense_viewmodel.dart';
 import 'presentation/viewmodels/auth_viewmodel.dart';
 import 'presentation/viewmodels/create_trip_viewmodel.dart';
 import 'presentation/viewmodels/home_viewmodel.dart';
-import 'presentation/viewmodels/ipo_viewmodel.dart';
 import 'presentation/viewmodels/join_trip_viewmodel.dart';
 import 'presentation/viewmodels/locale_viewmodel.dart';
-import 'presentation/viewmodels/personal_expense_viewmodel.dart';
-import 'presentation/viewmodels/person_ledger_viewmodel.dart';
 import 'presentation/viewmodels/theme_viewmodel.dart';
 import 'presentation/viewmodels/trip_detail_viewmodel.dart';
 import 'presentation/viewmodels/version_viewmodel.dart';
@@ -133,17 +127,7 @@ void main() async {
     apiClient: apiClient,
     realtimeClient: realtimeClient,
   );
-  final personalRepo = PersonalRepository(
-    storage: storageService,
-    syncService: syncService,
-    apiClient: apiClient,
-  );
-  final ipoDataProvider = LiveIpoDataProvider();
-  final ipoRepo = IpoRepository(
-    storage: storageService,
-    dataProvider: ipoDataProvider,
-    personalRepo: personalRepo,
-  );
+
 
   final widgetService = KithWidgetService(storage: storageService);
   widgetService.onDeepLinkReceived = (deepLinkUri) {
@@ -154,17 +138,9 @@ void main() async {
   // Instant pre-sync widgets on startup from local storage
   final currentUser = authService.getCurrentUser();
   if (currentUser != null) {
-    final now = DateTime.now();
-    final monthKey = '${now.year}-${now.month.toString().padLeft(2, '0')}';
-    final cachedExpenses = personalRepo.getCachedPersonalExpenses();
-    final cachedBudget = personalRepo.getCachedPersonalBudget(monthKey);
-    final cachedDebts = personalRepo.getCachedPersonalDebts();
     final cachedTrips = tripRepo.getCachedTrips();
     unawaited(widgetService.syncSnapshot(
       currentUser: currentUser,
-      personalExpenses: cachedExpenses,
-      budget: cachedBudget,
-      debtsSummary: cachedDebts,
       trips: cachedTrips,
     ));
   } else {
@@ -212,9 +188,6 @@ void main() async {
         Provider<UserRepository>.value(value: userRepo),
         Provider<TripRepository>.value(value: tripRepo),
         Provider<ExpenseRepository>.value(value: expenseRepo),
-        Provider<PersonalRepository>.value(value: personalRepo),
-        Provider<IpoDataProvider>.value(value: ipoDataProvider),
-        Provider<IpoRepository>.value(value: ipoRepo),
         ChangeNotifierProvider<SecurityLockService>.value(value: securityLockService),
         ChangeNotifierProvider<KithWidgetService>.value(value: widgetService),
         ChangeNotifierProvider(create: (_) => PaymentService()),
@@ -229,28 +202,6 @@ void main() async {
             tripRepo: tripRepo,
             expenseRepo: expenseRepo,
             realtimeClient: realtimeClient,
-          ),
-        ),
-
-        ChangeNotifierProvider(
-          create: (_) => PersonalExpenseViewModel(
-            personalRepo: personalRepo,
-            tripRepo: tripRepo,
-            expenseRepo: expenseRepo,
-          ),
-        ),
-        ChangeNotifierProvider(
-          create: (_) => PersonLedgerViewModel(
-            personalRepo: personalRepo,
-            expenseRepo: expenseRepo,
-            tripRepo: tripRepo,
-            storage: storageService,
-          ),
-        ),
-        ChangeNotifierProvider(
-          create: (_) => IpoViewModel(
-            ipoRepo: ipoRepo,
-            notificationService: notificationService,
           ),
         ),
         ChangeNotifierProvider(

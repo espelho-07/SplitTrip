@@ -5,7 +5,6 @@ import 'package:kith_app/core/localization/app_localizations.dart';
 import 'package:kith_app/core/network/api_client.dart';
 import 'package:kith_app/core/services/kith_widget_service.dart';
 import 'package:kith_app/data/repositories/expense_repository.dart';
-import 'package:kith_app/data/repositories/personal_repository.dart';
 import 'package:kith_app/data/repositories/trip_repository.dart';
 import 'package:kith_app/data/repositories/user_repository.dart';
 import 'package:kith_app/data/services/auth_service.dart';
@@ -14,7 +13,6 @@ import 'package:kith_app/data/services/sync_service.dart';
 import 'package:kith_app/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/home_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/locale_viewmodel.dart';
-import 'package:kith_app/presentation/viewmodels/personal_expense_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/theme_viewmodel.dart';
 import 'package:kith_app/presentation/views/widgets/widget_gallery_view.dart';
 import 'package:provider/provider.dart';
@@ -28,11 +26,9 @@ void main() {
   late SyncService syncService;
   late TripRepository tripRepo;
   late ExpenseRepository expenseRepo;
-  late PersonalRepository personalRepo;
   late KithWidgetService widgetService;
   late AuthViewModel authVm;
   late HomeViewModel homeVm;
-  late PersonalExpenseViewModel personalVm;
   late ThemeViewModel themeVm;
   late LocaleViewModel localeVm;
 
@@ -54,18 +50,8 @@ void main() {
       syncService: syncService,
       apiClient: apiClient,
     );
-    personalRepo = PersonalRepository(
-      storage: storage,
-      syncService: syncService,
-      apiClient: apiClient,
-    );
     widgetService = KithWidgetService(storage: storage);
     homeVm = HomeViewModel(
-      tripRepo: tripRepo,
-      expenseRepo: expenseRepo,
-    );
-    personalVm = PersonalExpenseViewModel(
-      personalRepo: personalRepo,
       tripRepo: tripRepo,
       expenseRepo: expenseRepo,
     );
@@ -79,7 +65,6 @@ void main() {
         ChangeNotifierProvider.value(value: widgetService),
         ChangeNotifierProvider.value(value: authVm),
         ChangeNotifierProvider.value(value: homeVm),
-        ChangeNotifierProvider.value(value: personalVm),
         ChangeNotifierProvider.value(value: themeVm),
         ChangeNotifierProvider.value(value: localeVm),
       ],

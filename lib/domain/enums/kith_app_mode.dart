@@ -31,9 +31,7 @@ enum KithAppMode {
   bool get isFinancial => this == KithAppMode.financial;
 
   static KithAppMode fromKey(String? key) {
-    if (key == 'financial') {
-      return KithAppMode.financial;
-    }
+    // SplitTrip is locked to dedicated Trip Mode
     return KithAppMode.trip;
   }
 }

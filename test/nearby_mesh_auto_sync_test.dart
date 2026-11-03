@@ -168,7 +168,7 @@ void main() {
       // Verify Radar title, trip name, member count
       expect(find.text('Nearby Trip Friends'), findsOneWidget);
       expect(find.text('Himalayan Trek 2026 • 0 in range'), findsOneWidget);
-      expect(find.text('TRIP MEMBERS (10)'), findsOneWidget);
+      expect(find.text('ELIGIBLE KITH MEMBERS (10)'), findsOneWidget);
 
       // Verify members are displayed
       expect(find.text('Rahul'), findsOneWidget);

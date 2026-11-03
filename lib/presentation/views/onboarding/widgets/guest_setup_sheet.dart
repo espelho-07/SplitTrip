@@ -34,7 +34,7 @@ class GuestSetupSheet extends StatefulWidget {
 
 class _GuestSetupSheetState extends State<GuestSetupSheet> {
   final TextEditingController _nameController = TextEditingController();
-  AppExperienceMode _selectedMode = AppExperienceMode.tripsOnly;
+  final AppExperienceMode _selectedMode = AppExperienceMode.tripsOnly;
   bool _isSubmitting = false;
 
   @override
@@ -149,37 +149,6 @@ class _GuestSetupSheetState extends State<GuestSetupSheet> {
               ),
               onSubmitted: (_) => _handleStart(),
             ),
-            const SizedBox(height: 18),
-
-            // Experience Mode Heading
-            Text(
-              l10n.onboardingModeSelect,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-              ),
-            ),
-            const SizedBox(height: 10),
-
-            // Option 1: Group Trips Only
-            _buildModeOption(
-              mode: AppExperienceMode.tripsOnly,
-              emoji: '✈️',
-              title: l10n.onboardingModeTripsOnly,
-              subtitle: l10n.onboardingModeTripsSub,
-              isDark: isDark,
-            ),
-            const SizedBox(height: 8),
-
-            // Option 2: Full Travel & Expense Suite
-            _buildModeOption(
-              mode: AppExperienceMode.all,
-              emoji: '💼',
-              title: l10n.onboardingModeAll,
-              subtitle: l10n.onboardingModeAllSub,
-              isDark: isDark,
-            ),
             const SizedBox(height: 24),
 
             // Start CTA
@@ -195,63 +164,4 @@ class _GuestSetupSheetState extends State<GuestSetupSheet> {
     );
   }
 
-  Widget _buildModeOption({
-    required AppExperienceMode mode,
-    required String emoji,
-    required String title,
-    required String subtitle,
-    required bool isDark,
-  }) {
-    final isSelected = _selectedMode == mode;
-    return InkWell(
-      onTap: () {
-        HapticHelper.selection();
-        setState(() => _selectedMode = mode);
-      },
-      borderRadius: AppRadius.mdBorder,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.12)
-              : (isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle),
-          borderRadius: AppRadius.mdBorder,
-          border: Border.all(
-            color: isSelected
-                ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
-                : (isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle),
-            width: isSelected ? 1.5 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Text(emoji, style: const TextStyle(fontSize: 22)),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                      color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: AppTypography.bodySmall(isDark: isDark),
-                  ),
-                ],
-              ),
-            ),
-            if (isSelected)
-              const Icon(Icons.check_circle_rounded, color: AppColors.emeraldPrimary, size: 20),
-          ],
-        ),
-      ),
-    );
-  }
 }

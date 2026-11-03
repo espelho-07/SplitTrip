@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -107,8 +107,8 @@ void main() {
       await tester.tap(find.text('Continue →'));
       await tester.pumpAndSettle();
 
-      expect(find.text('PERSONAL FINANCES & AI'), findsOneWidget);
-      expect(find.textContaining('Track Expenses'), findsOneWidget);
+      expect(find.text('OFFLINE P2P RADAR'), findsOneWidget);
+      expect(find.text('Nearby Friends &\nOffline P2P Sync'), findsOneWidget);
 
       // Tap Continue -> advances to Slide 3
       await tester.tap(find.text('Continue →'));

@@ -9,11 +9,9 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../data/services/local_storage_service.dart';
-import '../../../domain/enums/app_experience_mode.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/locale_viewmodel.dart';
-import '../../viewmodels/personal_expense_viewmodel.dart';
 import '../language/language_select_sheet.dart';
 import '../security/set_pin_sheet.dart';
 
@@ -330,19 +328,15 @@ class _MasterSettingsViewState extends State<MasterSettingsView> {
   void _showExportDataSheet(bool isDark) {
     HapticHelper.light();
     final homeVm = context.read<HomeViewModel>();
-    final personalVm = context.read<PersonalExpenseViewModel>();
 
     final trips = homeVm.trips;
-    final personalExpenses = personalVm.expenses;
 
     // Generate JSON
     final exportData = {
       'exported_at': DateTime.now().toIso8601String(),
       'app_version': '2.2.0',
       'trips_count': trips.length,
-      'personal_expenses_count': personalExpenses.length,
       'trips': trips.map((t) => t.toJson()).toList(),
-      'personal_expenses': personalExpenses.map((e) => e.toJson()).toList(),
     };
     final jsonString = const JsonEncoder.withIndent('  ').convert(exportData);
 
@@ -351,9 +345,6 @@ class _MasterSettingsViewState extends State<MasterSettingsView> {
     csvBuffer.writeln('Type,Title,Amount_Paise,Date,Category,Payer');
     for (final trip in trips) {
       csvBuffer.writeln('Trip,${trip.name},0,${trip.createdAt.toIso8601String()},${trip.tripMode},${trip.creatorId}');
-    }
-    for (final exp in personalExpenses) {
-      csvBuffer.writeln('Personal,${exp.title},${exp.amountInPaise},${exp.date.toIso8601String()},${exp.category.name},${exp.userId}');
     }
     final csvString = csvBuffer.toString();
 
@@ -377,12 +368,12 @@ class _MasterSettingsViewState extends State<MasterSettingsView> {
               ),
               const SizedBox(height: 16),
               Text(
-                'Export Your Financial Archive',
+                'Export Your Trips Archive',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: isDark ? Colors.white : Colors.black87),
               ),
               const SizedBox(height: 6),
               Text(
-                'Contains ${trips.length} group trips and ${personalExpenses.length} personal expenses recorded locally.',
+                'Contains ${trips.length} group trips recorded locally.',
                 style: TextStyle(fontSize: 13, color: isDark ? Colors.white70 : Colors.black87),
               ),
               const SizedBox(height: 18),
@@ -528,223 +519,10 @@ class _MasterSettingsViewState extends State<MasterSettingsView> {
     );
   }
 
-  void _showExperienceModeSelector(BuildContext context, AuthViewModel authVm, bool isDark, AppLocalizations l10n) {
-    HapticHelper.light();
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: isDark ? const Color(0xFF0F1418) : Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (bCtx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.white24 : Colors.black12,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 18),
-              Text(
-                l10n.settingsExpModeTitle,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                l10n.settingsExpModeSub,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
-                ),
-              ),
-              const SizedBox(height: 20),
-              _buildExperienceOption(
-                title: 'Trips Only',
-                subtitle: 'Streamlined UI focused purely on group trips, splits, and instant settlements',
-                icon: Icons.flight_takeoff_rounded,
-                isSelected: authVm.appExperienceMode == AppExperienceMode.tripsOnly,
-                isDark: isDark,
-                onTap: () async {
-                  HapticHelper.selection();
-                  await authVm.setAppExperienceMode(AppExperienceMode.tripsOnly);
-                  if (bCtx.mounted) Navigator.pop(bCtx);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Switched to Trips Only mode ✓'), behavior: SnackBarBehavior.floating),
-                    );
-                  }
-                },
-              ),
-              const SizedBox(height: 10),
-              _buildExperienceOption(
-                title: 'Trips + Expenses',
-                subtitle: 'Group trips plus personal expense ledger, analytics, and lending/borrowing',
-                icon: Icons.receipt_long_rounded,
-                isSelected: authVm.appExperienceMode == AppExperienceMode.tripsAndExpenses,
-                isDark: isDark,
-                onTap: () async {
-                  HapticHelper.selection();
-                  await authVm.setAppExperienceMode(AppExperienceMode.tripsAndExpenses);
-                  if (bCtx.mounted) Navigator.pop(bCtx);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Switched to Trips + Expenses mode ✓'), behavior: SnackBarBehavior.floating),
-                    );
-                  }
-                },
-              ),
-              const SizedBox(height: 10),
-              _buildExperienceOption(
-                title: 'Trips + IPO Manager',
-                subtitle: 'Group trips plus dedicated IPO applications, accounts, allotments & released money tracking',
-                icon: Icons.candlestick_chart_rounded,
-                isSelected: authVm.appExperienceMode == AppExperienceMode.tripsAndIpo,
-                isDark: isDark,
-                onTap: () async {
-                  HapticHelper.selection();
-                  await authVm.setAppExperienceMode(AppExperienceMode.tripsAndIpo);
-                  if (bCtx.mounted) Navigator.pop(bCtx);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Switched to Trips + IPO Manager mode ✓'), behavior: SnackBarBehavior.floating),
-                    );
-                  }
-                },
-              ),
-              const SizedBox(height: 10),
-              _buildExperienceOption(
-                title: 'All Features',
-                subtitle: 'Complete Kith experience with trips, personal expenses, and IPO manager',
-                icon: Icons.auto_awesome_mosaic_rounded,
-                isSelected: authVm.appExperienceMode == AppExperienceMode.all,
-                isDark: isDark,
-                onTap: () async {
-                  HapticHelper.selection();
-                  await authVm.setAppExperienceMode(AppExperienceMode.all);
-                  if (bCtx.mounted) Navigator.pop(bCtx);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Switched to All Features mode ✓'), behavior: SnackBarBehavior.floating),
-                    );
-                  }
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildExperienceOption({
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required bool isSelected,
-    required bool isDark,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? const Color(0xFF14B8A6).withValues(alpha: isDark ? 0.18 : 0.08)
-                : (isDark ? const Color(0xFF161D24) : const Color(0xFFF8FAFC)),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isSelected
-                  ? const Color(0xFF14B8A6)
-                  : (isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0)),
-              width: isSelected ? 1.8 : 1.0,
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? const Color(0xFF14B8A6).withValues(alpha: 0.2)
-                      : (isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  icon,
-                  size: 22,
-                  color: isSelected
-                      ? const Color(0xFF14B8A6)
-                      : (isDark ? AppColors.darkTextSecondary : const Color(0xFF475569)),
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
-                        height: 1.3,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              if (isSelected)
-                const Icon(
-                  Icons.check_circle_rounded,
-                  color: Color(0xFF14B8A6),
-                  size: 22,
-                )
-              else
-                Icon(
-                  Icons.radio_button_unchecked_rounded,
-                  color: isDark ? Colors.white24 : const Color(0xFFCBD5E1),
-                  size: 22,
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final security = context.watch<SecurityLockService>();
-    final authVm = context.watch<AuthViewModel>();
     final l10n = context.l10n;
     LocaleViewModel? localeVm;
     try {
@@ -770,7 +548,6 @@ class _MasterSettingsViewState extends State<MasterSettingsView> {
         children: [
           _buildSectionHeader(l10n.settingsSecGeneral, isDark),
           _buildSettingsGroup(isDark, [
-            _buildSettingTile(l10n.settingsAppExpMode, authVm.appExperienceMode == AppExperienceMode.tripsOnly ? l10n.settingsExpTripsOnly : l10n.settingsExpFull, Icons.auto_awesome_mosaic_rounded, isDark, () => _showExperienceModeSelector(context, authVm, isDark, l10n)),
             _buildSettingTile(l10n.settingsPaymentMethods, l10n.settingsPaymentMethodsSub, Icons.payment_rounded, isDark, () => context.push('/payment-methods')),
             _buildSettingTile(l10n.settingsNotifications, l10n.settingsNotificationsSub, Icons.notifications_none_rounded, isDark, () => context.push('/notifications')),
             _buildSettingTile(l10n.settingsBaseCurrency, l10n.settingsBaseCurrencySub(_selectedCurrency), Icons.currency_rupee_rounded, isDark, () => _showCurrencySelector(isDark, l10n)),

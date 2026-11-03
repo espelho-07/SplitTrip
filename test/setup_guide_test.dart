@@ -47,12 +47,12 @@ void main() {
 
       // Check category tabs
       expect(find.text('Getting Started'), findsOneWidget);
-      expect(find.text('Personal Expenses'), findsOneWidget);
+      expect(find.text('Cloud Backup & Sync'), findsOneWidget);
       expect(find.text('Trips & Group Splits'), findsOneWidget);
 
       // Check items under Getting Started (default selected category)
       expect(find.text('Change App Language'), findsOneWidget);
-      expect(find.text('Expense vs Trips Modes'), findsOneWidget);
+      expect(find.text('Home Screen Widgets'), findsOneWidget);
     });
 
     testWidgets('Switching categories updates guide items', (tester) async {

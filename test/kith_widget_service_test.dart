@@ -1,11 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kith_app/core/services/kith_widget_service.dart';
 import 'package:kith_app/data/services/local_storage_service.dart';
-import 'package:kith_app/domain/enums/expense_category.dart';
+import 'package:kith_app/domain/enums/trip_lifecycle.dart';
+import 'package:kith_app/domain/models/balance_summary.dart';
 import 'package:kith_app/domain/models/guest_user.dart';
-import 'package:kith_app/domain/models/personal_budget.dart';
-import 'package:kith_app/domain/models/personal_debt.dart';
-import 'package:kith_app/domain/models/personal_expense.dart';
+import 'package:kith_app/domain/models/trip.dart';
+import 'package:kith_app/domain/models/trip_member.dart';
 import 'package:kith_app/presentation/router/app_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -33,30 +33,25 @@ void main() {
     test('KithWidgetSnapshot serializes and deserializes cleanly without data loss', () {
       final snapshot = KithWidgetSnapshot(
         spentPaise: 1245000,
-        budgetPaise: 2000000,
-        remainingPaise: 755000,
-        dailyRunwayPaise: 46000,
-        comparisonText: '₹820 less than last month',
+        budgetPaise: 0,
+        remainingPaise: 0,
+        dailyRunwayPaise: 0,
+        comparisonText: 'Trip expenses',
         monthName: 'August',
         moneyOwedTotalPaise: 185000,
-        topDebts: [
-          {'name': 'Rahul', 'amountPaise': 120000},
-          {'name': 'Priya', 'amountPaise': 65000},
-        ],
+        topDebts: const [],
         moneyYouOweTotalPaise: 80000,
-        topYouOwe: [
-          {'name': 'Aman', 'amountPaise': 80000},
-        ],
+        topYouOwe: const [],
         activeTripId: 'trip_goa_01',
         activeTripTitle: 'Goa \'26',
         activeTripEmoji: '✈️',
         activeTripSpentPaise: 842000,
         activeTripUserBalancePaise: 124000,
         activeTripMemberCount: 3,
-        smartHeadline: 'Rahul owes you ₹1,200',
-        smartSubtext: 'From Goa trip expenses',
+        smartHeadline: 'You\'re owed ₹1,240 in Goa \'26',
+        smartSubtext: 'Unsettled balances pending from friends',
         smartActionLabel: 'Settle',
-        smartActionDeepLink: 'kith://personal/debts',
+        smartActionDeepLink: 'kith://trip/trip_goa_01',
         isPrivacyMode: false,
         isSignedOut: false,
         localeCode: 'en',
@@ -67,21 +62,15 @@ void main() {
       final restored = KithWidgetSnapshot.fromJson(json);
 
       expect(restored.spentPaise, equals(1245000));
-      expect(restored.budgetPaise, equals(2000000));
-      expect(restored.remainingPaise, equals(755000));
-      expect(restored.topDebts.length, equals(2));
-      expect(restored.topDebts.first['name'], equals('Rahul'));
-      expect(restored.topYouOwe.first['name'], equals('Aman'));
       expect(restored.activeTripTitle, equals('Goa \'26'));
-      expect(restored.smartHeadline, equals('Rahul owes you ₹1,200'));
+      expect(restored.smartHeadline, equals('You\'re owed ₹1,240 in Goa \'26'));
       expect(restored.isSignedOut, isFalse);
     });
 
-    test('Signed out snapshot is fully sanitized with zero leaked personal data', () {
+    test('Signed out snapshot is fully sanitized with zero leaked data', () {
       final signedOut = KithWidgetSnapshot.signedOut();
       expect(signedOut.isSignedOut, isTrue);
       expect(signedOut.spentPaise, equals(0));
-      expect(signedOut.budgetPaise, equals(0));
       expect(signedOut.topDebts, isEmpty);
       expect(signedOut.topYouOwe, isEmpty);
       expect(signedOut.activeTripId, isEmpty);
@@ -98,78 +87,60 @@ void main() {
       expect(reloadedService.isPrivacyMode, isTrue);
     });
 
-    test('Smart Kith Intelligence prioritizes high outstanding debts first', () async {
+    test('Smart Kith Intelligence prioritizes active trip with balance', () async {
       final now = DateTime.now();
-      final debts = PersonalDebtsSummary(
-        totalLentPaise: 120000,
-        totalBorrowedPaise: 0,
-        netBalancePaise: 120000,
-        debts: [
-          PersonalDebt(
-            id: 'debt_01',
+      final sampleTrip = Trip(
+        id: 'trip_01',
+        name: 'Manali Heights',
+        emoji: '🏔️',
+        creatorId: testUser.id,
+        inviteCode: 'MANA99',
+        lifecycleState: TripLifecycle.active,
+        members: [
+          TripMember(
+            id: 'm1',
             userId: testUser.id,
-            personName: 'Rahul',
-            debtType: PersonalDebtType.lent,
-            initialAmountInPaise: 120000,
-            remainingAmountInPaise: 120000,
-            date: now,
-            createdAt: now,
-            updatedAt: now,
+            displayName: 'Alice',
+            joinedAt: now,
+          ),
+          TripMember(
+            id: 'm2',
+            userId: 'user_02',
+            displayName: 'Bob',
+            joinedAt: now,
           ),
         ],
+        createdAt: now,
+        updatedAt: now,
       );
 
-      await widgetService.syncSnapshot(
-        currentUser: testUser,
-        debtsSummary: debts,
-      );
-
-      final raw = storage.getString('kith_widget_snapshot');
-      expect(raw, isNotNull);
-      expect(raw, contains('Rahul owes you ₹1200'));
-    });
-
-    test('Smart Kith Intelligence surfaces Budget Warning when threshold exceeded', () async {
-      final now = DateTime.now();
-      final budget = PersonalBudget(
-        monthYear: '2026-08',
-        monthlyLimitInPaise: 2000000, // ₹20,000
-        spentInPaise: 1800000,
-        remainingInPaise: 200000,
-        hasBudget: true,
-        percentageUsed: 90,
-      );
-
-      final expenses = [
-        PersonalExpense(
-          id: 'exp_01',
-          userId: testUser.id,
-          title: 'Rent & Groceries',
-          amountInPaise: 1800000, // ₹18,000 (90% spent)
-          category: ExpenseCategory.food,
-          date: now,
-          createdAt: now,
-          updatedAt: now,
+      final balances = {
+        'trip_01': BalanceSummary(
+          currentUserNetBalanceInPaise: 150000, // ₹1,500 owed to user
+          totalTripSpentInPaise: 450000,
+          memberNetBalances: const {},
+          debtsToPay: const [],
+          debtsToReceive: const [],
+          simplifiedSettlements: const [],
         ),
-      ];
+      };
 
       await widgetService.syncSnapshot(
         currentUser: testUser,
-        personalExpenses: expenses,
-        budget: budget,
+        trips: [sampleTrip],
+        tripBalances: balances,
       );
 
       final raw = storage.getString('kith_widget_snapshot');
       expect(raw, isNotNull);
-      expect(raw, contains('left in your'));
-      expect(raw, contains('View Budget'));
+      expect(raw, contains("You're owed ₹1500 in Manali Heights"));
     });
 
     test('Smart Kith Intelligence surfaces positive All Clear state when everything settled', () async {
       await widgetService.syncSnapshot(
         currentUser: testUser,
-        personalExpenses: const [],
-        debtsSummary: PersonalDebtsSummary.empty(),
+        trips: const [],
+        tripBalances: const {},
       );
 
       final raw = storage.getString('kith_widget_snapshot');
@@ -183,11 +154,6 @@ void main() {
         'kith://create-trip',
         'kith://create-trip/',
         'kith://expense/add',
-        'kith://expense/voice',
-        'kith://expense/receipt',
-        'kith://budget',
-        'kith://personal/debts',
-        'kith://personal/categories',
         'kith://trips',
         'kith://trip/trip_sample_01',
         'kith://widgets',

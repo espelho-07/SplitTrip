@@ -10,8 +10,6 @@ import '../../../../data/services/local_storage_service.dart';
 import '../../../../domain/models/trip.dart';
 import '../../../viewmodels/auth_viewmodel.dart';
 import '../../../viewmodels/home_viewmodel.dart';
-import '../../../viewmodels/personal_expense_viewmodel.dart';
-import '../../personal/widgets/add_personal_expense_sheet.dart';
 
 class DashboardTab extends StatelessWidget {
   const DashboardTab({super.key});
@@ -21,7 +19,6 @@ class DashboardTab extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final authVm = context.watch<AuthViewModel>();
     final homeVm = context.watch<HomeViewModel>();
-    final personalVm = context.watch<PersonalExpenseViewModel>();
     final l10n = context.l10n;
     final user = authVm.currentUser;
 
@@ -43,9 +40,7 @@ class DashboardTab extends StatelessWidget {
       }
     }
 
-    final debts = personalVm.debtsSummary;
-    totalOwedToUser += debts.totalLentPaise;
-    totalUserOwes += debts.totalBorrowedPaise;
+
 
     final storage = context.watch<LocalStorageService>();
     final hasConfiguredPayment = storage.hasPaymentMethodConfigured();
@@ -55,7 +50,6 @@ class DashboardTab extends StatelessWidget {
       onRefresh: () async {
         if (user != null) {
           await homeVm.refresh(user.id);
-          await personalVm.loadData(user.id);
         }
       },
       child: ListView(
@@ -684,7 +678,7 @@ class DashboardTab extends StatelessWidget {
     final trips = homeVm.trips;
 
     if (trips.isEmpty) {
-      AddPersonalExpenseSheet.show(context);
+      context.push('/create-trip');
     } else if (trips.length == 1) {
       context.push('/trip/${trips.first.id}/add-expense?tab=$tab');
     } else {
@@ -833,7 +827,7 @@ class DashboardTab extends StatelessWidget {
               InkWell(
                 onTap: () {
                   Navigator.pop(ctx);
-                  AddPersonalExpenseSheet.show(context);
+                  context.push('/create-trip');
                 },
                 borderRadius: BorderRadius.circular(14),
                 child: Container(
@@ -848,10 +842,10 @@ class DashboardTab extends StatelessWidget {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.person_outline_rounded, size: 18, color: AppColors.emeraldPrimary),
+                      const Icon(Icons.add_rounded, size: 18, color: AppColors.emeraldPrimary),
                       const SizedBox(width: 8),
                       Text(
-                        l10n.dashLogPersonalExpense,
+                        l10n.tripsCreate,
                         style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,

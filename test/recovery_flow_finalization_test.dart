@@ -5,7 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:kith_app/core/network/api_client.dart';
 import 'package:kith_app/core/services/recovery_key_service.dart';
 import 'package:kith_app/data/repositories/expense_repository.dart';
-import 'package:kith_app/data/repositories/personal_repository.dart';
 import 'package:kith_app/data/repositories/trip_repository.dart';
 import 'package:kith_app/data/repositories/user_repository.dart';
 import 'package:kith_app/data/services/auth_service.dart';
@@ -14,7 +13,6 @@ import 'package:kith_app/data/services/sync_service.dart';
 import 'package:kith_app/domain/models/guest_user.dart';
 import 'package:kith_app/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/home_viewmodel.dart';
-import 'package:kith_app/presentation/viewmodels/personal_expense_viewmodel.dart';
 import 'package:kith_app/presentation/views/onboarding/recovery_progress_view.dart';
 import 'package:kith_app/presentation/views/onboarding/widgets/recovery_key_sheet.dart';
 
@@ -26,7 +24,6 @@ void main() {
   late UserRepository userRepo;
   late TripRepository tripRepo;
   late ExpenseRepository expenseRepo;
-  late PersonalRepository personalRepo;
   late SyncService syncService;
   late ApiClient apiClient;
 
@@ -40,7 +37,6 @@ void main() {
     syncService = SyncService(storage);
     tripRepo = TripRepository(storage: storage, syncService: syncService, apiClient: apiClient);
     expenseRepo = ExpenseRepository(storage: storage, syncService: syncService, apiClient: apiClient);
-    personalRepo = PersonalRepository(storage: storage, syncService: syncService, apiClient: apiClient);
   });
 
   group('Recovery Key Cryptography & Profile Preservation', () {
@@ -78,14 +74,12 @@ void main() {
     testWidgets('RecoveryProgressView renders recovery UI and handles invalid key error', (tester) async {
       final authVm = AuthViewModel(userRepo: userRepo);
       final homeVm = HomeViewModel(tripRepo: tripRepo, expenseRepo: expenseRepo);
-      final personalVm = PersonalExpenseViewModel(personalRepo: personalRepo);
 
       await tester.pumpWidget(
         MultiProvider(
           providers: [
             ChangeNotifierProvider<AuthViewModel>.value(value: authVm),
             ChangeNotifierProvider<HomeViewModel>.value(value: homeVm),
-            ChangeNotifierProvider<PersonalExpenseViewModel>.value(value: personalVm),
             Provider<SyncService>.value(value: syncService),
             Provider<ApiClient>.value(value: apiClient),
           ],
@@ -100,21 +94,19 @@ void main() {
 
       // Since the mock key does not exist on a fresh empty mock DB, it should safely transition to error state with Retry button
       expect(find.text('Recovery Error'), findsOneWidget);
-      expect(find.text('Retry Recovery'), findsOneWidget);
-      expect(find.text('Back'), findsOneWidget);
+      expect(find.text('Retry with Different Key'), findsOneWidget);
+      expect(find.text('Create New Account'), findsOneWidget);
     });
 
     testWidgets('RecoveryKeySheet renders paste icon and recover CTA button', (tester) async {
       final authVm = AuthViewModel(userRepo: userRepo);
       final homeVm = HomeViewModel(tripRepo: tripRepo, expenseRepo: expenseRepo);
-      final personalVm = PersonalExpenseViewModel(personalRepo: personalRepo);
 
       await tester.pumpWidget(
         MultiProvider(
           providers: [
             ChangeNotifierProvider<AuthViewModel>.value(value: authVm),
             ChangeNotifierProvider<HomeViewModel>.value(value: homeVm),
-            ChangeNotifierProvider<PersonalExpenseViewModel>.value(value: personalVm),
             Provider<SyncService>.value(value: syncService),
             Provider<ApiClient>.value(value: apiClient),
           ],

@@ -14,7 +14,6 @@ import '../../../data/services/local_storage_service.dart';
 import '../../../data/services/sync_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
-import '../../viewmodels/personal_expense_viewmodel.dart';
 
 enum RecoveryStep {
   findingKey,
@@ -77,7 +76,6 @@ class _RecoveryProgressViewState extends State<RecoveryProgressView> {
     final syncService = context.read<SyncService>();
     final apiClient = context.read<ApiClient>();
     final homeVm = context.read<HomeViewModel>();
-    final personalVm = context.read<PersonalExpenseViewModel>();
 
     final key = RecoveryKeyService.normalizeKey(widget.recoveryKey);
     if (key.isEmpty) {
@@ -130,7 +128,6 @@ class _RecoveryProgressViewState extends State<RecoveryProgressView> {
       HapticHelper.selection();
 
       await homeVm.loadTrips(user.id);
-      await personalVm.loadData(user.id);
 
       if (!mounted) return;
 
@@ -149,7 +146,6 @@ class _RecoveryProgressViewState extends State<RecoveryProgressView> {
             isFullySynced: true,
           ),
         );
-        await personalVm.syncTripExpenses(user.id);
         await homeVm.loadTrips(user.id);
       } catch (e) {
         debugPrint('[RecoveryProgressView] Non-fatal sync reconciliation notice: $e');

@@ -4,22 +4,18 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kith_app/core/localization/app_localizations.dart';
 import 'package:kith_app/core/network/api_client.dart';
 import 'package:kith_app/data/repositories/expense_repository.dart';
-import 'package:kith_app/data/repositories/personal_repository.dart';
 import 'package:kith_app/data/repositories/trip_repository.dart';
 import 'package:kith_app/data/repositories/user_repository.dart';
 import 'package:kith_app/data/services/auth_service.dart';
 import 'package:kith_app/data/services/local_storage_service.dart';
 import 'package:kith_app/data/services/sync_service.dart';
-import 'package:kith_app/domain/enums/expense_category.dart';
 import 'package:kith_app/domain/enums/trip_lifecycle.dart';
 import 'package:kith_app/domain/models/guest_user.dart';
 import 'package:kith_app/domain/models/trip.dart';
 import 'package:kith_app/domain/models/trip_member.dart';
 import 'package:kith_app/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/home_viewmodel.dart';
-import 'package:kith_app/presentation/viewmodels/personal_expense_viewmodel.dart';
 import 'package:kith_app/presentation/views/home/widgets/dashboard_tab.dart';
-import 'package:kith_app/presentation/views/personal/personal_home_tab.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -35,8 +31,6 @@ void main() {
   late TripRepository tripRepo;
   late ExpenseRepository expenseRepo;
   late HomeViewModel homeVm;
-  late PersonalRepository personalRepo;
-  late PersonalExpenseViewModel personalVm;
 
   final testUser = GuestUser(
     id: 'user_main',
@@ -86,9 +80,6 @@ void main() {
     tripRepo = TripRepository(storage: storage, syncService: syncService, apiClient: apiClient);
     expenseRepo = ExpenseRepository(storage: storage, syncService: syncService, apiClient: apiClient);
     homeVm = HomeViewModel(tripRepo: tripRepo, expenseRepo: expenseRepo);
-
-    personalRepo = PersonalRepository(storage: storage, syncService: syncService, apiClient: apiClient);
-    personalVm = PersonalExpenseViewModel(personalRepo: personalRepo, tripRepo: tripRepo, expenseRepo: expenseRepo);
   });
 
   Widget wrapWithProviders(Widget child) {
@@ -96,12 +87,10 @@ void main() {
       providers: [
         ChangeNotifierProvider<AuthViewModel>.value(value: authVm),
         ChangeNotifierProvider<HomeViewModel>.value(value: homeVm),
-        ChangeNotifierProvider<PersonalExpenseViewModel>.value(value: personalVm),
         Provider<LocalStorageService>.value(value: storage),
         Provider<SyncService>.value(value: syncService),
         Provider<TripRepository>.value(value: tripRepo),
         Provider<ExpenseRepository>.value(value: expenseRepo),
-        Provider<PersonalRepository>.value(value: personalRepo),
       ],
       child: MaterialApp(
         locale: const Locale('en'),
@@ -146,48 +135,7 @@ void main() {
       expect(find.text('Select Active Trip'), findsOneWidget);
       expect(find.text('Goa Trip'), findsOneWidget);
       expect(find.text('Manali Trip'), findsOneWidget);
-      expect(find.text('Log as Personal Expense instead'), findsOneWidget);
     });
 
-    testWidgets('3. Redesigned Expenses Page renders header, hero card, categories, and empty state', (tester) async {
-      await tester.pumpWidget(wrapWithProviders(const Scaffold(body: PersonalHomeTab())));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Expenses'), findsOneWidget);
-      expect(find.text('Add'), findsOneWidget);
-      expect(find.text('THIS MONTH\'S SPEND'), findsOneWidget);
-      expect(find.text('Lending'), findsOneWidget);
-      expect(find.text('Categories'), findsOneWidget);
-      expect(find.text('Set Budget'), findsOneWidget);
-      expect(find.text('All'), findsOneWidget);
-      expect(find.text('RECENT EXPENSES'), findsOneWidget);
-      expect(find.text('No expenses logged yet'), findsOneWidget);
-    });
-
-    testWidgets('4. Expenses Page displays chronological feed and filters by category', (tester) async {
-      await personalRepo.createPersonalExpense(
-        userId: testUser.id,
-        title: 'Starbucks Coffee',
-        amountInPaise: 45000,
-        category: ExpenseCategory.food,
-      );
-
-      await personalRepo.createPersonalExpense(
-        userId: testUser.id,
-        title: 'Uber to Airport',
-        amountInPaise: 85000,
-        category: ExpenseCategory.transport,
-      );
-
-      await personalVm.loadData(testUser.id);
-
-      await tester.pumpWidget(wrapWithProviders(const Scaffold(body: PersonalHomeTab())));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Starbucks Coffee'), findsOneWidget);
-      expect(find.text('Uber to Airport'), findsOneWidget);
-      expect(find.text('₹450'), findsOneWidget);
-      expect(find.text('₹850'), findsOneWidget);
-    });
   });
 }

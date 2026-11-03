@@ -12,7 +12,6 @@ import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../data/services/sync_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
-import '../../viewmodels/personal_expense_viewmodel.dart';
 
 class AuthProgressStep {
   final String title;
@@ -79,8 +78,8 @@ class _AuthProgressDialogState extends State<AuthProgressDialog> with SingleTick
       targetPercentage: 0.75,
     ),
     AuthProgressStep(
-      title: 'Syncing Personal Finances',
-      description: 'Downloading expenses, debts & monthly budgets',
+      title: 'Finalizing Setup',
+      description: 'Preparing your trips dashboard',
       targetPercentage: 0.95,
     ),
   ];
@@ -118,7 +117,6 @@ class _AuthProgressDialogState extends State<AuthProgressDialog> with SingleTick
   Future<void> _executeSignInFlow() async {
     final authVm = context.read<AuthViewModel>();
     final homeVm = context.read<HomeViewModel>();
-    final personalVm = context.read<PersonalExpenseViewModel>();
     final apiClient = context.read<ApiClient>();
     final syncService = context.read<SyncService>();
 
@@ -181,16 +179,13 @@ class _AuthProgressDialogState extends State<AuthProgressDialog> with SingleTick
 
       await homeVm.loadTrips(user.id);
 
-      // Step 4: Fetch Personal Expenses, Debts, Budgets
+      // Step 4: Finalizing Setup
       _updateProgress(
-        0.88,
-        'Syncing Personal Ledger…',
-        'Restoring personal expenses, lending records & budget',
+        0.92,
+        'Finalizing Setup…',
+        'Preparing your trips dashboard',
         3,
       );
-
-      await personalVm.loadData(user.id);
-      await personalVm.syncTripExpenses(user.id);
 
       // Step 5: 100% Success
       if (!mounted) return;

@@ -12,7 +12,6 @@ import '../../../core/widgets/surface_card.dart';
 import '../../../data/services/sync_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
-import '../../viewmodels/personal_expense_viewmodel.dart';
 import '../../widgets/progress/kith_stage_progress.dart';
 import '../../widgets/progress/kith_success_toast.dart';
 
@@ -39,8 +38,8 @@ class _CloudSyncSheetState extends State<CloudSyncSheet> {
 
   final List<ProgressStage> _stages = const [
     ProgressStage(label: 'Checking account & session', description: 'Verifying encryption tokens'),
-    ProgressStage(label: 'Syncing personal expenses', description: 'Updating categories & budgets'),
-    ProgressStage(label: 'Syncing trips & settlements', description: 'Uploading offline ledger changes'),
+    ProgressStage(label: 'Flushing pending changes', description: 'Uploading offline mutations'),
+    ProgressStage(label: 'Syncing trips & settlements', description: 'Updating trip ledger & balances'),
     ProgressStage(label: 'Finishing up', description: 'Ledger verified'),
   ];
 
@@ -57,7 +56,6 @@ class _CloudSyncSheetState extends State<CloudSyncSheet> {
     try {
       final authVm = context.read<AuthViewModel>();
       final homeVm = context.read<HomeViewModel>();
-      final personalVm = context.read<PersonalExpenseViewModel>();
       final apiClient = context.read<ApiClient>();
       final syncService = context.read<SyncService>();
       final user = authVm.currentUser;
@@ -70,15 +68,13 @@ class _CloudSyncSheetState extends State<CloudSyncSheet> {
       await Future.delayed(const Duration(milliseconds: 200));
       if (mounted) setState(() => _activeStage = 1);
 
-      // Stage 1: Flush mutation queue & sync personal expenses
+      // Stage 1: Flush mutation queue
       await syncService.flushQueue(apiClient);
-      await personalVm.loadData(user.id);
       await Future.delayed(const Duration(milliseconds: 250));
       if (mounted) setState(() => _activeStage = 2);
 
-      // Stage 2: Sync trips & personal linked expenses
+      // Stage 2: Sync trips & settlements
       await homeVm.loadTrips(user.id);
-      await personalVm.syncTripExpenses(user.id);
       await Future.delayed(const Duration(milliseconds: 250));
       if (mounted) setState(() => _activeStage = 3);
 
@@ -171,7 +167,7 @@ class _CloudSyncSheetState extends State<CloudSyncSheet> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Keep trips & personal records in sync across devices',
+                        'Keep trips in sync across devices',
                         style: AppTypography.bodySmall(isDark: isDark),
                       ),
                     ],

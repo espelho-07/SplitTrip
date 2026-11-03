@@ -1,14 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kith_app/core/network/api_client.dart';
 import 'package:kith_app/data/repositories/expense_repository.dart';
-import 'package:kith_app/data/repositories/personal_repository.dart';
 import 'package:kith_app/data/repositories/trip_repository.dart';
 import 'package:kith_app/data/services/auth_service.dart';
 import 'package:kith_app/data/services/local_storage_service.dart';
 import 'package:kith_app/data/services/sync_service.dart';
-import 'package:kith_app/domain/enums/expense_category.dart';
 import 'package:kith_app/presentation/viewmodels/home_viewmodel.dart';
-import 'package:kith_app/presentation/viewmodels/personal_expense_viewmodel.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -64,20 +61,7 @@ void main() {
       final guest = await authService.createGuestUser(displayName: 'Guest Darpan');
       expect(guest.id, startsWith('usr_'));
 
-      // Step B: Save personal expenses & trips under guest ID
-      final personalRepo = PersonalRepository(
-        storage: storage,
-        syncService: syncService,
-        apiClient: apiClient,
-      );
-
-      await personalRepo.createPersonalExpense(
-        userId: guest.id,
-        title: 'Guest Coffee',
-        amountInPaise: 20000,
-        category: ExpenseCategory.food,
-      );
-
+      // Step B: Save trips under guest ID
       final tripRepo = TripRepository(
         storage: storage,
         syncService: syncService,
@@ -102,10 +86,7 @@ void main() {
       expect(googleUser.isLinkedToAccount, isTrue);
 
       // Step D: Verify local cached data was re-tagged to the canonical Google user ID
-      final cachedExpenses = personalRepo.getCachedPersonalExpenses();
-      expect(cachedExpenses.length, 1);
-      expect(cachedExpenses.first.userId, 'usr_canonical_google_123');
-
+      tripRepo.invalidateCache();
       final cachedTrips = tripRepo.getCachedTrips();
       expect(cachedTrips.length, 1);
       expect(cachedTrips.first.creatorId, 'usr_canonical_google_123');
@@ -277,7 +258,6 @@ void main() {
       final authService = AuthService(storage: freshStorage, apiClient: apiClient);
       final tripRepo = TripRepository(storage: freshStorage, syncService: freshSyncService, apiClient: apiClient);
       final expenseRepo = ExpenseRepository(storage: freshStorage, syncService: freshSyncService, apiClient: apiClient);
-      final personalRepo = PersonalRepository(storage: freshStorage, syncService: freshSyncService, apiClient: apiClient);
 
       // Sign in on fresh device
       final user = await authService.signInWithGoogle(
@@ -289,16 +269,9 @@ void main() {
 
       expect(user.id, 'usr_canonical_google_123');
 
-      // Hydrate via HomeViewModel and PersonalExpenseViewModel
+      // Hydrate via HomeViewModel
       final homeVm = HomeViewModel(tripRepo: tripRepo, expenseRepo: expenseRepo);
       await homeVm.loadTrips(user.id);
-
-      final personalVm = PersonalExpenseViewModel(
-        personalRepo: personalRepo,
-        tripRepo: tripRepo,
-        expenseRepo: expenseRepo,
-      );
-      await personalVm.loadData(user.id);
 
       // Verify trips restored
       expect(homeVm.trips.length, 1);
@@ -309,18 +282,6 @@ void main() {
       final tripExpenses = expenseRepo.getCachedExpenses('trip_restored_01');
       expect(tripExpenses.length, 1);
       expect(tripExpenses.first.title, 'Hotel Booking');
-
-      // Verify personal expenses restored
-      expect(personalVm.allEffectiveExpenses.length, 1);
-      expect(personalVm.allEffectiveExpenses.first.title, 'Flight Tickets');
-
-      // Verify debts restored
-      expect(personalVm.debtsSummary.debts.length, 1);
-      expect(personalVm.debtsSummary.debts.first.personName, 'Aman');
-
-      // Verify budget restored
-      expect(personalVm.budget.hasBudget, isTrue);
-      expect(personalVm.budget.monthlyLimitInPaise, 10000000);
     });
 
     test('3. Sign out clears all cached private data to guarantee account isolation', () async {

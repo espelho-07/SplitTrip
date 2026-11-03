@@ -5,7 +5,6 @@ import 'package:kith_app/core/localization/app_localizations.dart';
 import 'package:kith_app/core/network/api_client.dart';
 import 'package:kith_app/core/theme/app_theme.dart';
 import 'package:kith_app/data/repositories/expense_repository.dart';
-import 'package:kith_app/data/repositories/personal_repository.dart';
 import 'package:kith_app/data/repositories/trip_repository.dart';
 import 'package:kith_app/data/repositories/user_repository.dart';
 import 'package:kith_app/data/services/auth_service.dart';
@@ -14,7 +13,6 @@ import 'package:kith_app/data/services/sync_service.dart';
 import 'package:kith_app/domain/models/guest_user.dart';
 import 'package:kith_app/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/home_viewmodel.dart';
-import 'package:kith_app/presentation/viewmodels/personal_expense_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/theme_viewmodel.dart';
 import 'package:kith_app/presentation/views/onboarding/widgets/recovery_key_sheet.dart';
 import 'package:kith_app/presentation/views/profile/profile_home_tab.dart';
@@ -31,9 +29,7 @@ void main() {
   late AuthViewModel authVm;
   late TripRepository tripRepo;
   late ExpenseRepository expenseRepo;
-  late PersonalRepository personalRepo;
   late HomeViewModel homeVm;
-  late PersonalExpenseViewModel personalVm;
   late SyncService syncService;
   late ThemeViewModel themeVm;
 
@@ -56,17 +52,7 @@ void main() {
       syncService: syncService,
       apiClient: apiClient,
     );
-    personalRepo = PersonalRepository(
-      storage: storage,
-      apiClient: apiClient,
-      syncService: syncService,
-    );
     homeVm = HomeViewModel(tripRepo: tripRepo, expenseRepo: expenseRepo);
-    personalVm = PersonalExpenseViewModel(
-      personalRepo: personalRepo,
-      tripRepo: tripRepo,
-      expenseRepo: expenseRepo,
-    );
     themeVm = ThemeViewModel(storage: storage);
   });
 
@@ -127,7 +113,6 @@ void main() {
           providers: [
             ChangeNotifierProvider.value(value: authVm),
             ChangeNotifierProvider.value(value: homeVm),
-            ChangeNotifierProvider.value(value: personalVm),
             Provider.value(value: syncService),
             Provider.value(value: apiClient),
           ],
@@ -174,7 +159,6 @@ void main() {
           providers: [
             ChangeNotifierProvider.value(value: authVm),
             ChangeNotifierProvider.value(value: homeVm),
-            ChangeNotifierProvider.value(value: personalVm),
             Provider.value(value: syncService),
             ChangeNotifierProvider.value(value: themeVm),
             Provider.value(value: storage),
