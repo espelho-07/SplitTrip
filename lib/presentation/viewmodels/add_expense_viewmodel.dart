@@ -79,7 +79,7 @@ class AddExpenseViewModel extends ChangeNotifier {
   bool get isSaving => _isSaving;
   String? get errorMessage => _errorMessage;
 
-  bool get isValid => _amountInPaise > 0 && _title.trim().isNotEmpty && _selectedParticipantMemberIds.isNotEmpty;
+  bool get isValid => _amountInPaise > 0 && _selectedParticipantMemberIds.isNotEmpty;
 
   void setTab(int index) {
     _currentTab = index;
@@ -293,6 +293,16 @@ class AddExpenseViewModel extends ChangeNotifier {
   }
 
   // --- Voice & OCR Intelligence ---
+  /// Silently stops any active voice listening - call from view dispose()
+  /// to prevent notifyListeners() firing into a dead widget tree.
+  void cancelVoice() {
+    if (_isListening) {
+      _isListening = false;
+      _speechService.stopListening().ignore();
+      // Do NOT call notifyListeners() here - the widget may already be disposed
+    }
+  }
+
   Future<bool> startLiveVoiceListening({
     required Function(ExpenseDraft draft) onDraftReady,
     required List<TripMember> tripMembers,
@@ -302,12 +312,12 @@ class AddExpenseViewModel extends ChangeNotifier {
     _voiceTranscript = '';
     _parsedIntent = null;
     _activeDraft = null;
-    notifyListeners();
+    if (hasListeners) notifyListeners();
 
     final started = await _speechService.startListening(
       onResult: (words, isFinal) {
         _voiceTranscript = words;
-        notifyListeners();
+        if (hasListeners) notifyListeners();
 
         if (isFinal && words.trim().isNotEmpty) {
           final draft = parseVoiceToDraft(words, tripMembers, currentUserId);
@@ -318,7 +328,7 @@ class AddExpenseViewModel extends ChangeNotifier {
 
     if (!started) {
       _isListening = false;
-      notifyListeners();
+      if (hasListeners) notifyListeners();
     }
 
     return started;
@@ -331,7 +341,7 @@ class AddExpenseViewModel extends ChangeNotifier {
   }) async {
     _isListening = false;
     await _speechService.stopListening();
-    notifyListeners();
+    if (hasListeners) notifyListeners();
 
     if (_voiceTranscript.trim().isNotEmpty) {
       final draft = parseVoiceToDraft(_voiceTranscript, tripMembers, currentUserId);
@@ -441,10 +451,14 @@ class AddExpenseViewModel extends ChangeNotifier {
     if (_isSaving) return null;
 
     if (!isValid) {
-      _errorMessage = 'Please enter a valid title, amount, and at least one participant';
+      _errorMessage = 'Please enter a valid amount and select at least one participant';
       notifyListeners();
       return null;
     }
+
+    final effectiveTitle = _title.trim().isNotEmpty
+        ? _title.trim()
+        : (_category.displayName.isNotEmpty ? _category.displayName : 'Expense');
 
     final splits = computeFinalSplits();
     final isValidSum = MoneyEngine.validateSplits(_amountInPaise, splits);
@@ -464,7 +478,7 @@ class AddExpenseViewModel extends ChangeNotifier {
         final updatedExpense = Expense(
           id: _editingExpenseId!,
           tripId: tripId,
-          title: _title.trim(),
+          title: effectiveTitle,
           amountInPaise: _amountInPaise,
           category: _category,
           location: _location.trim().isNotEmpty ? _location.trim() : null,
@@ -483,7 +497,7 @@ class AddExpenseViewModel extends ChangeNotifier {
         final expense = Expense(
           id: _draftExpenseId!,
           tripId: tripId,
-          title: _title.trim(),
+          title: effectiveTitle,
           amountInPaise: _amountInPaise,
           category: _category,
           location: _location.trim().isNotEmpty ? _location.trim() : null,
@@ -504,7 +518,7 @@ class AddExpenseViewModel extends ChangeNotifier {
       return null;
     } finally {
       _isSaving = false;
-      notifyListeners();
+      if (hasListeners) notifyListeners();
     }
   }
 }

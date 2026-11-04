@@ -12,7 +12,6 @@ import '../../../core/utils/kith_calculator_engine.dart';
 import '../../../core/services/location_service.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/kith_amount_calculator_field.dart';
-import '../../../core/widgets/kith_components.dart';
 import '../../../core/widgets/member_avatar.dart';
 import '../../../domain/enums/expense_category.dart';
 import '../../../domain/enums/split_type.dart';
@@ -24,7 +23,6 @@ import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/trip_detail_viewmodel.dart';
 import '../../widgets/progress/kith_success_toast.dart';
-import 'widgets/feature_crafting_hero.dart';
 
 /// Clean, sleek, and intuitive Add/Edit Expense Experience for Kith.
 ///
@@ -185,6 +183,9 @@ class _AddExpenseViewState extends State<AddExpenseView> {
 
   @override
   void dispose() {
+    // Cancel any in-flight voice listening to prevent notifyListeners()
+    // firing into a disposed widget (causes _elements.contains assertion).
+    context.read<AddExpenseViewModel>().cancelVoice();
     _amountController.dispose();
     _titleController.dispose();
     _locationController.dispose();
@@ -204,16 +205,23 @@ class _AddExpenseViewState extends State<AddExpenseView> {
       addVm.setAmountInPaise(evaluatedPaise);
     }
 
-    if (addVm.title.trim().isEmpty || addVm.amountInPaise <= 0 || addVm.selectedParticipantMemberIds.isEmpty) {
+    // If title is empty, auto-fill with category or 'Expense' (description is optional)
+    if (addVm.title.trim().isEmpty) {
+      final fallbackTitle = addVm.category.displayName.isNotEmpty
+          ? addVm.category.displayName
+          : 'Expense';
+      addVm.setTitle(fallbackTitle);
+      _titleController.text = fallbackTitle;
+    }
+
+    if (addVm.amountInPaise <= 0 || addVm.selectedParticipantMemberIds.isEmpty) {
       HapticHelper.medium();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             addVm.amountInPaise <= 0
                 ? l10n.translate('add_expense_err_amount')
-                : (addVm.title.trim().isEmpty
-                    ? l10n.translate('add_expense_err_title')
-                    : l10n.translate('add_expense_err_person')),
+                : l10n.translate('add_expense_err_person'),
           ),
           backgroundColor: AppColors.negativeRedDark,
           duration: const Duration(seconds: 2),
@@ -279,13 +287,13 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                _buildHelpRow('🟰 ${l10n.expenseSplitEqually}', l10n.translate('expense_split_equally_desc'), isDark),
+                _buildHelpRow('🟰 ${l10n.expenseSplitEqually}', l10n.expenseSplitEquallyDesc, isDark),
                 const SizedBox(height: 12),
-                _buildHelpRow('📊 ${l10n.expenseSplitExact}', l10n.translate('expense_split_exact_desc'), isDark),
+                _buildHelpRow('📊 ${l10n.expenseSplitExact}', l10n.expenseSplitExactDesc, isDark),
                 const SizedBox(height: 12),
-                _buildHelpRow('💯 ${l10n.expenseSplitPercentages}', l10n.translate('expense_split_percentages_desc'), isDark),
+                _buildHelpRow('💯 ${l10n.expenseSplitPercentages}', l10n.expenseSplitPercentagesDesc, isDark),
                 const SizedBox(height: 12),
-                _buildHelpRow('⚖️ ${l10n.expenseSplitShares}', l10n.translate('expense_split_shares_desc'), isDark),
+                _buildHelpRow('⚖️ ${l10n.expenseSplitShares}', l10n.expenseSplitSharesDesc, isDark),
                 const SizedBox(height: 24),
                 AppButton(
                   text: l10n.actionDone,
@@ -396,31 +404,13 @@ class _AddExpenseViewState extends State<AddExpenseView> {
       appBar: _buildTopAppBar(context, isDark, addVm, l10n),
       body: Column(
         children: [
-          // Mode Tabs (Manual | Voice AI | Scan Receipt)
           _buildModeTabs(context, isDark, addVm, l10n),
-
-          // Main Content
           Expanded(
-            child: addVm.currentTab == 0
-                ? FeatureCraftingHero(
-                    type: FeatureCraftingType.voice,
-                    onSwitchToManual: () => addVm.setTab(2),
-                  )
-                : (addVm.currentTab == 1
-                    ? FeatureCraftingHero(
-                        type: FeatureCraftingType.receipt,
-                        onSwitchToManual: () => addVm.setTab(2),
-                      )
-                    : _buildManualExpenseForm(context, isDark, addVm, trip, currency, l10n)),
+            child: _buildManualExpenseForm(context, isDark, addVm, trip, currency, l10n),
           ),
-
-
-
-          // Bottom Action Dock
-          if (addVm.currentTab == 2)
-            _buildBottomActionDock(context, isDark, addVm, trip, l10n),
         ],
       ),
+      bottomNavigationBar: _buildBottomActionDock(context, isDark, addVm, trip, l10n),
     );
   }
 
@@ -546,35 +536,66 @@ class _AddExpenseViewState extends State<AddExpenseView> {
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
       children: [
-        // 1. Unified Amount & Description Card
+        // 1. Core Amount & Title with Quick Ideas
         _buildAmountAndTitleCard(context, isDark, addVm, currency, l10n),
 
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
 
         // 2. Category Selector (Horizontal Chips)
         _buildCategorySection(isDark, addVm, l10n),
 
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
 
         // 3. Paid By (Who Paid?)
         _buildPayerSection(isDark, addVm, trip, l10n),
 
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
 
-        // 4. Split Type & Participants Matrix
+        // 4. Split with Whom?
         _buildSplitAndParticipantsSection(isDark, addVm, trip, currency, l10n),
 
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
 
-        // 5. Date Selector Pill
-        _buildDateSelectorPill(isDark, l10n),
+        // 5. Date & Location Selector
+        _buildDateAndLocationSection(isDark, addVm, l10n),
 
-        const SizedBox(height: 32),
+        const SizedBox(height: 40),
       ],
     );
   }
 
-  /// Single, sleek unified card for Amount & Expense Title.
+  Widget _buildQuickAddChip(String label, int amount, bool isDark, AddExpenseViewModel addVm) {
+    return GestureDetector(
+      onTap: () {
+        HapticHelper.light();
+        final currentRupees = (addVm.amountInPaise / 100.0).round();
+        final nextRupees = currentRupees + amount;
+        _amountController.text = nextRupees.toString();
+        addVm.setAmountInPaise(nextRupees * 100);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF18222C) : const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
+            width: 0.8,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w700,
+            color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Single, sleek unified card for Amount & Expense Title with 1-tap quick ideas.
   Widget _buildAmountAndTitleCard(
     BuildContext context,
     bool isDark,
@@ -582,7 +603,18 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     String currency,
     AppLocalizations l10n,
   ) {
+    final quickIdeas = [
+      {'emoji': '🍽️', 'title': 'Dinner', 'cat': ExpenseCategory.food},
+      {'emoji': '☕', 'title': 'Coffee', 'cat': ExpenseCategory.food},
+      {'emoji': '🚕', 'title': 'Cab', 'cat': ExpenseCategory.transport},
+      {'emoji': '🛒', 'title': 'Groceries', 'cat': ExpenseCategory.groceries},
+      {'emoji': '🏨', 'title': 'Stay', 'cat': ExpenseCategory.stay},
+      {'emoji': '⛽', 'title': 'Fuel', 'cat': ExpenseCategory.transport},
+      {'emoji': '🎟️', 'title': 'Tickets', 'cat': ExpenseCategory.activities},
+    ];
+
     return Container(
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurfaceCard : Colors.white,
         borderRadius: BorderRadius.circular(18),
@@ -594,28 +626,78 @@ class _AddExpenseViewState extends State<AddExpenseView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Amount Section with Built-in Calculator Engine
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-            child: KithAmountCalculatorField(
-              controller: _amountController,
-              currencyCode: currency,
-              useInAppKeypad: false,
-              onAmountChanged: (evaluatedPaise) {
-                addVm.setAmountInPaise(evaluatedPaise);
-              },
+          Text(
+            'HOW MUCH & WHAT FOR?',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.7,
+              color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Amount field with calculator
+          KithAmountCalculatorField(
+            controller: _amountController,
+            currencyCode: currency,
+            useInAppKeypad: false,
+            onAmountChanged: (evaluatedPaise) {
+              addVm.setAmountInPaise(evaluatedPaise);
+            },
+          ),
+
+          const SizedBox(height: 8),
+
+          // Quick increment chips (+100, +200, +500, +1000)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildQuickAddChip('+100', 100, isDark, addVm),
+                const SizedBox(width: 6),
+                _buildQuickAddChip('+200', 200, isDark, addVm),
+                const SizedBox(width: 6),
+                _buildQuickAddChip('+500', 500, isDark, addVm),
+                const SizedBox(width: 6),
+                _buildQuickAddChip('+1,000', 1000, isDark, addVm),
+                const SizedBox(width: 8),
+                if (_amountController.text.isNotEmpty)
+                  GestureDetector(
+                    onTap: () {
+                      HapticHelper.light();
+                      _amountController.clear();
+                      addVm.setAmountInPaise(0);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withValues(alpha: isDark ? 0.2 : 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text('Clear', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.red)),
+                    ),
+                  ),
+              ],
             ),
           ),
 
-          Divider(
-            height: 1,
-            thickness: 0.8,
-            color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
-          ),
+          const SizedBox(height: 14),
+          Divider(height: 1, color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle),
+          const SizedBox(height: 12),
 
-          // Description / Title Field
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          // Title input
+          Container(
+            height: 48,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF141A21) : const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+                width: 0.8,
+              ),
+            ),
             child: Row(
               children: [
                 Icon(
@@ -627,22 +709,21 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                 Expanded(
                   child: TextField(
                     controller: _titleController,
-                    readOnly: false,
-                    showCursor: true,
-                    enableInteractiveSelection: true,
-                    textInputAction: TextInputAction.next,
+                    textInputAction: TextInputAction.done,
                     textCapitalization: TextCapitalization.sentences,
                     style: TextStyle(
                       fontSize: 14.5,
                       fontWeight: FontWeight.w600,
                       color: isDark ? Colors.white : const Color(0xFF0F172A),
                     ),
-                    decoration: KithInputDecoration.borderless(
-                      hintText: 'Expense title',
+                    decoration: const InputDecoration(
+                      hintText: 'Expense description (optional — e.g. Dinner, Fuel)',
                       hintStyle: TextStyle(
-                        color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                        fontSize: 14,
+                        color: Color(0xFF94A3B8),
+                        fontSize: 13.5,
                       ),
+                      border: InputBorder.none,
+                      isDense: true,
                     ),
                     onChanged: (val) => addVm.setTitle(val),
                   ),
@@ -660,115 +741,52 @@ class _AddExpenseViewState extends State<AddExpenseView> {
             ),
           ),
 
-          Divider(
-            height: 1,
-            thickness: 0.8,
-            color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
-          ),
+          const SizedBox(height: 10),
 
-          // Where / Location Field (Manual Typing or Current GPS Location)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          // Quick Idea Chips
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
             child: Row(
-              children: [
-                Icon(
-                  Icons.location_on_outlined,
-                  color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-                  size: 19,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: _locationController,
-                    readOnly: false,
-                    showCursor: true,
-                    enableInteractiveSelection: true,
-                    textInputAction: TextInputAction.done,
-                    textCapitalization: TextCapitalization.words,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.white : const Color(0xFF0F172A),
-                    ),
-                    decoration: KithInputDecoration.borderless(
-                      hintText: 'Location (optional)',
-                      hintStyle: TextStyle(
-                        color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                        fontSize: 13.5,
-                      ),
-                    ),
-                    onChanged: (val) => addVm.setLocation(val),
-                  ),
-                ),
-                if (_locationController.text.isNotEmpty) ...[
-                  GestureDetector(
+              children: quickIdeas.map((idea) {
+                final isCurrent = _titleController.text.toLowerCase() == (idea['title'] as String).toLowerCase();
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: GestureDetector(
                     onTap: () {
-                      HapticHelper.light();
-                      _locationController.clear();
-                      addVm.setLocation('');
+                      HapticHelper.selection();
+                      _titleController.text = idea['title'] as String;
+                      addVm.setTitle(idea['title'] as String);
+                      addVm.setCategory(idea['cat'] as ExpenseCategory);
                       setState(() {});
                     },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Icon(
-                        Icons.close_rounded,
-                        size: 17,
-                        color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                ],
-
-                // "Current Location" GPS Action Button
-                Tooltip(
-                  message: 'Use Current Location',
-                  child: InkWell(
-                    onTap: _isFetchingLocation ? null : () => _fetchCurrentLocation(addVm),
-                    borderRadius: BorderRadius.circular(8),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF14B8A6).withValues(alpha: isDark ? 0.18 : 0.12),
-                        borderRadius: BorderRadius.circular(8),
+                        color: isCurrent
+                            ? const Color(0xFF14B8A6).withValues(alpha: isDark ? 0.25 : 0.15)
+                            : (isDark ? const Color(0xFF141A21) : const Color(0xFFF1F5F9)),
+                        borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                          color: const Color(0xFF14B8A6).withValues(alpha: 0.3),
-                          width: 0.8,
+                          color: isCurrent
+                              ? const Color(0xFF14B8A6)
+                              : (isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0)),
+                          width: isCurrent ? 1.2 : 0.8,
                         ),
                       ),
-                      child: _isFetchingLocation
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 1.8,
-                                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF14B8A6)),
-                              ),
-                            )
-                          : Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  Icons.my_location_rounded,
-                                  size: 14,
-                                  color: Color(0xFF14B8A6),
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'GPS',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w800,
-                                    color: const Color(0xFF14B8A6),
-                                    letterSpacing: 0.2,
-                                  ),
-                                ),
-                              ],
-                            ),
+                      child: Text(
+                        '${idea['emoji']} ${idea['title']}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
+                          color: isCurrent
+                              ? (isDark ? Colors.white : const Color(0xFF0F766E))
+                              : (isDark ? AppColors.darkTextSecondary : const Color(0xFF475569)),
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ],
+                );
+              }).toList(),
             ),
           ),
         ],
@@ -852,78 +870,104 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     );
   }
 
-  /// Compact Payer Selector.
+  /// Clean Payer Selector Card.
   Widget _buildPayerSection(bool isDark, AddExpenseViewModel addVm, Trip trip, AppLocalizations l10n) {
     final activeColor = isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary;
+    final activeMembers = trip.members.where((m) => !m.isMerged).toList();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          l10n.expensePaidByHeader,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.8,
-            color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-          ),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurfaceCard : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+          width: 0.8,
         ),
-        const SizedBox(height: 8),
-        SizedBox(
-          height: 38,
-          child: ListView.separated(
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                l10n.expensePaidByHeader,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.7,
+                  color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
+                ),
+              ),
+              Text(
+                '1 person paid',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            itemCount: trip.members.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 8),
-            itemBuilder: (context, index) {
-              final member = trip.members[index];
-              final isSelected = addVm.paidById == member.id;
-
-              return InkWell(
-                onTap: () {
-                  HapticHelper.selection();
-                  addVm.setPayer(member.id);
-                },
-                borderRadius: BorderRadius.circular(12),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? activeColor.withValues(alpha: isDark ? 0.2 : 0.12)
-                        : (isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard),
+            child: Row(
+              children: activeMembers.map((member) {
+                final isSelected = addVm.paidById == member.id;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: InkWell(
+                    onTap: () {
+                      HapticHelper.selection();
+                      addVm.setPayer(member.id);
+                    },
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isSelected
-                          ? activeColor
-                          : (isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle),
-                      width: isSelected ? 1.4 : 0.8,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      MemberAvatar(name: member.displayName, size: 20),
-                      const SizedBox(width: 6),
-                      Text(
-                        member.displayName,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? activeColor.withValues(alpha: isDark ? 0.22 : 0.12)
+                            : (isDark ? const Color(0xFF141A21) : const Color(0xFFF8FAFC)),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
                           color: isSelected
-                              ? (isDark ? Colors.white : activeColor)
-                              : (isDark ? AppColors.darkTextSecondary : const Color(0xFF475569)),
+                              ? activeColor
+                              : (isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle),
+                          width: isSelected ? 1.5 : 0.8,
                         ),
                       ),
-                    ],
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          MemberAvatar(name: member.displayName, size: 22),
+                          const SizedBox(width: 8),
+                          Text(
+                            member.displayName,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                              color: isSelected
+                                  ? (isDark ? Colors.white : activeColor)
+                                  : (isDark ? AppColors.darkTextSecondary : const Color(0xFF475569)),
+                            ),
+                          ),
+                          if (isSelected) ...[
+                            const SizedBox(width: 4),
+                            Icon(Icons.check_circle_rounded, size: 14, color: activeColor),
+                          ],
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              }).toList(),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -1888,6 +1932,110 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     );
   }
 
+  Widget _buildLocationField(bool isDark, AddExpenseViewModel addVm) {
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF141A21) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+          width: 0.8,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.location_on_outlined,
+            color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+            size: 19,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: TextField(
+              controller: _locationController,
+              textCapitalization: TextCapitalization.words,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.white : const Color(0xFF0F172A),
+              ),
+              decoration: const InputDecoration(
+                hintText: 'Location (e.g. Cafe, Airport)',
+                hintStyle: TextStyle(
+                  color: Color(0xFF94A3B8),
+                  fontSize: 13.5,
+                ),
+                border: InputBorder.none,
+                isDense: true,
+              ),
+              onChanged: (val) => addVm.setLocation(val),
+            ),
+          ),
+          if (_locationController.text.isNotEmpty)
+            GestureDetector(
+              onTap: () {
+                HapticHelper.light();
+                _locationController.clear();
+                addVm.setLocation('');
+                setState(() {});
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Icon(Icons.close_rounded, size: 16, color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+              ),
+            ),
+          InkWell(
+            onTap: _isFetchingLocation ? null : () => _fetchCurrentLocation(addVm),
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xFF14B8A6).withValues(alpha: isDark ? 0.18 : 0.12),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: const Color(0xFF14B8A6).withValues(alpha: 0.3),
+                  width: 0.8,
+                ),
+              ),
+              child: _isFetchingLocation
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.8,
+                        valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF14B8A6)),
+                      ),
+                    )
+                  : const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.my_location_rounded, size: 13, color: Color(0xFF14B8A6)),
+                        SizedBox(width: 4),
+                        Text(
+                          'GPS',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF14B8A6)),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDateAndLocationSection(bool isDark, AddExpenseViewModel addVm, AppLocalizations l10n) {
+    return Column(
+      children: [
+        _buildDateSelectorPill(isDark, l10n),
+        const SizedBox(height: 10),
+        _buildLocationField(isDark, addVm),
+      ],
+    );
+  }
+
   Widget _buildDateSelectorPill(bool isDark, AppLocalizations l10n) {
     final dateStr = DateFormat('EEE, dd MMM yyyy').format(_selectedDate);
     return InkWell(
@@ -1904,9 +2052,10 @@ class _AddExpenseViewState extends State<AddExpenseView> {
       },
       borderRadius: BorderRadius.circular(12),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        height: 48,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
-          color: isDark ? AppColors.darkSurfaceCard : Colors.white,
+          color: isDark ? const Color(0xFF141A21) : const Color(0xFFF8FAFC),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
@@ -1948,32 +2097,45 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     Trip trip,
     AppLocalizations l10n,
   ) {
+    final hasAmount = addVm.amountInPaise > 0;
+    final formatted = CurrencyFormatter.formatPaise(addVm.amountInPaise, currencyCode: trip.currencyCode);
+    final buttonText = widget.existingExpense != null
+        ? (hasAmount ? 'Update • $formatted' : 'Update Expense')
+        : (hasAmount ? 'Save Expense • $formatted' : 'Save Expense');
+
     return Container(
       padding: EdgeInsets.only(
         left: 20,
         right: 20,
-        top: 10,
-        bottom: MediaQuery.of(context).padding.bottom + 10,
+        top: 12,
+        bottom: MediaQuery.of(context).padding.bottom + 12,
       ),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF080C0E) : const Color(0xFFF8FAFC),
+        color: isDark ? const Color(0xFF080C0E) : Colors.white,
         border: Border(
           top: BorderSide(
             color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
             width: 0.8,
           ),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
+          ),
+        ],
       ),
       child: SizedBox(
         width: double.infinity,
-        height: 48,
+        height: 50,
         child: ElevatedButton(
           onPressed: addVm.isSaving ? null : _handleSave,
           style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.emeraldPrimary,
+            backgroundColor: const Color(0xFF14B8A6),
             foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            elevation: 2,
           ),
           child: addVm.isSaving
               ? const SizedBox(
@@ -1986,12 +2148,12 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                   children: [
                     Icon(
                       widget.existingExpense != null ? Icons.save_rounded : Icons.check_circle_rounded,
-                      size: 18,
+                      size: 20,
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      widget.existingExpense != null ? l10n.expenseUpdateBtn : l10n.expenseSaveBtn,
-                      style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
+                      buttonText,
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                     ),
                   ],
                 ),
