@@ -23,6 +23,9 @@ class HomeViewModel extends ChangeNotifier {
   String? _errorMessage;
   String? _currentUserId;
   StreamSubscription? _realtimeSubscription;
+  /// Guards every notifyListeners() call that may fire after dispose()
+  /// (async loadTrips completion, realtime stream events, etc.)
+  bool _isDisposed = false;
 
   HomeViewModel({
     required this.tripRepo,
@@ -44,7 +47,7 @@ class HomeViewModel extends ChangeNotifier {
   void _subscribeToRealtimeEvents() {
     if (realtimeClient == null) return;
     _realtimeSubscription = realtimeClient!.events.listen((event) {
-      if (_currentUserId == null) return;
+      if (_isDisposed || _currentUserId == null) return;
 
       if (event.type == 'trip_created' || event.type == 'trip_joined') {
         if (event.data['trip'] is Map<String, dynamic>) {
@@ -62,7 +65,7 @@ class HomeViewModel extends ChangeNotifier {
         } else {
           // No trip object in payload — do a background refresh
           _computeLocalBalances(_trips, _currentUserId!);
-          notifyListeners();
+          if (!_isDisposed) notifyListeners();
         }
       } else if (event.type == 'expense_added' ||
           event.type == 'expense_updated' ||
@@ -73,12 +76,13 @@ class HomeViewModel extends ChangeNotifier {
           event.type == 'settlement_disputed') {
         // Recompute balances locally from updated cache
         _computeLocalBalances(_trips, _currentUserId!);
-        notifyListeners();
+        if (!_isDisposed) notifyListeners();
       }
     });
   }
 
   void updateTripInPlace(Trip trip, String currentUserId) {
+    if (_isDisposed) return;
     debugPrint('[HomeViewModel] Updating trip in place: ${trip.id} -> ${trip.lifecycleState.name}');
     final idx = _trips.indexWhere((t) => t.id == trip.id);
     if (idx != -1) {
@@ -87,15 +91,16 @@ class HomeViewModel extends ChangeNotifier {
       _trips.insert(0, trip);
     }
     _computeLocalBalances(_trips, currentUserId);
-    notifyListeners();
+    if (!_isDisposed) notifyListeners();
   }
 
   /// Optimistically adds a newly created/joined trip into memory and updates balances instantly
   void addTripLocally(Trip trip, String currentUserId) {
+    if (_isDisposed) return;
     _trips.removeWhere((t) => t.id == trip.id);
     _trips.insert(0, trip);
     _computeLocalBalances(_trips, currentUserId);
-    notifyListeners();
+    if (!_isDisposed) notifyListeners();
   }
 
   void _computeLocalBalances(List<Trip> tripsList, String currentUserId) {
@@ -151,6 +156,7 @@ class HomeViewModel extends ChangeNotifier {
   }
 
   Future<void> loadTrips(String currentUserId) async {
+    if (_isDisposed) return;
     _currentUserId = currentUserId;
 
     // 1. FAST LOCAL HYDRATION: Always hydrate cached trips immediately (< 5ms)
@@ -158,33 +164,37 @@ class HomeViewModel extends ChangeNotifier {
     if (cachedTrips.isNotEmpty) {
       _trips = cachedTrips;
       _computeLocalBalances(_trips, currentUserId);
-      notifyListeners();
+      if (!_isDisposed) notifyListeners();
       debugPrint('[HomeViewModel] Hydrated ${cachedTrips.length} cached trips from storage');
     }
 
     _isLoading = _trips.isEmpty;
     _errorMessage = null;
-    notifyListeners();
+    if (!_isDisposed) notifyListeners();
 
     try {
       // 2. Non-blocking network sync
       final remoteTrips = await tripRepo.getTrips();
+      if (_isDisposed) return;
       _trips = remoteTrips;
       debugPrint('[HomeViewModel] ALL TRIPS QUERY: result count=${remoteTrips.length}');
 
       // Hydrate expenses for each trip so balances are immediately available
       for (final trip in remoteTrips) {
+        if (_isDisposed) return;
         try {
           await expenseRepo.getExpenses(trip.id);
         } catch (_) {}
       }
 
-      _computeLocalBalances(_trips, currentUserId);
+      if (!_isDisposed) _computeLocalBalances(_trips, currentUserId);
     } catch (e) {
-      _errorMessage = KithErrorFormatter.format(e);
+      if (!_isDisposed) _errorMessage = KithErrorFormatter.format(e);
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (!_isDisposed) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -193,6 +203,7 @@ class HomeViewModel extends ChangeNotifier {
   }
 
   void clearData() {
+    if (_isDisposed) return;
     _trips = [];
     _tripBalances.clear();
     _overallNetBalanceInPaise = 0;
@@ -204,8 +215,8 @@ class HomeViewModel extends ChangeNotifier {
 
   @override
   void dispose() {
+    _isDisposed = true;
     _realtimeSubscription?.cancel();
     super.dispose();
   }
 }
-
