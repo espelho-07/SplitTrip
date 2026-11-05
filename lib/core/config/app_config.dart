@@ -20,6 +20,13 @@ class AppConfig {
 
   static const bool enableGoogleAuth = false;
 
+  /// Whether the Nirniq identity platform is enabled.
+  /// 
+  /// [PHASE 1] Always false. No Nirniq code path is active.
+  /// Do not change this value until Gates 1, 2, and 3 are approved.
+  /// See: NirniqFeatureFlags for granular control.
+  static const bool enableNirniqIdentity = false;
+
 
 
   /// Deep link scheme for invitation sharing
