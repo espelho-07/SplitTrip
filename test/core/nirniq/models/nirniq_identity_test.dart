@@ -133,5 +133,93 @@ void main() {
       expect(str, contains(validUuid));
       expect(str, contains('Atlas'));
     });
+
+    group('UUID validation (W1 & Release-mode safe)', () {
+      test('rejects empty string nirniqId', () {
+        expect(
+          () => NirniqIdentity(
+            nirniqId: '',
+            createdAt: fixedCreatedAt,
+          ),
+          throwsArgumentError,
+        );
+      });
+
+      test('rejects non-UUID string', () {
+        expect(
+          () => NirniqIdentity(
+            nirniqId: 'not-a-uuid',
+            createdAt: fixedCreatedAt,
+          ),
+          throwsArgumentError,
+        );
+      });
+
+      test('rejects all-zeros UUID (nil UUID is disallowed for identity)', () {
+        // Decision: Nil UUID (00000000-0000-0000-0000-000000000000) represents an uninitialized
+        // identifier and MUST NOT be accepted as a canonical Nirniq Identity ID.
+        expect(
+          () => NirniqIdentity(
+            nirniqId: '00000000-0000-0000-0000-000000000000',
+            createdAt: fixedCreatedAt,
+          ),
+          throwsArgumentError,
+        );
+      });
+
+      test('accepts valid lowercase UUID', () {
+        expect(
+          () => NirniqIdentity(
+            nirniqId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+            createdAt: fixedCreatedAt,
+          ),
+          returnsNormally,
+        );
+      });
+
+      test('accepts valid uppercase UUID', () {
+        expect(
+          () => NirniqIdentity(
+            nirniqId: 'A1B2C3D4-E5F6-7890-ABCD-EF1234567890',
+            createdAt: fixedCreatedAt,
+          ),
+          returnsNormally,
+        );
+      });
+
+      test('fromJson with invalid nirniqId throws ArgumentError', () {
+        expect(
+          () => NirniqIdentity.fromJson({
+            'nirniq_id': 'bad-id',
+            'created_at': fixedCreatedAt.toIso8601String(),
+          }),
+          throwsArgumentError,
+        );
+      });
+
+      test('fromJson with missing/null nirniqId throws ArgumentError', () {
+        expect(
+          () => NirniqIdentity.fromJson({
+            'created_at': fixedCreatedAt.toIso8601String(),
+          }),
+          throwsArgumentError,
+        );
+      });
+
+      test('fromJson supports snake_case and defaults unknown migrationState safely', () {
+        final parsed = NirniqIdentity.fromJson({
+          'nirniq_id': validUuid,
+          'google_subject': 'g-sub',
+          'email': 'user@example.com',
+          'display_name': 'Traveler',
+          'created_at': fixedCreatedAt.toIso8601String(),
+          'migration_state': 'non_existent_state_name',
+        });
+
+        expect(parsed.nirniqId, validUuid);
+        expect(parsed.googleSubject, 'g-sub');
+        expect(parsed.migrationState, NirniqMigrationState.mappingCreated);
+      });
+    });
   });
 }

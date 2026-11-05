@@ -1,8 +1,12 @@
 import 'package:flutter/foundation.dart';
 import 'google_auth_service.dart';
 
-/// Ecosystem identity provided by Nirniq Account.
-class NirniqIdentity {
+/// Ecosystem identity provided by Nirniq Account (legacy prototype).
+///
+/// Deprecated in favor of the canonical domain model in
+/// `package:kith_app/core/nirniq/models/nirniq_identity.dart`.
+@Deprecated('Use NirniqIdentity from lib/core/nirniq/models/nirniq_identity.dart instead')
+class LegacyNirniqAccountIdentity {
   /// Unique Nirniq User Identifier (e.g. `nrn_...` or canonical user ID)
   final String nirniqId;
   final String email;
@@ -13,7 +17,7 @@ class NirniqIdentity {
   final String? supabaseUserId;
   final String? externalProviderId; // e.g. raw googleId
 
-  const NirniqIdentity({
+  const LegacyNirniqAccountIdentity({
     required this.nirniqId,
     required this.email,
     required this.displayName,
@@ -35,8 +39,8 @@ class NirniqIdentity {
         'externalProviderId': externalProviderId,
       };
 
-  factory NirniqIdentity.fromJson(Map<String, dynamic> json) {
-    return NirniqIdentity(
+  factory LegacyNirniqAccountIdentity.fromJson(Map<String, dynamic> json) {
+    return LegacyNirniqAccountIdentity(
       nirniqId: json['nirniqId'] as String? ?? json['id'] as String? ?? '',
       email: json['email'] as String? ?? '',
       displayName: json['displayName'] as String? ?? 'Nirniq User',
@@ -57,7 +61,7 @@ class NirniqIdentity {
 
 /// Result of a Nirniq Account authentication attempt.
 class NirniqAuthResult {
-  final NirniqIdentity identity;
+  final LegacyNirniqAccountIdentity identity;
   final bool isNewAccount;
 
   const NirniqAuthResult({
@@ -77,7 +81,7 @@ class NirniqAccountService {
   /// Executes the Nirniq Account authentication sequence.
   ///
   /// Currently uses native Google OAuth + Supabase identity verification under the hood,
-  /// seamlessly transforming the result into a verified [NirniqIdentity].
+  /// seamlessly transforming the result into a verified [LegacyNirniqAccountIdentity].
   ///
   /// Returns `null` if the user cancelled.
   /// Throws [NirniqAuthException] on failure.
@@ -94,7 +98,7 @@ class NirniqAccountService {
       final nirniqId = googleResult.supabaseUserId ??
           'nrn_${googleResult.googleId.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}';
 
-      final identity = NirniqIdentity(
+      final identity = LegacyNirniqAccountIdentity(
         nirniqId: nirniqId,
         email: googleResult.email,
         displayName: googleResult.displayName,

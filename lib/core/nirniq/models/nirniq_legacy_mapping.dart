@@ -37,6 +37,10 @@ class NirniqLegacyMapping {
     r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
   );
 
+  /// The standard RFC 4122 Nil UUID (all zeros).
+  /// Disallowed as a valid canonical Nirniq ID.
+  static const String _nilUuid = '00000000-0000-0000-0000-000000000000';
+
   NirniqLegacyMapping({
     required this.nirniqId,
     required this.kithLocalUserId,
@@ -45,14 +49,36 @@ class NirniqLegacyMapping {
     this.migrationState = NirniqMigrationState.mappingCreated,
     required this.createdAt,
     this.linkedAt,
-  })  : assert(
-          kithLocalUserId.startsWith('usr_'),
-          'kithLocalUserId must start with usr_',
-        ),
-        assert(
-          _uuidRegex.hasMatch(nirniqId),
-          'nirniqId must be a valid UUID format',
-        );
+  }) {
+    if (!kithLocalUserId.startsWith('usr_')) {
+      throw ArgumentError.value(
+        kithLocalUserId,
+        'kithLocalUserId',
+        'Must start with "usr_" prefix (KITH local identity format)',
+      );
+    }
+    if (kithLocalUserId.length <= 4) {
+      throw ArgumentError.value(
+        kithLocalUserId,
+        'kithLocalUserId',
+        'Must have content after "usr_" prefix',
+      );
+    }
+    if (!_uuidRegex.hasMatch(nirniqId)) {
+      throw ArgumentError.value(
+        nirniqId,
+        'nirniqId',
+        'Must be a valid UUID (8-4-4-4-12 format)',
+      );
+    }
+    if (nirniqId == _nilUuid) {
+      throw ArgumentError.value(
+        nirniqId,
+        'nirniqId',
+        'Nil UUID (all zeros) is not allowed as a canonical Nirniq ID',
+      );
+    }
+  }
 
   /// Creates a copy with the given fields replaced by the new values.
   NirniqLegacyMapping copyWith({
@@ -89,20 +115,53 @@ class NirniqLegacyMapping {
 
   /// Deserializes a [NirniqLegacyMapping] from a JSON map.
   factory NirniqLegacyMapping.fromJson(Map<String, dynamic> json) {
+    final rawNirniqId = json['nirniqId'] ?? json['nirniq_id'];
+    if (rawNirniqId == null || rawNirniqId is! String) {
+      throw ArgumentError.value(
+        rawNirniqId,
+        'nirniqId',
+        'Missing or invalid nirniqId in JSON',
+      );
+    }
+
+    final rawKithLocalUserId =
+        json['kithLocalUserId'] ?? json['kith_local_user_id'];
+    if (rawKithLocalUserId == null || rawKithLocalUserId is! String) {
+      throw ArgumentError.value(
+        rawKithLocalUserId,
+        'kithLocalUserId',
+        'Missing or invalid kithLocalUserId in JSON',
+      );
+    }
+
+    final rawCreatedAt = json['createdAt'] ?? json['created_at'];
+    if (rawCreatedAt == null || rawCreatedAt is! String) {
+      throw ArgumentError.value(
+        rawCreatedAt,
+        'createdAt',
+        'Missing or invalid createdAt in JSON',
+      );
+    }
+
+    final rawLinkedAt = json['linkedAt'] ?? json['linked_at'];
+    final rawMigrationState =
+        json['migrationState'] ?? json['migration_state'];
+
     return NirniqLegacyMapping(
-      nirniqId: json['nirniqId'] as String,
-      kithLocalUserId: json['kithLocalUserId'] as String,
-      kithEffectiveAccountId: json['kithEffectiveAccountId'] as String,
-      supabaseAuthUid: json['supabaseAuthUid'] as String?,
-      migrationState: json['migrationState'] != null
-          ? NirniqMigrationState.values.firstWhere(
-              (e) => e.name == json['migrationState'],
-              orElse: () => NirniqMigrationState.mappingCreated,
-            )
-          : NirniqMigrationState.mappingCreated,
-      createdAt: DateTime.parse(json['createdAt'] as String),
-      linkedAt: json['linkedAt'] != null
-          ? DateTime.parse(json['linkedAt'] as String)
+      nirniqId: rawNirniqId,
+      kithLocalUserId: rawKithLocalUserId,
+      kithEffectiveAccountId: (json['kithEffectiveAccountId'] ??
+          json['kith_effective_account_id'] ??
+          rawKithLocalUserId) as String,
+      supabaseAuthUid:
+          (json['supabaseAuthUid'] ?? json['supabase_auth_uid']) as String?,
+      migrationState: NirniqMigrationState.fromString(
+        rawMigrationState as String?,
+        fallback: NirniqMigrationState.mappingCreated,
+      ),
+      createdAt: DateTime.parse(rawCreatedAt),
+      linkedAt: rawLinkedAt != null
+          ? DateTime.parse(rawLinkedAt as String)
           : null,
     );
   }

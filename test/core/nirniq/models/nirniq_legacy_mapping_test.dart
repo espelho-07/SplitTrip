@@ -10,7 +10,7 @@ void main() {
     final fixedCreatedAt = DateTime.utc(2026, 11, 5, 10, 0, 0);
     final fixedLinkedAt = DateTime.utc(2026, 11, 5, 10, 30, 0);
 
-    test('valid usr_* prefix assertion passes', () {
+    test('valid usr_* prefix validation passes', () {
       expect(
         () => NirniqLegacyMapping(
           nirniqId: validUuid,
@@ -22,7 +22,7 @@ void main() {
       );
     });
 
-    test('invalid prefix (not usr_) throws AssertionError', () {
+    test('invalid prefix (not usr_) throws ArgumentError', () {
       expect(
         () => NirniqLegacyMapping(
           nirniqId: validUuid,
@@ -30,7 +30,7 @@ void main() {
           kithEffectiveAccountId: validAccountId,
           createdAt: fixedCreatedAt,
         ),
-        throwsA(isA<AssertionError>()),
+        throwsArgumentError,
       );
     });
 
@@ -46,7 +46,7 @@ void main() {
       );
     });
 
-    test('invalid UUID format throws AssertionError', () {
+    test('invalid UUID format throws ArgumentError', () {
       expect(
         () => NirniqLegacyMapping(
           nirniqId: 'not-a-valid-uuid',
@@ -54,8 +54,96 @@ void main() {
           kithEffectiveAccountId: validAccountId,
           createdAt: fixedCreatedAt,
         ),
-        throwsA(isA<AssertionError>()),
+        throwsArgumentError,
       );
+    });
+
+    group('Runtime validation (W2, W3 & Release-mode safe)', () {
+      test('rejects usr_ prefix only (empty suffix)', () {
+        expect(
+          () => NirniqLegacyMapping(
+            nirniqId: validUuid,
+            kithLocalUserId: 'usr_',
+            kithEffectiveAccountId: validAccountId,
+            createdAt: fixedCreatedAt,
+          ),
+          throwsArgumentError,
+        );
+      });
+
+      test('rejects non-usr_ prefix', () {
+        expect(
+          () => NirniqLegacyMapping(
+            nirniqId: validUuid,
+            kithLocalUserId: 'abc_123',
+            kithEffectiveAccountId: validAccountId,
+            createdAt: fixedCreatedAt,
+          ),
+          throwsArgumentError,
+        );
+      });
+
+      test('rejects empty kithLocalUserId', () {
+        expect(
+          () => NirniqLegacyMapping(
+            nirniqId: validUuid,
+            kithLocalUserId: '',
+            kithEffectiveAccountId: validAccountId,
+            createdAt: fixedCreatedAt,
+          ),
+          throwsArgumentError,
+        );
+      });
+
+      test('rejects all-zeros nil UUID', () {
+        // Decision: Nil UUID (00000000-0000-0000-0000-000000000000) represents an uninitialized
+        // identifier and MUST NOT be accepted in a legacy mapping.
+        expect(
+          () => NirniqLegacyMapping(
+            nirniqId: '00000000-0000-0000-0000-000000000000',
+            kithLocalUserId: validUserId,
+            kithEffectiveAccountId: validAccountId,
+            createdAt: fixedCreatedAt,
+          ),
+          throwsArgumentError,
+        );
+      });
+
+      test('fromJson with invalid kithLocalUserId throws ArgumentError', () {
+        expect(
+          () => NirniqLegacyMapping.fromJson({
+            'nirniqId': validUuid,
+            'kith_local_user_id': 'bad',
+            'created_at': fixedCreatedAt.toIso8601String(),
+          }),
+          throwsArgumentError,
+        );
+      });
+
+      test('fromJson with invalid nirniqId throws ArgumentError', () {
+        expect(
+          () => NirniqLegacyMapping.fromJson({
+            'nirniq_id': 'not-uuid',
+            'kith_local_user_id': 'usr_abc123',
+            'created_at': fixedCreatedAt.toIso8601String(),
+          }),
+          throwsArgumentError,
+        );
+      });
+
+      test('fromJson supports snake_case and defaults unknown migrationState safely', () {
+        final parsed = NirniqLegacyMapping.fromJson({
+          'nirniq_id': validUuid,
+          'kith_local_user_id': validUserId,
+          'kith_effective_account_id': validAccountId,
+          'created_at': fixedCreatedAt.toIso8601String(),
+          'migration_state': 'unknown_state',
+        });
+
+        expect(parsed.nirniqId, validUuid);
+        expect(parsed.kithLocalUserId, validUserId);
+        expect(parsed.migrationState, NirniqMigrationState.mappingCreated);
+      });
     });
 
     test('fromJson and toJson round-trip preserves all fields', () {
