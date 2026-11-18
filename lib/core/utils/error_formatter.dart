@@ -1,10 +1,28 @@
 import 'dart:io';
 import '../network/api_exceptions.dart';
+import '../errors/app_error.dart';
+import '../errors/error_mapper.dart';
 
 /// Centralized utility to format raw exceptions and API error strings
 /// into clear, polite, and user-friendly messages for the UI.
 class KithErrorFormatter {
   KithErrorFormatter._();
+
+  /// Converts any exception or error object into a clean, user-facing explanation.
+  /// Maps an error to a strongly-typed ApplicationError with userTitle, recoveryAction, and retry guidance.
+  static ApplicationError mapToApplicationError(
+    dynamic error, {
+    UserActivity? activity,
+    bool isSavedLocally = false,
+    String? correlationId,
+  }) {
+    return ErrorMapper.map(
+      error,
+      activity: activity,
+      isSavedLocally: isSavedLocally,
+      correlationId: correlationId,
+    );
+  }
 
   /// Converts any exception or error object into a clean, user-facing explanation.
   static String format(dynamic error, {String? context}) {

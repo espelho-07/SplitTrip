@@ -917,7 +917,21 @@ class LocalDatabaseService {
         try {
           for (final entry in updatedExpensesByTrip.entries) {
             final tripId = entry.key;
-            db.execute('DELETE FROM expenses WHERE trip_id = ?;', [tripId]);
+            final incomingIds = entry.value
+                .map((e) => e['id']?.toString() ?? '')
+                .where((id) => id.isNotEmpty)
+                .toList();
+
+            if (incomingIds.isNotEmpty) {
+              final placeholders = List.filled(incomingIds.length, '?').join(',');
+              db.execute('''
+                DELETE FROM expenses 
+                WHERE trip_id = ? 
+                  AND id NOT IN ($placeholders)
+                  AND id NOT IN (SELECT json_extract(payload, '\$.id') FROM mutation_outbox WHERE trip_id = ?)
+              ''', [tripId, ...incomingIds, tripId]);
+            }
+
             for (final exp in entry.value) {
               expStmt.execute([
                 exp['id']?.toString() ?? '',
@@ -952,7 +966,16 @@ class LocalDatabaseService {
         try {
           for (final entry in updatedSettlementsByTrip.entries) {
             final tripId = entry.key;
-            db.execute('DELETE FROM settlements WHERE trip_id = ?;', [tripId]);
+            final incomingIds = entry.value
+                .map((s) => s['id']?.toString() ?? '')
+                .where((id) => id.isNotEmpty)
+                .toList();
+
+            if (incomingIds.isNotEmpty) {
+              final placeholders = List.filled(incomingIds.length, '?').join(',');
+              db.execute('DELETE FROM settlements WHERE trip_id = ? AND id NOT IN ($placeholders);', [tripId, ...incomingIds]);
+            }
+
             for (final s in entry.value) {
               setStmt.execute([
                 s['id']?.toString() ?? '',
@@ -1092,6 +1115,11 @@ class LocalDatabaseService {
             tombstoneToAdd['tripId']!,
             tombstoneToAdd['expenseId']!,
             nowIso,
+          ]);
+          // Granular deletion of the specific tombstoned expense from expenses table
+          db.execute('DELETE FROM expenses WHERE trip_id = ? AND id = ?;', [
+            tombstoneToAdd['tripId']!,
+            tombstoneToAdd['expenseId']!,
           ]);
         } finally {
           tombStmt.close();

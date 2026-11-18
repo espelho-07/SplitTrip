@@ -179,7 +179,11 @@ class LocalStorageService {
 
     final vault = _getRecoveryVault();
 
-    vault[normalized] = userJson;
+    final sanitized = Map<String, dynamic>.from(userJson);
+    sanitized.remove('anonymousToken');
+    sanitized.remove('token');
+    sanitized.remove('sessionToken');
+    vault[normalized] = sanitized;
 
     await _prefs.setString(_recoveryVaultKey, jsonEncode(vault));
   }
