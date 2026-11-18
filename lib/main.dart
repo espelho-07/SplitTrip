@@ -287,6 +287,11 @@ class _KithAppState extends State<KithApp> with WidgetsBindingObserver {
     } else if (state == AppLifecycleState.resumed) {
       final versionVm = context.read<VersionViewModel>();
       versionVm.checkForUpdates();
+      try {
+        final syncService = context.read<SyncService>();
+        final apiClient = context.read<ApiClient>();
+        syncService.flushQueue(apiClient);
+      } catch (_) {}
     }
   }
 
