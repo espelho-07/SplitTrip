@@ -69,3 +69,13 @@ server/data_storage/
 # Supabase temp & test reports
 supabase/.temp/
 test_reports/
+
+# Scratch, forensic snapshots, and diagnostics
+scratch/
+forensic_backups/
+/*.log
+/*.txt
+/*.xml
+/*.png
+Thumbs.db
+
