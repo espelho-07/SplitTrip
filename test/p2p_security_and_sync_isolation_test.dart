@@ -427,6 +427,7 @@ void main() {
         inviteCodeOrId: trip.inviteCode,
         user: realFriendUser,
         claimMemberId: placeholderRohan.id,
+        claimToken: placeholderRohan.claimToken,
       );
       final rohanClaimed = claimedTrip.members.firstWhere((m) => m.id == placeholderRohan.id);
       expect(rohanClaimed.isClaimed, isTrue);
@@ -439,6 +440,7 @@ void main() {
           inviteCodeOrId: trip.inviteCode,
           user: intruderUser,
           claimMemberId: placeholderRohan.id,
+          claimToken: placeholderRohan.claimToken,
         ),
         throwsA(isA<ConflictException>()),
       );
@@ -492,6 +494,7 @@ void main() {
         inviteCodeOrId: trip.inviteCode,
         user: realFriendUser,
         claimMemberId: virtualRahul.id,
+        claimToken: virtualRahul.claimToken,
       );
 
       final claimedRahul = claimedTrip.members.firstWhere((m) => m.id == virtualRahul.id);

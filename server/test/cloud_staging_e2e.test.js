@@ -27,6 +27,7 @@ describe('Real Cloud Staging & Multi-User End-to-End QA Test Suite', () => {
 
   after(async () => {
     realtimeHub.close();
+    server.closeAllConnections?.();
     await new Promise((resolve) => server.close(resolve));
   });
 
@@ -264,7 +265,7 @@ describe('Real Cloud Staging & Multi-User End-to-End QA Test Suite', () => {
         const msg = JSON.parse(raw.toString());
         if (msg.type === 'expense_added' || msg.type === 'expense_created') {
           clearTimeout(timer);
-          ws.close();
+          ws.terminate();
           resolve(msg);
         }
       });

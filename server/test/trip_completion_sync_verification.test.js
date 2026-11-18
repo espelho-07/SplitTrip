@@ -181,4 +181,37 @@ describe('Smart Trip Completion & Multi-Participant Sync Verification Tests', ()
     const balances = expenseService.getBalanceSummary(trip.id, userA.id);
     assert.equal(balances.totalTripSpendingInPaise, 15000);
   });
+
+  test('7. Virtual Members: Always treated as synced and never block normal trip completion', () => {
+    const virtualTrip = tripService.createTrip(userA, {
+      name: 'Solo Trek with Virtual Friends',
+      currencyCode: 'INR',
+      initialFriendNames: ['Rohan', 'Sneha'],
+    });
+
+    const memberAlice = virtualTrip.members.find((m) => m.userId === userA.id);
+    const memberRohan = virtualTrip.members.find((m) => m.displayName === 'Rohan');
+
+    expenseService.createExpense(userA, virtualTrip.id, {
+      title: 'Trek Gear',
+      amountInPaise: 4000,
+      paidById: memberAlice.id,
+      splits: [
+        { memberId: memberAlice.id, amountInPaise: 2000 },
+        { memberId: memberRohan.id, amountInPaise: 2000 },
+      ],
+    });
+
+    const status = tripService.getTripSyncStatus(virtualTrip.id, userA.id);
+    assert.equal(status.isFullySynced, true);
+    assert.equal(status.canCompleteNormally, true);
+    assert.equal(status.unsyncedParticipantsCount, 0);
+
+    const rohanSync = status.participants.find((p) => p.displayName === 'Rohan');
+    assert.equal(rohanSync.isVirtual, true);
+    assert.equal(rohanSync.syncStatus, 'synced');
+
+    const completed = tripService.completeTrip(virtualTrip.id, userA.id, { completionMode: 'NORMAL' });
+    assert.equal(completed.lifecycleState, 'completed');
+  });
 });

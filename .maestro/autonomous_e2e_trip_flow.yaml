@@ -1,0 +1,53 @@
+appId: com.nirniq.kith
+---
+# ==============================================================================
+# Autonomous E2E Black-Box User Journey Flow for SplitTrip
+# Run with: maestro test .maestro/autonomous_e2e_trip_flow.yaml
+# ==============================================================================
+
+- launchApp:
+    clearState: false
+
+# 1. Assert App Launches & Navigation Bar is Visible
+- assertVisible: "Expenses"
+
+# 2. Navigate to Trips Tab
+- tapOn: "Trips"
+- extendedWaitUntil:
+    visible: "Goa Beach Trip"
+    timeout: 5000
+
+# 3. Open Active Trip Detail
+- tapOn: "Goa Beach Trip"
+
+# 4. Open Settle Up Screen
+- tapOn:
+    text: "Settle Up"
+    optional: true
+
+# 5. Assert User-Centric Settle Up View
+- assertVisible: "My Dues"
+- assertVisible: "View Everyone"
+
+# 6. Switch to View Everyone Tab
+- tapOn: "View Everyone"
+
+# 7. Open Detailed Hisab Breakdown
+- tapOn:
+    text: "View in detail"
+    optional: true
+
+# 8. Close modal
+- back
+
+# 9. Test Add Expense with Optional Title
+- tapOn:
+    text: "Add Expense"
+    optional: true
+- tapOn:
+    text: "0"
+    optional: true
+- inputText: "750"
+- tapOn:
+    text: "Save Expense"
+    optional: true

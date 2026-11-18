@@ -27,6 +27,7 @@ test('Payment Notification & Verification Pipeline Test Suite', async (t) => {
   // Hardev claims his trip member record via joinTripByCode
   const joinedTrip = tripService.joinTripByCode(hardevUser, trip.inviteCode, {
     claimMemberId: unclaimedHardev.id,
+    claimToken: unclaimedHardev.claimToken,
   });
   const hardevMember = joinedTrip.members.find((m) => m.userId === hardevUser.id);
 

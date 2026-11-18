@@ -61,6 +61,7 @@ test('Trip Member Claim & Duplicate Prevention Tests', async (t) => {
     // Rahul joins and claims placeholder
     const updatedTrip = tripService.joinTripByCode(rahulUser, trip.inviteCode, {
       claimMemberId: placeholderMember.id,
+      claimToken: placeholderMember.claimToken,
     });
 
     // Exactly 2 members exist in trip
@@ -90,6 +91,7 @@ test('Trip Member Claim & Duplicate Prevention Tests', async (t) => {
     // First scan: claims member
     const firstJoin = tripService.joinTripByCode(rahulUser, trip.inviteCode, {
       claimMemberId: placeholder.id,
+      claimToken: placeholder.claimToken,
     });
     assert.strictEqual(firstJoin.members.length, 2);
 
@@ -106,12 +108,12 @@ test('Trip Member Claim & Duplicate Prevention Tests', async (t) => {
     });
     const placeholder = trip.members.find((m) => m.displayName === 'Rahul');
 
-    // Device A claims Rahul
-    tripService.joinTripByCode(rahulUser, trip.inviteCode, { claimMemberId: placeholder.id });
+    // Device A claims Rahul with valid claimToken
+    tripService.joinTripByCode(rahulUser, trip.inviteCode, { claimMemberId: placeholder.id, claimToken: placeholder.claimToken });
 
-    // Device B attempts to claim same Rahul with different user
+    // Device B attempts to claim same Rahul with different user (even if token is provided)
     assert.throws(() => {
-      tripService.joinTripByCode(amanUser, trip.inviteCode, { claimMemberId: placeholder.id });
+      tripService.joinTripByCode(amanUser, trip.inviteCode, { claimMemberId: placeholder.id, claimToken: placeholder.claimToken });
     }, (err) => err.statusCode === 409 || err.message.includes('already been claimed'));
   });
 

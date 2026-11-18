@@ -165,7 +165,7 @@ void main() {
             body: JoinPreviewSheet(
               preview: preview,
               isJoining: false,
-              onConfirmJoin: ({String? claimMemberId}) => confirmed = true,
+              onConfirmJoin: ({String? claimMemberId, String? claimToken}) => confirmed = true,
               onCancel: () {},
             ),
           ),

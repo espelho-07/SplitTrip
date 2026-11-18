@@ -26,8 +26,8 @@ test('Expense Activity Notification Pipeline Test Suite', async (t) => {
   const unclaimedB = tripA.members.find((m) => m.displayName === 'Friend B');
 
   // Claim memberships for real users
-  const joinedA = tripService.joinTripByCode(userA, tripA.inviteCode, { claimMemberId: unclaimedA.id });
-  const joinedB = tripService.joinTripByCode(userB, tripA.inviteCode, { claimMemberId: unclaimedB.id });
+  const joinedA = tripService.joinTripByCode(userA, tripA.inviteCode, { claimMemberId: unclaimedA.id, claimToken: unclaimedA.claimToken });
+  const joinedB = tripService.joinTripByCode(userB, tripA.inviteCode, { claimMemberId: unclaimedB.id, claimToken: unclaimedB.claimToken });
 
   const hardevMember = tripA.members.find((m) => m.userId === hardevUser.id);
   const memberA = joinedA.members.find((m) => m.userId === userA.id);

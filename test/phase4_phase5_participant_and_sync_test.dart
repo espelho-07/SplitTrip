@@ -86,6 +86,7 @@ void main() {
         inviteCodeOrId: trip.inviteCode,
         user: realFriendUser,
         claimMemberId: virtualAlice.id,
+        claimToken: virtualAlice.claimToken,
       );
 
       final claimedAlice = updatedTrip.members.firstWhere((m) => m.id == virtualAlice.id);
@@ -124,6 +125,7 @@ void main() {
         inviteCodeOrId: trip.inviteCode,
         user: rohanUser,
         claimMemberId: originalId,
+        claimToken: virtualRohan.claimToken,
       );
 
       final rohan = joined.members.firstWhere((m) => m.id == originalId);
@@ -146,14 +148,16 @@ void main() {
         inviteCodeOrId: trip.inviteCode,
         user: realFriendUser,
         claimMemberId: virtualAlice.id,
+        claimToken: virtualAlice.claimToken,
       );
 
-      // Other user attempts to claim the same participant
+      // Other user attempts to claim the same participant (even with token, fails with ConflictException because already claimed)
       expect(
         () => tripRepo.joinTrip(
           inviteCodeOrId: trip.inviteCode,
           user: otherUser,
           claimMemberId: virtualAlice.id,
+          claimToken: virtualAlice.claimToken,
         ),
         throwsA(isA<ConflictException>()),
       );
@@ -173,6 +177,7 @@ void main() {
         inviteCodeOrId: trip.inviteCode,
         user: realFriendUser,
         claimMemberId: virtualAlice.id,
+        claimToken: virtualAlice.claimToken,
       );
 
       // Same user attempts to claim Charlie as well
@@ -181,6 +186,7 @@ void main() {
           inviteCodeOrId: trip.inviteCode,
           user: realFriendUser,
           claimMemberId: virtualCharlie.id,
+          claimToken: virtualCharlie.claimToken,
         ),
         throwsA(isA<ConflictException>()),
       );
@@ -319,6 +325,7 @@ void main() {
         inviteCodeOrId: trip.inviteCode,
         user: realFriendUser,
         claimMemberId: placeholderAlice.id,
+        claimToken: placeholderAlice.claimToken,
       );
 
       eligible = updatedTrip.members.where((m) => !m.isVirtual && m.isClaimed).toList();
@@ -380,6 +387,7 @@ void main() {
         inviteCodeOrId: trip.inviteCode,
         user: bobUser,
         claimMemberId: virtualBob.id,
+        claimToken: virtualBob.claimToken,
       );
 
       // Re-evaluate balances with claimed trip members
@@ -408,6 +416,7 @@ void main() {
         inviteCodeOrId: localTrip.inviteCode,
         user: realFriendUser,
         claimMemberId: virtualAlice.id,
+        claimToken: virtualAlice.claimToken,
       );
 
       final claimedMember = claimedLocalTrip.members.firstWhere((m) => m.id == virtualAlice.id);
