@@ -34,8 +34,14 @@ class BalanceEngine {
     for (final expense in activeExpenses) {
       totalSpent += expense.amountInPaise;
 
-      // Credit the payer
-      paidMap[expense.paidById] = (paidMap[expense.paidById] ?? 0) + expense.amountInPaise;
+      // Credit the payer(s) (supports single or multi-payer custom contributions)
+      if (expense.paidByMap != null && expense.paidByMap!.isNotEmpty) {
+        expense.paidByMap!.forEach((payerId, paidPaise) {
+          paidMap[payerId] = (paidMap[payerId] ?? 0) + paidPaise;
+        });
+      } else {
+        paidMap[expense.paidById] = (paidMap[expense.paidById] ?? 0) + expense.amountInPaise;
+      }
 
       // Debit each participant's allocated share
       for (final split in expense.splits) {

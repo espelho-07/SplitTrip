@@ -2,6 +2,7 @@ import 'dart:async';
 import '../../core/network/api_client.dart';
 import '../../core/network/realtime_client.dart';
 import '../../domain/engine/balance_engine.dart';
+import '../../domain/engine/expense_merge.dart';
 import '../../domain/engine/money_engine.dart';
 import '../../domain/models/balance_summary.dart';
 import '../../domain/models/expense.dart';
@@ -21,7 +22,9 @@ class ExpenseRepository {
     required this.syncService,
     required this.apiClient,
     this.realtimeClient,
-  });
+  }) {
+    storage.addOnClearDataListener(clearLocalCache);
+  }
 
   final Map<String, List<Expense>> _cachedExpensesInMemory = {};
 
@@ -32,6 +35,11 @@ class ExpenseRepository {
     } else {
       _cachedExpensesInMemory.clear();
     }
+  }
+
+  /// Explicitly purges all cached expenses in memory across account switches or deletion.
+  void clearLocalCache() {
+    _cachedExpensesInMemory.clear();
   }
 
   /// Synchronously returns cached expenses for a trip without network latency.
@@ -56,52 +64,56 @@ class ExpenseRepository {
       if (res is List) {
         final serverExpenses = res.map((j) => Expense.fromJson(j as Map<String, dynamic>)).toList();
 
-        // 1. Inspect local pending outbox mutations
         final pendingMutations = syncService.getPendingMutationsForTrip(tripId);
         final pendingDeletedIds = pendingMutations
             .where((m) => m.type == MutationType.deleteExpense)
             .map((m) => (m.payload['id'] ?? m.payload['expenseId']).toString())
             .toSet();
-        final pendingUpdateMap = {
-          for (final m in pendingMutations.where((m) => m.type == MutationType.updateExpense))
-            (m.payload['id'] ?? m.payload['expenseId']).toString(): Expense.fromJson(m.payload)
-        };
-
-        final mergedMap = <String, Expense>{};
-        // 2. Populate local expenses, skipping locally deleted items
-        for (final local in localExpenses) {
-          if (!local.isDeleted && !pendingDeletedIds.contains(local.id)) {
-            mergedMap[local.id] = local;
+        final pendingUpserts = <String, Expense>{};
+        for (final mutation in pendingMutations.where(
+          (m) => m.type == MutationType.addExpense || m.type == MutationType.updateExpense,
+        )) {
+          final pendingExpense = Expense.fromJson(mutation.payload);
+          final current = pendingUpserts[pendingExpense.id];
+          if (current == null || pendingExpense.updatedAt.isAfter(current.updatedAt)) {
+            pendingUpserts[pendingExpense.id] = pendingExpense;
           }
         }
 
-        // 3. Merge server expenses safely
-        for (final server in serverExpenses) {
-          // Never resurrect an expense marked for deletion in the local outbox
-          if (pendingDeletedIds.contains(server.id)) {
-            continue;
-          }
-          // Never overwrite a local unpushed edit with older server data
-          if (pendingUpdateMap.containsKey(server.id)) {
-            final pendingEdit = pendingUpdateMap[server.id]!;
-            if (pendingEdit.updatedAt.isAfter(server.updatedAt)) {
-              mergedMap[server.id] = pendingEdit;
-              continue;
+        final tombstonedIds = storage
+            .getDeletedExpenseTombstones(tripId)
+            .keys
+            .toSet();
+        final outcome = mergeAuthoritativeExpenses(
+          localExpenses: localExpenses,
+          serverExpenses: serverExpenses,
+          pendingDeletedIds: pendingDeletedIds,
+          pendingUpserts: pendingUpserts,
+          tombstonedIds: tombstonedIds,
+        );
+
+        await storage.saveExpenses(tripId, outcome.expenses.map((e) => e.toJson()).toList());
+        for (final deletedId in outcome.remoteDeletedIds) {
+          await storage.markExpenseTombstoned(tripId, deletedId);
+        }
+        for (final expenseId in outcome.localNewerIds) {
+          Expense? expense;
+          for (final candidate in outcome.expenses) {
+            if (candidate.id == expenseId) {
+              expense = candidate;
+              break;
             }
           }
-          if (!server.isDeleted) {
-            mergedMap[server.id] = server;
-          } else {
-            mergedMap.remove(server.id);
-          }
+          if (expense == null || pendingUpserts.containsKey(expenseId)) continue;
+          await syncService.enqueueMutation(
+            MutationType.updateExpense,
+            expense.toJson(),
+            idempotencyKey: expense.id,
+            backgroundApiClient: apiClient,
+          );
         }
-
-        final mergedList = mergedMap.values.toList();
-        mergedList.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
-        await storage.saveExpenses(tripId, mergedList.map((e) => e.toJson()).toList());
-        _cachedExpensesInMemory[tripId] = mergedList;
-        return mergedList;
+        _cachedExpensesInMemory[tripId] = outcome.expenses;
+        return outcome.expenses;
       }
     } catch (_) {
       // Offline fallback: return durable local cache

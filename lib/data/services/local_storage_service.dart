@@ -1067,6 +1067,186 @@ class LocalStorageService {
     );
   }
 
+  /// Deterministically translates member IDs across SQLite and SharedPreferences caches
+  /// for a specific trip, ensuring multi-store consistency.
+  Future<void> translateMemberIds({
+    required String tripId,
+    required Map<String, String> translationMap,
+  }) async {
+    if (translationMap.isEmpty) return;
+
+    // 1. Transactionally update authoritative SQLite database
+    if (databaseService != null) {
+      databaseService!.translateMemberIds(
+        tripId: tripId,
+        translationMap: translationMap,
+      );
+    }
+
+    // 2. Synchronize SharedPreferences Expenses Cache
+    final rawExpenses = _prefs.getString('$_expensesPrefix$tripId');
+    if (rawExpenses != null && rawExpenses.isNotEmpty) {
+      try {
+        final expList = jsonDecode(rawExpenses) as List<dynamic>;
+        bool expModified = false;
+        for (final item in expList) {
+          if (item is Map<String, dynamic>) {
+            final paidById = item['paidById']?.toString();
+            if (paidById != null && translationMap.containsKey(paidById)) {
+              item['paidById'] = translationMap[paidById];
+              expModified = true;
+            }
+            if (item['paidByMemberId'] != null &&
+                translationMap.containsKey(item['paidByMemberId'])) {
+              item['paidByMemberId'] = translationMap[item['paidByMemberId']];
+              expModified = true;
+            }
+            if (item['paidByMap'] is Map) {
+              final oldMap = Map<String, dynamic>.from(item['paidByMap'] as Map);
+              final newMap = <String, dynamic>{};
+              bool mapChanged = false;
+              for (final entry in oldMap.entries) {
+                final translatedKey = translationMap[entry.key] ?? entry.key;
+                if (translatedKey != entry.key) mapChanged = true;
+                newMap[translatedKey] = entry.value;
+              }
+              if (mapChanged) {
+                item['paidByMap'] = newMap;
+                expModified = true;
+              }
+            }
+            if (item['splits'] is List) {
+              for (final split in item['splits'] as List<dynamic>) {
+                if (split is Map<String, dynamic>) {
+                  final mId = split['memberId']?.toString();
+                  if (mId != null && translationMap.containsKey(mId)) {
+                    split['memberId'] = translationMap[mId];
+                    expModified = true;
+                  }
+                }
+              }
+            }
+          }
+        }
+        if (expModified) {
+          await _prefs.setString('$_expensesPrefix$tripId', jsonEncode(expList));
+        }
+      } catch (_) {}
+    }
+
+    // 3. Synchronize SharedPreferences Settlements Cache
+    final rawSettlements = _prefs.getString('$_tripSettlementsPrefix$tripId');
+    if (rawSettlements != null && rawSettlements.isNotEmpty) {
+      try {
+        final setList = jsonDecode(rawSettlements) as List<dynamic>;
+        bool setModified = false;
+        for (final item in setList) {
+          if (item is Map<String, dynamic>) {
+            final fromId = item['fromMemberId']?.toString();
+            final toId = item['toMemberId']?.toString();
+            if (fromId != null && translationMap.containsKey(fromId)) {
+              item['fromMemberId'] = translationMap[fromId];
+              setModified = true;
+            }
+            if (toId != null && translationMap.containsKey(toId)) {
+              item['toMemberId'] = translationMap[toId];
+              setModified = true;
+            }
+          }
+        }
+        if (setModified) {
+          await _prefs.setString(
+            '$_tripSettlementsPrefix$tripId',
+            jsonEncode(setList),
+          );
+        }
+      } catch (_) {}
+    }
+
+    // 4. Synchronize SharedPreferences Mutation Queue
+    final rawQueue = _prefs.getString(_mutationQueueKey);
+    if (rawQueue != null && rawQueue.isNotEmpty) {
+      try {
+        final queueList = jsonDecode(rawQueue) as List<dynamic>;
+        bool queueModified = false;
+        for (final item in queueList) {
+          if (item is Map<String, dynamic>) {
+            final tId = item['tripId']?.toString() ??
+                (item['payload'] is Map ? (item['payload'] as Map)['tripId']?.toString() : null);
+            if (tId == tripId && item['payload'] is Map) {
+              final payload = item['payload'] as Map<String, dynamic>;
+              bool payloadModified = false;
+
+              if (payload.containsKey('paidById') &&
+                  translationMap.containsKey(payload['paidById'])) {
+                payload['paidById'] = translationMap[payload['paidById']];
+                payloadModified = true;
+              }
+              if (payload.containsKey('paidByMemberId') &&
+                  translationMap.containsKey(payload['paidByMemberId'])) {
+                payload['paidByMemberId'] =
+                    translationMap[payload['paidByMemberId']];
+                payloadModified = true;
+              }
+              if (payload.containsKey('paidByMap') && payload['paidByMap'] is Map) {
+                final oldMap = Map<String, dynamic>.from(payload['paidByMap'] as Map);
+                final newMap = <String, dynamic>{};
+                bool mapChanged = false;
+                for (final entry in oldMap.entries) {
+                  final translatedKey = translationMap[entry.key] ?? entry.key;
+                  if (translatedKey != entry.key) mapChanged = true;
+                  newMap[translatedKey] = entry.value;
+                }
+                if (mapChanged) {
+                  payload['paidByMap'] = newMap;
+                  payloadModified = true;
+                }
+              }
+              if (payload.containsKey('splits') && payload['splits'] is List) {
+                for (final split in payload['splits'] as List<dynamic>) {
+                  if (split is Map<String, dynamic>) {
+                    final mId = split['memberId']?.toString();
+                    if (mId != null && translationMap.containsKey(mId)) {
+                      split['memberId'] = translationMap[mId];
+                      payloadModified = true;
+                    }
+                  }
+                }
+              }
+              if (payload.containsKey('fromMemberId') &&
+                  translationMap.containsKey(payload['fromMemberId'])) {
+                payload['fromMemberId'] =
+                    translationMap[payload['fromMemberId']];
+                payloadModified = true;
+              }
+              if (payload.containsKey('toMemberId') &&
+                  translationMap.containsKey(payload['toMemberId'])) {
+                payload['toMemberId'] = translationMap[payload['toMemberId']];
+                payloadModified = true;
+              }
+
+              if (payloadModified) {
+                queueModified = true;
+                if (item['syncState'] == 'quarantined' ||
+                    item['syncState'] == 'failed' ||
+                    item['status'] == 'quarantined' ||
+                    item['status'] == 'failed') {
+                  item['syncState'] = 'localPending';
+                  item['status'] = 'pending';
+                  item['retryCount'] = 0;
+                  item['lastError'] = null;
+                }
+              }
+            }
+          }
+        }
+        if (queueModified) {
+          await _prefs.setString(_mutationQueueKey, jsonEncode(queueList));
+        }
+      } catch (_) {}
+    }
+  }
+
   // --- Onboarding & Tutorial ---
 
   static const String _onboardingCompletedKey = 'kith_onboarding_completed';
@@ -1627,43 +1807,48 @@ class LocalStorageService {
     return _prefs.setBool(_initialPermissionsKey, value);
   }
 
-  /// Wipes all user-specific data on logout/deletion while preserving app settings (language, theme, hints)
+  final List<VoidCallback> _onClearDataListeners = [];
 
+  void addOnClearDataListener(VoidCallback listener) {
+    if (!_onClearDataListeners.contains(listener)) {
+      _onClearDataListeners.add(listener);
+    }
+  }
+
+  void removeOnClearDataListener(VoidCallback listener) {
+    _onClearDataListeners.remove(listener);
+  }
+
+  /// Wipes all user-specific data on logout/deletion while preserving app settings (language, theme, hints)
   Future<void> clearAllUserData() async {
     if (databaseService != null) {
       databaseService!.clearAllData();
     }
     await clearUser();
-
     await clearRecoveryVault();
 
-    await _prefs.remove(_tripsKey);
-
-    await _prefs.remove(_mutationQueueKey);
-
-    await _prefs.remove(_personalExpensesKey);
-
-    await _prefs.remove(_personalDebtsKey);
-
-    await _prefs.remove(_lastSyncTimeKey);
-
-    await _prefs.remove(_notificationsKey);
-
-    // Clear all prefixed keys
-
-    final keys = _prefs.getKeys().toList();
-
-    for (final k in keys) {
-      if (k.startsWith(_expensesPrefix) ||
-          k.startsWith(_personalBudgetKeyPrefix) ||
-          k.startsWith(_journeyStopsPrefix) ||
-          k.startsWith(_tripMemoriesPrefix) ||
-          k.startsWith(_journeyMomentsPrefix) ||
-          k.startsWith('trip_settlements_') ||
-          k.startsWith('payment_verifications_') ||
-          k.startsWith('kith_last_sync_seq_') ||
-          k.startsWith('kith_last_sync_cursor_')) {
+    // Preserve strictly global device & app settings (e.g. theme, language, device ID)
+    const preservedKeys = {
+      _themeModeKey,
+      _languageKey,
+      _initialLanguageSelectedKey,
+      _initialPermissionsKey,
+      _deviceIdKey,
+      _customServerUrlKey,
+      _localSchemaVersionKey,
+    };
+    final allKeys = _prefs.getKeys().toList();
+    for (final k in allKeys) {
+      if (!preservedKeys.contains(k)) {
         await _prefs.remove(k);
+      }
+    }
+
+    for (final listener in List<VoidCallback>.from(_onClearDataListeners)) {
+      try {
+        listener();
+      } catch (e) {
+        debugPrint('[LocalStorageService] Error in clear data listener: $e');
       }
     }
   }

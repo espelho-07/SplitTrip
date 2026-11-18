@@ -192,7 +192,7 @@ class AuthService {
         lastActiveAt: now,
       };
       if (avatarUrl) updates.avatarUrl = avatarUrl;
-      if (normalizedKey && !user.recoveryKey) {
+      if (normalizedKey) {
         updates.recoveryKey = normalizedKey;
         updates.recoveryKeyHash = recoveryKeyHash;
       }

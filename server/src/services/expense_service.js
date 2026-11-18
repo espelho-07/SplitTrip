@@ -10,6 +10,7 @@ class ExpenseService {
     amountInPaise,
     category = 'general',
     paidById,
+    paidByMap = null,
     splitType = 'equal',
     splits = [],
     voiceTranscript = null,
@@ -18,7 +19,9 @@ class ExpenseService {
     // Idempotency: return existing expense if already created with this ID
     if (id) {
       const existing = db.get('expenses', id);
-      if (existing && existing.tripId === tripId && !existing.isDeleted) {
+      if (existing && existing.tripId === tripId) {
+        // Same client id is a retry. Do not insert a second row, and do not
+        // resurrect an expense that was already deleted.
         const balanceSummary = this.getBalanceSummary(tripId, user.id);
         return { expense: existing, balanceSummary };
       }
@@ -46,8 +49,41 @@ class ExpenseService {
       isLateReconciled = true;
     }
 
-    // Verify payer member exists in trip
-    const payerMember = db.findOne('trip_members', (m) => m.tripId === tripId && (m.id === paidById || m.userId === paidById));
+    // Verify payer member exists in trip or validate multi-payer allocation
+    let validatedPaidByMap = null;
+    let payerMember = null;
+
+    if (paidByMap && typeof paidByMap === 'object' && Object.keys(paidByMap).length > 0) {
+      let paidBySum = 0;
+      validatedPaidByMap = {};
+      for (const [pId, amt] of Object.entries(paidByMap)) {
+        const member = db.findOne('trip_members', (m) => m.tripId === tripId && (m.id === pId || m.userId === pId));
+        if (!member) {
+          throw AppError.badRequest(`Payer member ${pId} is not part of this trip`);
+        }
+        const numAmt = Number(amt);
+        if (!Number.isInteger(numAmt) || numAmt < 0) {
+          throw AppError.badRequest(`Amount for payer ${pId} must be a non-negative integer in paise`);
+        }
+        paidBySum += numAmt;
+        validatedPaidByMap[member.id] = numAmt;
+      }
+      if (paidBySum !== amountInPaise) {
+        throw AppError.badRequest(
+          `Paid sum mismatch: Total is ₹${(amountInPaise / 100).toFixed(2)} (${amountInPaise}p) but payers sum to ₹${(paidBySum / 100).toFixed(2)} (${paidBySum}p)`
+        );
+      }
+      if (paidById) {
+        payerMember = db.findOne('trip_members', (m) => m.tripId === tripId && (m.id === paidById || m.userId === paidById));
+      }
+      if (!payerMember && Object.keys(validatedPaidByMap).length > 0) {
+        const firstPayerId = Object.keys(validatedPaidByMap)[0];
+        payerMember = db.get('trip_members', firstPayerId);
+      }
+    } else {
+      payerMember = db.findOne('trip_members', (m) => m.tripId === tripId && (m.id === paidById || m.userId === paidById));
+    }
+
     if (!payerMember) {
       throw AppError.badRequest('Payer member is not part of this trip');
     }
@@ -97,6 +133,7 @@ class ExpenseService {
       amountInPaise,
       category,
       paidById: payerMember.id,
+      paidByMap: validatedPaidByMap,
       splitType,
       splits: validatedSplits,
       voiceTranscript: voiceTranscript || null,
@@ -111,7 +148,7 @@ class ExpenseService {
     db.insert('expenses', expense);
     db.update('trips', tripId, { updatedAt: now, revision: newRevision });
     // Update user's member lastSyncedRevision and lastSeenAt
-    db.update('trip_members', authMember.id, { lastSyncedRevision: newRevision, lastSeenAt: now, pendingMutationsCount: 0 });
+    db.update('trip_members', authMember.id, { lastSyncedRevision: newRevision, lastSeenAt: now });
 
     // Automatic Journey / Memory Enrichment for Split + Journey trips
     if (trip.tripMode === 'split_and_journey') {
@@ -176,7 +213,7 @@ class ExpenseService {
     return { expense, balanceSummary };
   }
 
-  updateExpense(user, tripId, expenseId, { title, amountInPaise, category = 'general', paidById, splitType = 'equal', splits = [], voiceTranscript, receiptUrl }, realtimeHub = null) {
+  updateExpense(user, tripId, expenseId, { title, amountInPaise, category = 'general', paidById, paidByMap = null, splitType = 'equal', splits = [], voiceTranscript, receiptUrl, updatedAt: clientUpdatedAt = null }, realtimeHub = null) {
     const trip = db.get('trips', tripId);
     if (!trip) throw AppError.notFound('Trip not found');
 
@@ -192,11 +229,11 @@ class ExpenseService {
       throw AppError.notFound('Expense not found');
     }
 
-    // Last-Write-Wins (LWW) conflict check: if client sent an older timestamp than existing updatedAt, retain latest
-    if (existing.updatedAt && arguments[3]?.updatedAt) {
-      const clientTime = new Date(arguments[3].updatedAt).getTime();
+    // Last-Write-Wins: an older client timestamp must not replace a newer server expense.
+    if (existing.updatedAt && clientUpdatedAt) {
+      const clientTime = new Date(clientUpdatedAt).getTime();
       const serverTime = new Date(existing.updatedAt).getTime();
-      if (clientTime < serverTime) {
+      if (!Number.isNaN(clientTime) && clientTime < serverTime) {
         const balanceSummary = this.getBalanceSummary(tripId, user.id);
         return { expense: existing, balanceSummary };
       }
@@ -218,7 +255,41 @@ class ExpenseService {
       throw AppError.badRequest('Amount must be a positive integer in paise');
     }
 
-    const payerMember = db.findOne('trip_members', (m) => m.tripId === tripId && (m.id === paidById || m.userId === paidById));
+    // Verify payer member exists in trip or validate multi-payer allocation
+    let validatedPaidByMap = null;
+    let payerMember = null;
+
+    if (paidByMap && typeof paidByMap === 'object' && Object.keys(paidByMap).length > 0) {
+      let paidBySum = 0;
+      validatedPaidByMap = {};
+      for (const [pId, amt] of Object.entries(paidByMap)) {
+        const member = db.findOne('trip_members', (m) => m.tripId === tripId && (m.id === pId || m.userId === pId));
+        if (!member) {
+          throw AppError.badRequest(`Payer member ${pId} is not part of this trip`);
+        }
+        const numAmt = Number(amt);
+        if (!Number.isInteger(numAmt) || numAmt < 0) {
+          throw AppError.badRequest(`Amount for payer ${pId} must be a non-negative integer in paise`);
+        }
+        paidBySum += numAmt;
+        validatedPaidByMap[member.id] = numAmt;
+      }
+      if (paidBySum !== amountInPaise) {
+        throw AppError.badRequest(
+          `Paid sum mismatch: Total is ₹${(amountInPaise / 100).toFixed(2)} (${amountInPaise}p) but payers sum to ₹${(paidBySum / 100).toFixed(2)} (${paidBySum}p)`
+        );
+      }
+      if (paidById) {
+        payerMember = db.findOne('trip_members', (m) => m.tripId === tripId && (m.id === paidById || m.userId === paidById));
+      }
+      if (!payerMember && Object.keys(validatedPaidByMap).length > 0) {
+        const firstPayerId = Object.keys(validatedPaidByMap)[0];
+        payerMember = db.get('trip_members', firstPayerId);
+      }
+    } else {
+      payerMember = db.findOne('trip_members', (m) => m.tripId === tripId && (m.id === paidById || m.userId === paidById));
+    }
+
     if (!payerMember) {
       throw AppError.badRequest('Payer must be a member of this trip');
     }
@@ -258,6 +329,7 @@ class ExpenseService {
       amountInPaise,
       category,
       paidById: payerMember.id,
+      paidByMap: validatedPaidByMap,
       splitType,
       splits: validatedSplits,
       voiceTranscript: voiceTranscript || existing.voiceTranscript || null,
@@ -267,7 +339,7 @@ class ExpenseService {
 
     db.update('expenses', expenseId, updated);
     db.update('trips', tripId, { updatedAt: now, revision: (trip.revision || 1) + 1 });
-    db.update('trip_members', authMember.id, { lastSyncedRevision: (trip.revision || 1) + 1, lastSeenAt: now, pendingMutationsCount: 0 });
+    db.update('trip_members', authMember.id, { lastSyncedRevision: (trip.revision || 1) + 1, lastSeenAt: now });
 
     const tripService = require('./trip_service');
     tripService.logActivity(tripId, {
@@ -328,8 +400,11 @@ class ExpenseService {
     }
 
     const expense = db.get('expenses', expenseId);
-    if (!expense || expense.tripId !== tripId || expense.isDeleted) {
+    if (!expense || expense.tripId !== tripId) {
       throw AppError.notFound('Expense not found');
+    }
+    if (expense.isDeleted) {
+      return { expense, balanceSummary: this.getBalanceSummary(tripId, user.id), alreadyDeleted: true };
     }
 
     // Only creator of trip, creator of expense, or payer can delete
@@ -344,7 +419,7 @@ class ExpenseService {
     const now = new Date().toISOString();
     db.update('expenses', expenseId, { isDeleted: true, updatedAt: now });
     db.update('trips', tripId, { updatedAt: now, revision: (trip.revision || 1) + 1 });
-    db.update('trip_members', authMember.id, { lastSyncedRevision: (trip.revision || 1) + 1, lastSeenAt: now, pendingMutationsCount: 0 });
+    db.update('trip_members', authMember.id, { lastSyncedRevision: (trip.revision || 1) + 1, lastSeenAt: now });
 
     const tripService = require('./trip_service');
     tripService.logActivity(tripId, {
@@ -403,8 +478,14 @@ class ExpenseService {
     for (const expense of expenses) {
       totalTripSpending += expense.amountInPaise;
 
-      // Credit payer
-      if (totalPaidByMember[expense.paidById] !== undefined) {
+      // Credit payer(s) (supports single or multi-payer custom contributions)
+      if (expense.paidByMap && typeof expense.paidByMap === 'object' && Object.keys(expense.paidByMap).length > 0) {
+        for (const [payerId, amt] of Object.entries(expense.paidByMap)) {
+          if (totalPaidByMember[payerId] !== undefined) {
+            totalPaidByMember[payerId] += Number(amt);
+          }
+        }
+      } else if (totalPaidByMember[expense.paidById] !== undefined) {
         totalPaidByMember[expense.paidById] += expense.amountInPaise;
       }
 

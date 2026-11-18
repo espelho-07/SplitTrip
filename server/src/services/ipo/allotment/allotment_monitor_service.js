@@ -29,6 +29,9 @@ class AllotmentMonitorService {
     if (this._intervalTimer) return;
     console.log('[AllotmentMonitor] Starting background monitoring worker...');
     this._intervalTimer = setInterval(() => this.runScheduledCycle(), this.pollIntervalMs);
+    if (this._intervalTimer && this._intervalTimer.unref) {
+      this._intervalTimer.unref();
+    }
   }
 
   stop() {

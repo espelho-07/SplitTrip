@@ -77,6 +77,9 @@ class RealtimeHub {
         ws.ping();
       });
     }, 30000);
+    if (this.heartbeatInterval && this.heartbeatInterval.unref) {
+      this.heartbeatInterval.unref();
+    }
   }
 
   _subscribeUserRoom(ws, userId) {
@@ -316,8 +319,14 @@ class RealtimeHub {
   close() {
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
     }
     if (this.wss) {
+      for (const client of this.wss.clients) {
+        try {
+          client.terminate();
+        } catch (_) {}
+      }
       this.wss.close();
     }
   }

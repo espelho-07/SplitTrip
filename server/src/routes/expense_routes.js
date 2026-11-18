@@ -38,6 +38,7 @@ router.post('/', (req, res, next) => {
       amountInPaise,
       category,
       paidById,
+      paidByMap,
       splitType,
       splits,
       voiceTranscript,
@@ -53,6 +54,7 @@ router.post('/', (req, res, next) => {
         amountInPaise,
         category,
         paidById,
+        paidByMap,
         splitType,
         splits,
         voiceTranscript,
@@ -70,7 +72,7 @@ router.post('/', (req, res, next) => {
 // PUT /api/trips/:tripId/expenses/:expenseId
 router.put('/:expenseId', (req, res, next) => {
   try {
-    const { title, amountInPaise, category, paidById, splitType, splits, voiceTranscript, receiptUrl } = req.body;
+    const { title, amountInPaise, category, paidById, paidByMap, splitType, splits, voiceTranscript, receiptUrl } = req.body;
     const result = expenseService.updateExpense(
       req.user,
       req.params.tripId,
@@ -80,6 +82,7 @@ router.put('/:expenseId', (req, res, next) => {
         amountInPaise,
         category,
         paidById,
+        paidByMap,
         splitType,
         splits,
         voiceTranscript,

@@ -194,7 +194,14 @@ class AuthService {
             try {
               final localTrip = Trip.fromJson(tripMap[id]!);
               final remoteTrip = Trip.fromJson(remoteJson);
-              tripMap[id] = localTrip.mergeWith(remoteTrip).toJson();
+              final mergeResult = localTrip.mergeWithDetailed(remoteTrip);
+              tripMap[id] = mergeResult.mergedTrip.toJson();
+              if (mergeResult.memberIdMap.isNotEmpty) {
+                await storage.translateMemberIds(
+                  tripId: id,
+                  translationMap: mergeResult.memberIdMap,
+                );
+              }
             } catch (_) {
               tripMap[id] = remoteJson;
             }
@@ -314,6 +321,7 @@ class AuthService {
     apiClient.setAuthToken(token);
     realtimeClient?.setAuthToken(token);
     await storage.saveUser(user.toJson());
+    await storage.saveUserToRecoveryVault(user.toJson());
 
     // Register securely on Supabase
     try {
@@ -329,6 +337,7 @@ class AuthService {
 
     // Anchor in Android Keystore
     unawaited(_secureId.persistGuestIdentity(user.id, recoveryKey));
+    await syncLocalGuestSession(user);
 
     return user;
   }
@@ -416,21 +425,24 @@ class AuthService {
     // 3. Query Render backend /auth/recover
     try {
       final backendRes = await apiClient.post('/auth/recover', body: {'recoveryKey': cleanKey});
-      if (backendRes is Map<String, dynamic> && backendRes['data'] is Map<String, dynamic>) {
-        final data = backendRes['data'] as Map<String, dynamic>;
+      final data = (backendRes is Map<String, dynamic> && backendRes.containsKey('data'))
+          ? backendRes['data'] as Map<String, dynamic>
+          : (backendRes is Map<String, dynamic> ? backendRes : null);
+      if (data != null) {
         final userMap = data['user'] as Map<String, dynamic>?;
         if (userMap != null) {
           final user = GuestUser.fromJson(userMap);
           apiClient.setAuthToken(user.anonymousToken);
           realtimeClient?.setAuthToken(user.anonymousToken);
           await storage.saveUser(user.toJson());
+          await storage.saveUserToRecoveryVault(user.toJson());
           await _secureId.persistGuestIdentity(user.id, user.recoveryKey);
-          syncLocalGuestSession(user);
+          await syncLocalGuestSession(user);
           return user;
         }
       }
     } catch (e) {
-      debugPrint('[AuthService] Backend server recovery notice: $e');
+      debugPrint('[AuthService] Backend server recovery notice: ');
     }
 
     // 4. Fallback to local device Recovery Vault (if not deleted)

@@ -131,7 +131,7 @@ class NotificationService {
           actorName,
           amountInPaise: String(expense.amountInPaise),
           route,
-          channelId: 'kith_activity',
+          channelId: 'kith_expenses',
         },
       });
     }
@@ -201,7 +201,7 @@ class NotificationService {
           actorName,
           amountInPaise: String(newExpense.amountInPaise),
           route,
-          channelId: 'kith_activity',
+          channelId: 'kith_expenses',
         },
       });
     }
@@ -303,7 +303,7 @@ class NotificationService {
 
       const title = 'Member joined trip';
       const body = `${actorName} joined "${tripName}".`;
-      const route = `/trip/${trip.id}`;
+      const route = `/trip/${trip.id}/members`;
 
       this.createNotification({
         recipientUserId,

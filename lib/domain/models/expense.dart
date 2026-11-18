@@ -11,6 +11,7 @@ class Expense {
   final int amountInPaise;
   final ExpenseCategory category;
   final String paidById;
+  final Map<String, int>? paidByMap;
   final List<ExpenseSplit> splits;
   final SplitType splitType;
   final String? location;
@@ -27,6 +28,7 @@ class Expense {
     required this.amountInPaise,
     required this.category,
     required this.paidById,
+    this.paidByMap,
     required this.splits,
     this.splitType = SplitType.equal,
     this.location,
@@ -44,6 +46,7 @@ class Expense {
     int? amountInPaise,
     ExpenseCategory? category,
     String? paidById,
+    Map<String, int>? paidByMap,
     List<ExpenseSplit>? splits,
     SplitType? splitType,
     String? location,
@@ -60,6 +63,7 @@ class Expense {
       amountInPaise: amountInPaise ?? this.amountInPaise,
       category: category ?? this.category,
       paidById: paidById ?? this.paidById,
+      paidByMap: paidByMap ?? this.paidByMap,
       splits: splits ?? this.splits,
       splitType: splitType ?? this.splitType,
       location: location ?? this.location,
@@ -78,6 +82,7 @@ class Expense {
     'amountInPaise': amountInPaise,
     'category': category.name,
     'paidById': paidById,
+    if (paidByMap != null && paidByMap!.isNotEmpty) 'paidByMap': paidByMap,
     'splits': splits.map((s) => s.toJson()).toList(),
     'splitType': splitType.name,
     if (location != null && location!.isNotEmpty) 'location': location,
@@ -89,26 +94,36 @@ class Expense {
   };
 
   factory Expense.fromJson(Map<String, dynamic> json) => Expense(
-    id: json['id'] as String,
-    tripId: json['tripId'] as String,
-    title: json['title'] as String,
-    amountInPaise: json['amountInPaise'] as int,
-    category: ExpenseCategory.fromString(json['category'] as String? ?? 'general'),
-    paidById: json['paidById'] as String,
+    id: (json['id'] ?? '').toString(),
+    tripId: (json['tripId'] ?? json['trip_id'] ?? '').toString(),
+    title: (json['title'] ?? 'Expense').toString(),
+    amountInPaise: (json['amountInPaise'] as num?)?.toInt() ??
+        (json['amount_in_paise'] as num?)?.toInt() ??
+        ((json['amount'] as num?)?.toDouble() != null ? ((json['amount'] as num).toDouble() * 100).round() : 0),
+    category: ExpenseCategory.fromString((json['category'] ?? 'general').toString()),
+    paidById: (json['paidById'] ?? json['paid_by_id'] ?? json['paidByMemberId'])?.toString() ??
+        (json['paidByMap'] is Map && (json['paidByMap'] as Map).isNotEmpty
+            ? (json['paidByMap'] as Map).keys.first.toString()
+            : ''),
+    paidByMap: json['paidByMap'] != null && json['paidByMap'] is Map
+        ? (json['paidByMap'] as Map).map((k, v) => MapEntry(k.toString(), (v as num).toInt()))
+        : (json['paid_by_map'] != null && json['paid_by_map'] is Map
+            ? (json['paid_by_map'] as Map).map((k, v) => MapEntry(k.toString(), (v as num).toInt()))
+            : null),
     splits: (json['splits'] as List<dynamic>?)
             ?.map((e) => ExpenseSplit.fromJson(e as Map<String, dynamic>))
             .toList() ??
         [],
-    splitType: SplitType.fromString(json['splitType'] as String? ?? 'equal'),
+    splitType: SplitType.fromString((json['splitType'] ?? json['split_type'] ?? 'equal').toString()),
     location: json['location'] as String?,
-    receiptUrl: json['receiptUrl'] as String?,
-    voiceTranscript: json['voiceTranscript'] as String?,
+    receiptUrl: (json['receiptUrl'] ?? json['receipt_url']) as String?,
+    voiceTranscript: (json['voiceTranscript'] ?? json['voice_transcript']) as String?,
     createdAt: json['createdAt'] != null
         ? DateTime.tryParse(json['createdAt'] as String) ?? DateTime.now()
-        : DateTime.now(),
+        : (json['created_at'] != null ? DateTime.tryParse(json['created_at'] as String) ?? DateTime.now() : DateTime.now()),
     updatedAt: json['updatedAt'] != null
         ? DateTime.tryParse(json['updatedAt'] as String) ?? DateTime.now()
-        : DateTime.now(),
-    isDeleted: json['isDeleted'] as bool? ?? false,
+        : (json['updated_at'] != null ? DateTime.tryParse(json['updated_at'] as String) ?? DateTime.now() : DateTime.now()),
+    isDeleted: (json['isDeleted'] ?? json['is_deleted']) as bool? ?? false,
   );
 }

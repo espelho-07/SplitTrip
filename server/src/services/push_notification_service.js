@@ -1,22 +1,47 @@
 'use strict';
 
+// Ensure server/.env is loaded safely into process.env if present
+require('../config/env');
+
 /**
  * Push Notification Service — Firebase Admin SDK integration.
  *
- * Sends FCM push notifications to Kith users for payment lifecycle events
+ * Sends FCM push notifications to Kith users for payment & trip activity events
  * so they reach devices even when app is backgrounded or terminated.
  *
- * Environment variables required:
- *   FIREBASE_PROJECT_ID   — Firebase project ID (e.g. "amazing-pipe-484506-t8")
- *   FIREBASE_CLIENT_EMAIL — Firebase service account client email
- *   FIREBASE_PRIVATE_KEY  — Firebase service account private key (replace \n with actual newlines)
+ * Target Firebase Project (configured in Android): kith-7c88f
  *
- * These can be set in server/.env. If not set, push is silently skipped
- * (WebSocket delivery still works for foreground users).
+ * Required environment variables:
+ *   FIREBASE_PROJECT_ID   — Firebase project ID (defaults to "kith-7c88f")
+ *   FIREBASE_CLIENT_EMAIL — Firebase service account client email
+ *   FIREBASE_PRIVATE_KEY  — Firebase service account private key (with \n or real newlines)
+ *   (or FIREBASE_SERVICE_ACCOUNT — Full JSON string or file path)
+ *
+ * If credentials are not configured or contain placeholder mock strings,
+ * FCM push is safely bypassed without throwing unhandled exceptions.
  */
 
 let admin;
 let isInitialized = false;
+
+/**
+ * Validates whether the given string represents placeholder credentials rather than genuine keys.
+ * A genuine Google 2048-bit RSA private key is typically > 1600 characters in PEM format.
+ */
+function isPlaceholderKey(key) {
+  if (!key || typeof key !== 'string') return true;
+  const trimmed = key.trim();
+  if (trimmed.length < 500) return true;
+  if (trimmed.includes('YOUR_KEY_HERE') || trimmed.includes('...') || trimmed.includes('example')) return true;
+  return false;
+}
+
+function isPlaceholderEmail(email) {
+  if (!email || typeof email !== 'string') return true;
+  const trimmed = email.trim();
+  if (trimmed.includes('XXXXX') || trimmed.includes('example.com') || trimmed.length < 10) return true;
+  return false;
+}
 
 function initFirebaseAdmin() {
   if (isInitialized) return;
@@ -24,11 +49,16 @@ function initFirebaseAdmin() {
     admin = require('firebase-admin');
     const fs = require('fs');
 
+    const projectId = process.env.FIREBASE_PROJECT_ID || 'kith-7c88f';
     let credential = null;
 
     // 1. Explicit Service Account JSON string or file path
     if (process.env.FIREBASE_SERVICE_ACCOUNT) {
       const sa = process.env.FIREBASE_SERVICE_ACCOUNT.trim();
+      if (sa.includes('YOUR_KEY_HERE') || sa.includes('...')) {
+        console.warn(`[PushNotification] Placeholder FIREBASE_SERVICE_ACCOUNT detected for project: ${projectId}. Push delivery disabled.`);
+        return;
+      }
       if (sa.startsWith('{')) {
         credential = admin.credential.cert(JSON.parse(sa));
       } else if (fs.existsSync(sa)) {
@@ -38,11 +68,16 @@ function initFirebaseAdmin() {
 
     // 2. Individual Environment Variables
     if (!credential) {
-      const projectId = process.env.FIREBASE_PROJECT_ID || 'kith-7c88f';
       const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-      const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+      const rawPrivateKey = process.env.FIREBASE_PRIVATE_KEY;
 
-      if (clientEmail && privateKey) {
+      if (clientEmail || rawPrivateKey) {
+        if (isPlaceholderEmail(clientEmail) || isPlaceholderKey(rawPrivateKey)) {
+          console.warn(`[PushNotification] Placeholder credentials detected for project: ${projectId}. Push delivery disabled until real credentials are provided.`);
+          return;
+        }
+
+        const privateKey = rawPrivateKey.replace(/\\n/g, '\n');
         credential = admin.credential.cert({
           projectId,
           clientEmail,
@@ -59,7 +94,7 @@ function initFirebaseAdmin() {
     }
 
     if (!credential) {
-      console.warn('[PushNotification] Firebase Admin credentials not set. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY (or FIREBASE_SERVICE_ACCOUNT) to enable FCM push.');
+      console.warn(`[PushNotification] Firebase Admin credentials not set for project: ${projectId}. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY (or FIREBASE_SERVICE_ACCOUNT) to enable FCM push.`);
       return;
     }
 
@@ -68,14 +103,34 @@ function initFirebaseAdmin() {
     }
 
     isInitialized = true;
-    console.info('[PushNotification] Firebase Admin SDK initialized successfully');
+    console.info(`[PushNotification] Firebase Admin SDK initialized successfully for project: ${projectId}`);
   } catch (err) {
-    console.error('[PushNotification] Firebase Admin SDK init notice:', err.message);
+    // Sanitize error message to ensure no secrets or tokens are ever exposed
+    const safeError = err.message ? err.message.replace(/([A-Za-z0-9+/=]{40,})/g, '[REDACTED]') : 'Unknown initialization error';
+    console.error('[PushNotification] Firebase Admin SDK init notice:', safeError);
   }
 }
 
 // Initialize on module load
 initFirebaseAdmin();
+
+/**
+ * Returns safe diagnostic status without revealing credentials or private keys.
+ */
+function getStatus() {
+  const projectId = process.env.FIREBASE_PROJECT_ID || 'kith-7c88f';
+  const email = process.env.FIREBASE_CLIENT_EMAIL;
+  const key = process.env.FIREBASE_PRIVATE_KEY;
+  return {
+    isInitialized,
+    initialized: isInitialized,
+    mode: isInitialized ? 'live' : 'mock',
+    targetProjectId: projectId,
+    hasClientEmail: Boolean(email && !isPlaceholderEmail(email)),
+    hasPrivateKey: Boolean(key && !isPlaceholderKey(key)),
+    isPlaceholderConfigured: Boolean((key && isPlaceholderKey(key)) || (email && isPlaceholderEmail(email))),
+  };
+}
 
 /**
  * Sends an FCM push notification to a specific user's registered devices.
@@ -177,4 +232,8 @@ async function sendToUser(db, userId, payload) {
   }
 }
 
-module.exports = { sendToUser };
+module.exports = {
+  sendToUser,
+  initFirebaseAdmin,
+  getStatus,
+};

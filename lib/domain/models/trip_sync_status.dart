@@ -1,3 +1,5 @@
+import 'trip.dart';
+
 /// Participant synchronization status reported by the server.
 enum ParticipantSyncState {
   synced,
@@ -27,6 +29,7 @@ class ParticipantSyncInfo {
   final String? avatarUrl;
   final bool isCreator;
   final bool isCurrentUser;
+  final bool isVirtual;
   final bool isOnline;
   final ParticipantSyncState syncStatus;
   final int acknowledgedRevision;
@@ -41,6 +44,7 @@ class ParticipantSyncInfo {
     this.avatarUrl,
     this.isCreator = false,
     this.isCurrentUser = false,
+    this.isVirtual = false,
     this.isOnline = false,
     this.syncStatus = ParticipantSyncState.unknown,
     this.acknowledgedRevision = 1,
@@ -49,7 +53,7 @@ class ParticipantSyncInfo {
     this.lastSyncFormatted = 'Unknown',
   });
 
-  bool get isSynced => syncStatus == ParticipantSyncState.synced && pendingCount == 0;
+  bool get isSynced => isVirtual || (syncStatus == ParticipantSyncState.synced && pendingCount == 0);
 
   factory ParticipantSyncInfo.fromJson(Map<String, dynamic> json) => ParticipantSyncInfo(
     memberId: json['memberId'] as String? ?? '',
@@ -58,6 +62,9 @@ class ParticipantSyncInfo {
     avatarUrl: json['avatarUrl'] as String?,
     isCreator: json['isCreator'] as bool? ?? false,
     isCurrentUser: json['isCurrentUser'] as bool? ?? false,
+    isVirtual: (json['isVirtual'] == true) ||
+        (json['userId'] as String? ?? '').startsWith('unclaimed_') ||
+        (json['lastSyncFormatted'] as String? ?? '').toLowerCase().contains('virtual'),
     isOnline: json['isOnline'] as bool? ?? false,
     syncStatus: ParticipantSyncState.fromString(json['syncStatus'] as String?),
     acknowledgedRevision: json['acknowledgedRevision'] as int? ?? 1,
@@ -73,6 +80,7 @@ class ParticipantSyncInfo {
     'avatarUrl': avatarUrl,
     'isCreator': isCreator,
     'isCurrentUser': isCurrentUser,
+    'isVirtual': isVirtual,
     'isOnline': isOnline,
     'syncStatus': syncStatus.name,
     'acknowledgedRevision': acknowledgedRevision,
@@ -113,6 +121,37 @@ class TripSyncStatus {
     required this.unsyncedParticipantsCount,
     required this.participants,
   });
+
+    factory TripSyncStatus.fromLocalTrip(Trip trip, {String currentUserId = ''}) {
+    final participants = trip.members.map((m) => ParticipantSyncInfo(
+      memberId: m.id,
+      userId: m.userId,
+      displayName: m.displayName,
+      avatarUrl: m.avatarUrl,
+      isCreator: m.isCreator,
+      isCurrentUser: m.userId == currentUserId,
+      isVirtual: m.isVirtual,
+      isOnline: true,
+      syncStatus: ParticipantSyncState.synced,
+      acknowledgedRevision: trip.revision,
+      pendingCount: 0,
+      lastSeenAt: m.lastSeenAt ?? DateTime.now(),
+      lastSyncFormatted: m.isVirtual ? 'Virtual member' : 'Local',
+    )).toList();
+
+    return TripSyncStatus(
+      tripId: trip.id,
+      tripName: trip.name,
+      currentRevision: trip.revision,
+      lifecycleState: trip.lifecycleState.name,
+      isFullySynced: true,
+      canCompleteNormally: true,
+      totalParticipants: participants.length,
+      syncedParticipantsCount: participants.length,
+      unsyncedParticipantsCount: 0,
+      participants: participants,
+    );
+  }
 
   factory TripSyncStatus.fromJson(Map<String, dynamic> json) => TripSyncStatus(
     tripId: json['tripId'] as String? ?? '',

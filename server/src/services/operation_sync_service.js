@@ -60,6 +60,7 @@ class OperationSyncService {
           amountInPaise: payload.amountInPaise,
           category: payload.category || 'general',
           paidById: payload.paidById,
+          paidByMap: payload.paidByMap || null,
           splitType: payload.splitType || 'equal',
           splits: payload.splits || [],
           voiceTranscript: payload.voiceTranscript || null,
@@ -79,10 +80,12 @@ class OperationSyncService {
           amountInPaise: payload.amountInPaise,
           category: payload.category,
           paidById: payload.paidById,
+          paidByMap: payload.paidByMap || null,
           splitType: payload.splitType,
           splits: payload.splits,
           voiceTranscript: payload.voiceTranscript,
           receiptUrl: payload.receiptUrl,
+          updatedAt: payload.updatedAt,
         }, realtimeHub);
         entityId = expenseId;
         result = { expenseId };
@@ -190,7 +193,11 @@ class OperationSyncService {
       case 'addMember':
       case 'MEMBER_ADDED': {
         const res = tripService.addMember(tripId, user.id, {
+          id: payload.id,
+          userId: payload.userId,
           displayName: payload.displayName,
+          claimToken: payload.claimToken,
+          isVirtual: payload.isVirtual !== false,
         }, realtimeHub);
         entityId = tripId;
         result = { memberAdded: true };
@@ -199,7 +206,13 @@ class OperationSyncService {
 
       case 'renameMember':
       case 'MEMBER_RENAMED': {
-        const res = tripService.renameMember(tripId, user.id, payload.memberId, payload.newDisplayName, realtimeHub);
+        const res = tripService.renameMember(
+          tripId,
+          user.id,
+          payload.memberId,
+          payload.newDisplayName || payload.displayName,
+          realtimeHub,
+        );
         entityId = payload.memberId;
         result = { memberRenamed: true };
         break;

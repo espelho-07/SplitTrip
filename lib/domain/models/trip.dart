@@ -1,6 +1,20 @@
 import '../enums/trip_lifecycle.dart';
 import 'trip_member.dart';
 
+/// Result of a deep merge between two Trip snapshots, exposing any member ID translations
+/// and identifying ambiguous/unresolved member candidates.
+class TripMergeResult {
+  final Trip mergedTrip;
+  final Map<String, String> memberIdMap;
+  final List<String> unresolvedMemberIds;
+
+  const TripMergeResult({
+    required this.mergedTrip,
+    this.memberIdMap = const {},
+    this.unresolvedMemberIds = const [],
+  });
+}
+
 /// Core Trip aggregate root.
 class Trip {
   final String id;
@@ -92,15 +106,20 @@ class Trip {
   }
 
   /// Safely merges this local trip aggregate with a remote or cached snapshot.
-  /// Guarantees:
-  /// 1. Virtual members and locally joined members are NEVER dropped.
-  /// 2. Member lists are merged union-wise by member ID and user ID.
-  /// 3. Existing member display names are preserved and never overwritten by generic fallbacks.
-  /// 4. Higher revision number and newest updatedAt are preserved.
-  Trip mergeWith(Trip other) {
-    if (other.id != id) return this;
+  /// Backward compatible wrapper around [mergeWithDetailed].
+  Trip mergeWith(Trip other) => mergeWithDetailed(other).mergedTrip;
 
+  /// Safely merges this local trip aggregate with a remote or cached snapshot,
+  /// tracking all member ID translations and unresolved identity ambiguities.
+  TripMergeResult mergeWithDetailed(Trip other) {
+    if (other.id != id) {
+      return TripMergeResult(mergedTrip: this);
+    }
+
+    final memberIdMap = <String, String>{};
+    final unresolvedMemberIds = <String>{};
     final mergedMembersMap = <String, TripMember>{};
+
     // 1. Seed with this trip's members
     for (final m in members) {
       mergedMembersMap[m.id] = m;
@@ -139,33 +158,168 @@ class Trip {
               otherMember.mergedIntoMemberId ?? existing.mergedIntoMemberId,
           isVirtualMember: !isNowClaimed,
         );
-      } else {
-        // Check by authenticated userId if not unclaimed
-        final byUserId = mergedMembersMap.values
-            .where(
-              (m) =>
-                  m.userId.isNotEmpty &&
-                  !m.userId.startsWith('unclaimed_') &&
-                  m.userId == otherMember.userId,
-            )
-            .firstOrNull;
 
-        if (byUserId != null) {
-          mergedMembersMap[byUserId.id] = byUserId.copyWith(
-            displayName:
-                (otherMember.displayName.isNotEmpty &&
-                    otherMember.displayName != 'Member')
-                ? otherMember.displayName
-                : byUserId.displayName,
-            avatarUrl: otherMember.avatarUrl ?? byUserId.avatarUrl,
-            upiId: otherMember.upiId ?? byUserId.upiId,
+        // Deduplication self-healing: if otherMember is an unclaimed virtual member,
+        // collapse any other local unclaimed virtual members sharing the exact display name,
+        // unless they have a distinct claimToken matching another server member.
+        if (otherMember.isVirtual && !otherMember.isClaimed) {
+          final otherName = otherMember.displayName.trim().toLowerCase();
+          final duplicateUnclaimed = mergedMembersMap.values
+              .where((m) =>
+                  m.id != otherMember.id &&
+                  !m.isMerged &&
+                  m.isVirtual &&
+                  !m.isClaimed &&
+                  m.userId.startsWith('unclaimed_') &&
+                  m.displayName.trim().toLowerCase() == otherName &&
+                  !other.members.any((sm) =>
+                      sm.id != otherMember.id &&
+                      sm.claimToken != null &&
+                      sm.claimToken!.isNotEmpty &&
+                      sm.claimToken == m.claimToken))
+              .toList();
+          for (final dup in duplicateUnclaimed) {
+            memberIdMap[dup.id] = otherMember.id;
+            mergedMembersMap.remove(dup.id);
+          }
+        }
+      } else {
+        // 2a. Match by claimToken if present
+        TripMember? matchedByToken;
+        if (otherMember.claimToken != null && otherMember.claimToken!.isNotEmpty) {
+          matchedByToken = mergedMembersMap.values
+              .where((m) => m.claimToken == otherMember.claimToken)
+              .firstOrNull;
+        }
+
+        // 2b. Match by authenticated userId if not unclaimed
+        TripMember? matchedByUserId;
+        if (matchedByToken == null &&
+            otherMember.userId.isNotEmpty &&
+            !otherMember.userId.startsWith('unclaimed_')) {
+          matchedByUserId = mergedMembersMap.values
+              .where(
+                (m) =>
+                    m.userId.isNotEmpty &&
+                    !m.userId.startsWith('unclaimed_') &&
+                    m.userId == otherMember.userId,
+              )
+              .firstOrNull;
+        }
+
+        // 2c. Identity reconciliation:
+        //  - Valid claimToken matching (2a)
+        //  - Trusted, authenticated userId matching (2b)
+        //  - For unclaimed virtual members only: reconcile when exactly one candidate matches display name.
+        TripMember? matchedByName;
+        if (matchedByToken == null &&
+            matchedByUserId == null &&
+            otherMember.isVirtual &&
+            !otherMember.isClaimed &&
+            otherMember.userId.startsWith('unclaimed_')) {
+          final otherName = otherMember.displayName.trim().toLowerCase();
+          final candidates = mergedMembersMap.values
+              .where((m) =>
+                  !m.isMerged &&
+                  m.isVirtual &&
+                  !m.isClaimed &&
+                  m.userId.startsWith('unclaimed_') &&
+                  m.displayName.trim().toLowerCase() == otherName)
+              .toList();
+          if (candidates.length == 1) {
+            matchedByName = candidates.first;
+          }
+        }
+
+        final matched = matchedByToken ?? matchedByUserId ?? matchedByName;
+
+        // If identity cannot be established, preserve original IDs
+        // and track unresolved virtual candidates for auditability.
+        if (matched == null) {
+          final otherName = otherMember.displayName.trim().toLowerCase();
+          final matchingLocalCandidates = mergedMembersMap.values
+              .where((m) =>
+                  !m.isMerged &&
+                  (m.isVirtual || otherMember.isVirtual) &&
+                  m.displayName.trim().toLowerCase() == otherName)
+              .toList();
+
+          if (matchingLocalCandidates.isNotEmpty) {
+            for (final cand in matchingLocalCandidates) {
+              unresolvedMemberIds.add(cand.id);
+            }
+            unresolvedMemberIds.add(otherMember.id);
+          }
+        }
+
+        if (matched != null) {
+          if (matched.id != otherMember.id) {
+            memberIdMap[matched.id] = otherMember.id;
+          }
+          mergedMembersMap.remove(matched.id);
+          final chosenDisplayName =
+              (otherMember.displayName.isNotEmpty &&
+                  otherMember.displayName != 'Member')
+              ? otherMember.displayName
+              : matched.displayName;
+
+          final bool isNowClaimed = otherMember.isClaimed || matched.isClaimed;
+          final String chosenUserId;
+          if (!matched.userId.startsWith('unclaimed_') && matched.userId.isNotEmpty) {
+            chosenUserId = matched.userId;
+          } else if (!otherMember.userId.startsWith('unclaimed_') && otherMember.userId.isNotEmpty) {
+            chosenUserId = otherMember.userId;
+          } else {
+            chosenUserId = matched.userId.isNotEmpty ? matched.userId : otherMember.userId;
+          }
+
+          mergedMembersMap[otherMember.id] = matched.copyWith(
+            id: otherMember.id,
+            displayName: chosenDisplayName,
+            userId: chosenUserId,
+            avatarUrl: otherMember.avatarUrl ?? matched.avatarUrl,
+            role: otherMember.role != 'member' && otherMember.role != 'virtual' ? otherMember.role : matched.role,
+            upiId: otherMember.upiId ?? matched.upiId,
+            isClaimed: isNowClaimed,
+            status: isNowClaimed ? 'claimed' : (otherMember.status ?? matched.status),
+            claimToken: otherMember.claimToken ?? matched.claimToken,
+            mergedIntoMemberId:
+                otherMember.mergedIntoMemberId ?? matched.mergedIntoMemberId,
+            isVirtualMember: !isNowClaimed,
           );
+
+          // Deduplicate any remaining unclaimed duplicate members sharing this name,
+          // unless they have a distinct claimToken matching another server member.
+          if (otherMember.isVirtual && !otherMember.isClaimed) {
+            final otherName = otherMember.displayName.trim().toLowerCase();
+            final remainingDups = mergedMembersMap.values
+                .where((m) =>
+                    m.id != otherMember.id &&
+                    !m.isMerged &&
+                    m.isVirtual &&
+                    !m.isClaimed &&
+                    m.userId.startsWith('unclaimed_') &&
+                    m.displayName.trim().toLowerCase() == otherName &&
+                    !other.members.any((sm) =>
+                        sm.id != otherMember.id &&
+                        sm.claimToken != null &&
+                        sm.claimToken!.isNotEmpty &&
+                        sm.claimToken == m.claimToken))
+                .toList();
+            for (final dup in remainingDups) {
+              memberIdMap[dup.id] = otherMember.id;
+              mergedMembersMap.remove(dup.id);
+            }
+          }
         } else {
-          // Genuinely new member from other device/server
+          // Genuinely distinct member from other device/server - preserve intact
           mergedMembersMap[otherMember.id] = otherMember;
         }
       }
     }
+
+    // 3. Final safety: preserve all distinct members without dropping duplicate names.
+    // Every member in mergedMembersMap has a unique ID and is preserved.
 
     final isOtherNewer =
         other.revision > revision || other.updatedAt.isAfter(updatedAt);
@@ -181,7 +335,7 @@ class Trip {
       mergedSecret = other.p2pTripSecret;
     }
 
-    return Trip(
+    final mergedTrip = Trip(
       id: id,
       name: isOtherNewer && other.name.isNotEmpty ? other.name : name,
       description: isOtherNewer
@@ -212,6 +366,67 @@ class Trip {
           : other.createdAt,
       updatedAt: isOtherNewer ? other.updatedAt : updatedAt,
     );
+
+    return TripMergeResult(
+      mergedTrip: mergedTrip,
+      memberIdMap: memberIdMap,
+      unresolvedMemberIds: unresolvedMemberIds.toList(),
+    );
+  }
+
+  /// Self-heals duplicate unclaimed virtual members who share the exact same display name
+  /// within this single trip (e.g. from prior race conditions, outbox replay, or client/server mismatches).
+  TripMergeResult deduplicateMembers() {
+    final Map<String, TripMember> uniqueMap = {};
+    final Map<String, String> translationMap = {};
+    final Map<String, List<TripMember>> nameGroups = {};
+
+    for (final m in members) {
+      final key = m.displayName.trim().toLowerCase();
+      nameGroups.putIfAbsent(key, () => []).add(m);
+    }
+
+    bool changed = false;
+    for (final entry in nameGroups.entries) {
+      final group = entry.value;
+      if (group.length == 1) {
+        uniqueMap[group.first.id] = group.first;
+      } else {
+        // Check if all duplicates are unclaimed virtual members
+        final claimedOrAuth = group.where((m) => m.isClaimed || !m.userId.startsWith('unclaimed_')).toList();
+        final unclaimedVirtual = group.where((m) => !m.isClaimed && m.userId.startsWith('unclaimed_')).toList();
+
+        if (unclaimedVirtual.length > 1 && claimedOrAuth.isEmpty) {
+          // Sort to pick canonical member:
+          // Prefer member with valid claimToken, then UTC formatted server timestamp
+          unclaimedVirtual.sort((a, b) {
+            final aHasToken = (a.claimToken != null && a.claimToken!.isNotEmpty) ? 1 : 0;
+            final bHasToken = (b.claimToken != null && b.claimToken!.isNotEmpty) ? 1 : 0;
+            if (aHasToken != bHasToken) return bHasToken.compareTo(aHasToken);
+            return a.joinedAt.compareTo(b.joinedAt);
+          });
+          final canonical = unclaimedVirtual.first;
+          uniqueMap[canonical.id] = canonical;
+          for (int i = 1; i < unclaimedVirtual.length; i++) {
+            final dup = unclaimedVirtual[i];
+            translationMap[dup.id] = canonical.id;
+            changed = true;
+          }
+        } else {
+          // If there's a mix of real users or different statuses, preserve all
+          for (final m in group) {
+            uniqueMap[m.id] = m;
+          }
+        }
+      }
+    }
+
+    if (!changed) {
+      return TripMergeResult(mergedTrip: this, memberIdMap: {});
+    }
+
+    final newTrip = copyWith(members: uniqueMap.values.toList());
+    return TripMergeResult(mergedTrip: newTrip, memberIdMap: translationMap);
   }
 
   Map<String, dynamic> toJson() => {

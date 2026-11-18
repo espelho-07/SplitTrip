@@ -42,7 +42,7 @@ enum MutationType {
 
 enum SyncStatus { synced, syncing, pending, offline, reconnecting, error }
 
-enum SyncState { localPending, p2pShared, serverPending, serverAcked, failed }
+enum SyncState { localPending, p2pShared, serverPending, serverAcked, failed, quarantined }
 
 enum SyncOperationOutcome { success, partial, failed, skipped }
 
@@ -315,8 +315,34 @@ class SyncService {
   final StreamController<SyncStatus> _statusController =
       StreamController<SyncStatus>.broadcast();
   StreamSubscription? _realtimeSubscription;
+  Timer? _periodicSyncTimer;
+  ApiClient? _registeredApiClient;
 
-  SyncService(this._storage);
+  SyncService(this._storage) {
+    _storage.addOnClearDataListener(() {
+      clearQueue();
+    });
+  }
+
+  /// Starts continuous periodic background synchronization to ensure offline
+  /// mutations and pending deltas are automatically pushed to the cloud in the background.
+  void startPeriodicSync(
+    ApiClient apiClient, {
+    Duration interval = const Duration(seconds: 15),
+  }) {
+    _registeredApiClient = apiClient;
+    _periodicSyncTimer?.cancel();
+    _periodicSyncTimer = Timer.periodic(interval, (_) {
+      if (getPendingMutations().isNotEmpty && !isProcessing) {
+        unawaited(flushQueue(_registeredApiClient!));
+      }
+    });
+  }
+
+  void stopPeriodicSync() {
+    _periodicSyncTimer?.cancel();
+    _periodicSyncTimer = null;
+  }
 
   bool get isProcessing => _tripLocks.isNotEmpty;
 
@@ -406,8 +432,9 @@ class SyncService {
     await _storage.saveMutationQueue(queue.map((m) => m.toJson()).toList());
     _setStatus(SyncStatus.pending);
 
-    if (backgroundApiClient != null) {
-      unawaited(flushQueue(backgroundApiClient));
+    final client = backgroundApiClient ?? _registeredApiClient;
+    if (client != null) {
+      unawaited(flushQueue(client));
     }
 
     return mutation;
@@ -777,7 +804,14 @@ class SyncService {
         final idx = trips.indexWhere((t) => t['id'] == tripId);
         if (idx != -1) {
           final localTrip = Trip.fromJson(trips[idx]);
-          trips[idx] = localTrip.mergeWith(serverTrip).toJson();
+          final mergeResult = localTrip.mergeWithDetailed(serverTrip);
+          trips[idx] = mergeResult.mergedTrip.toJson();
+          if (mergeResult.memberIdMap.isNotEmpty) {
+            await _storage.translateMemberIds(
+              tripId: tripId,
+              translationMap: mergeResult.memberIdMap,
+            );
+          }
         } else {
           trips.add(serverTrip.toJson());
         }
@@ -993,6 +1027,11 @@ class SyncService {
         for (final mutation in queue) {
           final tId = mutation.tripId;
 
+          // Quarantined mutations are skipped to prevent infinite retry loops and head-of-line blocking
+          if (mutation.syncState == SyncState.quarantined) {
+            continue;
+          }
+
           // If trip is blocked due to prior failure in this cycle, skip
           if (tId != null && blockedTripIds.contains(tId)) {
             continue;
@@ -1050,15 +1089,70 @@ class SyncService {
               // Already resolved conflict / duplicate -> acknowledge safely
               completedMutationIds.add(mutation.id);
               await removeMutation(mutation.id);
+            } else if (e.statusCode == 404 &&
+                mutation.type == MutationType.deleteExpense &&
+                e.message.toLowerCase().contains('expense not found')) {
+              completedMutationIds.add(mutation.id);
+              await removeMutation(mutation.id);
+            } else if (e.statusCode == 404 &&
+                (e.message.toLowerCase().contains('trip not found') ||
+                 e.message.toLowerCase().contains('not found'))) {
+              // Self-healing: Trip is missing on server! Re-create trip on server and retry.
+              final tripId = mutation.tripId;
+              bool autoHealed = false;
+              if (tripId != null) {
+                final healed = await _ensureTripOnServer(apiClient, tripId);
+                if (healed) {
+                  try {
+                    await _executeMutation(apiClient, mutation);
+                    completedMutationIds.add(mutation.id);
+                    await removeMutation(mutation.id);
+                    autoHealed = true;
+                  } catch (_) {}
+                }
+              }
+              if (!autoHealed) {
+                await _updateMutationAttempt(
+                  mutation.id,
+                  mutation.retryCount + 1,
+                  errorMessage: e.message,
+                  syncState: SyncState.failed,
+                );
+                if (tId != null) blockedTripIds.add(tId);
+              }
             } else {
-              // Record failure reason and retry with backoff, NEVER silently drop financial mutations!
-              await _updateMutationAttempt(
-                mutation.id,
-                mutation.retryCount + 1,
-                errorMessage: e.message,
-                syncState: SyncState.failed,
-              );
-              if (tId != null) blockedTripIds.add(tId);
+              final msgLower = e.message.toLowerCase();
+              final isMembershipError = (e.statusCode == 400 || e.statusCode == 422) &&
+                  (msgLower.contains('payer member') ||
+                   msgLower.contains('split participant') ||
+                   msgLower.contains('member not found') ||
+                   msgLower.contains('not part of this trip') ||
+                   msgLower.contains('is not in this trip') ||
+                   msgLower.contains('not a member'));
+
+              final isMaxRetryExceeded = mutation.retryCount >= 5 && (e.statusCode == 400 || e.statusCode == 422);
+
+              if (isMembershipError || isMaxRetryExceeded) {
+                debugPrint(
+                  '[SyncService] Quarantining mutation ${mutation.id} due to ${isMembershipError ? "member-ID divergence" : "max retries exceeded"}: ${e.message}',
+                );
+                await _updateMutationAttempt(
+                  mutation.id,
+                  mutation.retryCount + 1,
+                  errorMessage: e.message,
+                  syncState: SyncState.quarantined,
+                );
+                // CRITICAL: Do NOT add tId to blockedTripIds so independent trip operations can proceed!
+              } else {
+                // Record failure reason and retry with backoff, NEVER silently drop financial mutations!
+                await _updateMutationAttempt(
+                  mutation.id,
+                  mutation.retryCount + 1,
+                  errorMessage: e.message,
+                  syncState: SyncState.failed,
+                );
+                if (tId != null) blockedTripIds.add(tId);
+              }
             }
           } catch (e) {
             debugPrint(
@@ -1087,6 +1181,70 @@ class SyncService {
         // Per-trip lock releases in runWithTripLock
       }
     });
+  }
+
+  Future<bool> _ensureTripOnServer(ApiClient apiClient, String tripId) async {
+    final trips = _storage.getSavedTrips();
+    final tripJson = trips.where((t) => t['id'] == tripId).firstOrNull;
+    if (tripJson == null) return false;
+
+    final user = _storage.getSavedUser();
+    final accountId =
+        user?['accountId'] as String? ?? user?['id'] as String? ?? 'guest_acc';
+
+    // 1. Sync to Supabase directly
+    if (_cloudSync.isAvailable) {
+      try {
+        await _cloudSync.syncTrip(tripJson, accountId: accountId);
+      } catch (_) {}
+    }
+
+    // 2. Post to API backend
+    try {
+      final members = (tripJson['members'] as List<dynamic>? ?? []);
+      final friendNames = members
+          .where((m) => m is Map && m['role'] != 'creator')
+          .map((m) => (m as Map)['displayName']?.toString() ?? '')
+          .where((name) => name.isNotEmpty)
+          .toList();
+
+      final payload = {
+        'id': tripJson['id'],
+        'name': tripJson['name'],
+        'description': tripJson['description'],
+        'emoji': tripJson['emoji'] ?? '✈️',
+        'coverGradientIndex': tripJson['coverGradientIndex'] ?? 0,
+        'currencyCode': tripJson['currencyCode'] ?? 'INR',
+        'tripMode': tripJson['tripMode'] ?? 'split_only',
+        'inviteCode': tripJson['inviteCode'],
+        'p2pTripSecret': tripJson['p2pTripSecret'] ?? tripJson['p2p_trip_secret'],
+        'p2p_trip_secret': tripJson['p2pTripSecret'] ?? tripJson['p2p_trip_secret'],
+        'initialFriendNames': friendNames,
+      };
+
+      await apiClient.post('/trips', body: payload);
+
+      // Re-push virtual members
+      for (final m in members) {
+        if (m is Map && m['role'] != 'creator') {
+          try {
+            await apiClient.post('/trips/$tripId/members', body: {
+              'tripId': tripId,
+              'id': m['id'],
+              'userId': m['userId'],
+              'displayName': m['displayName'],
+              'claimToken': m['claimToken'],
+              'isVirtual': m['isVirtual'] ?? true,
+            });
+          } catch (_) {}
+        }
+      }
+
+      return true;
+    } catch (e) {
+      debugPrint('[SyncService] Failed to auto-heal trip $tripId on server: $e');
+      return false;
+    }
   }
 
   /// Authoritative incremental Delta Cloud reconciliation using Supabase.
@@ -1155,9 +1313,14 @@ class SyncService {
               if (existingJson != null) {
                 final localTrip = Trip.fromJson(existingJson);
                 final remoteTrip = Trip.fromJson(payload);
-                workingTrips[recordId] = localTrip
-                    .mergeWith(remoteTrip)
-                    .toJson();
+                final mergeResult = localTrip.mergeWithDetailed(remoteTrip);
+                workingTrips[recordId] = mergeResult.mergedTrip.toJson();
+                if (mergeResult.memberIdMap.isNotEmpty) {
+                  await _storage.translateMemberIds(
+                    tripId: recordId,
+                    translationMap: mergeResult.memberIdMap,
+                  );
+                }
               } else {
                 workingTrips[recordId] = payload;
               }
@@ -1177,7 +1340,24 @@ class SyncService {
               workingExpensesByTrip[tripId]!.remove(recordId);
               tombstonesToAdd.add({'tripId': tripId, 'expenseId': recordId});
             } else if (payload.isNotEmpty) {
-              workingExpensesByTrip[tripId]![recordId] = payload;
+              final pendingForExpense = getPendingMutationsForTrip(tripId).any((m) {
+                final entityId = (m.payload['id'] ?? m.payload['expenseId'])?.toString();
+                return entityId == recordId &&
+                    (m.type == MutationType.addExpense ||
+                        m.type == MutationType.updateExpense ||
+                        m.type == MutationType.deleteExpense);
+              });
+              final existing = workingExpensesByTrip[tripId]![recordId];
+              final localUpdated = DateTime.tryParse(existing?['updatedAt']?.toString() ?? '') ??
+                  DateTime.fromMillisecondsSinceEpoch(0);
+              final remoteUpdated = DateTime.tryParse(
+                    payload['updatedAt']?.toString() ?? payload['updated_at']?.toString() ?? '',
+                  ) ??
+                  DateTime.fromMillisecondsSinceEpoch(0);
+              final tombstoned = _storage.isExpenseTombstoned(tripId, recordId);
+              if (!pendingForExpense && !tombstoned && (existing == null || !localUpdated.isAfter(remoteUpdated))) {
+                workingExpensesByTrip[tripId]![recordId] = payload;
+              }
             }
           } else if (table == 'settlements' &&
               tripId != null &&
@@ -1275,7 +1455,14 @@ class SyncService {
               if (existingJson != null) {
                 final localTrip = Trip.fromJson(existingJson);
                 final remoteTrip = Trip.fromJson(t);
-                tripMap[t['id']] = localTrip.mergeWith(remoteTrip).toJson();
+                final mergeResult = localTrip.mergeWithDetailed(remoteTrip);
+                tripMap[t['id']] = mergeResult.mergedTrip.toJson();
+                if (mergeResult.memberIdMap.isNotEmpty) {
+                  await _storage.translateMemberIds(
+                    tripId: t['id'] as String,
+                    translationMap: mergeResult.memberIdMap,
+                  );
+                }
               } else {
                 tripMap[t['id']] = t;
               }
@@ -1444,17 +1631,33 @@ class SyncService {
     final accountId =
         user?['accountId'] as String? ?? user?['id'] as String? ?? 'guest_acc';
 
-    // 1. Authoritative Supabase Cloud Sync Direct Push
+    // Supabase is a best-effort mirror. Outbox acknowledgement depends on the API push below.
     if (_cloudSync.isAvailable) {
       try {
         switch (mutation.type) {
           case MutationType.createTrip:
           case MutationType.joinTrip:
-            await _cloudSync.syncTrip(payload, accountId: accountId);
+await _cloudSync.syncTrip(payload, accountId: accountId);
+            break;
+          case MutationType.addMember:
+          case MutationType.renameMember:
+            final tId = mutation.payload['tripId'] as String?;
+            if (tId != null) {
+              final tripJson = _storage
+                  .getSavedTrips()
+                  .where((t) => t['id'] == tId)
+                  .firstOrNull;
+              if (tripJson != null) {
+await _cloudSync.syncTrip(
+                  tripJson,
+                  accountId: accountId,
+                );
+              }
+            }
             break;
           case MutationType.addExpense:
           case MutationType.updateExpense:
-            await _cloudSync.syncExpense(payload, accountId: accountId);
+await _cloudSync.syncExpense(payload, accountId: accountId);
             break;
           case MutationType.deleteExpense:
             final tripId = mutation.payload['tripId'] as String? ?? '';
@@ -1463,23 +1666,23 @@ class SyncService {
                 payload['expenseId'] as String? ??
                 '';
             if (expenseId.isNotEmpty) {
-              await _cloudSync.markExpenseDeleted(expenseId, tripId);
+await _cloudSync.markExpenseDeleted(expenseId, tripId);
             }
             break;
           case MutationType.recordTripSettlement:
           case MutationType.confirmTripSettlement:
           case MutationType.disputeTripSettlement:
           case MutationType.submitSettlementProof:
-            await _cloudSync.syncSettlement(payload, accountId: accountId);
+await _cloudSync.syncSettlement(payload, accountId: accountId);
             break;
           case MutationType.createPersonalExpense:
           case MutationType.updatePersonalExpense:
-            await _cloudSync.syncPersonalExpense(payload, accountId: accountId);
+await _cloudSync.syncPersonalExpense(payload, accountId: accountId);
             break;
           case MutationType.createPersonalDebt:
           case MutationType.updatePersonalDebt:
           case MutationType.recordPersonalRepayment:
-            await _cloudSync.syncPersonalDebt(payload, accountId: accountId);
+await _cloudSync.syncPersonalDebt(payload, accountId: accountId);
             break;
           default:
             break;
@@ -1489,8 +1692,16 @@ class SyncService {
       }
     }
 
-    // 2. Secondary API Client fallback
+    // The Node API is the read path for trips and expenses. A Supabase mirror
+    // write must not acknowledge the outbox until that API accepts the change.
+    await _pushToSecondaryApi(apiClient, mutation);
+  }
 
+  Future<void> _pushToSecondaryApi(
+    ApiClient apiClient,
+    SyncMutation mutation,
+  ) async {
+    final payload = mutation.payload;
     switch (mutation.type) {
       case MutationType.createTrip:
         await apiClient.post('/trips', body: payload);
@@ -1502,7 +1713,23 @@ class SyncService {
 
       case MutationType.addMember:
         final tripId = mutation.payload['tripId'] as String;
-        await apiClient.post('/trips/$tripId/members', body: payload);
+        final res = await apiClient.post('/trips/$tripId/members', body: payload);
+        if (res is Map<String, dynamic>) {
+          final serverTrip = Trip.fromJson(res);
+          final trips = _storage.getSavedTrips().map((j) => Trip.fromJson(j)).toList();
+          final idx = trips.indexWhere((t) => t.id == tripId);
+          if (idx != -1) {
+            final mergeResult = trips[idx].mergeWithDetailed(serverTrip);
+            trips[idx] = mergeResult.mergedTrip;
+            await _storage.saveTrips(trips.map((t) => t.toJson()).toList());
+            if (mergeResult.memberIdMap.isNotEmpty) {
+              await _storage.translateMemberIds(
+                tripId: tripId,
+                translationMap: mergeResult.memberIdMap,
+              );
+            }
+          }
+        }
         break;
 
       case MutationType.renameMember:
@@ -1653,6 +1880,7 @@ class SyncService {
   }
 
   void dispose() {
+    stopPeriodicSync();
     _realtimeSubscription?.cancel();
     _statusController.close();
   }

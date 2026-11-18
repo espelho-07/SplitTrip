@@ -52,7 +52,7 @@ class TripService {
   }
 
 
-  createTrip(user, { id, inviteCode: customInviteCode, name, description, emoji, coverGradientIndex, currencyCode, initialFriendNames = [], tripMode = 'split_only' } = {}, realtimeHub = null) {
+  createTrip(user, { id, inviteCode: customInviteCode, name, description, emoji, coverGradientIndex, currencyCode, initialFriendNames = [], tripMode = 'split_only', members } = {}, realtimeHub = null) {
     if (!name || !name.trim()) {
       throw AppError.badRequest('Trip name is required');
     }
@@ -96,9 +96,18 @@ class TripService {
 
     db.insert('trips', trip);
 
+    // Determine creator member ID (preserving client-generated ID when supplied)
+    let creatorMemberId = `mbr_${crypto.randomUUID().replace(/-/g, '').substring(0, 10)}`;
+    if (Array.isArray(members) && members.length > 0) {
+      const clientCreator = members.find((m) => m.userId === user.id || m.role === 'creator');
+      if (clientCreator && clientCreator.id && typeof clientCreator.id === 'string' && clientCreator.id.startsWith('mbr_')) {
+        creatorMemberId = clientCreator.id;
+      }
+    }
+
     // Creator membership
     const creatorMember = {
-      id: `mbr_${crypto.randomUUID().replace(/-/g, '').substring(0, 10)}`,
+      id: creatorMemberId,
       tripId,
       userId: user.id,
       displayName: user.displayName,
@@ -114,20 +123,42 @@ class TripService {
     };
     db.insert('trip_members', creatorMember);
 
-    // Initial friends (unclaimed placeholders)
+    // Initial friends (unclaimed placeholders, preserving client-generated IDs and claimTokens)
     if (Array.isArray(initialFriendNames)) {
       for (const friendName of initialFriendNames) {
         if (friendName && friendName.trim()) {
+          const cleanName = friendName.trim();
+          let friendMemberId = `mbr_${crypto.randomUUID().replace(/-/g, '').substring(0, 10)}`;
+          let friendClaimToken = `clm_${crypto.randomUUID().replace(/-/g, '').substring(0, 10)}`;
+          let friendUserId = `unclaimed_${crypto.randomUUID().replace(/-/g, '').substring(0, 8)}`;
+
+          if (Array.isArray(members) && members.length > 0) {
+            const clientFriend = members.find(
+              (m) => m.displayName && m.displayName.trim().toLowerCase() === cleanName.toLowerCase() && m.id !== creatorMemberId
+            );
+            if (clientFriend) {
+              if (clientFriend.id && typeof clientFriend.id === 'string' && clientFriend.id.startsWith('mbr_')) {
+                friendMemberId = clientFriend.id;
+              }
+              if (clientFriend.claimToken) {
+                friendClaimToken = clientFriend.claimToken;
+              }
+              if (clientFriend.userId) {
+                friendUserId = clientFriend.userId;
+              }
+            }
+          }
+
           const placeholderMember = {
-            id: `mbr_${crypto.randomUUID().replace(/-/g, '').substring(0, 10)}`,
+            id: friendMemberId,
             tripId,
-            userId: `unclaimed_${crypto.randomUUID().replace(/-/g, '').substring(0, 8)}`,
-            displayName: friendName.trim(),
+            userId: friendUserId,
+            displayName: cleanName,
             avatarUrl: null,
             role: 'member',
             status: 'unclaimed',
             isClaimed: false,
-            claimToken: `clm_${crypto.randomUUID().replace(/-/g, '').substring(0, 10)}`,
+            claimToken: friendClaimToken,
             joinedAt: now,
             lastSeenAt: now,
             lastSyncedRevision: 1,
@@ -239,7 +270,6 @@ class TripService {
         id: m.id,
         displayName: m.displayName,
         avatarUrl: m.avatarUrl || null,
-        claimToken: m.claimToken || null,
       }));
 
     return {
@@ -293,17 +323,36 @@ class TripService {
         throw AppError.notFound('Target member not found in this trip.');
       }
 
-      // Check if already claimed by someone else (concurrency protection / double claim prevention)
-      if (targetMember.status === 'claimed' || (targetMember.userId && !targetMember.userId.startsWith('unclaimed_') && targetMember.userId !== user.id)) {
+      // 2a. Concurrency & double claim prevention / token reuse prevention
+      if (
+        targetMember.status === 'claimed' ||
+        targetMember.isClaimed === true ||
+        (targetMember.userId && !targetMember.userId.startsWith('unclaimed_') && targetMember.userId !== user.id)
+      ) {
         throw AppError.conflict('This member participant has already been claimed.');
       }
 
+      // 2b. Strict claimToken validation
+      if (targetMember.claimToken && typeof targetMember.claimToken === 'string' && targetMember.claimToken.trim().length > 0) {
+        if (!claimToken || typeof claimToken !== 'string' || claimToken.trim() !== targetMember.claimToken.trim()) {
+          throw AppError.forbidden('Invalid or missing claim token for this participant.');
+        }
+      } else {
+        // Safe backward compatibility for legacy members without stored claim tokens:
+        // Prevent unauthorized hijacking by requiring creator authorization.
+        if (trip.creatorId !== user.id) {
+          throw AppError.forbidden('This legacy participant record requires creator authorization to claim.');
+        }
+      }
+
       // Atomically link user identity to the existing participant record
+      // Invalidate claimToken upon successful claim to prevent token reuse
       db.update('trip_members', targetMember.id, {
         userId: user.id,
         avatarUrl: user.avatarUrl || targetMember.avatarUrl || null,
         status: 'claimed',
         isClaimed: true,
+        claimToken: null,
         joinedAt: now,
         lastSeenAt: now,
         upiId: user.upiId || targetMember.upiId || null,
@@ -392,6 +441,17 @@ class TripService {
     // Check if member already exists by ID (idempotency)
     const existing = db.findOne('trip_members', (m) => m.tripId === tripId && m.id === finalId);
     if (existing) {
+      return this._enrichTrip(trip);
+    }
+
+    // Check if an unclaimed member with the same display name already exists (idempotency)
+    const cleanName = displayName.trim().toLowerCase();
+    const existingByName = db.findOne('trip_members', (m) => 
+      m.tripId === tripId && 
+      m.status === 'unclaimed' && 
+      (m.displayName || '').trim().toLowerCase() === cleanName
+    );
+    if (existingByName) {
       return this._enrichTrip(trip);
     }
 
@@ -779,22 +839,26 @@ class TripService {
     const nowDate = new Date();
 
     const participants = members.map((m) => {
-      const isCurrentUser = m.userId === currentUserId;
-      const isOnline = isCurrentUser ? true : (realtimeHub ? realtimeHub.isTripMemberConnected(tripId, m.userId) : false);
-      const memberRevision = m.lastSyncedRevision || 1;
-      const pendingCount = m.pendingMutationsCount || 0;
+      const isCurrentUser = m.userId === currentUserId || (authMember && m.id === authMember.id);
+      const isVirtual = m.isVirtual === true || m.isClaimed === false || !m.userId || (m.userId && (m.userId.startsWith('unclaimed_') || m.userId.startsWith('virtual_'))) || m.role === 'virtual' || Boolean(m.claimToken);
+      const isOnline = isCurrentUser || isVirtual ? true : (realtimeHub ? realtimeHub.isTripMemberConnected(tripId, m.userId) : false);
+      const memberRevision = isVirtual ? tripRevision : (m.lastSyncedRevision || 1);
+      const pendingCount = isVirtual ? 0 : (m.pendingMutationsCount || 0);
       const lastSeenDate = m.lastSeenAt ? new Date(m.lastSeenAt) : null;
 
+      const freshAckMs = 2 * 60 * 1000;
       let syncStatus = 'synced';
-      if (pendingCount > 0) {
+      if (isVirtual) {
+        syncStatus = 'synced';
+      } else if (pendingCount > 0) {
         syncStatus = isOnline ? 'pending' : 'offline';
       } else if (memberRevision < tripRevision) {
         syncStatus = isOnline ? 'pending' : 'offline';
-      } else if (!isOnline && !isCurrentUser && lastSeenDate && (nowDate - lastSeenDate > 1000 * 60 * 60 * 2)) {
-        // If not online and not seen in 2 hours with no pending changes, still consider synced if revision matches
-        syncStatus = memberRevision >= tripRevision ? 'synced' : 'offline';
-      } else if (!isOnline && !isCurrentUser && !lastSeenDate) {
-        syncStatus = 'unknown';
+      } else if (!isOnline && !isCurrentUser) {
+        const acknowledgedRecently = lastSeenDate && (nowDate - lastSeenDate) <= freshAckMs;
+        // An offline participant can create expenses after the last acknowledgement.
+        // A stale ack is not evidence that their local queue is empty.
+        syncStatus = acknowledgedRecently ? 'synced' : 'unknown';
       }
 
       return {
@@ -804,17 +868,18 @@ class TripService {
         avatarUrl: m.avatarUrl || null,
         isCreator: m.role === 'creator',
         isCurrentUser,
+        isVirtual,
         isOnline,
         syncStatus,
         acknowledgedRevision: memberRevision,
         pendingCount,
         lastSeenAt: m.lastSeenAt || null,
-        lastSyncFormatted: this._formatLastSync(m.lastSeenAt),
+        lastSyncFormatted: isVirtual ? 'Virtual member' : this._formatLastSync(m.lastSeenAt),
       };
     });
 
-    const isFullySynced = participants.every((p) => p.syncStatus === 'synced' && p.pendingCount === 0);
-    const unsyncedCount = participants.filter((p) => p.syncStatus !== 'synced' || p.pendingCount > 0).length;
+    const unsyncedCount = participants.filter((p) => !p.isVirtual && (p.syncStatus !== 'synced' || p.pendingCount > 0)).length;
+    const isFullySynced = unsyncedCount === 0;
 
     return {
       tripId: trip.id,

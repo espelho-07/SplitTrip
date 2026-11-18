@@ -33,7 +33,7 @@ router.get('/', (req, res, next) => {
 // POST /api/trips - Create new trip
 router.post('/', (req, res, next) => {
   try {
-    const { id, inviteCode, name, description, emoji, coverGradientIndex, currencyCode, initialFriendNames, tripMode } = req.body;
+    const { id, inviteCode, name, description, emoji, coverGradientIndex, currencyCode, initialFriendNames, tripMode, members } = req.body;
     const trip = tripService.createTrip(req.user, {
       id,
       inviteCode,
@@ -44,6 +44,7 @@ router.post('/', (req, res, next) => {
       currencyCode,
       initialFriendNames,
       tripMode,
+      members,
     }, realtimeHub);
     res.status(201).json({ data: trip });
   } catch (e) {
@@ -179,8 +180,8 @@ router.patch('/:id/lifecycle', (req, res, next) => {
 // POST /api/trips/:id/members - Add member to trip
 router.post('/:id/members', (req, res, next) => {
   try {
-    const { displayName } = req.body;
-    const trip = tripService.addMember(req.params.id, req.user.id, { displayName }, realtimeHub);
+    const { id, userId, displayName, claimToken, isVirtual } = req.body;
+    const trip = tripService.addMember(req.params.id, req.user.id, { id, userId, displayName, claimToken, isVirtual }, realtimeHub);
     res.status(201).json({ data: trip });
   } catch (e) {
     next(e);

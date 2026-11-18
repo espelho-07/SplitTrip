@@ -926,7 +926,7 @@ class LocalDatabaseService {
                 (exp['amount'] as num?)?.toDouble() ?? 0.0,
                 exp['currency']?.toString() ?? 'INR',
                 exp['category']?.toString() ?? 'general',
-                exp['paidByMemberId'] ?? exp['paid_by_id'] ?? '',
+                exp['paidById'] ?? exp['paidByMemberId'] ?? exp['paid_by_id'] ?? '',
                 exp['splitType'] ?? exp['split_type'] ?? 'equal',
                 exp['splitMode'] ?? exp['split_mode'] ?? 'default',
                 exp['receiptUrl'] ?? exp['receipt_url'],
@@ -1118,6 +1118,262 @@ class LocalDatabaseService {
       }
 
       return true;
+    });
+  }
+
+  /// Atomically translates member IDs across expenses, settlements, and mutation outbox entries
+  /// for a specific trip inside a single ACID SQLite transaction.
+  ///
+  /// Guarantees:
+  /// 1. Updates expenses paid_by_member_id column and raw_json (paidById, splits[].memberId).
+  /// 2. Updates settlements from_member_id, to_member_id columns and raw_json (fromMemberId, toMemberId).
+  /// 3. Updates mutation_outbox payloads (paidById, splits[].memberId, fromMemberId, toMemberId).
+  /// 4. Resets any quarantined or failed mutations that were blocked on old member IDs back to 'pending' with retry_count = 0.
+  /// 5. Never executes partially — rolls back completely on any failure.
+  bool translateMemberIds({
+    required String tripId,
+    required Map<String, String> translationMap,
+  }) {
+    if (translationMap.isEmpty) return false;
+
+    return executeTransaction<bool>((db) {
+      bool anyModified = false;
+
+      // 1. Reconcile Expenses
+      final expStmt = db.prepare(
+        'SELECT id, paid_by_member_id, raw_json FROM expenses WHERE trip_id = ?;',
+      );
+      final updateExpStmt = db.prepare(
+        'UPDATE expenses SET paid_by_member_id = ?, raw_json = ? WHERE id = ?;',
+      );
+      try {
+        final expRows = expStmt.select([tripId]);
+        for (final row in expRows) {
+          final expId = row['id'] as String;
+          final currentPayer = row['paid_by_member_id'] as String;
+          final rawJsonStr = row['raw_json'] as String;
+          final expJson = jsonDecode(rawJsonStr) as Map<String, dynamic>;
+
+          bool expModified = false;
+          String newPayer = currentPayer;
+          if (translationMap.containsKey(currentPayer)) {
+            newPayer = translationMap[currentPayer]!;
+            expModified = true;
+          }
+
+          if (expJson.containsKey('paidById') &&
+              translationMap.containsKey(expJson['paidById'])) {
+            expJson['paidById'] = translationMap[expJson['paidById']];
+            expModified = true;
+          }
+
+          if (expJson.containsKey('paidByMap') && expJson['paidByMap'] is Map) {
+            final oldPaidByMap = Map<String, dynamic>.from(expJson['paidByMap'] as Map);
+            final newPaidByMap = <String, dynamic>{};
+            bool mapChanged = false;
+            for (final entry in oldPaidByMap.entries) {
+              final translatedKey = translationMap[entry.key] ?? entry.key;
+              if (translatedKey != entry.key) mapChanged = true;
+              newPaidByMap[translatedKey] = entry.value;
+            }
+            if (mapChanged) {
+              expJson['paidByMap'] = newPaidByMap;
+              expModified = true;
+            }
+          }
+
+          if (expJson.containsKey('splits') && expJson['splits'] is List) {
+            final splits = expJson['splits'] as List<dynamic>;
+            for (final split in splits) {
+              if (split is Map<String, dynamic>) {
+                final memberId = split['memberId']?.toString();
+                if (memberId != null && translationMap.containsKey(memberId)) {
+                  split['memberId'] = translationMap[memberId];
+                  expModified = true;
+                }
+              }
+            }
+          }
+
+          if (expModified) {
+            updateExpStmt.execute([newPayer, jsonEncode(expJson), expId]);
+            anyModified = true;
+          }
+        }
+      } finally {
+        expStmt.close();
+        updateExpStmt.close();
+      }
+
+      // 2. Reconcile Settlements
+      final setStmt = db.prepare(
+        'SELECT id, from_member_id, to_member_id, raw_json FROM settlements WHERE trip_id = ?;',
+      );
+      final updateSetStmt = db.prepare(
+        'UPDATE settlements SET from_member_id = ?, to_member_id = ?, raw_json = ? WHERE id = ?;',
+      );
+      try {
+        final setRows = setStmt.select([tripId]);
+        for (final row in setRows) {
+          final setId = row['id'] as String;
+          final currentFrom = row['from_member_id'] as String;
+          final currentTo = row['to_member_id'] as String;
+          final rawJsonStr = row['raw_json'] as String;
+          final setJson = jsonDecode(rawJsonStr) as Map<String, dynamic>;
+
+          bool setModified = false;
+          String newFrom = currentFrom;
+          String newTo = currentTo;
+
+          if (translationMap.containsKey(currentFrom)) {
+            newFrom = translationMap[currentFrom]!;
+            setModified = true;
+          }
+          if (translationMap.containsKey(currentTo)) {
+            newTo = translationMap[currentTo]!;
+            setModified = true;
+          }
+
+          if (setJson.containsKey('fromMemberId') &&
+              translationMap.containsKey(setJson['fromMemberId'])) {
+            setJson['fromMemberId'] = translationMap[setJson['fromMemberId']];
+            setModified = true;
+          }
+          if (setJson.containsKey('toMemberId') &&
+              translationMap.containsKey(setJson['toMemberId'])) {
+            setJson['toMemberId'] = translationMap[setJson['toMemberId']];
+            setModified = true;
+          }
+
+          if (setModified) {
+            updateSetStmt.execute([newFrom, newTo, jsonEncode(setJson), setId]);
+            anyModified = true;
+          }
+        }
+      } finally {
+        setStmt.close();
+        updateSetStmt.close();
+      }
+
+      // 3. Reconcile Mutation Outbox
+      final outboxStmt = db.prepare(
+        'SELECT id, trip_id, payload, status, retry_count, error, raw_json FROM mutation_outbox WHERE trip_id = ?;',
+      );
+      final updateOutboxStmt = db.prepare(
+        'UPDATE mutation_outbox SET payload = ?, status = ?, retry_count = ?, error = ?, raw_json = ? WHERE id = ?;',
+      );
+      try {
+        final outboxRows = outboxStmt.select([tripId]);
+        for (final row in outboxRows) {
+          final outboxId = row['id'] as String;
+          final payloadStr = row['payload'] as String;
+          final currentStatus = row['status'] as String;
+          final rawJsonStr = row['raw_json'] as String;
+
+          Map<String, dynamic> payload;
+          try {
+            payload = jsonDecode(payloadStr) as Map<String, dynamic>;
+          } catch (_) {
+            continue;
+          }
+
+          Map<String, dynamic> rawJson;
+          try {
+            rawJson = jsonDecode(rawJsonStr) as Map<String, dynamic>;
+          } catch (_) {
+            rawJson = <String, dynamic>{};
+          }
+
+          bool outboxModified = false;
+
+          // Reconcile payer in payload
+          if (payload.containsKey('paidById') &&
+              translationMap.containsKey(payload['paidById'])) {
+            payload['paidById'] = translationMap[payload['paidById']];
+            outboxModified = true;
+          }
+          if (payload.containsKey('paidByMemberId') &&
+              translationMap.containsKey(payload['paidByMemberId'])) {
+            payload['paidByMemberId'] = translationMap[payload['paidByMemberId']];
+            outboxModified = true;
+          }
+          if (payload.containsKey('paidByMap') && payload['paidByMap'] is Map) {
+            final oldPaidByMap = Map<String, dynamic>.from(payload['paidByMap'] as Map);
+            final newPaidByMap = <String, dynamic>{};
+            bool mapChanged = false;
+            for (final entry in oldPaidByMap.entries) {
+              final translatedKey = translationMap[entry.key] ?? entry.key;
+              if (translatedKey != entry.key) mapChanged = true;
+              newPaidByMap[translatedKey] = entry.value;
+            }
+            if (mapChanged) {
+              payload['paidByMap'] = newPaidByMap;
+              outboxModified = true;
+            }
+          }
+
+          // Reconcile splits in payload
+          if (payload.containsKey('splits') && payload['splits'] is List) {
+            final splits = payload['splits'] as List<dynamic>;
+            for (final split in splits) {
+              if (split is Map<String, dynamic>) {
+                final memberId = split['memberId']?.toString();
+                if (memberId != null && translationMap.containsKey(memberId)) {
+                  split['memberId'] = translationMap[memberId];
+                  outboxModified = true;
+                }
+              }
+            }
+          }
+
+          // Reconcile settlements in payload
+          if (payload.containsKey('fromMemberId') &&
+              translationMap.containsKey(payload['fromMemberId'])) {
+            payload['fromMemberId'] = translationMap[payload['fromMemberId']];
+            outboxModified = true;
+          }
+          if (payload.containsKey('toMemberId') &&
+              translationMap.containsKey(payload['toMemberId'])) {
+            payload['toMemberId'] = translationMap[payload['toMemberId']];
+            outboxModified = true;
+          }
+
+          if (outboxModified) {
+            rawJson['payload'] = payload;
+
+            String newStatus = currentStatus;
+            int newRetryCount = row['retry_count'] as int? ?? 0;
+            String? newError = row['error'] as String?;
+
+            if (currentStatus == 'quarantined' ||
+                currentStatus == 'failed' ||
+                rawJson['syncState'] == 'quarantined' ||
+                rawJson['syncState'] == 'failed') {
+              newStatus = 'pending';
+              newRetryCount = 0;
+              newError = null;
+              rawJson['syncState'] = 'localPending';
+              rawJson['retryCount'] = 0;
+              rawJson['lastError'] = null;
+            }
+
+            updateOutboxStmt.execute([
+              jsonEncode(payload),
+              newStatus,
+              newRetryCount,
+              newError,
+              jsonEncode(rawJson),
+              outboxId,
+            ]);
+            anyModified = true;
+          }
+        }
+      } finally {
+        outboxStmt.close();
+        updateOutboxStmt.close();
+      }
+
+      return anyModified;
     });
   }
 

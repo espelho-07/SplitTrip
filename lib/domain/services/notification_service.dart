@@ -261,15 +261,19 @@ class NotificationService {
   Future<void> syncServerNotifications(ApiClient apiClient) async {
     try {
       final res = await apiClient.get('/notifications');
-      if (res is List) {
-        for (final item in res) {
+      final notifsList = res is List
+          ? res
+          : (res is Map && res['data'] is List ? res['data'] as List : null);
+      if (notifsList != null) {
+        for (final item in notifsList) {
           if (item is Map) {
             final notifMap = Map<String, dynamic>.from(item);
             final typeStr = notifMap['type'] as String? ?? '';
-            final isExpense = typeStr.toLowerCase().contains('expense');
+            final typeLower = typeStr.toLowerCase();
+            final isExpense = typeLower.contains('expense');
             final notifType = isExpense
                 ? NotificationType.expense
-                : typeStr.toLowerCase().contains('trip')
+                : (typeLower.contains('trip') || typeLower.contains('member'))
                     ? NotificationType.trip
                     : NotificationType.settlement;
 

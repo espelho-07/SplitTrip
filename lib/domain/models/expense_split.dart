@@ -35,8 +35,10 @@ class ExpenseSplit {
   };
 
   factory ExpenseSplit.fromJson(Map<String, dynamic> json) => ExpenseSplit(
-    memberId: json['memberId'] as String,
-    amountInPaise: json['amountInPaise'] as int,
+    memberId: (json['memberId'] ?? json['member_id'] ?? '').toString(),
+    amountInPaise: (json['amountInPaise'] as num?)?.toInt() ??
+        (json['amount_in_paise'] as num?)?.toInt() ??
+        ((json['amount'] as num?)?.toDouble() != null ? ((json['amount'] as num).toDouble() * 100).round() : 0),
     percentage: (json['percentage'] as num?)?.toDouble(),
     shares: json['shares'] as int?,
   );
