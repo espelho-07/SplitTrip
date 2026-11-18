@@ -175,5 +175,23 @@ class AppConfig {
 
   }
 
+  /// Builds a secure personalized claim link for an unclaimed virtual member.
+  /// Delivered out-of-band by the trip creator to the intended participant.
+  static String buildClaimLink(
+    String inviteCode, {
+    required String memberId,
+    required String claimToken,
+    String? p2pTripSecret,
+  }) {
+    final cleanCode = inviteCode.trim().toUpperCase();
+    final cleanMemberId = memberId.trim();
+    final cleanToken = claimToken.trim();
+    var link = 'https://kith.app/join?code=$cleanCode&memberId=$cleanMemberId&token=$cleanToken';
+    if (p2pTripSecret != null && p2pTripSecret.isNotEmpty) {
+      link += '&secret=$p2pTripSecret';
+    }
+    return link;
+  }
+
 }
 

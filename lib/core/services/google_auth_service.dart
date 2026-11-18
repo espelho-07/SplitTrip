@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/supabase_config.dart';
+import '../nirniq/config/nirniq_auth_config.dart';
 
 /// Result of a successful Google Sign-In + Supabase identity verification.
 class GoogleAuthResult {
@@ -26,7 +27,7 @@ class GoogleAuthResult {
 /// Reason that Google Sign-In was not completed.
 enum GoogleSignInFailure { cancelled, networkError, signInFailed, supabaseError }
 
-/// Wraps the complete Google Sign-In → Supabase identity verification flow.
+/// Wraps the complete Google Sign-In -> Supabase identity verification flow.
 ///
 /// Flow:
 ///   1. Native Android account picker via [GoogleSignIn.signIn()]
@@ -39,7 +40,7 @@ enum GoogleSignInFailure { cancelled, networkError, signInFailed, supabaseError 
 /// and the raw Google account info is returned directly.
 class GoogleAuthService {
   /// Web OAuth Client ID — registered in Google Cloud Console and configured
-  /// in Supabase Auth → Providers → Google.
+  /// in Supabase Auth -> Providers -> Google.
   ///
   /// Required as [serverClientId] so the native Google Sign-In plugin
   /// requests an idToken scoped for this server client, which Supabase
@@ -47,9 +48,19 @@ class GoogleAuthService {
   ///
   /// This is the Web client ID (not the Android client) — that is correct.
   /// The Android client ID is embedded in google-services.json for the
-  static final GoogleSignIn _googleSignIn = GoogleSignIn(
-    scopes: const ['email', 'profile'],
-  );
+  static GoogleSignIn? _mockGoogleSignIn;
+
+  @visibleForTesting
+  static void setMockGoogleSignIn(GoogleSignIn? mock) {
+    _mockGoogleSignIn = mock;
+  }
+
+  static GoogleSignIn get _googleSignIn =>
+      _mockGoogleSignIn ??
+      GoogleSignIn(
+        serverClientId: NirniqAuthConfig.googleWebClientId,
+        scopes: const ['email', 'profile'],
+      );
 
   /// Triggers the native Google account picker and returns a [GoogleAuthResult] on success.
   ///

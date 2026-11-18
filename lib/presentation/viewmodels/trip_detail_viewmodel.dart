@@ -13,11 +13,13 @@ import '../../domain/models/journey_moment.dart';
 import '../../domain/models/journey_stop.dart';
 import '../../domain/models/trip.dart';
 import '../../domain/models/trip_memory.dart';
+import '../../data/services/local_storage_service.dart';
 
 class TripDetailViewModel extends ChangeNotifier {
   final TripRepository tripRepo;
   final ExpenseRepository expenseRepo;
   final RealtimeClient? realtimeClient;
+  final LocalStorageService? storage;
 
   Trip? _trip;
   List<Expense> _expenses = [];
@@ -45,9 +47,23 @@ class TripDetailViewModel extends ChangeNotifier {
   TripDetailViewModel({
     required this.tripRepo,
     required this.expenseRepo,
+    this.storage,
     this.realtimeClient,
   }) {
+    storage?.addOnClearDataListener(clearData);
     _subscribeToRealtimeEvents();
+  }
+
+  void clearData() {
+    _trip = null;
+    _expenses = [];
+    _balanceSummary = BalanceSummary.empty();
+    _activityLogs = [];
+    _journeyStops = [];
+    _tripMemories = [];
+    _journeyMoments = [];
+    _errorMessage = null;
+    if (!_isDisposed) notifyListeners();
   }
 
   Trip? get trip => _trip;
@@ -351,7 +367,7 @@ class TripDetailViewModel extends ChangeNotifier {
   }
 
 
-  Future<void> loadTrip(String tripId, String currentUserId) async {
+  void hydrateLocally(String tripId, String currentUserId) {
     _currentUserId = currentUserId;
 
     // 1. FAST LOCAL HYDRATION: Render cached trip & expenses instantly (< 5ms)
@@ -372,6 +388,10 @@ class TripDetailViewModel extends ChangeNotifier {
       );
       notifyListeners();
     }
+  }
+
+  Future<void> loadTrip(String tripId, String currentUserId) async {
+    hydrateLocally(tripId, currentUserId);
 
     _isLoading = _trip == null;
     _errorMessage = null;
@@ -516,7 +536,11 @@ class TripDetailViewModel extends ChangeNotifier {
           paymentReference: 'settle_all_${DateTime.now().millisecondsSinceEpoch}',
         );
       }
-      await markAsSettled(currentUserId);
+      // Only transition lifecycle to settled if the trip was already in settling or completing.
+      // Active ongoing trips remain active so more expenses can be added.
+      if (_trip!.lifecycleState == TripLifecycle.settling || _trip!.lifecycleState == TripLifecycle.completing) {
+        await markAsSettled(currentUserId);
+      }
       await refresh(currentUserId);
     } catch (e) {
       _errorMessage = KithErrorFormatter.format(e);
@@ -766,6 +790,7 @@ class TripDetailViewModel extends ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
+    storage?.removeOnClearDataListener(clearData);
     if (_trip != null) {
       realtimeClient?.unsubscribeFromTrip(_trip!.id);
     }

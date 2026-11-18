@@ -192,6 +192,9 @@ class _UpiPaymentSheetState extends State<UpiPaymentSheet> {
     final hasDefaultUpi = widget.initialRecipientUpiId != null && widget.initialRecipientUpiId!.trim().isNotEmpty;
 
     return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.9,
+      ),
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -202,10 +205,12 @@ class _UpiPaymentSheetState extends State<UpiPaymentSheet> {
         right: 20,
         bottom: MediaQuery.of(context).viewInsets.bottom + 24,
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
           // Drag Handle
           Container(
             width: 36,
@@ -541,6 +546,7 @@ class _UpiPaymentSheetState extends State<UpiPaymentSheet> {
           const SizedBox(height: 12),
         ],
       ),
-    );
+    ),
+  );
   }
 }

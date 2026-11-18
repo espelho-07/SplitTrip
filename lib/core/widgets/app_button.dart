@@ -156,11 +156,13 @@ class _AppButtonState extends State<AppButton> with SingleTickerProviderStateMix
                 const SizedBox(width: 8),
               ],
               Flexible(
-                child: Text(
-                  widget.text,
-                  style: AppTypography.buttonText(color: textColor),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    widget.text,
+                    style: AppTypography.buttonText(color: textColor),
+                    maxLines: 1,
+                  ),
                 ),
               ),
             ],

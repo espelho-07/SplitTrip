@@ -11,6 +11,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/widgets/surface_card.dart';
+import '../../../data/services/local_storage_service.dart';
 import '../../../data/services/sync_service.dart';
 import '../../router/app_router.dart';
 import '../../viewmodels/auth_viewmodel.dart';
@@ -35,6 +36,7 @@ class CloudSettingsView extends StatelessWidget {
   void _showSignOutDialog(BuildContext context) async {
     final authVm = context.read<AuthViewModel>();
     final homeVm = context.read<HomeViewModel>();
+    final storage = context.read<LocalStorageService>();
     final l10n = context.l10n;
 
     final confirm = await showDialog<bool>(
@@ -58,9 +60,26 @@ class CloudSettingsView extends StatelessWidget {
     );
 
     if (confirm == true) {
-      AppRouter.router.go('/onboarding');
-      await authVm.logout();
-      homeVm.clearData();
+      final rootNav = Navigator.of(AppRouter.navigatorKey.currentContext ?? context, rootNavigator: true);
+      showDialog(
+        context: AppRouter.navigatorKey.currentContext ?? context,
+        barrierDismissible: false,
+        builder: (_) => const PopScope(
+          canPop: false,
+          child: Center(
+            child: CircularProgressIndicator(color: AppColors.emeraldPrimary),
+          ),
+        ),
+      );
+
+      try {
+        await authVm.logout();
+        await storage.clearAllUserData();
+        homeVm.clearData();
+      } finally {
+        if (rootNav.canPop()) rootNav.pop();
+        AppRouter.router.go('/onboarding');
+      }
 
       final rootCtx = AppRouter.navigatorKey.currentContext;
       if (rootCtx != null && rootCtx.mounted) {

@@ -91,9 +91,9 @@ class _RecoveryProgressViewState extends State<RecoveryProgressView> {
       setState(() => _currentStep = RecoveryStep.findingKey);
       HapticHelper.light();
 
-      // Enforce 15-second timeout safeguard
+      // Enforce 30-second timeout safeguard (allowing backend spin-up if cold)
       final user = await authVm.recoverSession(key).timeout(
-        const Duration(seconds: 15),
+        const Duration(seconds: 30),
         onTimeout: () => throw TimeoutException('Recovery timed out. Please check your network connection.'),
       );
 

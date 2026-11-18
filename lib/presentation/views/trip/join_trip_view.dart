@@ -8,6 +8,8 @@ import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
+import '../../../core/services/permission_service.dart';
+import '../../../data/services/p2p_sync_service.dart';
 import '../../../core/widgets/kith_brand.dart';
 import '../../../core/widgets/surface_card.dart';
 import '../../../domain/engine/qr_code_parser.dart';
@@ -22,8 +24,15 @@ import 'widgets/join_preview_sheet.dart';
 /// clipboard auto-paste, holographic QR scanner deck, and live preview sheet.
 class JoinTripView extends StatefulWidget {
   final String? initialCode;
+  final String? claimMemberId;
+  final String? claimToken;
 
-  const JoinTripView({super.key, this.initialCode});
+  const JoinTripView({
+    super.key,
+    this.initialCode,
+    this.claimMemberId,
+    this.claimToken,
+  });
 
   @override
   State<JoinTripView> createState() => _JoinTripViewState();
@@ -32,10 +41,14 @@ class JoinTripView extends StatefulWidget {
 class _JoinTripViewState extends State<JoinTripView> {
   final TextEditingController _codeController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
+  String? _claimMemberId;
+  String? _claimToken;
 
   @override
   void initState() {
     super.initState();
+    _claimMemberId = widget.claimMemberId;
+    _claimToken = widget.claimToken;
     if (widget.initialCode != null && widget.initialCode!.isNotEmpty) {
       final sanitized = widget.initialCode!.trim().toUpperCase();
       _codeController.text = sanitized;
@@ -57,8 +70,26 @@ class _JoinTripViewState extends State<JoinTripView> {
     final clipboardData = await Clipboard.getData('text/plain');
     if (clipboardData != null && clipboardData.text != null) {
       final text = clipboardData.text!.trim();
-      final parsed = QrCodeParser.extractInviteCode(text);
-      final codeToSet = parsed ?? text.replaceAll(RegExp(r'[^A-Z0-9]'), '').toUpperCase();
+      final parsed = QrCodeParser.parsePayload(text);
+      if (parsed != null && parsed.inviteCode.isNotEmpty) {
+        _claimMemberId = parsed.claimMemberId;
+        _claimToken = parsed.claimToken;
+        final codeToSet = parsed.inviteCode.toUpperCase();
+        setState(() {
+          _codeController.text = codeToSet;
+        });
+        if (mounted) context.read<JoinTripViewModel>().setCode(codeToSet);
+        if (codeToSet.length >= 4) {
+          _handlePreviewOrJoin(codeToSet);
+        }
+        return;
+      }
+      final parsedCode = QrCodeParser.extractInviteCode(text);
+      final memberId = QrCodeParser.extractClaimMemberId(text);
+      final token = QrCodeParser.extractClaimToken(text);
+      if (memberId != null) _claimMemberId = memberId;
+      if (token != null) _claimToken = token;
+      final codeToSet = parsedCode ?? text.replaceAll(RegExp(r'[^A-Z0-9]'), '').toUpperCase();
       if (codeToSet.isNotEmpty) {
         setState(() {
           _codeController.text = codeToSet;
@@ -99,7 +130,15 @@ class _JoinTripViewState extends State<JoinTripView> {
     if (preview != null && mounted) {
       _showPreviewSheet(preview);
     } else if (mounted) {
-      _executeJoinFlow(targetCode);
+      HapticHelper.error();
+      final err = joinVm.errorMessage ?? 'This trip does not exist. Check the code and try again.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(err),
+          backgroundColor: AppColors.negativeRedDark,
+          duration: const Duration(seconds: 4),
+        ),
+      );
     }
   }
 
@@ -111,13 +150,26 @@ class _JoinTripViewState extends State<JoinTripView> {
     );
 
     if (scannedCode != null && scannedCode.isNotEmpty && mounted) {
-      final sanitized = scannedCode.trim().toUpperCase();
+      final parsed = QrCodeParser.parsePayload(scannedCode);
+      if (parsed != null && parsed.inviteCode.isNotEmpty) {
+        _claimMemberId = parsed.claimMemberId;
+        _claimToken = parsed.claimToken;
+        final sanitized = parsed.inviteCode.trim().toUpperCase();
+        _codeController.text = sanitized;
+        _handlePreviewOrJoin(sanitized);
+        return;
+      }
+      final memberId = QrCodeParser.extractClaimMemberId(scannedCode);
+      final token = QrCodeParser.extractClaimToken(scannedCode);
+      if (memberId != null) _claimMemberId = memberId;
+      if (token != null) _claimToken = token;
+      final sanitized = (QrCodeParser.extractInviteCode(scannedCode) ?? scannedCode).trim().toUpperCase();
       _codeController.text = sanitized;
       _handlePreviewOrJoin(sanitized);
     }
   }
 
-  Future<void> _executeJoinFlow(String code, {String? claimMemberId}) async {
+  Future<void> _executeJoinFlow(String code, {String? claimMemberId, String? claimToken}) async {
     final authVm = context.read<AuthViewModel>();
     final homeVm = context.read<HomeViewModel>();
     final joinVm = context.read<JoinTripViewModel>();
@@ -127,6 +179,13 @@ class _JoinTripViewState extends State<JoinTripView> {
     if (user == null) return;
 
     _focusNode.unfocus();
+
+    // Upfront permission acquisition for nearby P2P auto-sync before joining
+    await PermissionService.requestNearbyPermissions();
+    if (!mounted) return;
+
+    final effectiveMemberId = claimMemberId ?? _claimMemberId;
+    final effectiveToken = claimToken ?? _claimToken;
 
     final stageNotifier = ValueNotifier<int>(0);
     final stages = [
@@ -165,13 +224,19 @@ class _JoinTripViewState extends State<JoinTripView> {
       if (mounted) stageNotifier.value = 2;
     });
 
-    final trip = await joinVm.joinTrip(user, code, claimMemberId);
+    final trip = await joinVm.joinTrip(user, code, effectiveMemberId, effectiveToken);
 
     if (mounted) {
       Navigator.of(context, rootNavigator: true).pop(); // Dismiss progress
 
       if (trip != null) {
         await homeVm.loadTrips(user.id);
+        if (mounted) {
+          try {
+            final p2p = Provider.of<P2PSyncService?>(context, listen: false);
+            p2p?.broadcastBeacon();
+          } catch (_) {}
+        }
         if (mounted) {
           GoRouter.of(context).go('/trip/${trip.id}');
           KithSuccessToast.show(context, l10n.joinSuccessToast);
@@ -187,7 +252,7 @@ class _JoinTripViewState extends State<JoinTripView> {
             action: SnackBarAction(
               label: 'Retry',
               textColor: Colors.white,
-              onPressed: () => _executeJoinFlow(code, claimMemberId: claimMemberId),
+              onPressed: () => _executeJoinFlow(code, claimMemberId: claimMemberId, claimToken: claimToken),
             ),
           ),
         );
@@ -199,6 +264,7 @@ class _JoinTripViewState extends State<JoinTripView> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (bottomSheetContext) {
         return Consumer<JoinTripViewModel>(
@@ -206,12 +272,18 @@ class _JoinTripViewState extends State<JoinTripView> {
             return JoinPreviewSheet(
               preview: preview,
               isJoining: joinVm.isJoining,
-              onConfirmJoin: ({String? claimMemberId}) async {
+              initialClaimMemberId: _claimMemberId,
+              initialClaimToken: _claimToken,
+              onConfirmJoin: ({String? claimMemberId, String? claimToken}) async {
                 Navigator.of(bottomSheetContext).pop();
                 final codeToJoin = (preview.inviteCode != null && (preview.inviteCode as String).isNotEmpty)
                     ? preview.inviteCode as String
                     : (preview.tripId as String? ?? _codeController.text.trim());
-                await _executeJoinFlow(codeToJoin, claimMemberId: claimMemberId);
+                await _executeJoinFlow(
+                  codeToJoin,
+                  claimMemberId: claimMemberId ?? _claimMemberId,
+                  claimToken: claimToken ?? _claimToken,
+                );
               },
               onCancel: () {
                 Navigator.of(bottomSheetContext).pop();

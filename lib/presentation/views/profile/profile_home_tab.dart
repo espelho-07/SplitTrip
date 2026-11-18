@@ -196,10 +196,28 @@ class ProfileHomeTab extends StatelessWidget {
     );
 
     if (confirm == true) {
-      AppRouter.router.go('/onboarding');
-      await authVm.logout();
-      await storage.clearAllUserData();
-      homeVm.clearData();
+      if (!context.mounted) return;
+      final activeCtx = AppRouter.navigatorKey.currentContext ?? context;
+      final rootNav = Navigator.of(activeCtx, rootNavigator: true);
+      showDialog(
+        context: activeCtx,
+        barrierDismissible: false,
+        builder: (_) => const PopScope(
+          canPop: false,
+          child: Center(
+            child: CircularProgressIndicator(color: AppColors.emeraldPrimary),
+          ),
+        ),
+      );
+
+      try {
+        await authVm.logout();
+        await storage.clearAllUserData();
+        homeVm.clearData();
+      } finally {
+        if (rootNav.canPop()) rootNav.pop();
+        AppRouter.router.go('/onboarding');
+      }
 
       final rootCtx = AppRouter.navigatorKey.currentContext;
       if (rootCtx != null && rootCtx.mounted) {
@@ -235,10 +253,28 @@ class ProfileHomeTab extends StatelessWidget {
     );
 
     if (confirm == true) {
-      AppRouter.router.go('/onboarding');
-      await authVm.deleteAccount();
-      await storage.clearAllUserData();
-      homeVm.clearData();
+      if (!context.mounted) return;
+      final activeCtx = AppRouter.navigatorKey.currentContext ?? context;
+      final rootNav = Navigator.of(activeCtx, rootNavigator: true);
+      showDialog(
+        context: activeCtx,
+        barrierDismissible: false,
+        builder: (_) => const PopScope(
+          canPop: false,
+          child: Center(
+            child: CircularProgressIndicator(color: AppColors.negativeRedDark),
+          ),
+        ),
+      );
+
+      try {
+        await authVm.deleteAccount();
+        await storage.clearAllUserData();
+        homeVm.clearData();
+      } finally {
+        if (rootNav.canPop()) rootNav.pop();
+        AppRouter.router.go('/onboarding');
+      }
 
       final rootCtx = AppRouter.navigatorKey.currentContext;
       if (rootCtx != null && rootCtx.mounted) {

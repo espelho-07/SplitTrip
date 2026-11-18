@@ -7,11 +7,13 @@ import '../../data/repositories/trip_repository.dart';
 import '../../domain/engine/balance_engine.dart';
 import '../../domain/models/balance_summary.dart';
 import '../../domain/models/trip.dart';
+import '../../data/services/local_storage_service.dart';
 
 class HomeViewModel extends ChangeNotifier {
   final TripRepository tripRepo;
   final ExpenseRepository expenseRepo;
   final RealtimeClient? realtimeClient;
+  final LocalStorageService? storage;
 
   List<Trip> _trips = [];
   final Map<String, BalanceSummary> _tripBalances = {};
@@ -30,8 +32,10 @@ class HomeViewModel extends ChangeNotifier {
   HomeViewModel({
     required this.tripRepo,
     required this.expenseRepo,
+    this.storage,
     this.realtimeClient,
   }) {
+    storage?.addOnClearDataListener(clearData);
     _subscribeToRealtimeEvents();
   }
 
@@ -206,6 +210,8 @@ class HomeViewModel extends ChangeNotifier {
     if (_isDisposed) return;
     _trips = [];
     _tripBalances.clear();
+    _tripTotalsPaise.clear();
+    _tripExpenseCounts.clear();
     _overallNetBalanceInPaise = 0;
     _totalSpentOnTripsInPaise = 0;
     _isLoading = false;
@@ -216,6 +222,7 @@ class HomeViewModel extends ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
+    storage?.removeOnClearDataListener(clearData);
     _realtimeSubscription?.cancel();
     super.dispose();
   }

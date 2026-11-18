@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/localization/app_localizations.dart';
+import '../../../core/design_system/components/liquid_glass_nav_bar.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/realtime_client.dart';
 import '../../../core/services/fcm_service.dart';
@@ -450,16 +451,7 @@ class _HomeViewState extends State<HomeView> {
           ],
         ),
       ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF0F1418) : Colors.white,
-          border: Border(
-            top: BorderSide(
-              color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
-              width: 1,
-            ),
-          ),
-        ),
+      bottomNavigationBar: LiquidGlassNavBar(
         child: NavigationBar(
           selectedIndex: activeIndex,
           backgroundColor: Colors.transparent,

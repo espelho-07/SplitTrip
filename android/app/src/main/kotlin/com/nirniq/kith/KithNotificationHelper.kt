@@ -107,9 +107,11 @@ object KithNotificationHelper {
 
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            action = "FLUTTER_NOTIFICATION_CLICK"
             if (!route.isNullOrEmpty()) {
                 val uriStr = if (route.startsWith("kith://")) route else "kith://kith.app$route"
                 data = Uri.parse(uriStr)
+                putExtra("route", route)
             }
         }
 

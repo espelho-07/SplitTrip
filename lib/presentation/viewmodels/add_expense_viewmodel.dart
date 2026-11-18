@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/services/voice_speech_service.dart';
+import '../../core/utils/currency_formatter.dart';
 import '../../core/utils/error_formatter.dart';
 import '../../data/repositories/expense_repository.dart';
 import '../../domain/engine/money_engine.dart';
@@ -28,6 +29,8 @@ class AddExpenseViewModel extends ChangeNotifier {
   bool _userExplicitlySelectedCategory = false;
   String _location = '';
   String _paidById = '';
+  bool _isMultiplePayers = false;
+  final Map<String, int> _payerAmountsInPaise = {};
   SplitType _splitType = SplitType.equal;
 
   // Split configurations
@@ -46,6 +49,13 @@ class AddExpenseViewModel extends ChangeNotifier {
   String? _draftExpenseId;
   DateTime? _createdAt;
 
+  DateTime? get createdAt => _createdAt;
+
+  void setDate(DateTime date) {
+    _createdAt = date;
+    notifyListeners();
+  }
+
   bool _isSaving = false;
   String? _errorMessage;
 
@@ -60,6 +70,91 @@ class AddExpenseViewModel extends ChangeNotifier {
   bool get userExplicitlySelectedCategory => _userExplicitlySelectedCategory;
   String get location => _location;
   String get paidById => _paidById;
+  bool get isMultiplePayers => _isMultiplePayers;
+  Map<String, int> get payerAmountsInPaise => _payerAmountsInPaise;
+
+  void toggleMultiplePayers(bool value) {
+    _isMultiplePayers = value;
+    if (_isMultiplePayers) {
+      if (_payerAmountsInPaise.isEmpty) {
+        final primaryPayer = _paidById.isNotEmpty ? _paidById : '';
+        if (primaryPayer.isNotEmpty) {
+          _payerAmountsInPaise[primaryPayer] = _amountInPaise;
+        }
+      } else if (_payerAmountsInPaise.length == 1) {
+        _payerAmountsInPaise[_payerAmountsInPaise.keys.first] = _amountInPaise;
+      }
+    } else {
+      if (_payerAmountsInPaise.isNotEmpty) {
+        String primaryPayer = _payerAmountsInPaise.keys.first;
+        int maxAmt = -1;
+        for (final entry in _payerAmountsInPaise.entries) {
+          if (entry.value > maxAmt) {
+            maxAmt = entry.value;
+            primaryPayer = entry.key;
+          }
+        }
+        _paidById = primaryPayer;
+      }
+      _payerAmountsInPaise.clear();
+    }
+    notifyListeners();
+  }
+
+  void togglePayerSelection(String memberId) {
+    if (!_isMultiplePayers) {
+      _paidById = memberId;
+      notifyListeners();
+      return;
+    }
+
+    if (_payerAmountsInPaise.containsKey(memberId)) {
+      if (_payerAmountsInPaise.length <= 1) return;
+      _payerAmountsInPaise.remove(memberId);
+    } else {
+      _payerAmountsInPaise[memberId] = 0;
+    }
+
+    distributeEqualAmongPayers();
+  }
+
+  void distributeEqualAmongPayers() {
+    if (_payerAmountsInPaise.isEmpty) return;
+
+    if (_amountInPaise <= 0) {
+      for (final pid in _payerAmountsInPaise.keys) {
+        _payerAmountsInPaise[pid] = 0;
+      }
+      notifyListeners();
+      return;
+    }
+
+    final payers = _payerAmountsInPaise.keys.toList();
+    final base = _amountInPaise ~/ payers.length;
+    var rem = _amountInPaise % payers.length;
+
+    for (final pid in payers) {
+      _payerAmountsInPaise[pid] = base + (rem > 0 ? 1 : 0);
+      if (rem > 0) rem--;
+    }
+    notifyListeners();
+  }
+
+  void setPayerAmount(String memberId, int amountInPaise) {
+    _payerAmountsInPaise[memberId] = amountInPaise < 0 ? 0 : amountInPaise;
+    notifyListeners();
+  }
+
+  void removePayer(String memberId) {
+    if (_payerAmountsInPaise.length <= 1) return;
+    _payerAmountsInPaise.remove(memberId);
+    distributeEqualAmongPayers();
+  }
+
+  int get totalPayerAllocatedPaise => _payerAmountsInPaise.values.fold(0, (sum, val) => sum + val);
+  int get remainingPayerPaise => _amountInPaise - totalPayerAllocatedPaise;
+  bool get isPayerAllocationBalanced => _isMultiplePayers ? totalPayerAllocatedPaise == _amountInPaise : true;
+
   SplitType get splitType => _splitType;
   Set<String> get selectedParticipantMemberIds => _selectedParticipantMemberIds;
   Map<String, int> get exactAmountsInPaise => _exactAmountsInPaise;
@@ -104,6 +199,8 @@ class AddExpenseViewModel extends ChangeNotifier {
     // Default payer to current user
     final currentMember = trip.members.where((m) => m.userId == currentUserId).firstOrNull;
     _paidById = currentMember?.id ?? (trip.members.isNotEmpty ? trip.members.first.id : '');
+    _isMultiplePayers = false;
+    _payerAmountsInPaise.clear();
 
     // Default participants to all trip members
     _selectedParticipantMemberIds.clear();
@@ -185,6 +282,14 @@ class AddExpenseViewModel extends ChangeNotifier {
     _userExplicitlySelectedCategory = true;
     _location = expense.location ?? '';
     _paidById = expense.paidById;
+    if (expense.paidByMap != null && expense.paidByMap!.isNotEmpty) {
+      _isMultiplePayers = true;
+      _payerAmountsInPaise.clear();
+      _payerAmountsInPaise.addAll(expense.paidByMap!);
+    } else {
+      _isMultiplePayers = false;
+      _payerAmountsInPaise.clear();
+    }
     _splitType = expense.splitType;
     _currentTab = 2; // Manual edit tab
 
@@ -229,6 +334,18 @@ class AddExpenseViewModel extends ChangeNotifier {
 
   void setAmountInPaise(int value) {
     _amountInPaise = value < 0 ? 0 : value;
+    if (_isMultiplePayers && _payerAmountsInPaise.isNotEmpty) {
+      if (_payerAmountsInPaise.length == 1) {
+        _payerAmountsInPaise[_payerAmountsInPaise.keys.first] = _amountInPaise;
+      } else {
+        // If payers have not been customized yet (all 0) or are balanced, automatically re-distribute
+        final allZero = _payerAmountsInPaise.values.every((v) => v == 0);
+        if (allZero) {
+          distributeEqualAmongPayers();
+          return;
+        }
+      }
+    }
     notifyListeners();
   }
 
@@ -469,6 +586,21 @@ class AddExpenseViewModel extends ChangeNotifier {
       return null;
     }
 
+    final effectivePaidByMap = _isMultiplePayers && _payerAmountsInPaise.isNotEmpty
+        ? Map<String, int>.from(_payerAmountsInPaise)
+        : null;
+
+    if (effectivePaidByMap != null) {
+      final totalPaidByMembers = effectivePaidByMap.values.fold(0, (sum, val) => sum + val);
+      if (totalPaidByMembers != _amountInPaise) {
+        final paidFormatted = CurrencyFormatter.formatPaise(totalPaidByMembers);
+        final totalFormatted = CurrencyFormatter.formatPaise(_amountInPaise);
+        _errorMessage = 'Total paid by members ($paidFormatted) must strictly equal total expense amount ($totalFormatted)';
+        notifyListeners();
+        return null;
+      }
+    }
+
     _isSaving = true;
     _errorMessage = null;
     notifyListeners();
@@ -482,7 +614,8 @@ class AddExpenseViewModel extends ChangeNotifier {
           amountInPaise: _amountInPaise,
           category: _category,
           location: _location.trim().isNotEmpty ? _location.trim() : null,
-          paidById: _paidById,
+          paidById: _paidById.isNotEmpty ? _paidById : (effectivePaidByMap?.keys.first ?? ''),
+          paidByMap: effectivePaidByMap,
           splits: splits,
           splitType: _splitType,
           voiceTranscript: _voiceTranscript.isNotEmpty ? _voiceTranscript : null,
@@ -501,11 +634,12 @@ class AddExpenseViewModel extends ChangeNotifier {
           amountInPaise: _amountInPaise,
           category: _category,
           location: _location.trim().isNotEmpty ? _location.trim() : null,
-          paidById: _paidById,
+          paidById: _paidById.isNotEmpty ? _paidById : (effectivePaidByMap?.keys.first ?? ''),
+          paidByMap: effectivePaidByMap,
           splits: splits,
           splitType: _splitType,
           voiceTranscript: _voiceTranscript.isNotEmpty ? _voiceTranscript : null,
-          createdAt: DateTime.now(),
+          createdAt: _createdAt ?? DateTime.now(),
           updatedAt: DateTime.now(),
         );
 

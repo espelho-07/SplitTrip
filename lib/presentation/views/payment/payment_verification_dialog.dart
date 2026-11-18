@@ -164,16 +164,21 @@ class _PaymentVerificationSheetState extends State<PaymentVerificationSheet> {
     final formattedAmt = CurrencyFormatter.formatPaise(widget.request.amountInPaise, currencyCode: 'INR');
 
     return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.9,
+      ),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF0F1418) : Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
         border: Border.all(color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
           // Drag Handle
           Container(
             width: 40,
@@ -319,7 +324,8 @@ class _PaymentVerificationSheetState extends State<PaymentVerificationSheet> {
           const SizedBox(height: 10),
         ],
       ),
-    );
+    ),
+  );
   }
 
   String _formatTime(DateTime dt) {
@@ -366,15 +372,20 @@ class PaymentDisputeAlertSheet extends StatelessWidget {
     final formattedAmt = CurrencyFormatter.formatPaise(request.amountInPaise, currencyCode: 'INR');
 
     return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.9,
+      ),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF0F1418) : Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
         border: Border.all(color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
           Container(
             width: 40,
             height: 4,
@@ -491,7 +502,8 @@ class PaymentDisputeAlertSheet extends StatelessWidget {
           const SizedBox(height: 10),
         ],
       ),
-    );
+    ),
+  );
   }
 }
 
@@ -729,16 +741,21 @@ class _PaymentProofSheetState extends State<PaymentProofSheet> {
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.9,
+        ),
         decoration: BoxDecoration(
           color: isDark ? const Color(0xFF0F1418) : Colors.white,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
           border: Border.all(color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0)),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             Center(
               child: Container(
                 width: 40,
@@ -912,7 +929,8 @@ class _PaymentProofSheetState extends State<PaymentProofSheet> {
           ],
         ),
       ),
-    );
+    ),
+  );
   }
 }
 
@@ -944,7 +962,7 @@ class PaymentVerificationManager {
 
       if (pendingReceiver.isNotEmpty) {
         final req = PaymentVerificationRequest.fromJson(pendingReceiver.first);
-        if (context.mounted) {
+        if (context.mounted && (ModalRoute.of(context)?.isCurrent ?? true)) {
           await PaymentVerificationView.show(context, request: req);
           return;
         }
@@ -958,7 +976,7 @@ class PaymentVerificationManager {
 
       if (disputedPayer.isNotEmpty) {
         final req = PaymentVerificationRequest.fromJson(disputedPayer.first);
-        if (context.mounted) {
+        if (context.mounted && (ModalRoute.of(context)?.isCurrent ?? true)) {
           await PaymentDisputeAlertSheet.show(context, request: req);
         }
       }

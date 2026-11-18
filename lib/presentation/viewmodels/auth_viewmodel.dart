@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../data/repositories/user_repository.dart';
 import '../../domain/enums/app_experience_mode.dart';
@@ -21,13 +22,19 @@ class AuthViewModel extends ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
 
-  AuthViewModel({required this.userRepo});
+  AuthViewModel({required this.userRepo}) {
+    // Fast synchronous local restoration to prevent cold-boot race conditions
+    _currentUser = userRepo.getCurrentUser();
+    if (_currentUser != null) {
+      _authState = AuthState.authenticated;
+    }
+  }
 
-  GuestUser? get currentUser => _currentUser;
+  GuestUser? get currentUser => _currentUser ??= userRepo.getCurrentUser();
   AppExperienceMode get appExperienceMode => _appExperienceMode;
   KithAppMode get primaryAppMode => _primaryAppMode;
   AuthState get authState => _authState;
-  bool get isAuthenticated => _currentUser != null;
+  bool get isAuthenticated => currentUser != null;
   bool get isInitialized => _authState != AuthState.uninitialized;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
@@ -35,20 +42,30 @@ class AuthViewModel extends ChangeNotifier {
   Future<void> initSession() async {
     _isLoading = true;
     _authState = AuthState.uninitialized;
-    // Yield to the event loop so that any pending widget builds complete
-    // before we call notifyListeners().
     await Future<void>.value();
 
     try {
-      // restoreGuestIfNeeded() checks SharedPreferences first (fast path),
-      // then falls back to Keystore → Supabase to recover after reinstall.
+      // 1. Instant local fast path: SharedPreferences / SQLite already has the user
+      final localUser = userRepo.getCurrentUser();
+      if (localUser != null) {
+        _currentUser = localUser;
+        _appExperienceMode = AppExperienceMode.tripsOnly;
+        _primaryAppMode = KithAppMode.trip;
+        _authState = AuthState.authenticated;
+        _isLoading = false;
+        notifyListeners();
+        // Fire non-blocking cloud session sync in background
+        unawaited(userRepo.syncSession(localUser));
+        return;
+      }
+
+      // 2. Slow path: Reinstall / first boot recovery from Keystore / Supabase
       _currentUser = await userRepo.restoreGuestIfNeeded();
-      // SplitTrip is locked to dedicated Trip Mode
       _appExperienceMode = AppExperienceMode.tripsOnly;
       _primaryAppMode = KithAppMode.trip;
       _authState = _currentUser != null ? AuthState.authenticated : AuthState.signedOut;
       if (_currentUser != null) {
-        userRepo.syncSession(_currentUser);
+        unawaited(userRepo.syncSession(_currentUser));
       }
     } catch (e) {
       _errorMessage = e.toString();
@@ -125,7 +142,7 @@ class AuthViewModel extends ChangeNotifier {
       _currentUser = user;
       if (user != null) {
         _authState = AuthState.authenticated;
-        userRepo.syncSession(user);
+        await userRepo.syncSession(user);
       }
       return user;
     } catch (e) {

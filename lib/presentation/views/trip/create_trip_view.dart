@@ -27,8 +27,8 @@ class CreateTripView extends StatefulWidget {
 class _CreateTripViewState extends State<CreateTripView> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _friendController = TextEditingController();
-  bool _showManualFriends = false;
   bool _showEmojiTray = false;
+  bool _showAdvancedOptions = false;
   int _bgStyleTab = 0;
 
   List<Map<String, String>> _getTripIdeas(AppLocalizations l10n) => [
@@ -164,16 +164,6 @@ class _CreateTripViewState extends State<CreateTripView> {
       },
     );
 
-    Future.delayed(const Duration(milliseconds: 250), () {
-      if (mounted) stageNotifier.value = 1;
-    });
-    Future.delayed(const Duration(milliseconds: 550), () {
-      if (mounted) stageNotifier.value = 2;
-    });
-    Future.delayed(const Duration(milliseconds: 850), () {
-      if (mounted) stageNotifier.value = 3;
-    });
-
     final trip = await createVm.createTrip(user);
 
     if (mounted) {
@@ -265,41 +255,31 @@ class _CreateTripViewState extends State<CreateTripView> {
               // 1. TOP APP BAR
               _buildTopBar(context, isDark, hasUnsavedData, l10n),
 
-              // 2. SCROLLABLE FORM CONTENT (Compact Small-to-Medium Sizing)
+              // 2. SCROLLABLE FORM CONTENT (Simple, Clear & Intuitive)
               Expanded(
                 child: ListView(
                   physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 6.0),
+                  padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 8.0),
                   children: [
-                    // HERO TRIP PREVIEW CARD (Compact 112px height)
-                    _buildHeroTripPreviewCard(createVm, isDark, l10n),
+                    // STEP 1: TRIP NAME & EMOJI (Clear Primary Focus)
+                    _buildTripNameCard(createVm, isDark, l10n),
 
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
 
-                    // QUICK INSPIRATION CHIPS
-                    _buildInspirationChips(isDark, l10n),
-
-                    const SizedBox(height: 16),
-
-                    // SECTION 1: TRIP IDENTITY
-                    _buildTripIdentitySection(createVm, isDark, l10n),
-
-                    const SizedBox(height: 16),
-
-                    // SECTION 2: EXPERIENCE MODE
-                    _buildExperienceModeSection(createVm, isDark, l10n),
-
-                    const SizedBox(height: 16),
-
-                    // SECTION 3: BASE CURRENCY
+                    // STEP 2: BASE CURRENCY
                     _buildCurrencySection(createVm, isDark, l10n),
 
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
 
-                    // SECTION 4: CREW & CO-TRAVELERS
+                    // STEP 3: INVITE FRIENDS (Optional)
                     _buildCrewSection(createVm, isDark, l10n),
 
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 14),
+
+                    // STEP 4: CUSTOM THEME & EXPERIENCE MODE (Collapsed Accordion)
+                    _buildAdvancedOptionsSection(createVm, isDark, l10n),
+
+                    const SizedBox(height: 28),
                   ],
                 ),
               ),
@@ -363,183 +343,16 @@ class _CreateTripViewState extends State<CreateTripView> {
     );
   }
 
-  /// Interactive Live Hero Card with Scenic Vector Artwork Background (~116px height)
-  Widget _buildHeroTripPreviewCard(
+  /// STEP 1: Trip Name & Emoji Card (Clear, focused & friendly)
+  Widget _buildTripNameCard(
     CreateTripViewModel createVm,
     bool isDark,
     AppLocalizations l10n,
   ) {
-    final hasName = createVm.name.trim().isNotEmpty;
-    final activeTheme = TripBackgroundThemes.getTheme(createVm.coverGradientIndex);
-
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: activeTheme.gradientColors.first.withValues(alpha: isDark ? 0.40 : 0.25),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: TripCoverBackground(
-        themeIndex: createVm.coverGradientIndex,
-        borderRadius: 18,
-        height: 116,
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            // Emoji Avatar
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.25),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 1.2),
-              ),
-              child: Center(
-                child: Text(createVm.emoji, style: const TextStyle(fontSize: 30)),
-              ),
-            ),
-            const SizedBox(width: 14),
-
-            // Trip Name & Badges
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    hasName ? createVm.name : l10n.translate('trip_idea_goa'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: -0.3,
-                      shadows: [
-                        Shadow(color: Colors.black45, blurRadius: 4, offset: Offset(0, 1)),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.35),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 0.8),
-                        ),
-                        child: Text(
-                          createVm.tripMode == 'split_and_journey' ? 'Split + Journey' : 'Split Only',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.35),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 0.8),
-                        ),
-                        child: Text(
-                          createVm.currencyCode,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.25),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          activeTheme.emoji,
-                          style: const TextStyle(fontSize: 10.5),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Quick Inspiration Chips
-  Widget _buildInspirationChips(bool isDark, AppLocalizations l10n) {
     final ideas = _getTripIdeas(l10n);
-    return SizedBox(
-      height: 32,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        itemCount: ideas.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 6),
-        itemBuilder: (context, index) {
-          final idea = ideas[index];
-          return InkWell(
-            onTap: () => _applyTripIdea(idea),
-            borderRadius: BorderRadius.circular(20),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF141C24) : Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
-                  width: 0.8,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(idea['emoji']!, style: const TextStyle(fontSize: 13)),
-                  const SizedBox(width: 5),
-                  Text(
-                    idea['name']!,
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w700,
-                      color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
 
-  /// Section 1: Trip Identity (Compact Card)
-  Widget _buildTripIdentitySection(
-    CreateTripViewModel createVm,
-    bool isDark,
-    AppLocalizations l10n,
-  ) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF111820) : Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -552,7 +365,7 @@ class _CreateTripViewState extends State<CreateTripView> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            l10n.createTripNameLabel.toUpperCase(),
+            'WHERE ARE YOU GOING?',
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w800,
@@ -560,9 +373,9 @@ class _CreateTripViewState extends State<CreateTripView> {
               color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
 
-          // Name Input Row with Emoji Trigger
+          // Main input row: [Emoji Button] [Trip Name Input]
           Row(
             children: [
               GestureDetector(
@@ -571,30 +384,34 @@ class _CreateTripViewState extends State<CreateTripView> {
                   setState(() => _showEmojiTray = !_showEmojiTray);
                 },
                 child: Container(
-                  width: 44,
-                  height: 44,
+                  width: 50,
+                  height: 50,
                   decoration: BoxDecoration(
                     color: isDark ? const Color(0xFF18222C) : const Color(0xFFF1F5F9),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
+                      color: _showEmojiTray
+                          ? const Color(0xFF14B8A6)
+                          : (isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0)),
+                      width: _showEmojiTray ? 1.5 : 1.0,
                     ),
                   ),
                   child: Center(
-                    child: Text(createVm.emoji, style: const TextStyle(fontSize: 22)),
+                    child: Text(createVm.emoji, style: const TextStyle(fontSize: 26)),
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Expanded(
                 child: Container(
-                  height: 44,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  height: 50,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
                   decoration: BoxDecoration(
                     color: isDark ? const Color(0xFF18222C) : const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(14),
                     border: Border.all(
                       color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
+                      width: 1.0,
                     ),
                   ),
                   alignment: Alignment.center,
@@ -607,14 +424,15 @@ class _CreateTripViewState extends State<CreateTripView> {
                     textCapitalization: TextCapitalization.words,
                     onChanged: (val) => createVm.setName(val),
                     style: TextStyle(
-                      fontSize: 15,
+                      fontSize: 16,
                       fontWeight: FontWeight.w700,
                       color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
                     ),
                     decoration: KithInputDecoration.borderless(
-                      hintText: l10n.createTripNameHint,
+                      hintText: 'e.g. Goa Trip, Manali Trek...',
                       hintStyle: TextStyle(
                         fontSize: 14,
+                        fontWeight: FontWeight.w500,
                         color: isDark ? AppColors.darkTextMuted : const Color(0xFF94A3B8),
                       ),
                     ),
@@ -624,7 +442,7 @@ class _CreateTripViewState extends State<CreateTripView> {
             ],
           ),
 
-          // Collapsible Emoji Tray
+          // Collapsible Emoji Picker
           if (_showEmojiTray) ...[
             const SizedBox(height: 12),
             Container(
@@ -645,19 +463,19 @@ class _CreateTripViewState extends State<CreateTripView> {
                       setState(() => _showEmojiTray = false);
                     },
                     child: Container(
-                      width: 36,
-                      height: 36,
+                      width: 38,
+                      height: 38,
                       decoration: BoxDecoration(
                         color: isSelected
                             ? const Color(0xFF14B8A6).withValues(alpha: isDark ? 0.3 : 0.2)
                             : Colors.transparent,
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(10),
                         border: isSelected
                             ? Border.all(color: const Color(0xFF14B8A6), width: 1.5)
                             : null,
                       ),
                       child: Center(
-                        child: Text(emoji, style: const TextStyle(fontSize: 19)),
+                        child: Text(emoji, style: const TextStyle(fontSize: 20)),
                       ),
                     ),
                   );
@@ -666,112 +484,299 @@ class _CreateTripViewState extends State<CreateTripView> {
             ),
           ],
 
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
 
-          // Background Options (Scenic Artwork vs Plain Solid Colors)
+          // Quick 1-tap popular suggestions
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'BACKGROUND THEME',
+                'Quick ideas:',
                 style: TextStyle(
                   fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.7,
-                  color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? AppColors.darkTextMuted : const Color(0xFF94A3B8),
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF161E27) : const Color(0xFFE2E8F0),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  children: [
-                    _buildBgTabChip('🌄 Scenic', 0, isDark),
-                    _buildBgTabChip('🎨 Plain Colors', 1, isDark),
-                  ],
+              const SizedBox(width: 8),
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  child: Row(
+                    children: ideas.map((idea) {
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 6.0),
+                        child: InkWell(
+                          onTap: () => _applyTripIdea(idea),
+                          borderRadius: BorderRadius.circular(16),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF18222C) : const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
+                                width: 0.8,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(idea['emoji']!, style: const TextStyle(fontSize: 12)),
+                                const SizedBox(width: 4),
+                                Text(
+                                  idea['name']!,
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark ? AppColors.darkTextPrimary : const Color(0xFF334155),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          SizedBox(
-            height: 58,
-            child: Builder(
-              builder: (context) {
-                final displayThemes = _bgStyleTab == 0
-                    ? TripBackgroundThemes.scenicThemes
-                    : TripBackgroundThemes.plainThemes;
+        ],
+      ),
+    );
+  }
 
-                return ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
-                  itemCount: displayThemes.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 8),
-                  itemBuilder: (context, index) {
-                    final theme = displayThemes[index];
-                    final isSelected = createVm.coverGradientIndex == theme.id;
+  /// STEP 4: Optional Collapsed Custom Theme & Split Mode Accordion
+  Widget _buildAdvancedOptionsSection(
+    CreateTripViewModel createVm,
+    bool isDark,
+    AppLocalizations l10n,
+  ) {
+    final activeTheme = TripBackgroundThemes.getTheme(createVm.coverGradientIndex);
 
-                    return InkWell(
-                      onTap: () {
-                        HapticHelper.selection();
-                        createVm.setCoverGradientIndex(theme.id);
-                      },
-                      borderRadius: BorderRadius.circular(12),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        width: 92,
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: theme.gradientColors,
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF111820) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
+          width: 0.8,
+        ),
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            onTap: () {
+              HapticHelper.light();
+              setState(() => _showAdvancedOptions = !_showAdvancedOptions);
+            },
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(colors: activeTheme.gradientColors),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Center(
+                      child: Text(activeTheme.emoji, style: const TextStyle(fontSize: 14)),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Artwork Theme & Split Mode',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
                           ),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isSelected ? Colors.white : Colors.transparent,
-                            width: isSelected ? 2.2 : 0.8,
-                          ),
-                          boxShadow: isSelected
-                              ? [
-                                  BoxShadow(
-                                    color: theme.gradientColors.first.withValues(alpha: 0.6),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ]
-                              : null,
                         ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                        Text(
+                          '${activeTheme.name} · ${createVm.tripMode == 'split_and_journey' ? 'Split + Journey' : 'Split Only'}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDark ? AppColors.darkTextSecondary : const Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    _showAdvancedOptions ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                    color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
+                    size: 20,
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          if (_showAdvancedOptions) ...[
+            const Divider(height: 1, thickness: 0.8),
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Background Theme Selector
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'COVER ARTWORK',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.7,
+                          color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF161E27) : const Color(0xFFE2E8F0),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
                           children: [
-                            Text(theme.emoji, style: const TextStyle(fontSize: 16)),
-                            const SizedBox(height: 2),
-                            Text(
-                              theme.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
-                                shadows: const [
-                                  Shadow(color: Colors.black45, blurRadius: 2),
-                                ],
-                              ),
-                            ),
+                            _buildBgTabChip('🌄 Scenic', 0, isDark),
+                            _buildBgTabChip('🎨 Plain', 1, isDark),
                           ],
                         ),
                       ),
-                    );
-                  },
-                );
-              },
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    height: 58,
+                    child: Builder(
+                      builder: (context) {
+                        final displayThemes = _bgStyleTab == 0
+                            ? TripBackgroundThemes.scenicThemes
+                            : TripBackgroundThemes.plainThemes;
+
+                        return ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          physics: const BouncingScrollPhysics(),
+                          itemCount: displayThemes.length,
+                          separatorBuilder: (_, _) => const SizedBox(width: 8),
+                          itemBuilder: (context, index) {
+                            final theme = displayThemes[index];
+                            final isSelected = createVm.coverGradientIndex == theme.id;
+
+                            return InkWell(
+                              onTap: () {
+                                HapticHelper.selection();
+                                createVm.setCoverGradientIndex(theme.id);
+                              },
+                              borderRadius: BorderRadius.circular(12),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 180),
+                                width: 92,
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: theme.gradientColors,
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: isSelected ? Colors.white : Colors.transparent,
+                                    width: isSelected ? 2.2 : 0.8,
+                                  ),
+                                  boxShadow: isSelected
+                                      ? [
+                                          BoxShadow(
+                                            color: theme.gradientColors.first.withValues(alpha: 0.6),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ]
+                                      : null,
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(theme.emoji, style: const TextStyle(fontSize: 16)),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      theme.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+                                        shadows: const [
+                                          Shadow(color: Colors.black45, blurRadius: 2),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Experience Mode Selector
+                  Text(
+                    l10n.createTripExpMode.toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.7,
+                      color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildModeCard(
+                          title: l10n.createTripModeSplitTitle,
+                          desc: l10n.createTripModeSplitDesc,
+                          icon: Icons.bolt_rounded,
+                          modeValue: 'split_only',
+                          isSelected: createVm.tripMode == 'split_only',
+                          isDark: isDark,
+                          onTap: () => createVm.setTripMode('split_only'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _buildModeCard(
+                          title: l10n.createTripModeFullTitle,
+                          desc: l10n.createTripModeFullDesc,
+                          icon: Icons.auto_awesome_rounded,
+                          modeValue: 'split_and_journey',
+                          isSelected: createVm.tripMode == 'split_and_journey',
+                          isDark: isDark,
+                          onTap: () => createVm.setTripMode('split_and_journey'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -803,72 +808,6 @@ class _CreateTripViewState extends State<CreateTripView> {
                 : (isDark ? AppColors.darkTextMuted : const Color(0xFF64748B)),
           ),
         ),
-      ),
-    );
-  }
-
-  /// Section 2: Experience Mode (Compact Small-to-Medium Cards)
-  Widget _buildExperienceModeSection(
-    CreateTripViewModel createVm,
-    bool isDark,
-    AppLocalizations l10n,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF111820) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
-          width: 0.8,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            l10n.createTripExpMode.toUpperCase(),
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.7,
-              color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
-            ),
-          ),
-          const SizedBox(height: 10),
-
-          // Side-by-Side Compact Mode Cards
-          Row(
-            children: [
-              // Mode 1: Split Only
-              Expanded(
-                child: _buildModeCard(
-                  title: l10n.createTripModeSplitTitle,
-                  desc: l10n.createTripModeSplitDesc,
-                  icon: Icons.bolt_rounded,
-                  modeValue: 'split_only',
-                  isSelected: createVm.tripMode == 'split_only',
-                  isDark: isDark,
-                  onTap: () => createVm.setTripMode('split_only'),
-                ),
-              ),
-              const SizedBox(width: 8),
-
-              // Mode 2: Split + Journey
-              Expanded(
-                child: _buildModeCard(
-                  title: l10n.createTripModeFullTitle,
-                  desc: l10n.createTripModeFullDesc,
-                  icon: Icons.auto_awesome_rounded,
-                  modeValue: 'split_and_journey',
-                  isSelected: createVm.tripMode == 'split_and_journey',
-                  isDark: isDark,
-                  onTap: () => createVm.setTripMode('split_and_journey'),
-                ),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }
@@ -950,6 +889,7 @@ class _CreateTripViewState extends State<CreateTripView> {
     );
   }
 
+
   /// Section 3: Base Currency
   Widget _buildCurrencySection(
     CreateTripViewModel createVm,
@@ -1030,14 +970,14 @@ class _CreateTripViewState extends State<CreateTripView> {
     );
   }
 
-  /// Section 4: Crew & Co-Travelers
+  /// STEP 3: Invite Friends (Optional, direct & clean)
   Widget _buildCrewSection(
     CreateTripViewModel createVm,
     bool isDark,
     AppLocalizations l10n,
   ) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF111820) : Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -1053,7 +993,7 @@ class _CreateTripViewState extends State<CreateTripView> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                l10n.createTripCrewTitle.toUpperCase(),
+                'ADD FRIENDS (OPTIONAL)',
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
@@ -1068,7 +1008,7 @@ class _CreateTripViewState extends State<CreateTripView> {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  '${createVm.friendNames.length + 1} members',
+                  '${createVm.friendNames.length + 1} crew',
                   style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
@@ -1078,177 +1018,133 @@ class _CreateTripViewState extends State<CreateTripView> {
               ),
             ],
           ),
-          const SizedBox(height: 10),
-
-          // QR Fast-Join Banner (Compact)
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xFF14B8A6).withValues(alpha: isDark ? 0.1 : 0.06),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: const Color(0xFF14B8A6).withValues(alpha: 0.25),
-                width: 0.8,
-              ),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.qr_code_scanner_rounded, size: 20, color: Color(0xFF14B8A6)),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    l10n.createTripQrHint,
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w500,
-                      color: isDark ? AppColors.darkTextSecondary : const Color(0xFF475569),
-                    ),
-                  ),
-                ),
-              ],
+          const SizedBox(height: 4),
+          Text(
+            'You can add friends now or invite them anytime later via QR / link.',
+            style: TextStyle(
+              fontSize: 12,
+              color: isDark ? AppColors.darkTextSecondary : const Color(0xFF64748B),
             ),
           ),
+          const SizedBox(height: 12),
 
-          const SizedBox(height: 10),
-
-          // Add Friend Manual Expandable
-          GestureDetector(
-            onTap: () {
-              HapticHelper.light();
-              setState(() => _showManualFriends = !_showManualFriends);
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF161E27) : const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.person_add_alt_1_rounded, size: 16, color: Color(0xFF14B8A6)),
-                  const SizedBox(width: 6),
-                  Text(
-                    l10n.createTripAddFriendManual,
+          // Direct Name Input + Add Button
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  height: 46,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF18222C) : const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
+                      width: 1.0,
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: TextField(
+                    controller: _friendController,
+                    keyboardType: TextInputType.text,
+                    textInputAction: TextInputAction.done,
+                    showCursor: true,
+                    enableInteractiveSelection: true,
+                    textCapitalization: TextCapitalization.words,
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
                     ),
+                    decoration: KithInputDecoration.borderless(
+                      hintText: "Friend's name...",
+                      hintStyle: TextStyle(
+                        fontSize: 13,
+                        color: isDark ? AppColors.darkTextMuted : const Color(0xFF94A3B8),
+                      ),
+                    ),
+                    onSubmitted: (_) => _addFriend(),
                   ),
-                  const Spacer(),
-                  Icon(
-                    _showManualFriends ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
-                    size: 16,
-                    color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
-                  ),
-                ],
+                ),
               ),
-            ),
-          ),
-
-          if (_showManualFriends || createVm.friendNames.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    height: 42,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF161E27) : const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
-                        width: 0.8,
-                      ),
-                    ),
-                    alignment: Alignment.center,
-                    child: TextField(
-                      controller: _friendController,
-                      keyboardType: TextInputType.text,
-                      textInputAction: TextInputAction.done,
-                      showCursor: true,
-                      enableInteractiveSelection: true,
-                      textCapitalization: TextCapitalization.words,
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
-                      ),
-                      decoration: KithInputDecoration.borderless(
-                        hintText: l10n.createTripFriendHint,
-                        hintStyle: TextStyle(
-                          fontSize: 12.5,
-                          color: isDark ? AppColors.darkTextMuted : const Color(0xFF94A3B8),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: _addFriend,
+                child: Container(
+                  height: 46,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF14B8A6),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.add_rounded, color: Colors.white, size: 20),
+                      SizedBox(width: 4),
+                      Text(
+                        'Add',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
-                      onSubmitted: (_) => _addFriend(),
-                    ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: _addFriend,
-                  child: Container(
-                    height: 42,
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF14B8A6),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Center(
-                      child: Icon(Icons.add_rounded, color: Colors.white, size: 20),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-
-            if (createVm.friendNames.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: createVm.friendNames.map((name) {
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF14B8A6).withValues(alpha: isDark ? 0.18 : 0.12),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: const Color(0xFF14B8A6).withValues(alpha: 0.35),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          name,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: isDark ? const Color(0xFF2DD4BF) : const Color(0xFF0D9488),
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        GestureDetector(
-                          onTap: () {
-                            HapticHelper.light();
-                            createVm.removeFriendName(name);
-                          },
-                          child: const Icon(Icons.close_rounded, size: 14),
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
               ),
             ],
+          ),
+
+          // Friend Chips
+          if (createVm.friendNames.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: createVm.friendNames.map((name) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF14B8A6).withValues(alpha: isDark ? 0.18 : 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: const Color(0xFF14B8A6).withValues(alpha: 0.35),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.person_outline_rounded, size: 14, color: Color(0xFF14B8A6)),
+                      const SizedBox(width: 4),
+                      Text(
+                        name,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? const Color(0xFF2DD4BF) : const Color(0xFF0D9488),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      GestureDetector(
+                        onTap: () {
+                          HapticHelper.light();
+                          createVm.removeFriendName(name);
+                        },
+                        child: const Icon(Icons.close_rounded, size: 14, color: Color(0xFF14B8A6)),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
           ],
         ],
       ),
     );
   }
+
 
   /// Sticky Bottom Action Deck
   Widget _buildStickyBottomDeck(

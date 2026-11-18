@@ -108,7 +108,8 @@ void main() async {
   // Initialize Production Security Lock Service
   final securityLockService = SecurityLockService(storageService);
 
-  // Trigger background offline queue flush, P2P discovery start, and non-blocking version check
+  // Trigger continuous background sync, offline queue flush, P2P discovery start, and non-blocking version check
+  syncService.startPeriodicSync(apiClient);
   unawaited(syncService.flushQueue(apiClient));
   unawaited(p2pSyncService.start());
   unawaited(appVersionService.checkVersion());
@@ -201,6 +202,7 @@ void main() async {
           create: (_) => HomeViewModel(
             tripRepo: tripRepo,
             expenseRepo: expenseRepo,
+            storage: storageService,
             realtimeClient: realtimeClient,
           ),
         ),
@@ -208,6 +210,7 @@ void main() async {
           create: (_) => TripDetailViewModel(
             tripRepo: tripRepo,
             expenseRepo: expenseRepo,
+            storage: storageService,
             realtimeClient: realtimeClient,
           ),
         ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../../../core/config/app_config.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
@@ -303,7 +304,7 @@ class _TripMembersViewState extends State<TripMembersView> {
                               ),
                             ),
                             Text(
-                              'Offline • Unclaimed',
+                              'Virtual • Managed locally',
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w500,
@@ -493,7 +494,7 @@ class _TripMembersViewState extends State<TripMembersView> {
                     const SizedBox(height: 2),
                     Text(
                       isVirtual
-                          ? 'Offline placeholder • Excluded from sync'
+                          ? 'Virtual participant • Managed locally'
                           : '@${member.displayName.toLowerCase().replaceAll(' ', '')} • Active KITH Account',
                       style: TextStyle(
                         fontSize: 12,
@@ -603,11 +604,19 @@ class _TripMembersViewState extends State<TripMembersView> {
                   borderRadius: BorderRadius.circular(8),
                   onTap: () {
                     HapticHelper.light();
-                    Clipboard.setData(ClipboardData(text: trip.inviteCode));
+                    final claimLink = (member.claimToken != null && member.claimToken!.isNotEmpty)
+                        ? AppConfig.buildClaimLink(
+                            trip.inviteCode,
+                            memberId: member.id,
+                            claimToken: member.claimToken!,
+                            p2pTripSecret: trip.p2pTripSecret,
+                          )
+                        : trip.inviteCode;
+                    Clipboard.setData(ClipboardData(text: claimLink));
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
-                          'Trip code ${trip.inviteCode} copied! Share with ${member.displayName} to claim. ✓',
+                          'Claim link for ${member.displayName} copied! Share with them to claim. ✓',
                         ),
                       ),
                     );

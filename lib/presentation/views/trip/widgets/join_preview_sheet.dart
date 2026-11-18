@@ -12,13 +12,17 @@ import '../../../../domain/models/trip_preview.dart';
 class JoinPreviewSheet extends StatelessWidget {
   final TripPreview preview;
   final bool isJoining;
-  final void Function({String? claimMemberId}) onConfirmJoin;
+  final String? initialClaimMemberId;
+  final String? initialClaimToken;
+  final void Function({String? claimMemberId, String? claimToken}) onConfirmJoin;
   final VoidCallback onCancel;
 
   const JoinPreviewSheet({
     super.key,
     required this.preview,
     required this.isJoining,
+    this.initialClaimMemberId,
+    this.initialClaimToken,
     required this.onConfirmJoin,
     required this.onCancel,
   });
@@ -29,22 +33,37 @@ class JoinPreviewSheet extends StatelessWidget {
     final l10n = context.l10n;
     final unclaimed = preview.unclaimedMembers;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF0F1418) : AppColors.lightSurfaceCard,
-        borderRadius: AppRadius.topSheetBorder,
-        border: Border(
-          top: BorderSide(
-            color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
-            width: 1,
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+
+    return SafeArea(
+      top: false,
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.88,
+        ),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF0F1418) : AppColors.lightSurfaceCard,
+          borderRadius: AppRadius.topSheetBorder,
+          border: Border(
+            top: BorderSide(
+              color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+              width: 1,
+            ),
           ),
         ),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: EdgeInsets.only(
+            left: 20.0,
+            right: 20.0,
+            top: 16.0,
+            bottom: bottomInset > 0 ? bottomInset + 12.0 : (bottomPadding > 0 ? bottomPadding : 16.0),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
           // Drag Handle
           Center(
             child: Container(
@@ -217,56 +236,93 @@ class JoinPreviewSheet extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   for (final member in unclaimed)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8.0),
-                      child: InkWell(
-                        onTap: isJoining
-                            ? null
-                            : () {
-                                HapticHelper.medium();
-                                onConfirmJoin(claimMemberId: member.id);
-                              },
-                        borderRadius: BorderRadius.circular(12),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: isDark ? const Color(0xFF1B2B28) : Colors.white,
+                    Builder(
+                      builder: (context) {
+                        final isInvitedSpot = initialClaimMemberId == member.id &&
+                            initialClaimToken != null &&
+                            initialClaimToken!.isNotEmpty;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8.0),
+                          child: InkWell(
+                            onTap: isJoining
+                                ? null
+                                : () {
+                                    HapticHelper.medium();
+                                    final tokenToPass = (initialClaimMemberId == member.id)
+                                        ? initialClaimToken
+                                        : null;
+                                    onConfirmJoin(
+                                      claimMemberId: member.id,
+                                      claimToken: tokenToPass,
+                                    );
+                                  },
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: AppColors.emeraldLight.withValues(alpha: 0.4),
-                              width: 1,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: isInvitedSpot
+                                    ? (isDark ? const Color(0xFF14302C) : const Color(0xFFD1FAE5))
+                                    : (isDark ? const Color(0xFF1B2B28) : Colors.white),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: isInvitedSpot
+                                      ? AppColors.emeraldPrimary
+                                      : AppColors.emeraldLight.withValues(alpha: 0.4),
+                                  width: isInvitedSpot ? 1.5 : 1,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 15,
+                                    backgroundColor: isInvitedSpot
+                                        ? AppColors.emeraldPrimary.withValues(alpha: 0.25)
+                                        : AppColors.emeraldLight.withValues(alpha: 0.2),
+                                    child: Text(
+                                      member.displayName.isNotEmpty ? member.displayName[0].toUpperCase() : '?',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: isInvitedSpot ? AppColors.emeraldPrimary : AppColors.emeraldLight,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Join as ${member.displayName}',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w700,
+                                            color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                                          ),
+                                        ),
+                                        if (isInvitedSpot)
+                                          const Text(
+                                            'Personal Claim Link Verified ✓',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w700,
+                                              color: AppColors.emeraldPrimary,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  Icon(
+                                    isInvitedSpot ? Icons.verified_user_rounded : Icons.arrow_forward_ios_rounded,
+                                    size: isInvitedSpot ? 16 : 13,
+                                    color: isInvitedSpot ? AppColors.emeraldPrimary : AppColors.emeraldLight,
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                          child: Row(
-                            children: [
-                              CircleAvatar(
-                                radius: 15,
-                                backgroundColor: AppColors.emeraldLight.withValues(alpha: 0.2),
-                                child: Text(
-                                  member.displayName.isNotEmpty ? member.displayName[0].toUpperCase() : '?',
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.emeraldLight,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  'Join as ${member.displayName}',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                    color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-                                  ),
-                                ),
-                              ),
-                              const Icon(Icons.arrow_forward_ios_rounded, size: 13, color: AppColors.emeraldLight),
-                            ],
-                          ),
-                        ),
-                      ),
+                        );
+                      },
                     ),
                 ],
               ),
@@ -363,6 +419,8 @@ class JoinPreviewSheet extends StatelessWidget {
           ),
         ],
       ),
+    ),
+    ),
     );
   }
 

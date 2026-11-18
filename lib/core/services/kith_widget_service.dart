@@ -185,9 +185,24 @@ class KithWidgetService extends ChangeNotifier {
     checkInitialDeepLink();
   }
 
-  Future<void> checkInitialDeepLink() async {
+  String? _consumedInitialDeepLink;
+
+  Future<String?> getInitialDeepLink() async {
     try {
       final initialLink = await _channel.invokeMethod<String>('getInitialDeepLink');
+      if (initialLink != null && initialLink.isNotEmpty && initialLink != _consumedInitialDeepLink) {
+        _consumedInitialDeepLink = initialLink;
+        return initialLink;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> checkInitialDeepLink() async {
+    try {
+      final initialLink = await getInitialDeepLink();
       if (initialLink != null && initialLink.isNotEmpty && onDeepLinkReceived != null) {
         onDeepLinkReceived!(initialLink);
       }

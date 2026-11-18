@@ -1,3 +1,4 @@
+import '../../presentation/router/app_router.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -35,6 +36,28 @@ class FcmService {
   String? _pendingInitialRoute;
 
   final Set<String> _processedMessageIds = <String>{};
+  final Set<String> _processedTapMessageIds = <String>{};
+
+  /// Checks and returns the initial route if the app was launched by tapping
+  /// a notification while terminated. Resolves immediately without network dependence.
+  Future<String?> getOrCheckInitialRoute() async {
+    if (_pendingInitialRoute != null && _pendingInitialRoute!.isNotEmpty) {
+      final route = _pendingInitialRoute;
+      _pendingInitialRoute = null;
+      return route;
+    }
+    try {
+      final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+      if (initialMessage != null) {
+        debugPrint('[FCM] Cold-boot initial message resolved: ${initialMessage.messageId}');
+        final targetRoute = _extractRouteFromMessage(initialMessage);
+        return targetRoute;
+      }
+    } catch (e) {
+      debugPrint('[FCM] getOrCheckInitialRoute error: $e');
+    }
+    return null;
+  }
 
   FcmService({
     required this.apiClient,
@@ -101,43 +124,51 @@ class FcmService {
         sound: false,
       );
 
-      // 2. Initial token registration
-      final token = await FirebaseMessaging.instance.getToken();
-      if (token != null && token.isNotEmpty) {
-        await _registerTokenWithServer(token);
+      // 2. Cold-boot message check immediately (local platform call, zero network wait)
+      try {
+        final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+        if (initialMessage != null) {
+          debugPrint('[FCM] App launched from cold-boot initial message: ${initialMessage.messageId}');
+          final targetRoute = _extractRouteFromMessage(initialMessage);
+          if (targetRoute != null && targetRoute.isNotEmpty) {
+            _pendingInitialRoute = targetRoute;
+          }
+        }
+      } catch (e) {
+        debugPrint('[FCM] Initial message check notice: $e');
       }
 
-      // 3. Listen for token refreshes
+      // 3. Foreground & Background message listeners
+      FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+      FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
+
+      // 4. Initial token registration (Non-blocking background sync)
+      unawaited(() async {
+        try {
+          final token = await FirebaseMessaging.instance.getToken();
+          if (token != null && token.isNotEmpty) {
+            await _registerTokenWithServer(token);
+          }
+        } catch (e) {
+          debugPrint('[FCM] Token registration error: $e');
+        }
+      }());
+
+      // 5. Listen for token refreshes
       FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
         debugPrint('[FCM] Token refreshed');
         await _registerTokenWithServer(newToken);
       });
-
-      // 4. Foreground message listener
-      FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
-
-      // 5. Background message opened listener (app backgrounded)
-      FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
-
-      // 6. Cold-boot message check (app was completely terminated/killed)
-      final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
-      if (initialMessage != null) {
-        debugPrint('[FCM] App launched from cold-boot initial message: ${initialMessage.messageId}');
-        final targetRoute = _extractRouteFromMessage(initialMessage);
-        if (targetRoute != null && targetRoute.isNotEmpty) {
-          _pendingInitialRoute = targetRoute;
-        }
-      }
     } catch (e) {
       debugPrint('[FCM] Init error (non-fatal): $e');
     }
   }
 
-  String? _extractRouteFromMessage(RemoteMessage message) {
-    final data = message.data;
+  static String? extractRouteFromData(Map<String, dynamic> data) {
     final explicitRoute = data['route'] as String?;
     if (explicitRoute != null && explicitRoute.isNotEmpty) {
-      return explicitRoute;
+      final parsed = AppRouter.parseDeepLinkToRoute(explicitRoute);
+      return (parsed != null && parsed.isNotEmpty) ? parsed : explicitRoute;
     }
 
     final tripId = data['tripId'] as String?;
@@ -145,6 +176,7 @@ class FcmService {
     final expenseId = data['expenseId'] as String?;
     final ipoId = data['ipoId'] as String?;
     final personName = data['personName'] as String?;
+    final type = (data['type'] as String? ?? '').toLowerCase();
 
     if (tripId != null && tripId.isNotEmpty) {
       if (expenseId != null && expenseId.isNotEmpty) {
@@ -152,6 +184,9 @@ class FcmService {
       }
       if (settlementId != null && settlementId.isNotEmpty) {
         return '/trip/$tripId?settlementId=$settlementId';
+      }
+      if (type.contains('member')) {
+        return '/trip/$tripId/members';
       }
       return '/trip/$tripId';
     }
@@ -164,7 +199,6 @@ class FcmService {
       return '/person-ledger?name=${Uri.encodeComponent(personName)}';
     }
 
-    final type = (data['type'] as String? ?? '').toLowerCase();
     if (type.contains('debt') || type.contains('lending') || type.contains('borrowing')) {
       return '/personal/debts';
     }
@@ -173,6 +207,10 @@ class FcmService {
     }
 
     return null;
+  }
+
+  String? _extractRouteFromMessage(RemoteMessage message) {
+    return extractRouteFromData(message.data);
   }
 
   void _handleForegroundMessage(RemoteMessage message) {
@@ -268,12 +306,19 @@ class FcmService {
   }
 
   void _handleNotificationTap(RemoteMessage message) {
+    final messageId = message.messageId ?? '';
+    if (messageId.isNotEmpty && _processedTapMessageIds.contains(messageId)) {
+      debugPrint('[FCM] Duplicate tap message suppressed: $messageId');
+      return;
+    }
+    if (messageId.isNotEmpty) {
+      _processedTapMessageIds.add(messageId);
+    }
+
     final targetRoute = _extractRouteFromMessage(message);
     if (targetRoute != null && targetRoute.isNotEmpty) {
       if (_onNavigate != null) {
-        Future.delayed(const Duration(milliseconds: 300), () {
-          _onNavigate?.call(targetRoute);
-        });
+        _onNavigate?.call(targetRoute);
       } else {
         _pendingRoute = targetRoute;
       }

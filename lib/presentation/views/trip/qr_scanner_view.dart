@@ -393,9 +393,17 @@ class _QrScannerViewState extends State<QrScannerView>
 
             // 2. Camera Overlay & Viewfinder Framing
             if (_hasCameraPermission && !_isCheckingPermission)
-              Column(
-                children: [
-                  const Spacer(),
+              Positioned.fill(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return SingleChildScrollView(
+                      physics: const ClampingScrollPhysics(),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                        child: IntrinsicHeight(
+                          child: Column(
+                            children: [
+                              const Spacer(),
 
                   // Viewfinder Box
                   Center(
@@ -490,6 +498,12 @@ class _QrScannerViewState extends State<QrScannerView>
                   ),
                 ],
               ),
+            ),
+          ),
+        );
+      },
+    ),
+  ),
           ],
         ),
       ),

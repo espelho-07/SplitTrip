@@ -57,9 +57,17 @@ class _AddExpenseViewState extends State<AddExpenseView> {
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
+  final Map<String, TextEditingController> _payerControllers = {};
+  AddExpenseViewModel? _addVm;
   bool _isFetchingLocation = false;
   DateTime _selectedDate = DateTime.now();
   bool _isLoadingTrip = true;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _addVm = context.read<AddExpenseViewModel>();
+  }
 
   @override
   void initState() {
@@ -133,62 +141,99 @@ class _AddExpenseViewState extends State<AddExpenseView> {
       } else {
         addVm.init(trip: trip, currentUserId: user.id);
       }
+
+      if (widget.existingExpense == null) {
+        _selectedDate = DateTime.now();
+        addVm.setDate(_selectedDate);
+        _fetchCurrentLocation(addVm, silent: true);
+      }
     }
 
     setState(() => _isLoadingTrip = false);
   }
 
-  Future<void> _fetchCurrentLocation(AddExpenseViewModel addVm) async {
+  Future<void> _fetchCurrentLocation(AddExpenseViewModel addVm, {bool silent = false}) async {
     if (_isFetchingLocation) return;
     setState(() => _isFetchingLocation = true);
-    HapticHelper.selection();
+    if (!silent) HapticHelper.selection();
 
-    final place = await LocationService().getCurrentPlaceName();
-    if (!mounted) return;
+    try {
+      final place = await LocationService().getCurrentPlaceName().timeout(const Duration(seconds: 2));
+      if (!mounted) return;
 
-    setState(() => _isFetchingLocation = false);
-
-    if (place != null && place.trim().isNotEmpty) {
-      HapticHelper.medium();
-      _locationController.text = place;
-      addVm.setLocation(place);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.location_on_rounded, color: Colors.white, size: 16),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text('📍 $place', maxLines: 1, overflow: TextOverflow.ellipsis),
+      if (place != null && place.trim().isNotEmpty) {
+        if (!silent) HapticHelper.medium();
+        _locationController.text = place;
+        addVm.setLocation(place);
+        if (!silent) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.location_on_rounded, color: Colors.white, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text('📍 $place', maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ),
+                ],
               ),
-            ],
+              backgroundColor: const Color(0xFF14B8A6),
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      } else if (!silent) {
+        HapticHelper.warning();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not fetch location. You can type manually.'),
+            backgroundColor: Color(0xFFE11D48),
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 2),
           ),
-          backgroundColor: const Color(0xFF14B8A6),
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    } else {
-      HapticHelper.warning();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not fetch location. You can type manually.'),
-          backgroundColor: Color(0xFFE11D48),
-          behavior: SnackBarBehavior.floating,
-          duration: Duration(seconds: 2),
-        ),
+        );
+      }
+    } catch (_) {
+      // Safe fallback when location service is offline, denied, or in tests
+    } finally {
+      if (mounted) {
+        setState(() => _isFetchingLocation = false);
+      }
+    }
+  }
+
+  TextEditingController _getPayerController(String memberId, int paise) {
+    final ctrl = _payerControllers.putIfAbsent(memberId, () {
+      final rupees = paise / 100.0;
+      final text = paise % 100 == 0 ? rupees.toInt().toString() : rupees.toStringAsFixed(2);
+      return TextEditingController(text: text);
+    });
+
+    final currentPaise = ((double.tryParse(ctrl.text) ?? 0.0) * 100).round();
+    if (currentPaise != paise) {
+      final rupees = paise / 100.0;
+      final text = paise % 100 == 0 ? rupees.toInt().toString() : rupees.toStringAsFixed(2);
+      ctrl.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
       );
     }
+    return ctrl;
   }
 
   @override
   void dispose() {
     // Cancel any in-flight voice listening to prevent notifyListeners()
     // firing into a disposed widget (causes _elements.contains assertion).
-    context.read<AddExpenseViewModel>().cancelVoice();
+    _addVm?.cancelVoice();
     _amountController.dispose();
     _titleController.dispose();
     _locationController.dispose();
+    for (final ctrl in _payerControllers.values) {
+      ctrl.dispose();
+    }
+    _payerControllers.clear();
     super.dispose();
   }
 
@@ -686,24 +731,15 @@ class _AddExpenseViewState extends State<AddExpenseView> {
           Divider(height: 1, color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle),
           const SizedBox(height: 12),
 
-          // Title input
-          Container(
-            height: 48,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF141A21) : const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
-                width: 0.8,
-              ),
-            ),
+          // Title input — clean, unified seamless styling
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
             child: Row(
               children: [
                 Icon(
                   Icons.edit_note_rounded,
                   color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-                  size: 20,
+                  size: 22,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -716,16 +752,20 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                       fontWeight: FontWeight.w600,
                       color: isDark ? Colors.white : const Color(0xFF0F172A),
                     ),
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       hintText: 'Expense description (optional — e.g. Dinner, Fuel)',
                       hintStyle: TextStyle(
-                        color: Color(0xFF94A3B8),
+                        color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
                         fontSize: 13.5,
                       ),
                       border: InputBorder.none,
+                      contentPadding: EdgeInsets.zero,
                       isDense: true,
                     ),
-                    onChanged: (val) => addVm.setTitle(val),
+                    onChanged: (val) {
+                      addVm.setTitle(val);
+                      setState(() {});
+                    },
                   ),
                 ),
                 if (_titleController.text.isNotEmpty)
@@ -734,8 +774,12 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                       HapticHelper.light();
                       _titleController.clear();
                       addVm.setTitle('');
+                      setState(() {});
                     },
-                    child: Icon(Icons.close_rounded, size: 16, color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4.0),
+                      child: Icon(Icons.close_rounded, size: 18, color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                    ),
                   ),
               ],
             ),
@@ -870,10 +914,17 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     );
   }
 
-  /// Clean Payer Selector Card.
+  /// Clean Payer Selector Card with Multi-Payer & Custom Split Amounts support.
   Widget _buildPayerSection(bool isDark, AddExpenseViewModel addVm, Trip trip, AppLocalizations l10n) {
     final activeColor = isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary;
     final activeMembers = trip.members.where((m) => !m.isMerged).toList();
+    final isMultiple = addVm.isMultiplePayers;
+
+    final totalPaidPaise = isMultiple
+        ? addVm.totalPayerAllocatedPaise
+        : addVm.amountInPaise;
+    final remainingPaise = addVm.amountInPaise - totalPaidPaise;
+    final isMatching = remainingPaise == 0;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -900,12 +951,36 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                   color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
                 ),
               ),
-              Text(
-                '1 person paid',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+              InkWell(
+                onTap: () {
+                  HapticHelper.selection();
+                  addVm.toggleMultiplePayers(!isMultiple);
+                  setState(() {});
+                },
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isMultiple ? Icons.people_alt_rounded : Icons.person_rounded,
+                        size: 13,
+                        color: isMultiple ? activeColor : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        isMultiple ? 'Multiple Payers' : 'Single Payer',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: isMultiple ? activeColor : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      Icon(Icons.swap_horiz_rounded, size: 13, color: isMultiple ? activeColor : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted)),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -915,13 +990,17 @@ class _AddExpenseViewState extends State<AddExpenseView> {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: activeMembers.map((member) {
-                final isSelected = addVm.paidById == member.id;
+                final isSelected = isMultiple
+                    ? addVm.payerAmountsInPaise.containsKey(member.id)
+                    : addVm.paidById == member.id;
                 return Padding(
+                  key: ValueKey('payer_chip_${member.id}'),
                   padding: const EdgeInsets.only(right: 8),
                   child: InkWell(
                     onTap: () {
                       HapticHelper.selection();
-                      addVm.setPayer(member.id);
+                      addVm.togglePayerSelection(member.id);
+                      setState(() {});
                     },
                     borderRadius: BorderRadius.circular(12),
                     child: AnimatedContainer(
@@ -966,6 +1045,149 @@ class _AddExpenseViewState extends State<AddExpenseView> {
               }).toList(),
             ),
           ),
+          if (isMultiple) ...[
+            const SizedBox(height: 14),
+            Divider(height: 1, color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle),
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'PAID AMOUNTS (${addVm.payerAmountsInPaise.length} PAYERS)',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                    color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () {
+                    HapticHelper.light();
+                    addVm.distributeEqualAmongPayers();
+                    setState(() {});
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: activeColor.withValues(alpha: isDark ? 0.2 : 0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      'Split Paid Equally',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: activeColor,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            for (final member in activeMembers.where((m) => addVm.payerAmountsInPaise.containsKey(m.id)))
+              Padding(
+                key: ValueKey('payer_row_${member.id}'),
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF141A21) : const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+                      width: 0.6,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      MemberAvatar(name: member.displayName, size: 24),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          member.displayName,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        trip.currencyCode == 'INR' ? '₹' : trip.currencyCode,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      SizedBox(
+                        width: 90,
+                        height: 34,
+                        child: TextFormField(
+                          key: ValueKey('payer_input_${member.id}'),
+                          controller: _getPayerController(member.id, addVm.payerAmountsInPaise[member.id] ?? 0),
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w800,
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          ),
+                          decoration: InputDecoration(
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: activeColor, width: 1.5),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            isDense: true,
+                          ),
+                          onChanged: (val) {
+                            final doubleVal = double.tryParse(val) ?? 0.0;
+                            final paise = (doubleVal * 100).round();
+                            addVm.setPayerAmount(member.id, paise);
+                            setState(() {});
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Total Paid: ${CurrencyFormatter.formatPaise(totalPaidPaise, currencyCode: trip.currencyCode)}',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: isMatching ? AppColors.positiveGreenLight : Colors.orange,
+                  ),
+                ),
+                Text(
+                  isMatching
+                      ? '✓ Matches Total'
+                      : (remainingPaise > 0
+                          ? 'Remaining: ${CurrencyFormatter.formatPaise(remainingPaise, currencyCode: trip.currencyCode)} left'
+                          : 'Exceeds: ${CurrencyFormatter.formatPaise(-remainingPaise, currencyCode: trip.currencyCode)} over'),
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: isMatching ? AppColors.positiveGreenLight : (remainingPaise > 0 ? Colors.orange : AppColors.negativeRedDark),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -981,6 +1203,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
   ) {
     final count = addVm.selectedParticipantMemberIds.length;
     final activeColor = isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary;
+    final activeSplitMembers = trip.members.where((m) => !m.isMerged).toList();
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -1169,14 +1392,14 @@ class _AddExpenseViewState extends State<AddExpenseView> {
           ListView.separated(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            itemCount: trip.members.length,
+            itemCount: activeSplitMembers.length,
             separatorBuilder: (_, _) => Divider(
               height: 12,
               thickness: 0.5,
               color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.04),
             ),
             itemBuilder: (context, index) {
-              final member = trip.members[index];
+              final member = activeSplitMembers[index];
               final isChecked = addVm.selectedParticipantMemberIds.contains(member.id);
 
               return _buildMemberSplitRow(isDark, addVm, member, isChecked, currency, count);
@@ -1560,32 +1783,49 @@ class _AddExpenseViewState extends State<AddExpenseView> {
 
     return Row(
       children: [
-        // Checkbox
-        SizedBox(
-          width: 28,
-          height: 28,
-          child: Checkbox(
-            value: isChecked,
-            activeColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
-            onChanged: (_) {
+        // Tappable Checkbox & Member Identity
+        Expanded(
+          child: InkWell(
+            onTap: () {
               HapticHelper.selection();
               addVm.toggleParticipant(member.id);
             },
-          ),
-        ),
-        const SizedBox(width: 6),
-        MemberAvatar(name: member.displayName, size: 24),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            member.displayName,
-            style: TextStyle(
-              fontSize: 12.5,
-              fontWeight: isChecked ? FontWeight.w700 : FontWeight.w500,
-              color: isChecked
-                  ? (isDark ? Colors.white : const Color(0xFF0F172A))
-                  : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: Checkbox(
+                      value: isChecked,
+                      activeColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+                      onChanged: (_) {
+                        HapticHelper.selection();
+                        addVm.toggleParticipant(member.id);
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  MemberAvatar(name: member.displayName, size: 24),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      member.displayName,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: isChecked ? FontWeight.w700 : FontWeight.w500,
+                        color: isChecked
+                            ? (isDark ? Colors.white : const Color(0xFF0F172A))
+                            : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

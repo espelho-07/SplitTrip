@@ -44,42 +44,7 @@ class AppRouter {
 
       // Handle 'kith://' custom scheme deep links sent directly to GoRouter by platform
       if (uri.scheme == 'kith' || uriString.startsWith('kith://')) {
-        final host = uri.host.toLowerCase();
-        final path = uri.path.toLowerCase();
-        final fullPath = (host.isNotEmpty ? '/$host' : '') + path;
-
-
-
-        if (host == 'create-trip' || fullPath.contains('create-trip')) {
-          return '/create-trip';
-        }
-        if (host == 'widgets' || fullPath.contains('widgets')) {
-          return '/widgets';
-        }
-        if (host == 'guide' || fullPath.contains('guide')) {
-          return '/guide';
-        }
-        if (host == 'help' || fullPath.contains('help')) {
-          return '/help';
-        }
-        if (host == 'cloud-settings' || fullPath.contains('cloud-settings')) {
-          return '/cloud-settings';
-        }
-        if (host == 'auth' || host == 'onboarding' || fullPath.contains('auth')) {
-          return '/onboarding';
-        }
-        if (host == 'trip' || fullPath.startsWith('/trip')) {
-          final segments = uri.pathSegments;
-          if (segments.isNotEmpty && segments.last != 'trip') {
-            return '/trip/${segments.last}';
-          }
-          return '/home';
-        }
-        if (host == 'join' || fullPath.contains('join')) {
-          final code = uri.queryParameters['code'];
-          return code != null ? '/join-trip?code=$code' : '/join-trip';
-        }
-        return '/home';
+        return parseDeepLinkToRoute(uriString);
       }
 
       return null;
@@ -180,14 +145,26 @@ class AppRouter {
         path: '/join-trip',
         builder: (context, state) {
           final code = state.uri.queryParameters['code'];
-          return JoinTripView(initialCode: code);
+          final memberId = state.uri.queryParameters['memberId'] ?? state.uri.queryParameters['claimMemberId'];
+          final token = state.uri.queryParameters['token'] ?? state.uri.queryParameters['claimToken'];
+          return JoinTripView(
+            initialCode: code,
+            claimMemberId: memberId,
+            claimToken: token,
+          );
         },
       ),
       GoRoute(
         path: '/join',
         builder: (context, state) {
           final code = state.uri.queryParameters['code'];
-          return JoinTripView(initialCode: code);
+          final memberId = state.uri.queryParameters['memberId'] ?? state.uri.queryParameters['claimMemberId'];
+          final token = state.uri.queryParameters['token'] ?? state.uri.queryParameters['claimToken'];
+          return JoinTripView(
+            initialCode: code,
+            claimMemberId: memberId,
+            claimToken: token,
+          );
         },
       ),
       GoRoute(
@@ -243,51 +220,166 @@ class AppRouter {
     ],
   );
 
+  static const Set<String> _sensitiveQueryParams = {
+    'token',
+    'claimtoken',
+    'secret',
+    'p2p_secret',
+    'p2psecret',
+    'key',
+    's',
+    'password',
+    'auth',
+    'authorization',
+    'bearer',
+  };
+
+  /// Redacts sensitive query parameters (such as tokens, claim credentials, and secrets)
+  /// from deep links and routes for safe logging and diagnostic telemetry.
+  static String redactDeepLink(String? uriString) {
+    if (uriString == null || uriString.trim().isEmpty) return '';
+    final trimmed = uriString.trim();
+
+    try {
+      final uri = Uri.parse(trimmed);
+      if (!uri.hasQuery) return trimmed;
+
+      final sanitizedParams = <String, String>{};
+      for (final entry in uri.queryParameters.entries) {
+        final keyLower = entry.key.toLowerCase();
+        if (_sensitiveQueryParams.contains(keyLower)) {
+          sanitizedParams[entry.key] = '[REDACTED]';
+        } else {
+          sanitizedParams[entry.key] = entry.value;
+        }
+      }
+
+      final queryStr = sanitizedParams.entries.map((e) {
+        final val = e.value == '[REDACTED]' ? '[REDACTED]' : Uri.encodeQueryComponent(e.value);
+        return '${Uri.encodeQueryComponent(e.key)}=$val';
+      }).join('&');
+
+      final baseUri = trimmed.split('?').first;
+      return '$baseUri?$queryStr';
+    } catch (_) {
+      final regex = RegExp(r'([?&])([a-zA-Z0-9_\-]+)=([^&]*)');
+      return trimmed.replaceAllMapped(regex, (match) {
+        final prefix = match.group(1)!;
+        final key = match.group(2)!;
+        final val = match.group(3)!;
+        if (_sensitiveQueryParams.contains(key.toLowerCase())) {
+          return '$prefix$key=[REDACTED]';
+        }
+        return '$prefix$key=$val';
+      });
+    }
+  }
+
+  /// Parses any incoming deep link URI (kith://, https://, or relative /path)
+  /// into a canonical in-app GoRouter route, preserving subroutes and query parameters.
+  static String? parseDeepLinkToRoute(String deepLinkUri) {
+    try {
+      final cleanUri = deepLinkUri.trim();
+      if (cleanUri.isEmpty) return null;
+
+      // Direct relative routes (e.g. /trip/trip_123?expenseId=exp_456)
+      if (cleanUri.startsWith('/') && !cleanUri.startsWith('//')) {
+        return cleanUri;
+      }
+
+      final uri = Uri.parse(cleanUri);
+      final scheme = uri.scheme.toLowerCase();
+      if (scheme.isNotEmpty && scheme != 'kith' && scheme != 'https' && scheme != 'http') {
+        return null;
+      }
+
+      final host = uri.host.toLowerCase();
+      final query = uri.hasQuery ? '?${uri.query}' : '';
+
+      // Normalize segments regardless of whether authority is kith.app or direct scheme
+      // e.g.:
+      // kith://kith.app/trip/t1?expenseId=e1 -> segments: ['trip', 't1']
+      // kith://trip/t1?expenseId=e1          -> segments: ['trip', 't1']
+      // https://kith.app/join?code=XYZ      -> segments: ['join']
+      final List<String> segments;
+      if (host == 'kith.app') {
+        segments = uri.pathSegments;
+      } else if (host.isNotEmpty) {
+        segments = [host, ...uri.pathSegments];
+      } else {
+        segments = uri.pathSegments;
+      }
+
+      if (segments.isEmpty) return '/home';
+
+      final firstSegment = segments.first.toLowerCase();
+
+      // 1. Trip Routes (e.g. /trip/123, /trip/123/members, /trip/123/add-expense)
+      if (firstSegment == 'trip') {
+        if (segments.length >= 2) {
+          final tripId = segments[1];
+          if (segments.length >= 3) {
+            final subroute = segments[2].toLowerCase();
+            if (subroute == 'members') {
+              return '/trip/$tripId/members$query';
+            } else if (subroute == 'add-expense') {
+              return '/trip/$tripId/add-expense$query';
+            } else if (subroute == 'memories') {
+              return '/trip/$tripId/memories$query';
+            }
+          }
+          return '/trip/$tripId$query';
+        }
+        return '/home';
+      }
+
+      // 2. Join Trip / Invitation Links (e.g. kith://join?code=..., https://kith.app/join?...)
+      if (firstSegment == 'join' || firstSegment == 'join-trip') {
+        final code = uri.queryParameters['code'];
+        final memberId = uri.queryParameters['memberId'] ?? uri.queryParameters['claimMemberId'];
+        final token = uri.queryParameters['token'] ?? uri.queryParameters['claimToken'];
+        final params = <String, String>{};
+        if (code != null && code.isNotEmpty) params['code'] = code;
+        if (memberId != null && memberId.isNotEmpty) params['memberId'] = memberId;
+        if (token != null && token.isNotEmpty) params['token'] = token;
+        final joinQuery = params.isNotEmpty ? '?${Uri(queryParameters: params).query}' : '';
+        return '/join-trip$joinQuery';
+      }
+
+      // 3. Quick Expense Creation
+      if (firstSegment == 'expense') {
+        final tripId = uri.queryParameters['tripId'];
+        if (tripId != null && tripId.isNotEmpty) {
+          return '/trip/$tripId/add-expense$query';
+        }
+        return '/home';
+      }
+
+      // 4. Other Standard Screens
+      if (firstSegment == 'create-trip') return '/create-trip';
+      if (firstSegment == 'widgets') return '/widgets';
+      if (firstSegment == 'guide') return '/guide';
+      if (firstSegment == 'help') return '/help';
+      if (firstSegment == 'cloud-settings') return '/cloud-settings';
+      if (firstSegment == 'auth' || firstSegment == 'onboarding') return '/onboarding';
+      if (firstSegment == 'notifications') return '/notifications';
+      if (firstSegment == 'settings') return '/settings';
+      if (firstSegment == 'home') return '/home';
+
+      return '/home';
+    } catch (e) {
+      debugPrint('[AppRouter] Error parsing deep link ${redactDeepLink(deepLinkUri)}: $e');
+      return null;
+    }
+  }
+
   /// Dispatches deep links originating from AppWidgets or external intents directly into Kith.
   static void handleDeepLink(String deepLinkUri) {
     try {
-      final cleanUri = deepLinkUri.trim();
-      if (cleanUri.isEmpty) return;
-
-      final uri = Uri.parse(cleanUri);
-      final host = uri.host.toLowerCase();
-      final path = uri.path.toLowerCase();
-      final fullPath = (host.isNotEmpty ? '/$host' : '') + path;
-
-      debugPrint('[AppRouter] handleDeepLink: $cleanUri (host: $host, path: $path, full: $fullPath)');
-
-      if (host == 'create-trip' || fullPath.contains('create-trip')) {
-        router.push('/create-trip');
-      } else if (host == 'expense' || path.contains('expense') || fullPath.contains('expense')) {
-        final tripId = uri.queryParameters['tripId'];
-        if (tripId != null && tripId.isNotEmpty) {
-          router.push('/trip/$tripId/add-expense');
-        } else {
-          router.go('/home');
-        }
-      } else if (host == 'widgets' || fullPath.contains('widgets')) {
-        router.push('/widgets');
-      } else if (host == 'guide' || fullPath.contains('guide')) {
-        router.push('/guide');
-      } else if (host == 'help' || fullPath.contains('help')) {
-        router.push('/help');
-      } else if (host == 'cloud-settings' || fullPath.contains('cloud-settings')) {
-        router.push('/cloud-settings');
-      } else if (host == 'auth' || path.startsWith('/auth') || host == 'onboarding') {
-        router.go('/onboarding');
-      } else if (host == 'trip' || fullPath.startsWith('/trip')) {
-        final segments = uri.pathSegments;
-        if (segments.isNotEmpty && segments.last != 'trip') {
-          final tripId = segments.last;
-          router.push('/trip/$tripId');
-        } else {
-          router.go('/home');
-        }
-      } else if (host == 'join' || fullPath.contains('join')) {
-        final code = uri.queryParameters['code'];
-        router.push('/join-trip${code != null ? '?code=$code' : ''}');
-      } else {
-        router.go('/home');
+      final targetRoute = parseDeepLinkToRoute(deepLinkUri);
+      if (targetRoute != null && targetRoute.isNotEmpty) {
+        debugPrint('[AppRouter] handleDeepLink: routing to ${redactDeepLink(targetRoute)}');
+        router.push(targetRoute);
       }
     } catch (e) {
       debugPrint('[AppRouter] Error handling deep link: $e');

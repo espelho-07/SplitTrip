@@ -1,3 +1,5 @@
+import '../../../core/services/kith_widget_service.dart';
+import '../../router/app_router.dart';
 import '../../../core/services/fcm_service.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -31,8 +33,8 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
   Timer? _delayTimer;
 
   // Minimum time the splash is shown — ensures user enjoys the full opening animation
-  static const _minSplashMs = 2100;
-  static const _statusTriggerMs = 1200;
+  static const _minSplashMs = 800;
+  static const _statusTriggerMs = 600;
 
   @override
   void initState() {
@@ -61,7 +63,7 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
     });
 
     try {
-      await authVm.initSession().timeout(const Duration(seconds: 4));
+      await authVm.initSession().timeout(const Duration(seconds: 2));
     } catch (_) {
       // Fallback: proceed to onboarding
     }
@@ -86,11 +88,23 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
         String? initialRoute;
         try {
           final fcmService = context.read<FcmService>();
-          initialRoute = fcmService.consumePendingInitialRoute();
+          initialRoute = await fcmService.getOrCheckInitialRoute();
         } catch (_) {}
 
+        if (initialRoute == null || initialRoute.isEmpty) {
+          if (!mounted) return;
+          try {
+            final widgetService = context.read<KithWidgetService>();
+            final initialLink = await widgetService.getInitialDeepLink();
+            if (initialLink != null && initialLink.isNotEmpty) {
+              initialRoute = AppRouter.parseDeepLinkToRoute(initialLink);
+            }
+          } catch (_) {}
+        }
+
+        if (!mounted) return;
         if (initialRoute != null && initialRoute.isNotEmpty) {
-          debugPrint('[SplashView] Routing to cold-boot deep-link: $initialRoute');
+          debugPrint('[SplashView] Routing to cold-boot deep-link: ${AppRouter.redactDeepLink(initialRoute)}');
           context.go(initialRoute);
         } else {
           context.go('/home');

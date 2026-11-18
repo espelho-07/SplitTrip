@@ -12,6 +12,7 @@ import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/member_avatar.dart';
 import '../../../../data/repositories/trip_repository.dart';
 import '../../../../data/services/sync_service.dart';
+import '../../../../domain/models/trip.dart';
 import '../../../../domain/models/trip_sync_status.dart';
 import '../../../viewmodels/auth_viewmodel.dart';
 import '../../../viewmodels/home_viewmodel.dart';
@@ -122,8 +123,17 @@ class _TripCompletionVerificationSheetState
 
       TripSyncStatus status = await tripRepo.getTripSyncStatus(widget.tripId);
 
-      // Step 4: If participants are not synced, request realtime sync (75%)
-      if (!status.isFullySynced) {
+      if (!mounted) return;
+      final authVm = Provider.of<AuthViewModel?>(context, listen: false);
+      final currentUid = authVm?.currentUser?.id ?? '';
+      final cachedTrip = tripRepo.getCachedTripById(widget.tripId);
+      final hasOnlyVirtualPeers = cachedTrip != null && cachedTrip.members.every(
+        (m) => m.isVirtual || m.userId == currentUid || m.id == currentUid,
+      );
+
+      // Step 4: If participants are not synced and real remote devices exist, request realtime sync (75%)
+      // If trip only contains virtual members, bypass remote device sync waiting completely.
+      if (!status.isFullySynced && !hasOnlyVirtualPeers) {
         if (mounted) {
           setState(() {
             _stage = VerificationStage.requestingSync;
@@ -167,6 +177,23 @@ class _TripCompletionVerificationSheetState
       }
     } on NetworkException catch (e) {
       if (mounted) {
+        final localTrip = tripRepo.getCachedTripById(widget.tripId);
+        if (localTrip != null) {
+          final authVm = Provider.of<AuthViewModel?>(context, listen: false);
+          final fallbackStatus = TripSyncStatus.fromLocalTrip(
+            localTrip,
+            currentUserId: authVm?.currentUser?.id ?? '',
+          );
+          setState(() {
+            _syncStatus = fallbackStatus;
+            _progress = 1.0;
+            _stage = VerificationStage.readyToComplete;
+            _statusMessage = l10n.tripCompReadyDesc;
+            _isOffline = true;
+          });
+          HapticHelper.selection();
+          return;
+        }
         setState(() {
           _stage = VerificationStage.error;
           _isOffline = true;
@@ -175,6 +202,22 @@ class _TripCompletionVerificationSheetState
       }
     } catch (e) {
       if (mounted) {
+        final localTrip = tripRepo.getCachedTripById(widget.tripId);
+        if (localTrip != null) {
+          final authVm = Provider.of<AuthViewModel?>(context, listen: false);
+          final fallbackStatus = TripSyncStatus.fromLocalTrip(
+            localTrip,
+            currentUserId: authVm?.currentUser?.id ?? '',
+          );
+          setState(() {
+            _syncStatus = fallbackStatus;
+            _progress = 1.0;
+            _stage = VerificationStage.readyToComplete;
+            _statusMessage = l10n.tripCompReadyDesc;
+          });
+          HapticHelper.selection();
+          return;
+        }
         setState(() {
           _stage = VerificationStage.error;
           _errorMessage = e.toString().replaceAll('Exception: ', '');
@@ -256,7 +299,12 @@ class _TripCompletionVerificationSheetState
           children: [
             const Icon(Icons.warning_amber_rounded, color: AppColors.amberAccent, size: 24),
             const SizedBox(width: 10),
-            Text(l10n.tripCompDialogTitle, style: AppTypography.titleMedium(isDark: isDark)),
+            Expanded(
+              child: Text(
+                l10n.tripCompDialogTitle,
+                style: AppTypography.titleMedium(isDark: isDark),
+              ),
+            ),
           ],
         ),
         content: Column(
@@ -348,112 +396,121 @@ class _TripCompletionVerificationSheetState
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.sm),
 
-          // Progress Bar & Status Text
-          if (isVerifying || _stage == VerificationStage.readyToComplete || _stage == VerificationStage.syncBlocked) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: _progress,
-                minHeight: 6,
-                backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  _stage == VerificationStage.syncBlocked
-                      ? AppColors.amberAccent
-                      : AppColors.emeraldPrimary,
-                ),
+          // Scrollable middle section preventing orientation/landscape RenderFlex overflow
+          Expanded(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Progress Bar & Status Text
+                  if (isVerifying || _stage == VerificationStage.readyToComplete || _stage == VerificationStage.syncBlocked) ...[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: _progress,
+                        minHeight: 6,
+                        backgroundColor: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          _stage == VerificationStage.syncBlocked
+                              ? AppColors.amberAccent
+                              : AppColors.emeraldPrimary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _statusMessage,
+                            style: AppTypography.bodySmall(isDark: isDark),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Text(
+                          '${(_progress * 100).toInt()}%',
+                          style: AppTypography.bodySmall(isDark: isDark).copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: _stage == VerificationStage.syncBlocked
+                                ? AppColors.amberAccent
+                                : AppColors.emeraldPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+
+                  // Participant Sync Status Breakdown Card
+                  if (_syncStatus != null && _syncStatus!.participants.isNotEmpty) ...[
+                    Text(
+                      l10n.tripCompParticipantHeader,
+                      style: AppTypography.bodySmall(isDark: isDark).copyWith(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+                        borderRadius: AppRadius.mdBorder,
+                        border: Border.all(
+                          color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          for (int i = 0; i < _syncStatus!.participants.length; i++) ...[
+                            if (i > 0)
+                              Divider(
+                                height: 1,
+                                color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+                              ),
+                            _buildParticipantRow(_syncStatus!.participants[i], isDark, l10n),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+
+                  // Warning / Notice Banners
+                  if (_stage == VerificationStage.readyToComplete) ...[
+                    _buildNoticeBanner(
+                      isDark: isDark,
+                      color: AppColors.emeraldPrimary,
+                      icon: Icons.check_circle_outline,
+                      title: l10n.tripCompReadyTitle,
+                      description: l10n.tripCompReadyDesc,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                  ] else if (_stage == VerificationStage.syncBlocked) ...[
+                    _buildNoticeBanner(
+                      isDark: isDark,
+                      color: AppColors.amberAccent,
+                      icon: Icons.warning_amber_rounded,
+                      title: l10n.tripCompPendingTitle,
+                      description: l10n.tripCompPendingDesc,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                  ] else if (_stage == VerificationStage.error) ...[
+                    _buildNoticeBanner(
+                      isDark: isDark,
+                      color: isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight,
+                      icon: Icons.error_outline,
+                      title: _isOffline ? l10n.tripCompOfflineTitle : l10n.tripCompOfflineDesc,
+                      description: _errorMessage ?? l10n.tripCompOfflineDesc,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+                ],
               ),
             ),
-            const SizedBox(height: AppSpacing.xs),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    _statusMessage,
-                    style: AppTypography.bodySmall(isDark: isDark),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                Text(
-                  '${(_progress * 100).toInt()}%',
-                  style: AppTypography.bodySmall(isDark: isDark).copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: _stage == VerificationStage.syncBlocked
-                        ? AppColors.amberAccent
-                        : AppColors.emeraldPrimary,
-                  ),
-                ),
-              ],
-            ),
-          ],
+          ),
 
-          const SizedBox(height: AppSpacing.md),
-
-          // Participant Sync Status Breakdown Card
-          if (_syncStatus != null && _syncStatus!.participants.isNotEmpty) ...[
-            Text(
-              l10n.tripCompParticipantHeader,
-              style: AppTypography.bodySmall(isDark: isDark).copyWith(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            Flexible(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
-                  borderRadius: AppRadius.mdBorder,
-                  border: Border.all(
-                    color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
-                  ),
-                ),
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  itemCount: _syncStatus!.participants.length,
-                  separatorBuilder: (context, index) => Divider(
-                    height: 1,
-                    color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
-                  ),
-                  itemBuilder: (ctx, idx) {
-                    final p = _syncStatus!.participants[idx];
-                    return _buildParticipantRow(p, isDark, l10n);
-                  },
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-          ],
-
-          // Warning / Notice Banners
-          if (_stage == VerificationStage.readyToComplete) ...[
-            _buildNoticeBanner(
-              isDark: isDark,
-              color: AppColors.emeraldPrimary,
-              icon: Icons.check_circle_outline,
-              title: l10n.tripCompReadyTitle,
-              description: l10n.tripCompReadyDesc,
-            ),
-            const SizedBox(height: AppSpacing.md),
-          ] else if (_stage == VerificationStage.syncBlocked) ...[
-            _buildNoticeBanner(
-              isDark: isDark,
-              color: AppColors.amberAccent,
-              icon: Icons.warning_amber_rounded,
-              title: l10n.tripCompPendingTitle,
-              description: l10n.tripCompPendingDesc,
-            ),
-            const SizedBox(height: AppSpacing.md),
-          ] else if (_stage == VerificationStage.error) ...[
-            _buildNoticeBanner(
-              isDark: isDark,
-              color: isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight,
-              icon: Icons.error_outline,
-              title: _isOffline ? l10n.tripCompOfflineTitle : l10n.tripCompOfflineDesc,
-              description: _errorMessage ?? l10n.tripCompOfflineDesc,
-            ),
-            const SizedBox(height: AppSpacing.md),
-          ],
+          const SizedBox(height: AppSpacing.sm),
 
           // Action Buttons
           _buildActionButtons(isDark, l10n),
@@ -463,6 +520,13 @@ class _TripCompletionVerificationSheetState
   }
 
   Widget _buildParticipantRow(ParticipantSyncInfo p, bool isDark, AppLocalizations l10n) {
+    Trip? localTrip;
+    try {
+      localTrip = context.read<TripRepository>().getCachedTripById(widget.tripId);
+    } catch (_) {}
+    final localMember = localTrip?.members.where((m) => m.id == p.memberId || m.displayName.trim().toLowerCase() == p.displayName.trim().toLowerCase()).firstOrNull;
+    final isEffectivelyVirtual = p.isVirtual || (localMember != null && localMember.isVirtual) || p.userId.startsWith('unclaimed_');
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
@@ -528,19 +592,44 @@ class _TripCompletionVerificationSheetState
                   ],
                 ),
                 Text(
-                  p.isOnline ? l10n.tripCompStatusOnline : l10n.tripCompLastSync(p.lastSyncFormatted),
+                  isEffectivelyVirtual
+                      ? 'Virtual member • Synced with device'
+                      : (p.isOnline ? l10n.tripCompStatusOnline : l10n.tripCompLastSync(p.lastSyncFormatted)),
                   style: AppTypography.bodySmall(isDark: isDark),
                 ),
               ],
             ),
           ),
-          _buildSyncBadge(p, isDark, l10n),
+          _buildSyncBadge(p, isDark, l10n, isVirtualOverride: isEffectivelyVirtual),
         ],
       ),
     );
   }
 
-  Widget _buildSyncBadge(ParticipantSyncInfo p, bool isDark, AppLocalizations l10n) {
+  Widget _buildSyncBadge(ParticipantSyncInfo p, bool isDark, AppLocalizations l10n, {bool isVirtualOverride = false}) {
+    if (p.isVirtual || isVirtualOverride) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: AppColors.positiveGreenLight.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.check, size: 14, color: AppColors.positiveGreenLight),
+            const SizedBox(width: 4),
+            Text(
+              l10n.tripCompStatusSynced,
+              style: AppTypography.bodySmall(isDark: isDark).copyWith(
+                color: AppColors.positiveGreenLight,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     switch (p.syncStatus) {
       case ParticipantSyncState.synced:
         return Container(

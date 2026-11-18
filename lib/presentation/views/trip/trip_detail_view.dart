@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../../core/design_system/components/liquid_glass_button.dart';
+import '../../../core/design_system/components/liquid_glass_card.dart';
+import '../../../core/design_system/tokens/glass_tokens.dart';
 import '../../../core/services/permission_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_elevation.dart';
@@ -9,15 +12,14 @@ import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/currency_formatter.dart';
+import '../../../core/utils/error_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/currency_display.dart';
 import '../../../core/widgets/empty_state_view.dart';
 import '../../../core/widgets/kith_components.dart';
-import '../../../core/widgets/trip_cover_background.dart';
 import '../../../core/widgets/member_avatar.dart';
-import '../../../core/widgets/pill_badge.dart';
 import '../../../core/widgets/shimmer_skeleton.dart';
 import '../../../core/widgets/surface_card.dart';
 import '../../../domain/enums/trip_lifecycle.dart';
@@ -78,6 +80,8 @@ class _TripDetailViewState extends State<TripDetailView> {
   bool _initialLoading = true;
   bool _isOpeningDeepLink = false;
   String _deepLinkStatus = '';
+  String? _activePresentedExpenseId;
+  bool _isPresentedSheetOpen = false;
   StreamSubscription<Map<String, dynamic>>? _notifSubscription;
 
   static const List<Map<String, String?>> _categories = [
@@ -132,75 +136,34 @@ class _TripDetailViewState extends State<TripDetailView> {
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final user = context.read<AuthViewModel>().currentUser;
-      if (user != null) {
-        final tripDetailVm = context.read<TripDetailViewModel>();
-        final expenseRepo = context.read<ExpenseRepository>();
-        final storage = context.read<LocalStorageService>();
-        
-        // 1. Immediately hydrate trip locally
-        await tripDetailVm.loadTrip(widget.tripId, user.id);
-        if (mounted) {
-          setState(() => _initialLoading = false);
-        }
+      final authVm = context.read<AuthViewModel>();
+      final tripDetailVm = context.read<TripDetailViewModel>();
+      final expenseRepo = context.read<ExpenseRepository>();
+      var user = authVm.currentUser;
+      if (user == null) {
+        try {
+          await authVm.initSession().timeout(const Duration(seconds: 1));
+          user = authVm.currentUser;
+        } catch (_) {}
+      }
+      if (!mounted) return;
+      final effectiveUserId = user?.id ?? '';
+      
+      // 1. FAST LOCAL HYDRATION: Immediate (< 5ms) sync from cache/SQLite
+      tripDetailVm.hydrateLocally(widget.tripId, effectiveUserId);
+      if (mounted) {
+        setState(() => _initialLoading = false);
+      }
 
-        // 2. Immediate Deep Link handling (ZERO LAG - before background network sync)
-        if (mounted && hasExpenseDeepLink) {
-          final currentVm = context.read<TripDetailViewModel>();
-          Expense? targetExpense = currentVm.expenses.where((e) => e.id == widget.expenseId).firstOrNull;
-          
-          if (targetExpense == null) {
-            if (mounted) {
-              setState(() => _deepLinkStatus = 'Fetching expense from cloud...');
-            }
-            final freshExpenses = await expenseRepo.getExpenses(widget.tripId);
-            targetExpense = freshExpenses.where((e) => e.id == widget.expenseId).firstOrNull;
-          }
+      // 2. Immediate Deep Link handling (ZERO LAG - does not block on network)
+      if (mounted) {
+        await _handleDeepLinkNavigation();
+      }
 
-          if (mounted) {
-            setState(() => _isOpeningDeepLink = false);
-            if (targetExpense != null && currentVm.trip != null) {
-              _showExpenseDetailSheet(targetExpense, currentVm.trip!, user.id);
-            } else {
-              await PaymentVerificationManager.checkAndPrompt(context);
-            }
-          }
-        } else if (mounted && hasSettlementDeepLink) {
-          final allPending = storage.getSavedPaymentVerifications();
-          var match = allPending.firstWhere(
-            (p) => p['settlementId'] == widget.settlementId || p['id'] == widget.settlementId,
-            orElse: () => <String, dynamic>{},
-          );
-
-          if (match.isEmpty) {
-            if (mounted) {
-              setState(() => _deepLinkStatus = 'Syncing payment verification...');
-            }
-            await expenseRepo.syncPendingVerifications(user.id);
-            final updatedPending = storage.getSavedPaymentVerifications();
-            match = updatedPending.firstWhere(
-              (p) => p['settlementId'] == widget.settlementId || p['id'] == widget.settlementId,
-              orElse: () => <String, dynamic>{},
-            );
-          }
-
-          if (mounted) {
-            setState(() => _isOpeningDeepLink = false);
-            if (match.isNotEmpty) {
-              final req = PaymentVerificationRequest.fromJson(match);
-              await PaymentVerificationView.show(context, request: req);
-            } else {
-              await PaymentVerificationManager.checkAndPrompt(context);
-            }
-          }
-        } else if (mounted) {
-          await PaymentVerificationManager.checkAndPrompt(context);
-        }
-
-        // 3. Background settlements sync
-        if (mounted) {
-          expenseRepo.getSettlements(widget.tripId);
-        }
+      // 3. Background settlements & trip sync non-blocking
+      unawaited(tripDetailVm.loadTrip(widget.tripId, effectiveUserId));
+      if (mounted) {
+        expenseRepo.getSettlements(widget.tripId);
       }
     });
   }
@@ -215,57 +178,99 @@ class _TripDetailViewState extends State<TripDetailView> {
   void _showAddFriendDialog() {
     final nameController = TextEditingController();
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final tripDetailVm = context.read<TripDetailViewModel>();
+    final trip = tripDetailVm.trip;
+    String? localError;
+    bool isSubmitting = false;
 
     showDialog(
       context: context,
       builder: (ctx) {
-        return AlertDialog(
-          backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
-          shape: RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
-          title: Text(
-            'Add Friend to Trip',
-            style: AppTypography.titleMedium(isDark: isDark),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Enter friend\'s name to add them as a trip member and split expenses.',
-                style: AppTypography.bodySmall(isDark: isDark),
+        return StatefulBuilder(
+          builder: (dialogCtx, setDialogState) {
+            return AlertDialog(
+              backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+              shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
+              title: Text(
+                'Add Friend to Trip',
+                style: AppTypography.titleMedium(isDark: isDark),
               ),
-              const SizedBox(height: AppSpacing.md),
-              TextField(
-                controller: nameController,
-                autofocus: true,
-                textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  hintText: 'Friend\'s name (e.g. Rahul, Tanya)',
-                  prefixIcon: Icon(Icons.person_outline_rounded, size: 20),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Enter friend\'s name to add them as a trip member and split expenses.',
+                    style: AppTypography.bodySmall(isDark: isDark),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  TextField(
+                    controller: nameController,
+                    autofocus: true,
+                    textCapitalization: TextCapitalization.words,
+                    onChanged: (_) {
+                      if (localError != null) {
+                        setDialogState(() => localError = null);
+                      }
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'Friend\'s name (e.g. Rahul, Tanya)',
+                      prefixIcon: const Icon(Icons.person_outline_rounded, size: 20),
+                      errorText: localError,
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
                 ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final name = nameController.text.trim();
-                if (name.isNotEmpty) {
-                  Navigator.pop(ctx);
-                  final tripDetailVm = context.read<TripDetailViewModel>();
-                  final authVm = context.read<AuthViewModel>();
-                  final user = authVm.currentUser;
-                  if (user != null) {
-                    await tripDetailVm.addMember(name, user.id);
-                  }
-                }
-              },
-              child: const Text('Add Member'),
-            ),
-          ],
+                ElevatedButton(
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          final name = nameController.text.trim();
+                          if (name.isEmpty) return;
+
+                          // Check if friend with same name already exists in active members
+                          if (trip != null &&
+                              trip.members.any((m) =>
+                                  !m.isMerged &&
+                                  m.displayName.trim().toLowerCase() == name.toLowerCase())) {
+                            setDialogState(() {
+                              localError = '$name is already a member of this trip';
+                            });
+                            return;
+                          }
+
+                          setDialogState(() => isSubmitting = true);
+                          final messenger = ScaffoldMessenger.of(context);
+                          Navigator.pop(ctx);
+                          final authVm = context.read<AuthViewModel>();
+                          final user = authVm.currentUser;
+                          if (user != null) {
+                            try {
+                              await tripDetailVm.addMember(name, user.id);
+                              HapticHelper.success();
+                            } catch (e) {
+                              messenger.showSnackBar(
+                                SnackBar(content: Text(KithErrorFormatter.format(e))),
+                              );
+                            }
+                          }
+                        },
+                  child: isSubmitting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Add Member'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -402,16 +407,136 @@ class _TripDetailViewState extends State<TripDetailView> {
           );
         },
         onMarkSettled: () {
-          tripDetailVm.markAsSettled(authVm.currentUser?.id ?? '');
+          if (trip.lifecycleState == TripLifecycle.settling || trip.lifecycleState == TripLifecycle.completing) {
+            tripDetailVm.markAsSettled(authVm.currentUser?.id ?? '');
+          }
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('🎉 Trip marked as fully settled!')),
+            const SnackBar(content: Text('🎉 All dues marked as settled!')),
           );
         },
       ),
     );
   }
 
+  @override
+  void didUpdateWidget(covariant TripDetailView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final expenseChanged = widget.expenseId != null &&
+        widget.expenseId!.isNotEmpty &&
+        widget.expenseId != oldWidget.expenseId;
+    final settlementChanged = widget.settlementId != null &&
+        widget.settlementId!.isNotEmpty &&
+        widget.settlementId != oldWidget.settlementId;
+
+    if (expenseChanged || settlementChanged) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _handleDeepLinkNavigation();
+      });
+    }
+  }
+
+  Future<void> _handleDeepLinkNavigation() async {
+    final user = context.read<AuthViewModel>().currentUser;
+    final effectiveUserId = user?.id ?? '';
+
+    final hasExpenseDeepLink = widget.expenseId != null && widget.expenseId!.isNotEmpty;
+    final hasSettlementDeepLink = widget.settlementId != null && widget.settlementId!.isNotEmpty;
+
+    if (!hasExpenseDeepLink && !hasSettlementDeepLink) {
+      await PaymentVerificationManager.checkAndPrompt(context);
+      return;
+    }
+
+    final currentVm = context.read<TripDetailViewModel>();
+    final expenseRepo = context.read<ExpenseRepository>();
+    final storage = context.read<LocalStorageService>();
+
+    if (hasExpenseDeepLink) {
+      if (_isPresentedSheetOpen && _activePresentedExpenseId == widget.expenseId) {
+        return;
+      }
+
+      Expense? targetExpense = currentVm.expenses.where((e) => e.id == widget.expenseId).firstOrNull;
+      
+      if (targetExpense == null) {
+        if (mounted) {
+          setState(() {
+            _isOpeningDeepLink = true;
+            _deepLinkStatus = 'Fetching expense from cloud...';
+          });
+        }
+        try {
+          final freshExpenses = await expenseRepo.getExpenses(widget.tripId).timeout(const Duration(seconds: 3));
+          targetExpense = freshExpenses.where((e) => e.id == widget.expenseId).firstOrNull;
+        } catch (_) {}
+      }
+
+      if (mounted) {
+        setState(() => _isOpeningDeepLink = false);
+        if (targetExpense != null && targetExpense.tripId == widget.tripId && currentVm.trip != null) {
+          _showExpenseDetailSheet(targetExpense, currentVm.trip!, effectiveUserId);
+        } else {
+          debugPrint('[TripDetailView] Target expense ${widget.expenseId} not found or mismatched with trip ${widget.tripId}');
+          await PaymentVerificationManager.checkAndPrompt(context);
+        }
+      }
+    } else if (hasSettlementDeepLink) {
+      final allPending = storage.getSavedPaymentVerifications();
+      var match = allPending.firstWhere(
+        (p) =>
+            (p['settlementId'] == widget.settlementId || p['id'] == widget.settlementId) &&
+            (p['tripId'] == null || p['tripId'] == widget.tripId),
+        orElse: () => <String, dynamic>{},
+      );
+
+      if (match.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _isOpeningDeepLink = true;
+            _deepLinkStatus = 'Syncing payment verification...';
+          });
+        }
+        await expenseRepo.syncPendingVerifications(effectiveUserId);
+        final updatedPending = storage.getSavedPaymentVerifications();
+        match = updatedPending.firstWhere(
+          (p) =>
+              (p['settlementId'] == widget.settlementId || p['id'] == widget.settlementId) &&
+              (p['tripId'] == null || p['tripId'] == widget.tripId),
+          orElse: () => <String, dynamic>{},
+        );
+      }
+
+      if (mounted) {
+        setState(() => _isOpeningDeepLink = false);
+        if (match.isNotEmpty) {
+          final req = PaymentVerificationRequest.fromJson(match);
+          final effectiveReq = (req.tripId.isEmpty && widget.tripId.isNotEmpty)
+              ? req.copyWith(tripId: widget.tripId, tripName: currentVm.trip?.name ?? req.tripName)
+              : req;
+
+          if (effectiveReq.tripId == widget.tripId) {
+            await PaymentVerificationView.show(context, request: effectiveReq);
+          } else {
+            debugPrint('[TripDetailView] Settlement verification ${widget.settlementId} trip mismatch: expected ${widget.tripId}, found ${effectiveReq.tripId}');
+            await PaymentVerificationManager.checkAndPrompt(context);
+          }
+        } else {
+          await PaymentVerificationManager.checkAndPrompt(context);
+        }
+      }
+    }
+  }
+
   void _showExpenseDetailSheet(Expense expense, Trip trip, String currentUserId) {
+    if (_isPresentedSheetOpen && _activePresentedExpenseId == expense.id) {
+      return;
+    }
+    if (_isPresentedSheetOpen) {
+      Navigator.of(context, rootNavigator: true).pop();
+    }
+    _isPresentedSheetOpen = true;
+    _activePresentedExpenseId = expense.id;
     final tripDetailVm = context.read<TripDetailViewModel>();
     showModalBottomSheet(
       context: context,
@@ -448,7 +573,10 @@ class _TripDetailViewState extends State<TripDetailView> {
           }
         },
       ),
-    );
+    ).whenComplete(() {
+      _isPresentedSheetOpen = false;
+      _activePresentedExpenseId = null;
+    });
   }
 
   void _showActivityLogsSheet() {
@@ -802,6 +930,7 @@ class _TripDetailViewState extends State<TripDetailView> {
                     isDark,
                     gradientColors,
                     l10n,
+                    isCreator,
                   ),
 
                   const SizedBox(height: AppSpacing.md),
@@ -926,260 +1055,203 @@ class _TripDetailViewState extends State<TripDetailView> {
     bool isDark,
     List<Color> gradientColors,
     AppLocalizations l10n,
+    bool isCreator,
   ) {
-    final youAreOwedPaise = userNetPaise > 0 ? userNetPaise : 0;
-    final youOwePaise = userNetPaise < 0 ? userNetPaise.abs() : 0;
     final totalTripPaise = balanceSummary.totalTripSpentInPaise;
+    final netColor = userNetPaise > 0
+        ? GlassColors.positive(isDark)
+        : (userNetPaise < 0 ? GlassColors.negative(isDark) : (isDark ? Colors.white : const Color(0xFF0F172A)));
 
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        borderRadius: AppRadius.xlBorder,
-        boxShadow: [
-          BoxShadow(
-            color: gradientColors[0].withValues(alpha: 0.35),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: TripCoverBackground(
-        themeIndex: trip.coverGradientIndex,
-        borderRadius: 24,
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return LiquidGlassCard(
+      padding: const EdgeInsets.all(20.0),
+      borderRadius: GlassRadii.xlBorder,
+      child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  PillBadge(
-                    label: trip.lifecycleState.displayName.toUpperCase(),
-                    color: Colors.white,
-                    backgroundColor: Colors.black.withValues(alpha: 0.25),
+              // 1. Trip Name (Full breathing room, never truncated)
+              Padding(
+                padding: const EdgeInsets.only(right: 68.0),
+                child: Text(
+                  trip.name,
+                  style: GlassTypography.titleMedium(isDark: isDark).copyWith(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
                   ),
-                  const SizedBox(width: 8),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(height: 6),
+
+              // 2. Subtitle: Date range, Members count, Lifecycle pill & Sync badge
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  Text(
+                    '${DateFormatter.formatTripDateRange(trip.createdAt, trip.updatedAt)} • ${trip.members.where((m) => !m.isMerged).length == 1 ? l10n.tripCardMemberSingle : l10n.tripCardMemberPlural(trip.members.where((m) => !m.isMerged).length)}',
+                    style: GlassTypography.bodySmall(isDark: isDark),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: trip.lifecycleState == TripLifecycle.active
+                          ? (isDark ? const Color(0xFF065F46) : const Color(0xFFD1FAE5))
+                          : (isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9)),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      trip.lifecycleState.displayName.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.5,
+                        color: trip.lifecycleState == TripLifecycle.active
+                            ? (isDark ? const Color(0xFF6EE7B7) : const Color(0xFF047857))
+                            : (isDark ? GlassColors.darkTextSecondary : GlassColors.lightTextSecondary),
+                      ),
+                    ),
+                  ),
                   NearbySyncBadge(
                     p2pService: context.read<P2PSyncService>(),
                     syncService: context.read<SyncService>(),
                     tripId: trip.id,
                     trip: trip,
                   ),
-                  const SizedBox(width: 8),
-                  InkWell(
-                    onTap: () {
-                      final authVm = context.read<AuthViewModel>();
-                      final tripVm = context.read<TripDetailViewModel>();
-                      final currentUser = authVm.currentUser;
-                      NearbyTripFriendsRadarSheet.show(
-                        context,
-                        trip: trip,
-                        syncService: context.read<SyncService>(),
-                        p2pService: context.read<P2PSyncService>(),
-                        onSyncCompleted: () {
-                          if (currentUser != null) {
-                            tripVm.loadTrip(trip.id, currentUser.id);
-                          }
-                        },
-                      );
-                    },
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.white24),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.sync_rounded, size: 12, color: Colors.white),
-                          SizedBox(width: 4),
-                          Text(
-                            'Sync',
-                            style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
+                ],
+              ),
+
+              const SizedBox(height: 20),
+
+              // 3. User Balance & Trip Spent (Clean, bold, matching Home screen hero)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          userNetPaise > 0
+                              ? l10n.dashYouAreOwed
+                              : (userNetPaise < 0 ? l10n.dashYouOwe : l10n.dashAllSettled),
+                          style: GlassTypography.labelCaps(isDark: isDark),
+                        ),
+                        const SizedBox(height: 4),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            CurrencyFormatter.formatPaise(userNetPaise.abs(), currencyCode: trip.currencyCode),
+                            style: GlassTypography.moneyLarge(isDark: isDark, color: netColor).copyWith(
+                              fontSize: 32,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        'TOTAL SPENT',
+                        style: GlassTypography.labelCaps(isDark: isDark),
+                      ),
+                      const SizedBox(height: 4),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          CurrencyFormatter.formatPaise(totalTripPaise, currencyCode: trip.currencyCode),
+                          style: GlassTypography.titleMedium(isDark: isDark).copyWith(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
+
+              const SizedBox(height: 20),
+
+              // 4. Action Buttons (Tactile Liquid Glass)
               Row(
                 children: [
-                  const Icon(Icons.people_alt_outlined, size: 14, color: Colors.white70),
-                  const SizedBox(width: 4),
-                  Text(
-                    l10n.tripsHomeMembersCount(trip.members.length),
-                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                  Expanded(
+                    child: LiquidGlassButton(
+                      text: balanceSummary.simplifiedSettlements.isNotEmpty
+                          ? '${l10n.tripDetailBtnSettleUp} (${balanceSummary.simplifiedSettlements.length})'
+                          : l10n.tripDetailBtnSettleUp,
+                      icon: Icons.handshake_outlined,
+                      variant: LiquidGlassButtonVariant.primary,
+                      onPressed: _showSettlementSheet,
+                    ),
                   ),
+                  if (isCreator && trip.lifecycleState == TripLifecycle.active) ...[
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: LiquidGlassButton(
+                        text: l10n.tripDetailCompleteBtn,
+                        icon: Icons.check_circle_outline_rounded,
+                        variant: LiquidGlassButtonVariant.secondary,
+                        onPressed: _showCompleteTripConfirmation,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.md),
 
-          // 3-Metric Clean Financial Row
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      l10n.personalYouAreOwed.toUpperCase(),
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        CurrencyFormatter.formatPaise(youAreOwedPaise, currencyCode: trip.currencyCode),
-                        style: TextStyle(
-                          color: youAreOwedPaise > 0 ? const Color(0xFF6EE7B7) : Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ],
+          // Top-Right Frosted Circle with Emoji (Exact match to Home Screen hero card)
+          Positioned(
+            right: 0,
+            top: 4,
+            child: Container(
+              width: 58,
+              height: 58,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isDark ? GlassColors.darkSurfaceSubtle : GlassColors.lightSurfaceSubtle,
+                border: Border.all(
+                  color: isDark ? GlassColors.darkBorderSubtle : GlassColors.lightBorderSubtle,
+                  width: 1.2,
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
               ),
-              Container(width: 1, height: 32, color: Colors.white24),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      l10n.personalYouOwe.toUpperCase(),
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        CurrencyFormatter.formatPaise(youOwePaise, currencyCode: trip.currencyCode),
-                        style: TextStyle(
-                          color: youOwePaise > 0 ? const Color(0xFFFCA5A5) : Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(width: 1, height: 32, color: Colors.white24),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      l10n.tripDetailTripSpending.toUpperCase(),
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        CurrencyFormatter.formatPaise(totalTripPaise, currencyCode: trip.currencyCode),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          if (balanceSummary.simplifiedSettlements.isNotEmpty || trip.lifecycleState != TripLifecycle.active) ...[
-            const SizedBox(height: AppSpacing.md),
-            InkWell(
-              onTap: _showSettlementSheet,
-              borderRadius: BorderRadius.circular(10),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.22),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.white30),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.payments_outlined, size: 16, color: Colors.white),
-                    const SizedBox(width: 8),
-                    Text(
-                      '${l10n.tripDetailSettleUp} (${balanceSummary.simplifiedSettlements.length})',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const Spacer(),
-                    const Icon(Icons.chevron_right_rounded, size: 18, color: Colors.white),
-                  ],
-                ),
+              alignment: Alignment.center,
+              child: Text(
+                trip.emoji.isNotEmpty ? trip.emoji : '🏝️',
+                style: const TextStyle(fontSize: 28),
               ),
             ),
-          ],
+          ),
         ],
-      ),
       ),
     );
   }
 
   Widget _buildLifecycleActionBar(Trip trip, bool isCreator, bool isDark, AppLocalizations l10n) {
     if (trip.lifecycleState == TripLifecycle.active) {
-      if (isCreator) {
-        return SurfaceCard(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            children: [
-              const Icon(Icons.info_outline_rounded, size: 18, color: AppColors.indigoAccent),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  l10n.tripDetailActiveBanner,
-                  style: AppTypography.bodySmall(isDark: isDark),
-                ),
-              ),
-              const SizedBox(width: 8),
-              AppButton(
-                text: l10n.tripDetailCompleteBtn,
-                height: 38,
-                variant: AppButtonVariant.outline,
-                onPressed: _showCompleteTripConfirmation,
-              ),
-            ],
-          ),
-        );
-      }
       return const SizedBox.shrink();
     } else if (trip.lifecycleState == TripLifecycle.completing) {
       final syncService = Provider.of<SyncService?>(context);
@@ -1414,96 +1486,78 @@ class _TripDetailViewState extends State<TripDetailView> {
       crossAxisAlignment: CrossAxisAlignment.start,
 
       children: [
-        // Trip Members and Meta Card
-        SurfaceCard(
-          padding: const EdgeInsets.all(16),
+        // Trip Crew Card (Clean, focused, no duplicate trip name)
+        LiquidGlassCard(
+          padding: const EdgeInsets.all(18),
+          borderRadius: GlassRadii.lgBorder,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  Text(trip.emoji, style: const TextStyle(fontSize: 28)),
-                  const SizedBox(width: 12),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(trip.name, style: AppTypography.titleMedium(isDark: isDark)),
-                        if (trip.description != null && trip.description!.isNotEmpty) ...[
-                          const SizedBox(height: 2),
-                          Text(trip.description!, style: AppTypography.bodySmall(isDark: isDark)),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Divider(color: isDark ? Colors.white10 : Colors.black12),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  InkWell(
-                    onTap: () {
-                      HapticHelper.light();
-                      Navigator.push(context, TripMembersView.route(trip.id));
-                    },
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          l10n.tripDetailMembersCount(trip.members.where((m) => !m.isMerged).length),
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-                          ),
-                        ),
-                        const SizedBox(width: 2),
-                        Icon(
-                          Icons.chevron_right_rounded,
-                          size: 16,
-                          color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-                        ),
-                      ],
-                    ),
-                  ),
-                  Row(
-                    children: [
-                      if (isCreator) ...[
-                        InkWell(
-                          onTap: () {
-                            HapticHelper.light();
-                            Navigator.push(context, ManageMembersView.route(trip.id));
-                          },
-                          child: Row(
-                            children: [
-                              Icon(Icons.manage_accounts_rounded, size: 14, color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary),
-                              const SizedBox(width: 4),
-                              Text(
-                                'Manage',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                      ],
-                      InkWell(
-                        onTap: _showAddFriendDialog,
+                    child: InkWell(
+                      onTap: () {
+                        HapticHelper.light();
+                        Navigator.push(context, TripMembersView.route(trip.id));
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.person_add_alt_1_rounded, size: 14, color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary),
-                            const SizedBox(width: 4),
+                            Icon(
+                              Icons.group_outlined,
+                              size: 18,
+                              color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                            ),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                'Members (${trip.members.where((m) => !m.isMerged).length})',
+                                style: TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 2),
+                            Icon(
+                              Icons.chevron_right_rounded,
+                              size: 18,
+                              color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  if (isCreator) ...[
+                    InkWell(
+                      onTap: () {
+                        HapticHelper.light();
+                        Navigator.push(context, ManageMembersView.route(trip.id));
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.manage_accounts_rounded, size: 13, color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary),
+                            const SizedBox(width: 3),
                             Text(
-                              l10n.tripDetailAddFriend,
+                              'Manage',
                               style: TextStyle(
-                                fontSize: 12,
+                                fontSize: 11,
                                 fontWeight: FontWeight.w700,
                                 color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
                               ),
@@ -1511,7 +1565,34 @@ class _TripDetailViewState extends State<TripDetailView> {
                           ],
                         ),
                       ),
-                    ],
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+                  InkWell(
+                    onTap: _showAddFriendDialog,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.person_add_alt_1_rounded, size: 13, color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary),
+                          const SizedBox(width: 3),
+                          Text(
+                            '+ Add',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -2761,28 +2842,25 @@ class _TripDetailViewState extends State<TripDetailView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            Row(
               children: [
-                Row(
-                  children: [
-                    const Icon(Icons.pie_chart_outline_rounded, size: 18, color: AppColors.emeraldPrimary),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Member Total Spending',
-                      style: AppTypography.titleSmall(isDark: isDark),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'What each person consumed in "${trip.name}" (Tap for breakdown)',
-                  style: AppTypography.bodySmall(isDark: isDark),
+                const Icon(Icons.pie_chart_outline_rounded, size: 18, color: AppColors.emeraldPrimary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Member Total Spending',
+                    style: AppTypography.titleSmall(isDark: isDark),
+                  ),
                 ),
               ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'What each person consumed in "${trip.name}" (Tap for breakdown)',
+              style: AppTypography.bodySmall(isDark: isDark),
             ),
           ],
         ),

@@ -40,6 +40,22 @@ class NearbySyncBadge extends StatelessWidget {
               return const SizedBox.shrink();
             }
 
+            // Check if this trip contains other registered members (non-virtual friends)
+            final hasOtherRegisteredMembers = trip?.members.any(
+                  (m) =>
+                      !m.isVirtual &&
+                      !m.isMerged &&
+                      m.userId != trip?.creatorId &&
+                      !m.isCreator,
+                ) ??
+                false;
+
+            // If all other members are virtual/unclaimed and no peer is nearby, hide the badge.
+            // Virtual-only trips have authoritative local state and background sync handles cloud reconciliation silently.
+            if (peerCount == 0 && !hasOtherRegisteredMembers) {
+              return const SizedBox.shrink();
+            }
+
             String label;
             IconData icon;
             Color color;

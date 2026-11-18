@@ -75,10 +75,12 @@ class KithStageProgress extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
         Text(
           title,
           style: AppTypography.titleLarge(isDark: isDark),
@@ -169,7 +171,8 @@ class KithStageProgress extends StatelessWidget {
           ),
         ],
       ],
-    );
+    ),
+  );
   }
 
   Widget _buildStageIcon(bool isDone, bool isCurrent, bool isPending, bool isDark) {

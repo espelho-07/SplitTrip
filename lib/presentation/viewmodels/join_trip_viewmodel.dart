@@ -49,12 +49,12 @@ class JoinTripViewModel extends ChangeNotifier {
     try {
       final p = await tripRepo.getTripPreview(targetCode);
       if (p == null) {
-        _errorMessage = 'No trip found for code "$targetCode". Please check and try again.';
+        _errorMessage = 'This trip does not exist. Check the code and try again.';
       }
       _preview = p;
       return p;
     } catch (e) {
-      _errorMessage = KithErrorFormatter.format(e);
+      _errorMessage = KithErrorFormatter.format(e, context: 'join');
       return null;
     } finally {
       _isLoadingPreview = false;
@@ -62,7 +62,12 @@ class JoinTripViewModel extends ChangeNotifier {
     }
   }
 
-  Future<Trip?> joinTrip(GuestUser user, [String? directCode, String? claimMemberId]) async {
+  Future<Trip?> joinTrip(
+    GuestUser user, [
+    String? directCode,
+    String? claimMemberId,
+    String? claimToken,
+  ]) async {
     if (_isJoining) return null;
 
     final targetCode = (directCode ?? _code).trim().toUpperCase().replaceAll(RegExp(r'[\s\-]'), '');
@@ -81,11 +86,12 @@ class JoinTripViewModel extends ChangeNotifier {
         inviteCodeOrId: targetCode,
         user: user,
         claimMemberId: claimMemberId,
+        claimToken: claimToken,
       );
 
       return trip;
     } catch (e) {
-      _errorMessage = KithErrorFormatter.format(e);
+      _errorMessage = KithErrorFormatter.format(e, context: 'join');
       return null;
     } finally {
       _isJoining = false;

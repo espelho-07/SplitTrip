@@ -13,6 +13,10 @@ import '../../../core/widgets/kith_brand.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/locale_viewmodel.dart';
 import '../../widgets/progress/progress.dart';
+import '../../../core/nirniq/config/nirniq_feature_flags.dart';
+import '../../../core/nirniq/services/nirniq_google_auth_service.dart';
+import '../../../core/nirniq/services/nirniq_identity_service_impl.dart';
+import '../auth/widgets/nirniq_sign_in_button.dart';
 import '../language/language_select_sheet.dart';
 import 'widgets/guest_setup_sheet.dart';
 import 'widgets/kith_nirniq_button.dart';
@@ -31,6 +35,44 @@ class OnboardingView extends StatefulWidget {
 }
 
 class _OnboardingViewState extends State<OnboardingView> {
+  bool _isNirniqAuthenticating = false;
+
+  Future<void> _handleNirniqSignIn() async {
+    final localeVm = context.read<LocaleViewModel>();
+    if (!localeVm.hasSelectedInitialLanguage) {
+      context.push('/language-select');
+      return;
+    }
+
+    if (_isNirniqAuthenticating) return;
+
+    HapticHelper.medium();
+    setState(() => _isNirniqAuthenticating = true);
+
+    try {
+      final nirniqService = NirniqIdentityServiceImpl();
+      final result = await nirniqService.authenticateWithNirniq();
+
+      if (result != null && mounted) {
+        context.go('/home');
+      }
+    } catch (e) {
+      if (mounted) {
+        if (e is! NirniqAuthException || e.code != NirniqAuthErrorCode.cancelled) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(e is NirniqAuthException ? e.message : 'Unable to sign in with Nirniq. Please try again.'),
+              backgroundColor: AppColors.negativeRedLight,
+            ),
+          );
+        }
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isNirniqAuthenticating = false);
+      }
+    }
+  }
   Future<void> _handleGoogleSignIn() async {
     final localeVm = context.read<LocaleViewModel>();
     if (!localeVm.hasSelectedInitialLanguage) {
@@ -175,6 +217,14 @@ class _OnboardingViewState extends State<OnboardingView> {
                             ),
 
                             // Preserved for future reactivation: Google Sign-In
+                            if (NirniqFeatureFlags.showNirniqSignInButton) ...[
+                              const SizedBox(height: 12),
+                              NirniqSignInButton(
+                                isLoading: _isNirniqAuthenticating,
+                                onPressed: _handleNirniqSignIn,
+                              ),
+                            ],
+
                             if (AppConfig.enableGoogleAuth) ...[
                               const SizedBox(height: 12),
                               KithGoogleAuthButton(

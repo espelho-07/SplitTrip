@@ -26,6 +26,7 @@ class MainActivity : FlutterFragmentActivity() {
     private var pendingSafCreateContent: String? = null
 
     private var initialDeepLink: String? = null
+    private var flutterEngineInstance: FlutterEngine? = null
     private var pendingContactPickerResult: MethodChannel.Result? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -43,10 +44,27 @@ class MainActivity : FlutterFragmentActivity() {
 
     private fun handleIntent(intent: Intent?) {
         val uri: Uri? = intent?.data
-        if (uri != null) {
-            val deepLink = uri.toString()
+        val routeExtra: String? = intent?.getStringExtra("route")
+            ?: intent?.extras?.getString("route")
+            ?: intent?.extras?.getString("tripId")?.let { tripId ->
+                val expenseId = intent.extras?.getString("expenseId")
+                val settlementId = intent.extras?.getString("settlementId")
+                if (!expenseId.isNullOrEmpty()) {
+                    "/trip/$tripId?expenseId=$expenseId"
+                } else if (!settlementId.isNullOrEmpty()) {
+                    "/trip/$tripId?settlementId=$settlementId"
+                } else {
+                    "/trip/$tripId"
+                }
+            }
+        val deepLink = uri?.toString() ?: routeExtra?.let {
+            if (it.startsWith("kith://")) it else "kith://kith.app$it"
+        }
+        if (deepLink != null) {
+            val redacted = redactDeepLink(deepLink)
+            android.util.Log.d(TAG, "handleIntent: deepLink=$redacted")
             initialDeepLink = deepLink
-            flutterEngine?.let { engine ->
+            flutterEngineInstance?.let { engine ->
                 MethodChannel(engine.dartExecutor.binaryMessenger, CHANNEL)
                     .invokeMethod("onDeepLink", deepLink)
             }
@@ -122,8 +140,14 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        flutterEngineInstance = null
+        super.cleanUpFlutterEngine(flutterEngine)
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        flutterEngineInstance = flutterEngine
 
         // Migration Channel for Cross-App SAF & Share Intent
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, MIGRATION_CHANNEL).setMethodCallHandler { call, result ->
@@ -296,6 +320,7 @@ class MainActivity : FlutterFragmentActivity() {
                 }
                 "getInitialDeepLink" -> {
                     result.success(initialDeepLink)
+                    initialDeepLink = null
                 }
                 else -> result.notImplemented()
             }
@@ -314,6 +339,55 @@ class MainActivity : FlutterFragmentActivity() {
                     result.success(true)
                 }
                 else -> result.notImplemented()
+            }
+        }
+    }
+    companion object {
+        private const val TAG = "MainActivity"
+        private val SENSITIVE_QUERY_PARAMS = setOf(
+            "token",
+            "claimtoken",
+            "secret",
+            "p2p_secret",
+            "p2psecret",
+            "key",
+            "s",
+            "password",
+            "auth",
+            "authorization",
+            "bearer"
+        )
+
+        fun redactDeepLink(uriString: String?): String {
+            if (uriString.isNullOrBlank()) return ""
+            return try {
+                val uri = Uri.parse(uriString)
+                val queryNames = uri.queryParameterNames
+                if (queryNames.isNullOrEmpty()) {
+                    uriString
+                } else {
+                    val builder = uri.buildUpon().clearQuery()
+                    for (param in queryNames) {
+                        if (SENSITIVE_QUERY_PARAMS.contains(param.lowercase())) {
+                            builder.appendQueryParameter(param, "[REDACTED]")
+                        } else {
+                            builder.appendQueryParameter(param, uri.getQueryParameter(param))
+                        }
+                    }
+                    builder.build().toString()
+                }
+            } catch (_: Exception) {
+                val regex = Regex("([?&])([a-zA-Z0-9_-]+)=([^&]*)")
+                regex.replace(uriString) { matchResult ->
+                    val prefix = matchResult.groupValues[1]
+                    val key = matchResult.groupValues[2]
+                    val value = matchResult.groupValues[3]
+                    if (SENSITIVE_QUERY_PARAMS.contains(key.lowercase())) {
+                        "$prefix$key=[REDACTED]"
+                    } else {
+                        "$prefix$key=$value"
+                    }
+                }
             }
         }
     }

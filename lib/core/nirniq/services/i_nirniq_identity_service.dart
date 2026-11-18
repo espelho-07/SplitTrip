@@ -1,13 +1,10 @@
 import '../models/nirniq_identity.dart';
 import '../models/nirniq_migration_state.dart';
+import 'nirniq_google_auth_service.dart';
 
 /// Abstract service interface for high-level Nirniq identity operations.
-///
-/// [PHASE 1 — INTERFACE ONLY]
-/// No connection to external services, no OAuth, no Supabase Auth.
 abstract interface class INirniqIdentityService {
   /// Whether the Nirniq identity feature is enabled.
-  /// Always false in Phase 1.
   bool get isEnabled;
 
   /// The current migration state for the active KITH user.
@@ -21,4 +18,12 @@ abstract interface class INirniqIdentityService {
   /// Whether a Nirniq identity can be created for this KITH user.
   /// Returns false when [isEnabled] is false.
   Future<bool> canLinkToNirniq(String kithLocalUserId);
+
+  /// Triggers native Nirniq authentication (via Google Sign-In and Central Supabase IdP).
+  ///
+  /// Returns [NirniqAuthResult] on success, or null if the user cancelled the flow.
+  Future<NirniqAuthResult?> authenticateWithNirniq();
+
+  /// Signs out from the active Nirniq session.
+  Future<void> signOutNirniq();
 }

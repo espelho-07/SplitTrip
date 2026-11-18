@@ -92,13 +92,27 @@ class ProfileSheet extends StatelessWidget {
     );
 
     if (confirm == true) {
-      // Dismiss profile sheet and navigate to onboarding immediately
       nav.pop();
-      AppRouter.router.go('/onboarding');
+      final rootNav = Navigator.of(AppRouter.navigatorKey.currentContext ?? context, rootNavigator: true);
+      showDialog(
+        context: AppRouter.navigatorKey.currentContext ?? context,
+        barrierDismissible: false,
+        builder: (_) => const PopScope(
+          canPop: false,
+          child: Center(
+            child: CircularProgressIndicator(color: AppColors.emeraldPrimary),
+          ),
+        ),
+      );
 
-      await authVm.logout();
-      await storage.clearAllUserData();
-      homeVm.clearData();
+      try {
+        await authVm.logout();
+        await storage.clearAllUserData();
+        homeVm.clearData();
+      } finally {
+        if (rootNav.canPop()) rootNav.pop();
+        AppRouter.router.go('/onboarding');
+      }
 
       final rootCtx = AppRouter.navigatorKey.currentContext;
       if (rootCtx != null && rootCtx.mounted) {
@@ -136,11 +150,26 @@ class ProfileSheet extends StatelessWidget {
 
     if (confirm == true) {
       nav.pop();
-      AppRouter.router.go('/onboarding');
+      final rootNav = Navigator.of(AppRouter.navigatorKey.currentContext ?? context, rootNavigator: true);
+      showDialog(
+        context: AppRouter.navigatorKey.currentContext ?? context,
+        barrierDismissible: false,
+        builder: (_) => const PopScope(
+          canPop: false,
+          child: Center(
+            child: CircularProgressIndicator(color: AppColors.negativeRedDark),
+          ),
+        ),
+      );
 
-      await authVm.deleteAccount();
-      await storage.clearAllUserData();
-      homeVm.clearData();
+      try {
+        await authVm.deleteAccount();
+        await storage.clearAllUserData();
+        homeVm.clearData();
+      } finally {
+        if (rootNav.canPop()) rootNav.pop();
+        AppRouter.router.go('/onboarding');
+      }
 
       final rootCtx = AppRouter.navigatorKey.currentContext;
       if (rootCtx != null && rootCtx.mounted) {
@@ -163,6 +192,9 @@ class ProfileSheet extends StatelessWidget {
     final pendingCount = syncService.pendingCount;
 
     return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.9,
+      ),
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
         border: Border(

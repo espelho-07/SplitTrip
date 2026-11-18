@@ -193,8 +193,10 @@ class TripCoverBackground extends StatelessWidget {
             // Custom vector scenic artwork painter (only if not a plain color theme)
             if (!theme.isPlainColor)
               Positioned.fill(
-                child: CustomPaint(
-                  painter: _ScenicArtworkPainter(themeId: theme.id),
+                child: RepaintBoundary(
+                  child: CustomPaint(
+                    painter: _ScenicArtworkPainter(themeId: theme.id),
+                  ),
                 ),
               ),
 

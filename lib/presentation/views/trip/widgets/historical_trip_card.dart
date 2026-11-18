@@ -140,16 +140,21 @@ class HistoricalTripCard extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        trip.members.length == 1
-                            ? l10n.tripCardMemberSingle
-                            : l10n.tripCardMemberPlural(trip.members.length),
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: isDark ? AppColors.darkTextMuted : const Color(0xFF94A3B8),
+                      Expanded(
+                        child: Text(
+                          trip.members.length == 1
+                              ? l10n.tripCardMemberSingle
+                              : l10n.tripCardMemberPlural(trip.members.length),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: isDark ? AppColors.darkTextMuted : const Color(0xFF94A3B8),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                      const SizedBox(width: 8),
                       Text(
                         CurrencyFormatter.formatPaise(totalExpensesPaise, currencyCode: trip.currencyCode),
                         style: TextStyle(

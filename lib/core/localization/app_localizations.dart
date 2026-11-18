@@ -629,9 +629,13 @@ class AppLocalizations {
   String get expensePaidByLabel => translate('expense_paid_by_label');
   String get expenseSplitHowLabel => translate('expense_split_how_label');
   String get expenseSplitEqually => translate('expense_split_equally');
+  String get expenseSplitEquallyDesc => translate('expense_split_equally_desc');
   String get expenseSplitExact => translate('expense_split_exact');
+  String get expenseSplitExactDesc => translate('expense_split_exact_desc');
   String get expenseSplitPercentages => translate('expense_split_percentages');
+  String get expenseSplitPercentagesDesc => translate('expense_split_percentages_desc');
   String get expenseSplitShares => translate('expense_split_shares');
+  String get expenseSplitSharesDesc => translate('expense_split_shares_desc');
   String get expenseSaveBtn => translate('expense_save_btn');
   String get expenseVoiceTab => translate('expense_voice_tab');
   String get expenseReceiptTab => translate('expense_receipt_tab');
