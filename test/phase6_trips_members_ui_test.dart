@@ -251,7 +251,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // SnackBar shows copy notification
-      expect(find.text('Trip code GOA123 copied! Share with Bob Offline to claim. ✓'), findsOneWidget);
+      expect(find.text('Claim link for Bob Offline copied! Share with them to claim. ✓'), findsOneWidget);
     });
 
     testWidgets('4. TripMembersView shows empty state when a category has zero members', (tester) async {
@@ -341,7 +341,7 @@ void main() {
       await tester.tap(find.text('Share').first);
       await tester.pumpAndSettle();
 
-      expect(find.text('Trip code GOA123 copied! Share with Bob Offline to claim. ✓'), findsOneWidget);
+      expect(find.text('Claim link for Bob Offline copied! Share with them to claim.'), findsOneWidget);
     });
 
     testWidgets('7. TripDetailView displays participants count link and VIRTUAL indicators', (tester) async {
@@ -353,7 +353,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Trip detail header displays members count link
-      expect(find.text('Trip Members (4)'), findsOneWidget);
+      expect(find.text('Members (4)'), findsOneWidget);
 
       // Wrap chips show all 4 members
       expect(find.text('Darpan Creator (You)'), findsWidgets);
@@ -365,7 +365,7 @@ void main() {
       expect(find.text('VIRTUAL'), findsWidgets);
 
       // Tapping member count navigates to TripMembersView
-      await tester.tap(find.text('Trip Members (4)'));
+      await tester.tap(find.text('Members (4)'));
       await tester.pumpAndSettle();
 
       // Successfully navigated to TripMembersView

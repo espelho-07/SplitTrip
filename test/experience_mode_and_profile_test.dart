@@ -15,6 +15,7 @@ import 'package:kith_app/domain/enums/app_experience_mode.dart';
 import 'package:kith_app/domain/models/guest_user.dart';
 import 'package:kith_app/domain/services/notification_service.dart';
 import 'package:kith_app/presentation/viewmodels/auth_viewmodel.dart';
+import 'package:kith_app/presentation/viewmodels/currency_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/home_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/theme_viewmodel.dart';
 import 'package:kith_app/presentation/views/home/home_view.dart';
@@ -86,6 +87,7 @@ themeVm = ThemeViewModel(storage: storage);
         ChangeNotifierProvider.value(value: authVm),
         ChangeNotifierProvider.value(value: homeVm),
         ChangeNotifierProvider.value(value: themeVm),
+        ChangeNotifierProvider(create: (_) => CurrencyViewModel(storage: storage)),
         ChangeNotifierProvider.value(value: widgetService),
         Provider.value(value: storage),
         Provider.value(value: apiClient),

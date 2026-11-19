@@ -72,8 +72,11 @@ class KithErrorFormatter {
         lower.contains('trip not found') ||
         lower.contains('not found') ||
         cleaned.contains('404')) {
-      if (context == 'join' || context == 'trip_join' || lower.contains('trip') || lower.contains('code')) {
+      if (context == 'join' || context == 'trip_join') {
         return 'This trip does not exist. Check the code and try again.';
+      }
+      if (lower.contains('trip') || lower.contains('code')) {
+        return 'No trip found for this invite code. Please check the code and try again.';
       }
       return 'The requested item was not found. Please try again.';
     }

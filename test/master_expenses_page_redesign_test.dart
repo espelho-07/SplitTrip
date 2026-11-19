@@ -14,6 +14,7 @@ import 'package:kith_app/domain/models/guest_user.dart';
 import 'package:kith_app/domain/models/trip.dart';
 import 'package:kith_app/domain/models/trip_member.dart';
 import 'package:kith_app/presentation/viewmodels/auth_viewmodel.dart';
+import 'package:kith_app/presentation/viewmodels/currency_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/home_viewmodel.dart';
 import 'package:kith_app/presentation/views/home/widgets/dashboard_tab.dart';
 import 'package:provider/provider.dart';
@@ -86,6 +87,7 @@ void main() {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<AuthViewModel>.value(value: authVm),
+        ChangeNotifierProvider(create: (_) => CurrencyViewModel(storage: storage)),
         ChangeNotifierProvider<HomeViewModel>.value(value: homeVm),
         Provider<LocalStorageService>.value(value: storage),
         Provider<SyncService>.value(value: syncService),

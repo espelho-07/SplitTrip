@@ -304,7 +304,7 @@ class _TripMembersViewState extends State<TripMembersView> {
                               ),
                             ),
                             Text(
-                              'Virtual • Managed locally',
+                              'Offline • Unclaimed',
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w500,

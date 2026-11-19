@@ -94,10 +94,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Create Trip'), findsWidgets);
-      expect(find.text('TRIP NAME'), findsOneWidget);
-      expect(find.text('EXPERIENCE MODE'), findsOneWidget);
-      expect(find.text('Split Only'), findsWidgets);
-      expect(find.text('Split + Journey'), findsWidgets);
+      expect(find.text('WHERE ARE YOU GOING?'), findsOneWidget);
+      expect(find.text('Artwork Theme & Split Mode'), findsOneWidget);
       expect(find.text('BASE CURRENCY'), findsOneWidget);
       expect(find.text('₹ INR'), findsOneWidget);
     });
@@ -151,14 +149,9 @@ void main() {
       await tester.pumpWidget(buildCreateTripTestWidget());
       await tester.pumpAndSettle();
 
-      expect(find.text('1 members'), findsOneWidget);
+      expect(find.text('1 crew'), findsOneWidget);
 
-      // Expand manual friends
-      final expandFriends = find.text('Add friend manually (offline/non-app member)');
-      await tester.tap(expandFriends);
-      await tester.pumpAndSettle();
-
-      final friendField = find.widgetWithText(TextField, 'e.g. Rahul, Priya, Vikram...');
+      final friendField = find.widgetWithText(TextField, "Friend's name...");
       await tester.enterText(friendField, 'Ananya');
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();

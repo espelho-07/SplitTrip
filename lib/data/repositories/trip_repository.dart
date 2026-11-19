@@ -306,14 +306,17 @@ class TripRepository {
       ),
     ];
 
+    final seenFriendNames = <String>{};
     for (final friendName in initialFriendNames) {
-      if (friendName.trim().isNotEmpty) {
+      final trimmed = friendName.trim();
+      if (trimmed.isNotEmpty && !seenFriendNames.contains(trimmed.toLowerCase())) {
+        seenFriendNames.add(trimmed.toLowerCase());
         members.add(
           TripMember(
             id: 'mbr_${const Uuid().v4().replaceAll('-', '').substring(0, 10)}',
             userId:
                 'unclaimed_${_uuid.v4().replaceAll('-', '').substring(0, 8)}',
-            displayName: friendName.trim(),
+            displayName: trimmed,
             role: 'member',
             isClaimed: false,
             isVirtualMember: true,
@@ -893,41 +896,73 @@ class TripRepository {
       }
     }
 
-    final res = await apiClient.post(
-      '/trips/$tripId/complete',
-      body: {
-        'completionMode': completionMode,
-        'expectedRevision': expectedRevision,
-      },
-    );
-
-    if (res is Map<String, dynamic>) {
-      final completedTrip = Trip.fromJson(res);
-      debugPrint(
-        '[TripRepository] SERVER COMPLETION RESULT: tripId=${completedTrip.id}, status=${completedTrip.lifecycleState.name}',
+    try {
+      final res = await apiClient.post(
+        '/trips/$tripId/complete',
+        body: {
+          'completionMode': completionMode,
+          'expectedRevision': expectedRevision,
+        },
       );
 
-      // 1. Immediately update local storage cache with completed trip
+      if (res is Map<String, dynamic>) {
+        final completedTrip = Trip.fromJson(res);
+        debugPrint(
+          '[TripRepository] SERVER COMPLETION RESULT: tripId=${completedTrip.id}, status=${completedTrip.lifecycleState.name}',
+        );
+
+        // 1. Immediately update local storage cache with completed trip
+        final cached = getCachedTrips();
+        final idx = cached.indexWhere((t) => t.id == tripId);
+        if (idx != -1) {
+          cached[idx] = completedTrip;
+        } else {
+          cached.insert(0, completedTrip);
+        }
+        await _saveTripsAndCache(cached.map((t) => t.toJson()).toList());
+
+        // 2. Fetch authoritative full remote list in background without dropping completed trip
+        try {
+          final remoteTrips = await getTrips();
+          final rIdx = remoteTrips.indexWhere((t) => t.id == tripId);
+          if (rIdx != -1) {
+            remoteTrips[rIdx] = completedTrip;
+            await _saveTripsAndCache(remoteTrips.map((t) => t.toJson()).toList());
+          }
+        } catch (_) {}
+
+        return completedTrip;
+      }
+    } catch (e) {
+      // Offline / network failure self-healing fallback:
+      // If trip exists in local storage, mark it completed locally and enqueue completion mutation
       final cached = getCachedTrips();
       final idx = cached.indexWhere((t) => t.id == tripId);
       if (idx != -1) {
+        final now = DateTime.now();
+        final completedTrip = cached[idx].copyWith(
+          lifecycleState: TripLifecycle.completed,
+          completedAt: now,
+          updatedAt: now,
+        );
         cached[idx] = completedTrip;
-      } else {
-        cached.insert(0, completedTrip);
+        await _saveTripsAndCache(cached.map((t) => t.toJson()).toList());
+
+        await syncService.enqueueMutation(
+          MutationType.updateTripLifecycle,
+          {
+            'tripId': tripId,
+            'lifecycleState': TripLifecycle.completed.name,
+            'completionMode': completionMode,
+            'expectedRevision': expectedRevision,
+          },
+          idempotencyKey: 'complete_$tripId',
+          backgroundApiClient: apiClient,
+        );
+
+        return completedTrip;
       }
-      await _saveTripsAndCache(cached.map((t) => t.toJson()).toList());
-
-      // 2. Fetch authoritative full remote list in background without dropping completed trip
-      try {
-        final remoteTrips = await getTrips();
-        final rIdx = remoteTrips.indexWhere((t) => t.id == tripId);
-        if (rIdx != -1) {
-          remoteTrips[rIdx] = completedTrip;
-          await _saveTripsAndCache(remoteTrips.map((t) => t.toJson()).toList());
-        }
-      } catch (_) {}
-
-      return completedTrip;
+      rethrow;
     }
 
     throw const NetworkException(message: 'Failed to complete trip on server');

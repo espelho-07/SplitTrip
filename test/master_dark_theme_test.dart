@@ -12,6 +12,7 @@ import 'package:kith_app/data/services/auth_service.dart';
 import 'package:kith_app/data/services/local_storage_service.dart';
 import 'package:kith_app/data/services/sync_service.dart';
 import 'package:kith_app/presentation/viewmodels/auth_viewmodel.dart';
+import 'package:kith_app/presentation/viewmodels/currency_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/home_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/locale_viewmodel.dart';
 import 'package:kith_app/presentation/viewmodels/theme_viewmodel.dart';
@@ -64,6 +65,7 @@ void main() {
         ChangeNotifierProvider.value(value: authVm),
         ChangeNotifierProvider.value(value: homeVm),
         ChangeNotifierProvider.value(value: themeVm),
+        ChangeNotifierProvider(create: (_) => CurrencyViewModel(storage: storage)),
         ChangeNotifierProvider.value(value: localeVm),
         Provider.value(value: apiClient),
         Provider.value(value: syncService),

@@ -525,7 +525,10 @@ class TripDetailViewModel extends ChangeNotifier {
   }
 
   /// Settle all remaining debt transfers in one tap and mark the trip as settled.
-  Future<void> settleAllRemainingDues(String currentUserId) async {
+  Future<void> settleAllRemainingDues(
+    String currentUserId, {
+    bool completeTrip = true,
+  }) async {
     if (_trip == null) return;
     try {
       final settlements = List.of(_balanceSummary.simplifiedSettlements);
@@ -546,9 +549,9 @@ class TripDetailViewModel extends ChangeNotifier {
           paymentReference: 'settle_all_${DateTime.now().millisecondsSinceEpoch}',
         );
       }
-      // Only transition lifecycle to settled if the trip was already in settling or completing.
-      // Active ongoing trips remain active so more expenses can be added.
-      if (_trip!.lifecycleState == TripLifecycle.settling || _trip!.lifecycleState == TripLifecycle.completing) {
+      if (completeTrip ||
+          _trip!.lifecycleState == TripLifecycle.settling ||
+          _trip!.lifecycleState == TripLifecycle.completing) {
         await markAsSettled(currentUserId);
       }
       await refresh(currentUserId);

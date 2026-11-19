@@ -170,7 +170,7 @@ class Trip {
                   !m.isMerged &&
                   m.isVirtual &&
                   !m.isClaimed &&
-                  m.userId.startsWith('unclaimed_') &&
+                  (m.userId.startsWith('unclaimed_') || m.userId.isEmpty) &&
                   m.displayName.trim().toLowerCase() == otherName &&
                   !other.members.any((sm) =>
                       sm.id != otherMember.id &&
@@ -210,20 +210,20 @@ class Trip {
         // 2c. Identity reconciliation:
         //  - Valid claimToken matching (2a)
         //  - Trusted, authenticated userId matching (2b)
-        //  - For unclaimed virtual members only: reconcile when exactly one candidate matches display name.
+        //  - For unclaimed virtual members only: reconcile when candidate matches display name.
         TripMember? matchedByName;
         if (matchedByToken == null &&
             matchedByUserId == null &&
             otherMember.isVirtual &&
             !otherMember.isClaimed &&
-            otherMember.userId.startsWith('unclaimed_')) {
+            (otherMember.userId.startsWith('unclaimed_') || otherMember.userId.isEmpty)) {
           final otherName = otherMember.displayName.trim().toLowerCase();
           final candidates = mergedMembersMap.values
               .where((m) =>
                   !m.isMerged &&
                   m.isVirtual &&
                   !m.isClaimed &&
-                  m.userId.startsWith('unclaimed_') &&
+                  (m.userId.startsWith('unclaimed_') || m.userId.isEmpty) &&
                   m.displayName.trim().toLowerCase() == otherName)
               .toList();
           if (candidates.length == 1) {

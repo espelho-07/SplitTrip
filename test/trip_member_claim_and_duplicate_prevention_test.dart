@@ -104,6 +104,7 @@ void main() {
         inviteCodeOrId: trip.inviteCode,
         user: rahulUser,
         claimMemberId: placeholderRahul.id,
+        claimToken: placeholderRahul.claimToken,
       );
 
       // Total members remains exactly 2 (No duplicate!)
@@ -129,6 +130,7 @@ void main() {
         inviteCodeOrId: trip.inviteCode,
         user: rahulUser,
         claimMemberId: placeholderRahul.id,
+        claimToken: placeholderRahul.claimToken,
       );
       expect(firstJoin.members.length, equals(2));
 
