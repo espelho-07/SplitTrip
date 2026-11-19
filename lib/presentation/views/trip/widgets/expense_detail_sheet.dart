@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
@@ -200,6 +201,90 @@ class ExpenseDetailSheet extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+            ),
+          ],
+
+          // Receipt Attachment (if available)
+          if (expense.receiptUrl != null && expense.receiptUrl!.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            GestureDetector(
+              onTap: () {
+                final path = expense.receiptUrl!;
+                showDialog(
+                  context: context,
+                  builder: (ctx) => Dialog.fullscreen(
+                    backgroundColor: Colors.black,
+                    child: Stack(
+                      children: [
+                        Center(
+                          child: InteractiveViewer(
+                            minScale: 0.8,
+                            maxScale: 4.5,
+                            child: File(path).existsSync()
+                                ? Image.file(File(path), fit: BoxFit.contain)
+                                : (path.startsWith('http')
+                                    ? Image.network(path, fit: BoxFit.contain)
+                                    : const Center(
+                                        child: Text('Receipt image unavailable', style: TextStyle(color: Colors.white)),
+                                      )),
+                          ),
+                        ),
+                        Positioned(
+                          top: 40,
+                          right: 16,
+                          child: IconButton(
+                            icon: const Icon(Icons.close_rounded, color: Colors.white, size: 28),
+                            onPressed: () => Navigator.of(ctx).pop(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF14B8A6).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFF14B8A6).withValues(alpha: 0.25)),
+                ),
+                child: Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        color: Colors.black12,
+                        child: File(expense.receiptUrl!).existsSync()
+                            ? Image.file(File(expense.receiptUrl!), fit: BoxFit.cover)
+                            : const Icon(Icons.receipt_long_rounded, color: Color(0xFF14B8A6), size: 20),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Receipt Attached 🧾',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF14B8A6)),
+                          ),
+                          Text(
+                            'Tap to view receipt image in full screen',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.zoom_in_rounded, size: 20, color: Color(0xFF14B8A6)),
+                  ],
+                ),
               ),
             ),
           ],

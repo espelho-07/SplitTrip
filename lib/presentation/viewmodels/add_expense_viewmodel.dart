@@ -12,6 +12,7 @@ import '../../domain/enums/split_type.dart';
 import '../../domain/models/expense.dart';
 import '../../domain/models/expense_draft.dart';
 import '../../domain/models/expense_split.dart';
+import '../../domain/models/receipt_data.dart';
 import '../../domain/models/trip.dart';
 import '../../domain/models/trip_member.dart';
 
@@ -42,6 +43,7 @@ class AddExpenseViewModel extends ChangeNotifier {
   // Voice & OCR State
   bool _isListening = false;
   String _voiceTranscript = '';
+  String? _receiptUrl;
   VoiceExpenseIntent? _parsedIntent;
   ExpenseDraft? _activeDraft;
   bool _isEditMode = false;
@@ -50,6 +52,12 @@ class AddExpenseViewModel extends ChangeNotifier {
   DateTime? _createdAt;
 
   DateTime? get createdAt => _createdAt;
+  String? get receiptUrl => _receiptUrl;
+
+  void setReceiptUrl(String? url) {
+    _receiptUrl = url;
+    notifyListeners();
+  }
 
   void setDate(DateTime date) {
     _createdAt = date;
@@ -218,6 +226,7 @@ class AddExpenseViewModel extends ChangeNotifier {
 
     _isListening = false;
     _voiceTranscript = '';
+    _receiptUrl = null;
     _parsedIntent = null;
     _activeDraft = null;
     _errorMessage = null;
@@ -233,9 +242,13 @@ class AddExpenseViewModel extends ChangeNotifier {
     ExpenseCategory? category,
     int? initialAmountInPaise,
     String? initialTitle,
+    String? initialReceiptUrl,
     SplitType? splitType,
   }) {
     init(trip: trip, currentUserId: currentUserId);
+    if (initialReceiptUrl != null && initialReceiptUrl.isNotEmpty) {
+      _receiptUrl = initialReceiptUrl;
+    }
     if (initialTitle != null && initialTitle.isNotEmpty) {
       _title = initialTitle;
       final predicted = ExpenseCategory.predictFromTitle(initialTitle);
@@ -314,10 +327,40 @@ class AddExpenseViewModel extends ChangeNotifier {
 
     _isListening = false;
     _voiceTranscript = '';
+    _receiptUrl = expense.receiptUrl;
     _parsedIntent = null;
     _activeDraft = null;
     _errorMessage = null;
 
+    notifyListeners();
+  }
+
+  /// Ingests structured and user-confirmed [ReceiptData], pre-populating
+  /// merchant name, verified total in paise, predicted category, receipt date,
+  /// receipt number notes, and receipt attachment file path.
+  void applyReceiptData(ReceiptData receipt) {
+    if (receipt.merchant.name != null && receipt.merchant.name!.trim().isNotEmpty) {
+      _title = receipt.merchant.name!.trim();
+    }
+    final total = receipt.summary.totalInPaise ?? receipt.calculatedTotalInPaise;
+    if (total > 0) {
+      setAmountInPaise(total);
+    }
+    _receiptUrl = receipt.imagePath;
+    if (receipt.predictedCategory != null) {
+      _category = receipt.predictedCategory!;
+      _userExplicitlySelectedCategory = true;
+    }
+    if (receipt.receipt.date != null) {
+      _createdAt = receipt.receipt.date;
+    }
+    if (receipt.merchant.address != null && receipt.merchant.address!.trim().isNotEmpty) {
+      _location = receipt.merchant.address!.trim();
+    }
+    if (receipt.receipt.receiptNumber != null && receipt.receipt.receiptNumber!.trim().isNotEmpty) {
+      _voiceTranscript = 'Receipt #${receipt.receipt.receiptNumber!.trim()}';
+    }
+    _currentTab = 2; // Switch to manual form tab
     notifyListeners();
   }
 
@@ -614,6 +657,7 @@ class AddExpenseViewModel extends ChangeNotifier {
           amountInPaise: _amountInPaise,
           category: _category,
           location: _location.trim().isNotEmpty ? _location.trim() : null,
+          receiptUrl: _receiptUrl,
           paidById: _paidById.isNotEmpty ? _paidById : (effectivePaidByMap?.keys.first ?? ''),
           paidByMap: effectivePaidByMap,
           splits: splits,
@@ -634,6 +678,7 @@ class AddExpenseViewModel extends ChangeNotifier {
           amountInPaise: _amountInPaise,
           category: _category,
           location: _location.trim().isNotEmpty ? _location.trim() : null,
+          receiptUrl: _receiptUrl,
           paidById: _paidById.isNotEmpty ? _paidById : (effectivePaidByMap?.keys.first ?? ''),
           paidByMap: effectivePaidByMap,
           splits: splits,

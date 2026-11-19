@@ -1,8 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import '../../../core/localization/app_localizations.dart';
+import '../../../core/services/receipt_scanner_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_typography.dart';
@@ -16,6 +19,7 @@ import '../../../core/widgets/member_avatar.dart';
 import '../../../domain/enums/expense_category.dart';
 import '../../../domain/enums/split_type.dart';
 import '../../../domain/models/expense.dart';
+import '../../../domain/models/receipt_data.dart';
 import '../../../domain/models/trip.dart';
 import '../../../domain/models/trip_member.dart';
 import '../../viewmodels/add_expense_viewmodel.dart';
@@ -23,6 +27,8 @@ import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/trip_detail_viewmodel.dart';
 import '../../widgets/progress/kith_success_toast.dart';
+import 'receipt_review_view.dart';
+import 'widgets/feature_crafting_hero.dart';
 
 /// Clean, sleek, and intuitive Add/Edit Expense Experience for Kith.
 ///
@@ -62,6 +68,9 @@ class _AddExpenseViewState extends State<AddExpenseView> {
   bool _isFetchingLocation = false;
   DateTime _selectedDate = DateTime.now();
   bool _isLoadingTrip = true;
+  bool _isProcessingReceipt = false;
+  String _receiptProcessingStatus = '';
+  final ReceiptScannerService _receiptScannerService = ReceiptScannerService();
 
   @override
   void didChangeDependencies() {
@@ -106,7 +115,6 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     final trip = tripDetailVm.trip;
     if (trip != null) {
       final addVm = context.read<AddExpenseViewModel>();
-      addVm.setTab(widget.initialTab);
       if (widget.existingExpense != null) {
         addVm.initForEdit(expense: widget.existingExpense!, trip: trip, currentUserId: user.id);
         _titleController.text = widget.existingExpense!.title;
@@ -145,6 +153,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
       if (widget.existingExpense == null) {
         _selectedDate = DateTime.now();
         addVm.setDate(_selectedDate);
+        addVm.setTab(widget.initialTab);
         _fetchCurrentLocation(addVm, silent: true);
       }
     }
@@ -451,11 +460,20 @@ class _AddExpenseViewState extends State<AddExpenseView> {
         children: [
           _buildModeTabs(context, isDark, addVm, l10n),
           Expanded(
-            child: _buildManualExpenseForm(context, isDark, addVm, trip, currency, l10n),
+            child: addVm.currentTab == 1
+                ? _buildReceiptScannerTab(context, isDark, addVm, trip, l10n)
+                : (addVm.currentTab == 0
+                    ? FeatureCraftingHero(
+                        type: FeatureCraftingType.voice,
+                        onSwitchToManual: () => addVm.setTab(2),
+                      )
+                    : _buildManualExpenseForm(context, isDark, addVm, trip, currency, l10n)),
           ),
         ],
       ),
-      bottomNavigationBar: _buildBottomActionDock(context, isDark, addVm, trip, l10n),
+      bottomNavigationBar: addVm.currentTab == 2
+          ? _buildBottomActionDock(context, isDark, addVm, trip, l10n)
+          : null,
     );
   }
 
@@ -569,6 +587,379 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     );
   }
 
+  Future<void> _handleCaptureReceiptCamera(AddExpenseViewModel addVm, Trip trip) async {
+    HapticHelper.medium();
+    final status = await Permission.camera.request();
+    if (!status.isGranted) {
+      if (mounted) {
+        HapticHelper.warning();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Camera permission is required to scan receipts.'),
+            backgroundColor: const Color(0xFFE11D48),
+            action: SnackBarAction(
+              label: 'Settings',
+              textColor: Colors.white,
+              onPressed: () => openAppSettings(),
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    try {
+      final imagePath = await _receiptScannerService.captureFromCamera();
+      if (imagePath == null || !mounted) return;
+
+      await _processScannedReceipt(imagePath, addVm, trip);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to capture receipt: ${e.toString()}'),
+            backgroundColor: const Color(0xFFE11D48),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleImportReceiptGallery(AddExpenseViewModel addVm, Trip trip) async {
+    HapticHelper.medium();
+    try {
+      final imagePath = await _receiptScannerService.importFromGallery();
+      if (imagePath == null || !mounted) return;
+
+      await _processScannedReceipt(imagePath, addVm, trip);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to import receipt: ${e.toString()}'),
+            backgroundColor: const Color(0xFFE11D48),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _processScannedReceipt(String imagePath, AddExpenseViewModel addVm, Trip trip) async {
+    setState(() {
+      _isProcessingReceipt = true;
+      _receiptProcessingStatus = 'Extracting receipt text on-device...';
+    });
+
+    try {
+      final receiptData = await _receiptScannerService.processReceiptImage(
+        imagePath,
+        tripCurrencyCode: trip.currencyCode,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _isProcessingReceipt = false;
+      });
+
+      final tripExpenses = context.read<TripDetailViewModel>().expenses;
+      final confirmedReceipt = await Navigator.of(context).push<ReceiptData>(
+        MaterialPageRoute(
+          builder: (ctx) => ReceiptReviewView(
+            initialReceipt: receiptData,
+            existingTripExpenses: tripExpenses,
+            onConfirmed: (confirmed) {
+              Navigator.of(ctx).pop(confirmed);
+            },
+          ),
+        ),
+      );
+
+      if (confirmedReceipt != null && mounted) {
+        _onReceiptConfirmed(confirmedReceipt, addVm);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isProcessingReceipt = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('OCR error: ${e.toString()}'),
+            backgroundColor: const Color(0xFFE11D48),
+          ),
+        );
+      }
+    }
+  }
+
+  void _onReceiptConfirmed(ReceiptData confirmedReceipt, AddExpenseViewModel addVm) {
+    addVm.applyReceiptData(confirmedReceipt);
+    if (confirmedReceipt.merchant.name != null && confirmedReceipt.merchant.name!.trim().isNotEmpty) {
+      _titleController.text = confirmedReceipt.merchant.name!.trim();
+    }
+    final total = confirmedReceipt.summary.totalInPaise ?? confirmedReceipt.calculatedTotalInPaise;
+    if (total > 0) {
+      final rupees = total / 100.0;
+      _amountController.text = rupees % 1 == 0 ? rupees.toInt().toString() : rupees.toStringAsFixed(2);
+    }
+    if (confirmedReceipt.receipt.date != null) {
+      setState(() {
+        _selectedDate = confirmedReceipt.receipt.date!;
+      });
+    }
+    if (confirmedReceipt.merchant.address != null && confirmedReceipt.merchant.address!.trim().isNotEmpty) {
+      _locationController.text = confirmedReceipt.merchant.address!.trim();
+    }
+    HapticHelper.medium();
+    KithSuccessToast.show(context, 'Receipt details applied! Choose split & save. ✓');
+  }
+
+  Widget _buildReceiptScannerTab(
+    BuildContext context,
+    bool isDark,
+    AddExpenseViewModel addVm,
+    Trip trip,
+    AppLocalizations l10n,
+  ) {
+    if (_isProcessingReceipt) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF14B8A6)),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              _receiptProcessingStatus.isNotEmpty
+                  ? _receiptProcessingStatus
+                  : 'Processing receipt...',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: isDark ? Colors.white : const Color(0xFF0F172A),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Running 100% on-device OCR for maximum privacy',
+              style: TextStyle(
+                fontSize: 12,
+                color: isDark ? Colors.white60 : Colors.grey[600],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF141A21) : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isDark ? const Color(0xFF222B35) : const Color(0xFFE2E8F0),
+            ),
+          ),
+          child: Column(
+            children: [
+              Container(
+                width: 76,
+                height: 76,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF14B8A6).withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.document_scanner_rounded,
+                  color: Color(0xFF14B8A6),
+                  size: 38,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'Scan Any Receipt or Bill',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.2,
+                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Extract merchant, line items, taxes, and totals instantly without manual typing.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+        SizedBox(
+          height: 52,
+          child: ElevatedButton.icon(
+            icon: const Icon(Icons.camera_alt_rounded, size: 20),
+            label: const Text(
+              'Scan with Camera',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF14B8A6),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              elevation: 2,
+            ),
+            onPressed: () => _handleCaptureReceiptCamera(addVm, trip),
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 50,
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.photo_library_rounded, size: 20),
+            label: const Text(
+              'Import from Gallery',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: isDark ? Colors.white : const Color(0xFF0F172A),
+              side: BorderSide(
+                color: isDark ? const Color(0xFF2D3748) : const Color(0xFFCBD5E1),
+              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+            onPressed: () => _handleImportReceiptGallery(addVm, trip),
+          ),
+        ),
+        const SizedBox(height: 24),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF11171E) : const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.lightbulb_outline_rounded, size: 16, color: Color(0xFFF59E0B)),
+                  SizedBox(width: 8),
+                  Text(
+                    'TIPS FOR BEST ACCURACY',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5,
+                      color: Color(0xFFF59E0B),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              _buildTipItem('Keep receipt flat on a contrasting surface', isDark),
+              _buildTipItem('Ensure good lighting and avoid camera glare', isDark),
+              _buildTipItem('Capture the whole bill including the grand total', isDark),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTipItem(String text, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('• ', style: TextStyle(color: Colors.grey, fontSize: 13)),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 12,
+                color: isDark ? Colors.white70 : const Color(0xFF475569),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAttachedReceiptCard(BuildContext context, bool isDark, AddExpenseViewModel addVm) {
+    final path = addVm.receiptUrl!;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF14B8A6).withValues(alpha: isDark ? 0.12 : 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFF14B8A6).withValues(alpha: 0.35),
+        ),
+      ),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              width: 44,
+              height: 56,
+              color: isDark ? Colors.black26 : Colors.grey[200],
+              child: File(path).existsSync()
+                  ? Image.file(File(path), fit: BoxFit.cover)
+                  : const Icon(Icons.receipt_long_rounded, color: Color(0xFF14B8A6)),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.check_circle_rounded, color: Color(0xFF14B8A6), size: 14),
+                    SizedBox(width: 4),
+                    Text(
+                      'Receipt Attached',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF14B8A6)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Stored locally and will sync with this expense.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDark ? Colors.white70 : const Color(0xFF475569),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close_rounded, size: 18),
+            tooltip: 'Remove receipt',
+            onPressed: () {
+              HapticHelper.light();
+              addVm.setReceiptUrl(null);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildManualExpenseForm(
     BuildContext context,
     bool isDark,
@@ -581,6 +972,12 @@ class _AddExpenseViewState extends State<AddExpenseView> {
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
       children: [
+        // 0. Attached Receipt Banner (if present)
+        if (addVm.receiptUrl != null && addVm.receiptUrl!.isNotEmpty) ...[
+          _buildAttachedReceiptCard(context, isDark, addVm),
+          const SizedBox(height: 14),
+        ],
+
         // 1. Core Amount & Title with Quick Ideas
         _buildAmountAndTitleCard(context, isDark, addVm, currency, l10n),
 
