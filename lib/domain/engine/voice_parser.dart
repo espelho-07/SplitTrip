@@ -2,6 +2,7 @@ import '../enums/expense_category.dart';
 import '../enums/split_type.dart';
 import '../models/expense_draft.dart';
 import '../models/trip_member.dart';
+import 'multi_expense_voice_parser.dart';
 
 /// Structured intent extracted from spoken audio transcript.
 class VoiceExpenseIntent {
@@ -164,6 +165,19 @@ class VoiceIntentParser {
     if (text.contains('recharge') || text.contains('bill') || text.contains('wifi') || text.contains('electricity')) return 'Bill Payment';
     if (text.contains('medic') || text.contains('pharma') || text.contains('doctor')) return 'Health & Medical';
     return '${category.displayName} Expense';
+  }
+
+  /// Parses voice transcript into one or more structured [ExpenseDraft]s using [MultiExpenseVoiceParser].
+  static List<ExpenseDraft> parseMultipleToDrafts(
+    String transcript,
+    List<TripMember> members,
+    String currentUserId,
+  ) {
+    return MultiExpenseVoiceParser.parse(
+      transcript,
+      members: members,
+      currentUserId: currentUserId,
+    );
   }
 
   /// Parses voice transcript into structured intermediate [ExpenseDraft] with entity resolution against trip members.

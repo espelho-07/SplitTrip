@@ -13,13 +13,16 @@ import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/utils/kith_calculator_engine.dart';
 import '../../../core/services/location_service.dart';
+import '../../../core/services/voice_speech_service.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/kith_amount_calculator_field.dart';
 import '../../../core/widgets/kith_description_input_field.dart';
 import '../../../core/widgets/member_avatar.dart';
+import '../../../domain/engine/multi_expense_voice_parser.dart';
 import '../../../domain/enums/expense_category.dart';
 import '../../../domain/enums/split_type.dart';
 import '../../../domain/models/expense.dart';
+import '../../../domain/models/expense_draft.dart';
 import '../../../domain/models/receipt_data.dart';
 import '../../../domain/models/trip.dart';
 import '../../../domain/models/trip_member.dart';
@@ -29,7 +32,7 @@ import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/trip_detail_viewmodel.dart';
 import '../../widgets/progress/kith_success_toast.dart';
 import 'receipt_review_view.dart';
-import 'widgets/feature_crafting_hero.dart';
+import 'voice_review_view.dart';
 
 /// Clean, sleek, and intuitive Add/Edit Expense Experience for Kith.
 ///
@@ -72,6 +75,10 @@ class _AddExpenseViewState extends State<AddExpenseView> {
   bool _isProcessingReceipt = false;
   String _receiptProcessingStatus = '';
   final ReceiptScannerService _receiptScannerService = ReceiptScannerService();
+  bool _isProcessingVoice = false;
+  bool _isVoiceListening = false;
+  final TextEditingController _voiceTranscriptController = TextEditingController();
+  final VoiceSpeechService _voiceSpeechService = VoiceSpeechService();
 
   @override
   void didChangeDependencies() {
@@ -234,8 +241,8 @@ class _AddExpenseViewState extends State<AddExpenseView> {
 
   @override
   void dispose() {
-    // Cancel any in-flight voice listening to prevent notifyListeners()
-    // firing into a disposed widget (causes _elements.contains assertion).
+    _voiceSpeechService.cancelListening().ignore();
+    _voiceTranscriptController.dispose();
     _addVm?.cancelVoice();
     _amountController.dispose();
     _titleController.dispose();
@@ -488,10 +495,7 @@ class _AddExpenseViewState extends State<AddExpenseView> {
             child: addVm.currentTab == 1
                 ? _buildReceiptScannerTab(context, isDark, addVm, trip, l10n)
                 : (addVm.currentTab == 0
-                    ? FeatureCraftingHero(
-                        type: FeatureCraftingType.voice,
-                        onSwitchToManual: () => addVm.setTab(2),
-                      )
+                    ? _buildVoiceTab(context, isDark, addVm, trip, l10n)
                     : _buildManualExpenseForm(context, isDark, addVm, trip, currency, l10n)),
           ),
         ],
@@ -921,6 +925,505 @@ class _AddExpenseViewState extends State<AddExpenseView> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _handleVoiceMicToggle(AddExpenseViewModel addVm, Trip trip) async {
+    if (_isVoiceListening) {
+      await _stopVoiceListening();
+    } else {
+      await _startVoiceListening(addVm, trip);
+    }
+  }
+
+  Future<void> _startVoiceListening(AddExpenseViewModel addVm, Trip trip) async {
+    HapticHelper.selection();
+    setState(() {
+      _isVoiceListening = true;
+    });
+
+    final ok = await _voiceSpeechService.startListening(
+      onResult: (words, isFinal) {
+        if (!mounted) return;
+        setState(() {
+          _voiceTranscriptController.text = words;
+        });
+
+        if (isFinal && words.trim().isNotEmpty) {
+          setState(() {
+            _isVoiceListening = false;
+          });
+        }
+      },
+    );
+
+    if (!ok && mounted) {
+      setState(() => _isVoiceListening = false);
+      final error = _voiceSpeechService.userFacingError ?? 'Microphone permission or speech recognition unavailable.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error),
+          backgroundColor: const Color(0xFFE11D48),
+        ),
+      );
+    }
+  }
+
+  Future<void> _stopVoiceListening() async {
+    HapticHelper.light();
+    await _voiceSpeechService.stopListening();
+    if (mounted) {
+      setState(() {
+        _isVoiceListening = false;
+      });
+    }
+  }
+
+  Future<void> _processVoiceTranscript(AddExpenseViewModel addVm, Trip trip) async {
+    final transcript = _voiceTranscriptController.text.trim();
+    if (transcript.isEmpty) return;
+
+    if (_isVoiceListening) {
+      await _stopVoiceListening();
+    }
+    if (!mounted) return;
+
+    HapticHelper.medium();
+    setState(() => _isProcessingVoice = true);
+
+    try {
+      final authVm = context.read<AuthViewModel>();
+      final currentUserId = authVm.currentUser?.id ?? '';
+
+      final drafts = MultiExpenseVoiceParser.parse(
+        transcript,
+        members: trip.members,
+        currentUserId: currentUserId,
+      );
+
+      if (!mounted) return;
+      setState(() => _isProcessingVoice = false);
+
+      if (drafts.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not detect any expenses from transcript. Please try again.'),
+            backgroundColor: Color(0xFFE11D48),
+          ),
+        );
+        return;
+      }
+
+      final confirmedDrafts = await Navigator.of(context).push<List<ExpenseDraft>>(
+        MaterialPageRoute(
+          builder: (ctx) => VoiceReviewView(
+            initialTranscript: transcript,
+            initialDrafts: drafts,
+            trip: trip,
+            members: trip.members,
+            currentUserId: currentUserId,
+            onConfirmed: (confirmed) {
+              Navigator.of(ctx).pop(confirmed);
+            },
+            onReRecord: () {
+              Navigator.of(ctx).pop();
+              _voiceTranscriptController.clear();
+              _startVoiceListening(addVm, trip);
+            },
+          ),
+        ),
+      );
+
+      if (confirmedDrafts != null && confirmedDrafts.isNotEmpty && mounted) {
+        await _onVoiceExpensesConfirmed(confirmedDrafts, addVm, trip);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isProcessingVoice = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Voice parsing error: ${e.toString()}'),
+            backgroundColor: const Color(0xFFE11D48),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _onVoiceExpensesConfirmed(
+    List<ExpenseDraft> confirmedDrafts,
+    AddExpenseViewModel addVm,
+    Trip trip,
+  ) async {
+    if (confirmedDrafts.isEmpty) return;
+
+    setState(() => _isProcessingVoice = true);
+
+    try {
+      final savedExpenses = await addVm.saveMultipleConfirmedDrafts(trip.id, confirmedDrafts);
+
+      if (!mounted) return;
+      setState(() => _isProcessingVoice = false);
+
+      if (savedExpenses.isNotEmpty) {
+        if (!mounted) return;
+        final tripDetailVm = context.read<TripDetailViewModel>();
+        final authVm = context.read<AuthViewModel>();
+        if (authVm.currentUser != null) {
+          await tripDetailVm.loadTrip(trip.id, authVm.currentUser!.id);
+        }
+        if (!mounted) return;
+
+        HapticHelper.success();
+        final count = savedExpenses.length;
+        KithSuccessToast.show(
+          context,
+          count == 1 ? 'Expense saved successfully! ✓' : '$count expenses saved successfully! ✓',
+        );
+
+        if (Navigator.canPop(context)) {
+          Navigator.pop(context, true);
+        } else {
+          try {
+            context.pop(true);
+          } catch (_) {}
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(addVm.errorMessage ?? 'Failed to save expenses. Please try again.'),
+            backgroundColor: const Color(0xFFE11D48),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isProcessingVoice = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving expenses: ${e.toString()}'),
+            backgroundColor: const Color(0xFFE11D48),
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildVoiceTab(
+    BuildContext context,
+    bool isDark,
+    AddExpenseViewModel addVm,
+    Trip trip,
+    AppLocalizations l10n,
+  ) {
+    if (_isProcessingVoice) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(
+                isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Parsing voice expenses...',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: isDark ? Colors.white : const Color(0xFF0F172A),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Extracting multiple expenses with 100% integer precision',
+              style: TextStyle(
+                fontSize: 12,
+                color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final hasTranscript = _voiceTranscriptController.text.trim().isNotEmpty;
+
+    return ListView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+      children: [
+        // Hero Header Card
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF141A21) : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isDark ? const Color(0xFF222B35) : const Color(0xFFE2E8F0),
+            ),
+          ),
+          child: Column(
+            children: [
+              // Animated / Pulsing Microphone Button
+              GestureDetector(
+                onTap: () => _handleVoiceMicToggle(addVm, trip),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: _isVoiceListening
+                        ? const Color(0xFFE11D48).withValues(alpha: 0.15)
+                        : (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: _isVoiceListening
+                          ? const Color(0xFFE11D48)
+                          : (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary),
+                      width: _isVoiceListening ? 3 : 2,
+                    ),
+                  ),
+                  child: Center(
+                    child: Icon(
+                      _isVoiceListening ? Icons.stop_rounded : Icons.mic_rounded,
+                      size: 40,
+                      color: _isVoiceListening
+                          ? const Color(0xFFE11D48)
+                          : (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                _isVoiceListening ? 'Listening... Speak Now' : 'Voice Multi-Expense Entry',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.2,
+                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                _isVoiceListening
+                    ? 'Say amounts and items (e.g. 4k train, 5k club, 800 food)'
+                    : 'Speak naturally in English, Hindi, or Hinglish. Single or multiple expenses are supported.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // Live Recognized / Editable Transcript Card
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF141A21) : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isDark ? const Color(0xFF222B35) : const Color(0xFFE2E8F0),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'SPOKEN TRANSCRIPT',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.8,
+                      color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                    ),
+                  ),
+                  if (hasTranscript)
+                    InkWell(
+                      onTap: () {
+                        HapticHelper.light();
+                        setState(() {
+                          _voiceTranscriptController.clear();
+                        });
+                      },
+                      child: Text(
+                        'Clear',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _voiceTranscriptController,
+                maxLines: 3,
+                onChanged: (_) => setState(() {}),
+                style: TextStyle(
+                  fontSize: 15,
+                  height: 1.4,
+                  fontWeight: FontWeight.w500,
+                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Recognized voice text will appear here. You can also type or edit directly.',
+                  hintStyle: TextStyle(
+                    fontSize: 14,
+                    color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                  ),
+                  filled: true,
+                  fillColor: isDark ? const Color(0xFF1E2630) : const Color(0xFFF8FAFC),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // Process Action Button
+        SizedBox(
+          height: 52,
+          child: ElevatedButton.icon(
+            icon: const Icon(Icons.auto_awesome_rounded, size: 20),
+            label: const Text(
+              'Process Spoken Expenses',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+              foregroundColor: isDark ? Colors.black : Colors.white,
+              disabledBackgroundColor: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.3),
+              disabledForegroundColor: isDark ? Colors.white38 : Colors.white54,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              elevation: 2,
+            ),
+            onPressed: hasTranscript ? () => _processVoiceTranscript(addVm, trip) : null,
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // Quick Examples Section
+        Text(
+          'TRY SAYING',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.8,
+            color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+          ),
+        ),
+        const SizedBox(height: 10),
+        _buildVoiceExampleChip(
+          context,
+          isDark,
+          'Maine 4k train ke, 5k club ke aur 800 food ke diye',
+          '3 Expenses: Train ₹4,000, Club ₹5,000, Food ₹800',
+        ),
+        _buildVoiceExampleChip(
+          context,
+          isDark,
+          'Train 4000, hotel 5000, food 800',
+          '3 Expenses: Transport, Hotel, Food',
+        ),
+        _buildVoiceExampleChip(
+          context,
+          isDark,
+          'Yesterday I paid 2500 for hotel and 450 for taxi',
+          '2 Expenses: Hotel ₹2,500, Taxi ₹450',
+        ),
+        _buildVoiceExampleChip(
+          context,
+          isDark,
+          '2.5k taxi and 700 snacks',
+          '2 Expenses: Taxi ₹2,500, Snacks ₹700',
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  Widget _buildVoiceExampleChip(
+    BuildContext context,
+    bool isDark,
+    String phrase,
+    String description,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: InkWell(
+        onTap: () {
+          HapticHelper.selection();
+          setState(() {
+            _voiceTranscriptController.text = phrase;
+          });
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF141A21) : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isDark ? const Color(0xFF222B35) : const Color(0xFFE2E8F0),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.record_voice_over_rounded,
+                size: 16,
+                color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      phrase,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      description,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 12,
+                color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -529,6 +529,13 @@ class AddExpenseViewModel extends ChangeNotifier {
     return draft;
   }
 
+  /// Parses voice transcript into multiple discrete [ExpenseDraft]s for batch confirmation.
+  List<ExpenseDraft> parseMultipleVoiceDrafts(String transcript, List<TripMember> tripMembers, String currentUserId) {
+    _isListening = false;
+    _voiceTranscript = transcript;
+    return VoiceIntentParser.parseMultipleToDrafts(transcript, tripMembers, currentUserId);
+  }
+
   ExpenseDraft parseReceiptToDraft(String ocrText, List<TripMember> tripMembers, String currentUserId) {
     final draft = ReceiptParserEngine.parseToDraft(ocrText, tripMembers, currentUserId);
     _activeDraft = draft;
@@ -605,6 +612,19 @@ class AddExpenseViewModel extends ChangeNotifier {
   Future<Expense?> saveConfirmedDraft(String tripId, ExpenseDraft draft) async {
     applyDraft(draft);
     return saveExpense(tripId);
+  }
+
+  /// Atomically batches and persists multiple confirmed [ExpenseDraft]s extracted from Voice AI.
+  Future<List<Expense>> saveMultipleConfirmedDrafts(String tripId, List<ExpenseDraft> drafts) async {
+    final created = <Expense>[];
+    for (final draft in drafts) {
+      applyDraft(draft);
+      final expense = await saveExpense(tripId);
+      if (expense != null) {
+        created.add(expense);
+      }
+    }
+    return created;
   }
 
   Future<Expense?> saveExpense(String tripId) async {
