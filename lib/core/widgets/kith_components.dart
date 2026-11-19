@@ -563,3 +563,539 @@ class KithInputDecoration {
   }
 }
 
+/// Tactile, modern card surface container.
+/// Features a subtle border, ambient elevation shadow, and a gentle micro-scale press interaction.
+class KithCard extends StatefulWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final EdgeInsetsGeometry? margin;
+  final VoidCallback? onTap;
+  final BorderRadius borderRadius;
+  final Color? backgroundColor;
+  final Border? border;
+  final bool hasShadow;
+  final bool enableScale;
+
+  const KithCard({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(AppSpacing.lg),
+    this.margin,
+    this.onTap,
+    this.borderRadius = AppRadius.lgBorder,
+    this.backgroundColor,
+    this.border,
+    this.hasShadow = true,
+    this.enableScale = true,
+  });
+
+  @override
+  State<KithCard> createState() => _KithCardState();
+}
+
+class _KithCardState extends State<KithCard> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = widget.backgroundColor ??
+        (isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard);
+    final effectiveBorder = widget.border ??
+        Border.all(
+          color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+          width: 1.0,
+        );
+
+    final cardContent = Container(
+      padding: widget.padding,
+      margin: widget.margin,
+      decoration: BoxDecoration(
+        color: surfaceColor,
+        borderRadius: widget.borderRadius,
+        border: effectiveBorder,
+        boxShadow: widget.hasShadow
+            ? [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.04),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : null,
+      ),
+      child: widget.child,
+    );
+
+    if (widget.onTap == null) {
+      return cardContent;
+    }
+
+    return AnimatedScale(
+      scale: (_isPressed && widget.enableScale) ? 0.985 : 1.0,
+      duration: const Duration(milliseconds: 120),
+      curve: Curves.easeOutCubic,
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _isPressed = true),
+        onTapUp: (_) {
+          setState(() => _isPressed = false);
+          HapticHelper.light();
+          widget.onTap!();
+        },
+        onTapCancel: () => setState(() => _isPressed = false),
+        behavior: HitTestBehavior.opaque,
+        child: cardContent,
+      ),
+    );
+  }
+}
+
+/// Reusable pill badge for categories, statuses, filters, and counter tags.
+class KithPill extends StatelessWidget {
+  final String label;
+  final Widget? leading;
+  final Widget? trailing;
+  final Color? backgroundColor;
+  final Color? textColor;
+  final BorderSide? border;
+  final EdgeInsetsGeometry padding;
+  final VoidCallback? onTap;
+  final bool isSelected;
+
+  const KithPill({
+    super.key,
+    required this.label,
+    this.leading,
+    this.trailing,
+    this.backgroundColor,
+    this.textColor,
+    this.border,
+    this.padding = const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+    this.onTap,
+    this.isSelected = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final bg = backgroundColor ??
+        (isSelected
+            ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
+            : (isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle));
+
+    final fg = textColor ??
+        (isSelected
+            ? (isDark ? AppColors.darkBackground : Colors.white)
+            : (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary));
+
+    final effectiveBorder = border ??
+        BorderSide(
+          color: isSelected
+              ? Colors.transparent
+              : (isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle),
+          width: 0.8,
+        );
+
+    Widget content = Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: AppRadius.fullBorder,
+        border: Border.fromBorderSide(effectiveBorder),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          if (leading != null) ...[
+            leading!,
+            const SizedBox(width: 5),
+          ],
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+              color: fg,
+              letterSpacing: -0.1,
+            ),
+          ),
+          if (trailing != null) ...[
+            const SizedBox(width: 5),
+            trailing!,
+          ],
+        ],
+      ),
+    );
+
+    if (onTap != null) {
+      return GestureDetector(
+        onTap: () {
+          HapticHelper.selection();
+          onTap!();
+        },
+        behavior: HitTestBehavior.opaque,
+        child: content,
+      );
+    }
+
+    return content;
+  }
+}
+
+/// High-precision tabular financial amount display with currency formatting.
+class KithMoneyDisplay extends StatelessWidget {
+  final int amountInPaise;
+  final String currencyCode;
+  final TextStyle? style;
+  final bool isNetBalance;
+  final bool isHero;
+
+  const KithMoneyDisplay({
+    super.key,
+    required this.amountInPaise,
+    this.currencyCode = 'INR',
+    this.style,
+    this.isNetBalance = false,
+    this.isHero = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final absPaise = amountInPaise.abs();
+    final rupees = absPaise / 100.0;
+    final formattedNum = absPaise % 100 == 0
+        ? rupees.toInt().toString()
+        : rupees.toStringAsFixed(2);
+    final prefix = isNetBalance
+        ? (amountInPaise > 0 ? '+₹' : (amountInPaise < 0 ? '-₹' : '₹'))
+        : '₹';
+    final fullText = '$prefix$formattedNum';
+
+    Color textColor;
+    if (isNetBalance) {
+      if (amountInPaise > 0) {
+        textColor = isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight;
+      } else if (amountInPaise < 0) {
+        textColor = isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight;
+      } else {
+        textColor = isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted;
+      }
+    } else {
+      textColor = isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary;
+    }
+
+    final effectiveStyle = style ??
+        (isHero
+            ? AppTypography.moneyHero(isDark: isDark, overrideColor: textColor)
+            : AppTypography.moneyLarge(isDark: isDark, overrideColor: textColor));
+
+    return Text(
+      fullText,
+      style: effectiveStyle,
+    );
+  }
+}
+
+/// Airbnb-inspired header with circular back button, bold title, and trailing actions.
+class KithAppBar extends StatelessWidget implements PreferredSizeWidget {
+  final String title;
+  final String? subtitle;
+  final List<Widget>? actions;
+  final Widget? leading;
+  final bool showBackButton;
+  final VoidCallback? onBackPressed;
+
+  const KithAppBar({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.actions,
+    this.leading,
+    this.showBackButton = true,
+    this.onBackPressed,
+  });
+
+  @override
+  Size get preferredSize => const Size.fromHeight(56.0);
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return AppBar(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      automaticallyImplyLeading: false,
+      leadingWidth: showBackButton ? 56 : 0,
+      leading: showBackButton
+          ? Padding(
+              padding: const EdgeInsets.only(left: 16.0),
+              child: Center(
+                child: GestureDetector(
+                  onTap: () {
+                    HapticHelper.light();
+                    if (onBackPressed != null) {
+                      onBackPressed!();
+                    } else {
+                      Navigator.of(context).maybePop();
+                    }
+                  },
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+                        width: 1,
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      Icons.arrow_back_rounded,
+                      size: 18,
+                      color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                    ),
+                  ),
+                ),
+              ),
+            )
+          : null,
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.4,
+              color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+            ),
+          ),
+          if (subtitle != null && subtitle!.isNotEmpty)
+            Text(
+              subtitle!,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+              ),
+            ),
+        ],
+      ),
+      actions: actions != null
+          ? [
+              ...actions!,
+              const SizedBox(width: 12),
+            ]
+          : null,
+    );
+  }
+}
+
+/// Standardized bottom sheet container with rounded top corners, centered drag handle,
+/// and optional pinned action button.
+class KithBottomSheet extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final Widget child;
+  final Widget? bottomAction;
+  final VoidCallback? onClose;
+  final EdgeInsetsGeometry padding;
+
+  const KithBottomSheet({
+    super.key,
+    required this.title,
+    this.subtitle,
+    required this.child,
+    this.bottomAction,
+    this.onClose,
+    this.padding = AppSpacing.bottomSheetPadding,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceCard,
+        borderRadius: AppRadius.topSheetBorder,
+        border: Border.all(
+          color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+        ),
+      ),
+      padding: padding,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Centered drag handle pill
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white24 : Colors.black12,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Header row with title and close icon button
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.4,
+                        color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle!,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              GestureDetector(
+                onTap: () {
+                  HapticHelper.light();
+                  if (onClose != null) {
+                    onClose!();
+                  } else {
+                    Navigator.of(context).maybePop();
+                  }
+                },
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.close_rounded,
+                    size: 16,
+                    color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Body content
+          Flexible(child: child),
+
+          // Pinned bottom action
+          if (bottomAction != null) ...[
+            const SizedBox(height: 16),
+            bottomAction!,
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Overlapping member avatar stack.
+class KithAvatarGroup extends StatelessWidget {
+  final List<String> names;
+  final double avatarSize;
+  final int maxVisible;
+
+  const KithAvatarGroup({
+    super.key,
+    required this.names,
+    this.avatarSize = 30.0,
+    this.maxVisible = 3,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final visibleNames = names.take(maxVisible).toList();
+    final extraCount = names.length - maxVisible;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (int i = 0; i < visibleNames.length; i++)
+          Align(
+            widthFactor: 0.76,
+            child: Container(
+              width: avatarSize,
+              height: avatarSize,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+                border: Border.all(
+                  color: isDark ? AppColors.darkSurfaceCard : Colors.white,
+                  width: 1.8,
+                ),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                visibleNames[i].isNotEmpty ? visibleNames[i][0].toUpperCase() : '?',
+                style: TextStyle(
+                  fontSize: avatarSize * 0.42,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                ),
+              ),
+            ),
+          ),
+        if (extraCount > 0)
+          Align(
+            widthFactor: 0.76,
+            child: Container(
+              width: avatarSize,
+              height: avatarSize,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isDark ? AppColors.darkSurfaceElevated : const Color(0xFFE2E8F0),
+                border: Border.all(
+                  color: isDark ? AppColors.darkSurfaceCard : Colors.white,
+                  width: 1.8,
+                ),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                '+$extraCount',
+                style: TextStyle(
+                  fontSize: avatarSize * 0.35,
+                  fontWeight: FontWeight.w800,
+                  color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+

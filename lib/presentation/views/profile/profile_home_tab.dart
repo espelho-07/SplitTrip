@@ -604,10 +604,19 @@ _buildMenuItem(
               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
               child: Row(
                 children: [
-                  Icon(
-                    Icons.dark_mode_outlined,
-                    size: 20,
-                    color: isDark ? AppColors.darkTextSecondary : const Color(0xFF475569),
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: (isDark ? const Color(0xFF818CF8) : const Color(0xFF4F46E5)).withValues(alpha: isDark ? 0.16 : 0.10),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      Icons.dark_mode_outlined,
+                      size: 18,
+                      color: isDark ? const Color(0xFF818CF8) : const Color(0xFF4F46E5),
+                    ),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -880,20 +889,30 @@ _buildMenuItem(
     required bool isDark,
     required VoidCallback onTap,
   }) {
+    final effectiveColor = iconColor ?? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary);
     return InkWell(
       onTap: () {
         HapticHelper.light();
         onTap();
       },
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(16),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
         child: Row(
           children: [
-            Icon(
-              icon,
-              size: 20,
-              color: iconColor ?? (isDark ? AppColors.darkTextSecondary : const Color(0xFF475569)),
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: effectiveColor.withValues(alpha: isDark ? 0.16 : 0.10),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                icon,
+                size: 18,
+                color: effectiveColor,
+              ),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -936,5 +955,4 @@ _buildMenuItem(
       ),
     );
   }
-
 }

@@ -310,59 +310,46 @@ class _TripsHomeTabState extends State<TripsHomeTab> {
 
   /// Minimal clean card when there is no active trip
   Widget _buildNoActiveTripCard(BuildContext context, bool isDark, AppLocalizations l10n) {
-    return Container(
-      width: double.infinity,
+    return KithCard(
       padding: const EdgeInsets.all(20.0),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF0F1418) : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isDark ? AppColors.darkBorderSubtle : const Color(0xFFE2E8F0),
-          width: 1.1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      borderRadius: BorderRadius.circular(20),
+      child: Row(
         children: [
-          Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF161D24) : const Color(0xFFF1F5F9),
-                  shape: BoxShape.circle,
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF161D24) : const Color(0xFFF1F5F9),
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: const Text('🏖️', style: TextStyle(fontSize: 20)),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.tripsTabNoActiveTitle,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                alignment: Alignment.center,
-                child: const Text('🏖️', style: TextStyle(fontSize: 18)),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      l10n.tripsTabNoActiveTitle,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      l10n.tripsTabNoActiveSub,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? AppColors.darkTextSecondary : const Color(0xFF64748B),
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 3),
+                Text(
+                  l10n.tripsTabNoActiveSub,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: isDark ? AppColors.darkTextSecondary : const Color(0xFF64748B),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
