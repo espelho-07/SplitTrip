@@ -16,6 +16,7 @@ import 'core/payment/payment_service.dart';
 import 'core/services/app_version_service.dart';
 import 'core/services/fcm_service.dart';
 import 'core/services/kith_widget_service.dart';
+import 'core/services/play_in_app_update_service.dart';
 import 'core/services/security_lock_service.dart';
 import 'core/theme/app_theme.dart';
 import 'data/repositories/expense_repository.dart';
@@ -106,6 +107,7 @@ void main() async {
     storage: storageService,
     syncService: syncService,
   );
+  final playInAppUpdateService = PlayInAppUpdateService();
 
   // Initialize Production Security Lock Service
   final securityLockService = SecurityLockService(storageService);
@@ -204,8 +206,12 @@ void main() async {
         ChangeNotifierProvider(create: (_) => ThemeViewModel(storage: storageService)),
         ChangeNotifierProvider(create: (_) => LocaleViewModel(storage: storageService)),
         ChangeNotifierProvider(create: (_) => AuthViewModel(userRepo: userRepo)),
+        ChangeNotifierProvider<PlayInAppUpdateService>.value(value: playInAppUpdateService),
         ChangeNotifierProvider(
-          create: (_) => VersionViewModel(versionService: appVersionService)..checkForUpdates(),
+          create: (_) => VersionViewModel(
+            versionService: appVersionService,
+            inAppUpdateService: playInAppUpdateService,
+          )..checkForUpdates(),
         ),
         ChangeNotifierProvider(
           create: (_) => HomeViewModel(

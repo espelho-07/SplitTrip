@@ -106,6 +106,18 @@ jobs:
           EOF
           fi
 
+      - name: Provision Android Release Keystore & Signing Config
+        run: |
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/upload-keystore.jks
+            cat << EOF > android/key.properties
+          storeFile=upload-keystore.jks
+          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          EOF
+          fi
+
       - name: Build Android Release APK
         run: flutter build apk --release
 

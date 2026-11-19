@@ -183,10 +183,12 @@ class UpdateAvailableBanner extends StatelessWidget {
                       ),
                       const SizedBox(width: AppSpacing.xs),
                       ElevatedButton(
-                        onPressed: () {
-                          HapticHelper.medium();
-                          versionVm.openStore();
-                        },
+                        onPressed: versionVm.isPlayUpdateDownloading
+                            ? null
+                            : () {
+                                HapticHelper.medium();
+                                versionVm.triggerUpdate();
+                              },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.emeraldLight,
                           foregroundColor: Colors.black,
@@ -197,13 +199,24 @@ class UpdateAvailableBanner extends StatelessWidget {
                           ),
                           visualDensity: VisualDensity.compact,
                         ),
-                        child: Text(
-                          l10n.versionUpdateBtn,
-                          style: AppTypography.buttonText(color: Colors.black).copyWith(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13,
-                          ),
-                        ),
+                        child: versionVm.isPlayUpdateDownloading
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                                ),
+                              )
+                            : Text(
+                                versionVm.isPlayUpdateDownloaded
+                                    ? 'Restart & Install'
+                                    : l10n.versionUpdateBtn,
+                                style: AppTypography.buttonText(color: Colors.black).copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                ),
+                              ),
                       ),
                     ],
                   ),

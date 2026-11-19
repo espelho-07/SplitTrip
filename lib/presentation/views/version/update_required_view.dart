@@ -293,7 +293,7 @@ class UpdateRequiredView extends StatelessWidget {
                     child: ElevatedButton(
                       onPressed: () {
                         HapticHelper.heavy();
-                        versionVm.openStore();
+                        versionVm.triggerUpdate();
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.emeraldLight,

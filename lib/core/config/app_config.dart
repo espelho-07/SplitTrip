@@ -12,7 +12,7 @@ class AppConfig {
 
   static const String appName = 'Kith';
 
-  static const String appVersion = '1.0.0';
+  static const String appVersion = '2.0.25';
 
 
 

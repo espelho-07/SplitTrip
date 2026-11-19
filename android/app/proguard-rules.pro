@@ -18,3 +18,8 @@
 # Native Kith Widgets & Notification Helpers
 -keep class com.nirniq.kith.** { *; }
 -keepclassmembers class com.nirniq.kith.** { *; }
+
+# Google Play Core / In-App Update Rules
+-keep class com.google.android.play.core.** { *; }
+-keep class de.ffuf.in_app_update.** { *; }
+-dontwarn com.google.android.play.core.**

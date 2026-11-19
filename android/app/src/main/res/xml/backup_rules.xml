@@ -6,9 +6,9 @@
 -->
 <full-backup-content>
     <include domain="sharedpref" path="." />
+    <include domain="database" path="." />
     <exclude domain="sharedpref" path="kith_fcm_token" />
     <exclude domain="sharedpref" path="FlutterSecureStorage.xml" />
-    <exclude domain="database" path="kith_production_v2.db" />
     <exclude domain="database" path="kith_production_v2.db-wal" />
     <exclude domain="database" path="kith_production_v2.db-shm" />
 </full-backup-content>

@@ -1,11 +1,13 @@
 import 'package:flutter/foundation.dart';
 import '../../core/services/app_version_service.dart';
+import '../../core/services/play_in_app_update_service.dart';
 import '../../domain/models/app_version_info.dart';
 
 /// ViewModel managing reactive app version state, update checks, dismissal,
-/// and store navigation.
+/// Google Play In-App Updates, and store navigation.
 class VersionViewModel extends ChangeNotifier {
   final AppVersionService versionService;
+  final PlayInAppUpdateService? inAppUpdateService;
 
   AppVersionCheckResult? _status;
   bool _isLoading = false;
@@ -14,7 +16,14 @@ class VersionViewModel extends ChangeNotifier {
 
   VersionViewModel({
     required this.versionService,
-  });
+    this.inAppUpdateService,
+  }) {
+    inAppUpdateService?.addListener(_onInAppUpdateServiceChanged);
+  }
+
+  void _onInAppUpdateServiceChanged() {
+    notifyListeners();
+  }
 
   AppVersionCheckResult? get status => _status;
   bool get isLoading => _isLoading;
@@ -31,7 +40,11 @@ class VersionViewModel extends ChangeNotifier {
   int get unsyncedCount => _status?.unsyncedOperationsCount ?? 0;
   bool get isOffline => _status?.isOffline ?? false;
 
-  /// Checks for application updates from the backend.
+  // Google Play In-App Update states
+  bool get isPlayUpdateDownloading => inAppUpdateService?.isDownloading ?? false;
+  bool get isPlayUpdateDownloaded => inAppUpdateService?.isDownloaded ?? false;
+
+  /// Checks for application updates from the backend and Google Play.
   Future<void> checkForUpdates({
     bool forceRefresh = false,
     String? overrideInstalledVersion,
@@ -46,12 +59,50 @@ class VersionViewModel extends ChangeNotifier {
         overrideInstalledVersion: overrideInstalledVersion,
       );
       _status = result;
+
+      // Safely check Play Store in background
+      if (inAppUpdateService != null && !kIsWeb) {
+        try {
+          await inAppUpdateService!.checkForUpdate();
+        } catch (_) {}
+      }
     } catch (e) {
       _errorMessage = e.toString();
     } finally {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// Triggers the optimal update flow:
+  /// 1. If flexible update is downloaded, installs and restarts.
+  /// 2. If immediate/mandatory, attempts Google Play immediate flow, falling back to Play Store URL.
+  /// 3. If flexible/optional, attempts Google Play flexible flow, falling back to Play Store URL.
+  Future<bool> triggerUpdate({bool forceStoreUrl = false}) async {
+    if (forceStoreUrl || inAppUpdateService == null) {
+      return await openStore();
+    }
+
+    // 1. Downloaded flexible update waiting for install
+    if (inAppUpdateService!.isDownloaded) {
+      await inAppUpdateService!.completeFlexibleUpdate();
+      return true;
+    }
+
+    // 2. Immediate update for breaking/required updates
+    if (shouldBlockApp && inAppUpdateService!.isImmediateAllowed) {
+      final success = await inAppUpdateService!.performImmediateUpdate();
+      if (success) return true;
+    }
+
+    // 3. Flexible update for optional updates
+    if (inAppUpdateService!.isFlexibleAllowed) {
+      final started = await inAppUpdateService!.startFlexibleUpdate();
+      if (started) return true;
+    }
+
+    // 4. Graceful fallback to official Play Store listing
+    return await openStore();
   }
 
   /// Dismisses the optional update banner ("Later" action).
@@ -81,5 +132,11 @@ class VersionViewModel extends ChangeNotifier {
       return val is bool ? val : defaultValue;
     }
     return defaultValue;
+  }
+
+  @override
+  void dispose() {
+    inAppUpdateService?.removeListener(_onInAppUpdateServiceChanged);
+    super.dispose();
   }
 }

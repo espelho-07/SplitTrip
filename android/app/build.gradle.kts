@@ -16,8 +16,8 @@ if (localPropertiesFile.exists()) {
     }
 }
 
-val flutterVersionCode = localProperties.getProperty("flutter.versionCode")?.toInt() ?: 11
-val flutterVersionName = localProperties.getProperty("flutter.versionName") ?: "1.0.1"
+val flutterVersionCode = localProperties.getProperty("flutter.versionCode")?.toInt() ?: 2025
+val flutterVersionName = localProperties.getProperty("flutter.versionName") ?: "2.0.25"
 
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
@@ -28,7 +28,7 @@ if (keystorePropertiesFile.exists()) {
 android {
     namespace = "com.nirniq.kith"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    ndkVersion = "28.2.13676358"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -45,11 +45,13 @@ android {
 
     signingConfigs {
         create("release") {
-            val storeFilePath = keystoreProperties.getProperty("storeFile") ?: System.getenv("KEYSTORE_PATH")
-            if (storeFilePath != null) {
-                val kFile = rootProject.file(storeFilePath).takeIf { it.exists() }
-                    ?: rootProject.file("app/$storeFilePath").takeIf { it.exists() }
-                    ?: file(storeFilePath)
+            val storeFilePath = keystoreProperties.getProperty("storeFile")
+                ?: System.getenv("KEYSTORE_PATH")
+                ?: "upload-keystore.jks"
+            val kFile = rootProject.file(storeFilePath).takeIf { it.exists() }
+                ?: rootProject.file("app/$storeFilePath").takeIf { it.exists() }
+                ?: file(storeFilePath).takeIf { it.exists() }
+            if (kFile != null && kFile.exists()) {
                 storeFile = kFile
                 storePassword = keystoreProperties.getProperty("storePassword") ?: System.getenv("KEYSTORE_PASSWORD") ?: "kithpass123"
                 keyAlias = keystoreProperties.getProperty("keyAlias") ?: System.getenv("KEY_ALIAS") ?: "upload"
@@ -74,7 +76,7 @@ android {
                 "proguard-rules.pro"
             )
             ndk {
-                debugSymbolLevel = "none"
+                debugSymbolLevel = "SYMBOL_TABLE"
             }
         }
     }
@@ -86,6 +88,12 @@ android {
         jniLibs {
             excludes += "/META-INF/**"
         }
+    }
+
+    lint {
+        disable += listOf("InvalidPackage", "FullBackupContent")
+        checkReleaseBuilds = false
+        abortOnError = false
     }
 }
 

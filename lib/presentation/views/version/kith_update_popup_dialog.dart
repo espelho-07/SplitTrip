@@ -218,7 +218,7 @@ class KithUpdatePopupDialog extends StatelessWidget {
                     child: ElevatedButton(
                       onPressed: () async {
                         HapticHelper.heavy();
-                        final success = await versionVm.openStore();
+                        final success = await versionVm.triggerUpdate();
                         if (success && context.mounted) {
                           Navigator.of(context, rootNavigator: true).pop();
                         }
