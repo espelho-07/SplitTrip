@@ -14,6 +14,7 @@ class GuestUser {
   final String? googleId;
   final String? upiId;
   final String? upiQr;
+  final String? role;
 
   /// Returns the canonical logical account ID (defaults to user ID if not explicitly partitioned)
   String get effectiveAccountId => (accountId != null && accountId!.isNotEmpty) ? accountId! : id;
@@ -27,6 +28,10 @@ class GuestUser {
   bool get isGoogleLinked => isNirniqLinked;
 
   bool get isGuest => !isLinkedToAccount && !isNirniqLinked;
+
+  bool get isAdmin =>
+      role == 'admin' ||
+      (email != null && (email!.endsWith('@kith.app') || email!.endsWith('@nirniq.com')));
 
   const GuestUser({
     required this.id,
@@ -42,6 +47,7 @@ class GuestUser {
     this.googleId,
     this.upiId,
     this.upiQr,
+    this.role,
   });
 
   GuestUser copyWith({
@@ -58,6 +64,7 @@ class GuestUser {
     String? googleId,
     String? upiId,
     String? upiQr,
+    String? role,
   }) {
     return GuestUser(
       id: id ?? this.id,
@@ -73,6 +80,7 @@ class GuestUser {
       googleId: googleId ?? this.googleId,
       upiId: upiId ?? this.upiId,
       upiQr: upiQr ?? this.upiQr,
+      role: role ?? this.role,
     );
   }
 
@@ -90,6 +98,7 @@ class GuestUser {
     'googleId': googleId,
     'upiId': upiId,
     'upiQr': upiQr,
+    'role': role,
   };
 
   static String generateFallbackRecoveryKey() {
@@ -127,6 +136,7 @@ class GuestUser {
       googleId: json['googleId'] as String?,
       upiId: json['upiId'] as String?,
       upiQr: json['upiQr'] as String?,
+      role: json['role'] as String?,
     );
   }
 }

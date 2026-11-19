@@ -30,6 +30,7 @@ import 'presentation/router/app_router.dart';
 import 'presentation/viewmodels/add_expense_viewmodel.dart';
 import 'presentation/viewmodels/auth_viewmodel.dart';
 import 'presentation/viewmodels/create_trip_viewmodel.dart';
+import 'presentation/viewmodels/currency_viewmodel.dart';
 import 'presentation/viewmodels/home_viewmodel.dart';
 import 'presentation/viewmodels/join_trip_viewmodel.dart';
 import 'presentation/viewmodels/locale_viewmodel.dart';
@@ -192,6 +193,7 @@ void main() async {
         ChangeNotifierProvider<SecurityLockService>.value(value: securityLockService),
         ChangeNotifierProvider<KithWidgetService>.value(value: widgetService),
         ChangeNotifierProvider(create: (_) => PaymentService()),
+        ChangeNotifierProvider(create: (_) => CurrencyViewModel(storage: storageService)),
         ChangeNotifierProvider(create: (_) => ThemeViewModel(storage: storageService)),
         ChangeNotifierProvider(create: (_) => LocaleViewModel(storage: storageService)),
         ChangeNotifierProvider(create: (_) => AuthViewModel(userRepo: userRepo)),

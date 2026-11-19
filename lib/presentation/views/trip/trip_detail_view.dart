@@ -46,6 +46,7 @@ import '../payment/payment_verification_view.dart';
 import 'trip_members_view.dart';
 import 'widgets/activity_log_sheet.dart';
 import 'widgets/add_journey_moment_sheet.dart';
+import 'widgets/add_journey_stop_sheet.dart';
 import 'widgets/expense_detail_sheet.dart';
 import 'widgets/member_spend_breakdown_sheet.dart';
 import 'widgets/nearby_sync_badge.dart';
@@ -2045,22 +2046,6 @@ class _TripDetailViewState extends State<TripDetailView> {
           )
         : const SizedBox.shrink();
 
-    if (moments.isEmpty) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          locationPromptBanner,
-          EmptyStateView(
-            emoji: '🗺️',
-            title: 'Your trip starts here.',
-            subtitle: 'Add your first moment when something worth remembering happens.',
-            buttonText: 'Add Moment',
-            onButtonPressed: () => _showAddJourneyMomentSheet(trip, vm.expenses, currentUserId),
-          ),
-        ],
-      );
-    }
-
     final Map<int, List<JourneyMoment>> dayMap = {};
     for (final m in moments) {
       dayMap.putIfAbsent(m.dayIndex, () => []).add(m);
@@ -2071,10 +2056,12 @@ class _TripDetailViewState extends State<TripDetailView> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         locationPromptBanner,
+        _buildItineraryStopsSection(vm, trip, isDark),
+        const SizedBox(height: AppSpacing.lg),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Travel Timeline', style: AppTypography.titleSmall(isDark: isDark)),
+            Text('Travel Timeline (${moments.length})', style: AppTypography.titleSmall(isDark: isDark)),
             TextButton.icon(
               onPressed: () => _showAddJourneyMomentSheet(trip, vm.expenses, currentUserId),
               icon: const Icon(Icons.add_location_alt_outlined, size: 16),
@@ -2083,45 +2070,57 @@ class _TripDetailViewState extends State<TripDetailView> {
           ],
         ),
         const SizedBox(height: AppSpacing.xs),
-        ...sortedDays.map((day) {
-          final dayMoments = dayMap[day]!;
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        'DAY $day',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.0,
-                          color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+        if (moments.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: EmptyStateView(
+              emoji: '🗺️',
+              title: 'No memories yet.',
+              subtitle: 'Add your first moment when something worth remembering happens.',
+              buttonText: 'Add Moment',
+              onButtonPressed: () => _showAddJourneyMomentSheet(trip, vm.expenses, currentUserId),
+            ),
+          )
+        else ...[
+          ...sortedDays.map((day) {
+            final dayMoments = dayMap[day]!;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          'DAY $day',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.0,
+                            color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(child: Divider(color: isDark ? Colors.white12 : Colors.black12)),
-                  ],
+                      const SizedBox(width: 10),
+                      Expanded(child: Divider(color: isDark ? Colors.white12 : Colors.black12)),
+                    ],
+                  ),
                 ),
-              ),
-              ...dayMoments.map((moment) {
-                final linkedExp = moment.expenseId != null
-                    ? vm.expenses.where((e) => e.id == moment.expenseId).firstOrNull
-                    : null;
+                ...dayMoments.map((moment) {
+                  final linkedExp = moment.expenseId != null
+                      ? vm.expenses.where((e) => e.id == moment.expenseId).firstOrNull
+                      : null;
 
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: SurfaceCard(
-                    padding: const EdgeInsets.all(14),
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: SurfaceCard(
+                      padding: const EdgeInsets.all(14),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -2224,6 +2223,133 @@ class _TripDetailViewState extends State<TripDetailView> {
             ],
           );
         }),
+      ],
+      ],
+    );
+  }
+
+  Widget _buildItineraryStopsSection(TripDetailViewModel vm, Trip trip, bool isDark) {
+    final stops = vm.journeyStops;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Itinerary Stops (${stops.length})', style: AppTypography.titleSmall(isDark: isDark)),
+            TextButton.icon(
+              onPressed: () {
+                HapticHelper.light();
+                AddJourneyStopSheet.show(
+                  context,
+                  trip: trip,
+                  onAdd: (stop) => vm.addJourneyStop(stop),
+                );
+              },
+              icon: const Icon(Icons.add_road_rounded, size: 16),
+              label: const Text('Add Stop'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        if (stops.isEmpty)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
+              borderRadius: AppRadius.mdBorder,
+              border: Border.all(color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.directions_walk_rounded, color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted, size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'No stops planned yet. Add upcoming places, waypoints, or stays.',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: stops.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 8),
+            itemBuilder: (context, index) {
+              final stop = stops[index];
+              return SurfaceCard(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        'Day ${stop.dayNumber}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            stop.locationName,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                            ),
+                          ),
+                          if (stop.notes != null && stop.notes!.isNotEmpty)
+                            Text(
+                              stop.notes!,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      stop.time,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 16, color: Colors.grey),
+                      onPressed: () {
+                        HapticHelper.light();
+                        vm.deleteJourneyStop(stop.id);
+                      },
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
       ],
     );
   }

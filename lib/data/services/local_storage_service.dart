@@ -1811,6 +1811,14 @@ class LocalStorageService {
     return _prefs.setBool(_initialPermissionsKey, value);
   }
 
+  bool isAdminModeEnabled() {
+    return _prefs.getBool('kith_admin_mode_enabled') ?? false;
+  }
+
+  Future<bool> setAdminModeEnabled(bool value) {
+    return _prefs.setBool('kith_admin_mode_enabled', value);
+  }
+
   final List<VoidCallback> _onClearDataListeners = [];
 
   void addOnClearDataListener(VoidCallback listener) {

@@ -12,6 +12,7 @@ import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../data/services/finance_export_bridge_service.dart';
 import '../../../data/services/local_storage_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
+import '../../viewmodels/currency_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../viewmodels/locale_viewmodel.dart';
 import '../language/language_select_sheet.dart';
@@ -41,17 +42,28 @@ class _MasterSettingsViewState extends State<MasterSettingsView> {
   }
 
   void _loadPreferences() {
+    try {
+      _selectedCurrency = context.read<CurrencyViewModel>().currencyCode;
+    } catch (_) {
+      final storage = context.read<LocalStorageService>();
+      _selectedCurrency = storage.getString('kith_default_currency') ?? 'INR';
+    }
     final storage = context.read<LocalStorageService>();
-    _selectedCurrency = storage.getString('kith_default_currency') ?? 'INR';
     _selectedDateFormat = storage.getString('kith_date_format') ?? 'DD/MM/YYYY';
   }
 
   Future<void> _setCurrency(String code) async {
+    final currencyVm = context.read<CurrencyViewModel>();
     final storage = context.read<LocalStorageService>();
-    await storage.setString('kith_default_currency', code);
-    setState(() => _selectedCurrency = code);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await currencyVm.setCurrency(code);
+    } catch (_) {
+      await storage.setString('kith_default_currency', code);
+    }
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      setState(() => _selectedCurrency = code);
+      messenger.showSnackBar(
         SnackBar(content: Text('Default currency set to $code ✓'), duration: const Duration(seconds: 2)),
       );
     }

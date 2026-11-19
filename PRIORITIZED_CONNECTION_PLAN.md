@@ -184,47 +184,54 @@
 
 ---
 
-## 4. Phase 3 — P2 Medium Priority Remediations
+## 4. Phase 3 — P2 Medium Priority Remediations [STATUS: VERIFIED & COMPLETED]
 
 ---
 
 ### Task P2-1: Wire or Safely Deprecate Dead Views (`SettleUpView`, `ActivityHomeTab`, `SplitExpenseView`)
 - **Task ID:** `CONN-P2-01`
-- **Target Files:**
-  - `lib/presentation/views/trip/settle_up_view.dart`
-  - `lib/presentation/views/activity/activity_home_tab.dart`
-  - `lib/presentation/views/add_expense/split_expense_view.dart`
-- **Action:** Delete `SettleUpView` (superseded by `SettlementSheet`) and `SplitExpenseView` (implemented inline). If global activity feed is desired, wire `ActivityHomeTab` to dynamic data; otherwise delete.
+- **Status:** **COMPLETED & VERIFIED**
+- **Deleted Dead Files:**
+  - `lib/presentation/views/trip/settle_up_view.dart` (superseded by `SettlementSheet`, had mock strings)
+  - `lib/presentation/views/activity/activity_home_tab.dart` (had mock strings, zero references)
+  - `lib/presentation/views/add_expense/split_expense_view.dart` (implemented inline in `AddExpenseView`)
+- **Action:** Deleted dead code files. Zero broken imports verified via `flutter analyze`.
 - **Priority:** **P2**.
 
 ---
 
 ### Task P2-2: Connect `AddJourneyStopSheet` to Itinerary View
 - **Task ID:** `CONN-P2-02`
+- **Status:** **COMPLETED & VERIFIED**
 - **Target Files:**
   - [add_journey_stop_sheet.dart](file:///e:/PROJECTS/SplitTrip/lib/presentation/views/trip/widgets/add_journey_stop_sheet.dart)
   - [trip_detail_view.dart](file:///e:/PROJECTS/SplitTrip/lib/presentation/views/trip/trip_detail_view.dart)
-- **Action:** Add "Add Itinerary Stop" FAB button in trip timeline tab calling `AddJourneyStopSheet.show()`.
+- **Action:** Added `_buildItineraryStopsSection` in `TripDetailView` with "Add Stop" action calling `AddJourneyStopSheet.show()`, and rendered upcoming stops with time, day number, and notes.
 - **Priority:** **P2**.
 
 ---
 
 ### Task P2-3: Expose Admin Dashboard in Profile for Admin Accounts
 - **Task ID:** `CONN-P2-03`
+- **Status:** **COMPLETED & VERIFIED**
 - **Target Files:**
+  - [guest_user.dart](file:///e:/PROJECTS/SplitTrip/lib/domain/models/guest_user.dart)
+  - [local_storage_service.dart](file:///e:/PROJECTS/SplitTrip/lib/data/services/local_storage_service.dart)
   - [profile_home_tab.dart](file:///e:/PROJECTS/SplitTrip/lib/presentation/views/profile/profile_home_tab.dart)
-  - [app_router.dart](file:///e:/PROJECTS/SplitTrip/lib/presentation/router/app_router.dart)
-- **Action:** Show an "Admin Console" settings tile if `user.isAdmin == true` that navigates to `/admin`.
+- **Action:** Added `isAdmin` getter on `GuestUser`, `isAdminModeEnabled()` / `setAdminModeEnabled()` on `LocalStorageService`, secret 7-tap unlock on app version text, and conditional "Admin Console" menu item navigating to `/admin`.
 - **Priority:** **P2**.
 
 ---
 
-### Task P2-4: Make Currency Formatting Reactive
+### Task P2-4: Make Currency Formatting Reactive Across Open Screens
 - **Task ID:** `CONN-P2-04`
+- **Status:** **COMPLETED & VERIFIED**
 - **Target Files:**
-  - `lib/core/utils/currency_formatter.dart`
-  - `lib/main.dart`
-- **Action:** Provide `CurrencyNotifier` and consume it in trip detail and dashboard cards.
+  - [currency_viewmodel.dart](file:///e:/PROJECTS/SplitTrip/lib/presentation/viewmodels/currency_viewmodel.dart) (New)
+  - [main.dart](file:///e:/PROJECTS/SplitTrip/lib/main.dart)
+  - [master_settings_view.dart](file:///e:/PROJECTS/SplitTrip/lib/presentation/views/settings/master_settings_view.dart)
+  - [dashboard_tab.dart](file:///e:/PROJECTS/SplitTrip/lib/presentation/views/home/widgets/dashboard_tab.dart)
+- **Action:** Provided `CurrencyViewModel` at app root, wired currency preference update in `MasterSettingsView`, and consumed reactive `baseCurrency` in `DashboardTab` balance figures.
 - **Priority:** **P2**.
 
 ---

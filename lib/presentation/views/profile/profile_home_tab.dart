@@ -23,8 +23,15 @@ import '../onboarding/interactive_tutorial_sheet.dart';
 import '../onboarding/widgets/recovery_key_sheet.dart';
 import '../settings/widgets/beta_feedback_sheet.dart';
 
-class ProfileHomeTab extends StatelessWidget {
+class ProfileHomeTab extends StatefulWidget {
   const ProfileHomeTab({super.key});
+
+  @override
+  State<ProfileHomeTab> createState() => _ProfileHomeTabState();
+}
+
+class _ProfileHomeTabState extends State<ProfileHomeTab> {
+  int _adminTapCount = 0;
 
   Future<void> _handleNirniqSignIn(BuildContext context) async {
     final authVm = context.read<AuthViewModel>();
@@ -592,6 +599,14 @@ _buildMenuItem(
               isDark: isDark,
               onTap: () => context.push('/settings'),
             ),
+            if (user?.isAdmin == true || storage.isAdminModeEnabled())
+              _buildMenuItem(
+                icon: Icons.admin_panel_settings_outlined,
+                title: 'Admin Console',
+                subtitle: 'Platform metrics, user directory & audit logs',
+                isDark: isDark,
+                onTap: () => context.push('/admin'),
+              ),
             // Dark Mode Switch Item
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
@@ -742,13 +757,34 @@ _buildMenuItem(
                 ),
               ),
               const SizedBox(height: 2),
-              Text(
-                'v2.2.0 (Build 42)',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 0.4,
-                  color: isDark ? Colors.white12 : Colors.black12,
+              GestureDetector(
+                onTap: () async {
+                  _adminTapCount++;
+                  if (_adminTapCount >= 7) {
+                    _adminTapCount = 0;
+                    final messenger = ScaffoldMessenger.of(context);
+                    final current = storage.isAdminModeEnabled();
+                    await storage.setAdminModeEnabled(!current);
+                    HapticHelper.heavy();
+                    if (mounted) {
+                      setState(() {});
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: Text(!current ? 'Admin Console unlocked ✓' : 'Admin Console hidden'),
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    }
+                  }
+                },
+                child: Text(
+                  'v2.2.0 (Build 42)',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0.4,
+                    color: isDark ? Colors.white12 : Colors.black12,
+                  ),
                 ),
               ),
             ],

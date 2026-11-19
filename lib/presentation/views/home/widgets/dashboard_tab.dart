@@ -12,6 +12,7 @@ import '../../../../core/utils/haptic_feedback_helper.dart';
 import '../../../../data/services/local_storage_service.dart';
 import '../../../../domain/models/trip.dart';
 import '../../../viewmodels/auth_viewmodel.dart';
+import '../../../viewmodels/currency_viewmodel.dart';
 import '../../../viewmodels/home_viewmodel.dart';
 
 /// Pilot Screen: Main Trip Management Dashboard elevated with the Liquid Glass Design System.
@@ -407,6 +408,7 @@ class DashboardTab extends StatelessWidget {
     bool isDark,
     AppLocalizations l10n,
   ) {
+    final baseCurrency = context.watch<CurrencyViewModel>().currencyCode;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -430,7 +432,7 @@ class DashboardTab extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      CurrencyFormatter.formatPaise(totalOwedToUser, currencyCode: 'INR'),
+                      CurrencyFormatter.formatPaise(totalOwedToUser, currencyCode: baseCurrency),
                       style: GlassTypography.moneyMedium(
                         isDark: isDark,
                         color: GlassColors.positive(isDark),
@@ -454,7 +456,7 @@ class DashboardTab extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      CurrencyFormatter.formatPaise(totalUserOwes, currencyCode: 'INR'),
+                      CurrencyFormatter.formatPaise(totalUserOwes, currencyCode: baseCurrency),
                       style: GlassTypography.moneyMedium(
                         isDark: isDark,
                         color: GlassColors.negative(isDark),
