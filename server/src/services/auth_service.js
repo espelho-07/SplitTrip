@@ -1,8 +1,13 @@
 const crypto = require('crypto');
 const { db } = require('../db/database');
+const { dbManager } = require('../db/db_manager');
 const { AppError } = require('../middleware/error_handler');
 
 class AuthService {
+  constructor(adapter = null) {
+    this.adapter = adapter || dbManager.getAdapter();
+  }
+
   _normalizeRecoveryKey(rawKey) {
     if (!rawKey) return '';
     const trimmed = String(rawKey).trim().toUpperCase();
@@ -142,7 +147,7 @@ class AuthService {
     }
 
     if (!user) {
-      throw AppError.notFound('Account not found. No active account matches this recovery key.');
+      throw AppError.unauthorized('Invalid recovery key. No active account matches this recovery key.');
     }
 
     const session = this._createSession(user.id);

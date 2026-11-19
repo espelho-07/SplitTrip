@@ -1,4 +1,6 @@
 import 'dart:async';
+import '../../core/events/app_event_bus.dart';
+import '../../core/events/app_events.dart';
 import '../../core/network/api_client.dart';
 import '../../core/network/realtime_client.dart';
 import '../../domain/engine/balance_engine.dart';
@@ -16,12 +18,14 @@ class ExpenseRepository {
   final SyncService syncService;
   final ApiClient apiClient;
   final RealtimeClient? realtimeClient;
+  final AppEventBus? eventBus;
 
   ExpenseRepository({
     required this.storage,
     required this.syncService,
     required this.apiClient,
     this.realtimeClient,
+    this.eventBus,
   }) {
     storage.addOnClearDataListener(clearLocalCache);
   }
@@ -155,6 +159,7 @@ class ExpenseRepository {
       updatedOutbox: queue.map((m) => m.toJson()).toList(),
     );
     _cachedExpensesInMemory[expense.tripId] = currentExpenses;
+    eventBus?.emit(ExpenseCreatedEvent(tripId: expense.tripId, expense: expense));
 
     _logLocalActivity(
       tripId: expense.tripId,
@@ -202,6 +207,7 @@ class ExpenseRepository {
       updatedOutbox: queue.map((m) => m.toJson()).toList(),
     );
     _cachedExpensesInMemory[expense.tripId] = currentExpenses;
+    eventBus?.emit(ExpenseUpdatedEvent(tripId: expense.tripId, expense: expense));
 
     _logLocalActivity(
       tripId: expense.tripId,
@@ -248,6 +254,7 @@ class ExpenseRepository {
       updatedOutbox: queue.map((m) => m.toJson()).toList(),
       tombstoneToAdd: {'tripId': tripId, 'expenseId': expenseId},
     );
+    eventBus?.emit(ExpenseDeletedEvent(tripId: tripId, expenseId: expenseId));
 
     _logLocalActivity(
       tripId: tripId,
@@ -444,6 +451,7 @@ class ExpenseRepository {
       idempotencyKey: id,
       backgroundApiClient: apiClient,
     );
+    eventBus?.emit(SettlementRecordedEvent(tripId: tripId));
   }
 
   /// Confirm payment receipt by Receiver (Payee Handshake)

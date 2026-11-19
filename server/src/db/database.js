@@ -25,6 +25,7 @@ class Database {
       processed_operations: new Map(),
       ipo_applications: new Map(),
       ipo_allotment_records: new Map(),
+      deleted_accounts: new Map(),
     };
 
     // Secondary Indexes for O(1) concurrent lookups
@@ -40,9 +41,119 @@ class Database {
       ipo_applications: { byUserId: new Map(), byIpoId: new Map() },
     };
 
+    this.pgAdapter = null;
     if (!this.inMemory) {
       this._initStorage();
     }
+  }
+
+  setPostgresAdapter(adapter) {
+    this.pgAdapter = adapter;
+  }
+
+  _mirrorToPostgres(action, tableName, record) {
+    if (!this.pgAdapter || !this.pgAdapter.isConnected) return;
+    try {
+      if (action === 'delete') {
+        const queryMap = {
+          users: 'DELETE FROM users WHERE id = $1',
+          sessions: 'DELETE FROM sessions WHERE id = $1',
+          trips: 'DELETE FROM trips WHERE id = $1',
+          trip_members: 'DELETE FROM trip_members WHERE id = $1',
+          expenses: 'DELETE FROM expenses WHERE id = $1',
+          settlements: 'DELETE FROM settlements WHERE id = $1',
+        };
+        const sql = queryMap[tableName];
+        if (sql) {
+          this.pgAdapter.query(sql, [record.id]).catch(() => {});
+        }
+      } else if (action === 'insert' || action === 'update') {
+        if (tableName === 'users' && record.id) {
+          this.pgAdapter.query(
+            `INSERT INTO users (id, display_name, avatar_url, recovery_key_hash, is_guest, email, created_at, last_active_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             ON CONFLICT (id) DO UPDATE SET
+               display_name = EXCLUDED.display_name,
+               avatar_url = EXCLUDED.avatar_url,
+               email = EXCLUDED.email,
+               last_active_at = EXCLUDED.last_active_at`,
+            [
+              record.id,
+              record.displayName || 'Guest',
+              record.avatarUrl || null,
+              record.recoveryKeyHash || record.recoveryKey || 'none',
+              record.isGuest !== undefined ? record.isGuest : true,
+              record.email || null,
+              record.createdAt || new Date().toISOString(),
+              record.lastActiveAt || new Date().toISOString(),
+            ]
+          ).catch(() => {});
+        } else if (tableName === 'trips' && record.id) {
+          this.pgAdapter.query(
+            `INSERT INTO trips (id, name, description, emoji, cover_gradient_index, currency_code, creator_id, invite_code, lifecycle_state, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+             ON CONFLICT (id) DO UPDATE SET
+               name = EXCLUDED.name,
+               description = EXCLUDED.description,
+               emoji = EXCLUDED.emoji,
+               cover_gradient_index = EXCLUDED.cover_gradient_index,
+               lifecycle_state = EXCLUDED.lifecycle_state,
+               updated_at = EXCLUDED.updated_at`,
+            [
+              record.id,
+              record.name || 'Trip',
+              record.description || null,
+              record.emoji || '✈️',
+              record.coverGradientIndex || 0,
+              record.currencyCode || 'INR',
+              record.creatorId || 'anonymous',
+              record.inviteCode || 'INVITE',
+              record.lifecycleState || 'active',
+              record.createdAt || new Date().toISOString(),
+              record.updatedAt || new Date().toISOString(),
+            ]
+          ).catch(() => {});
+        } else if (tableName === 'trip_members' && record.id && record.tripId) {
+          this.pgAdapter.query(
+            `INSERT INTO trip_members (id, trip_id, user_id, display_name, avatar_url, role, joined_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             ON CONFLICT (trip_id, user_id) DO UPDATE SET
+               display_name = EXCLUDED.display_name,
+               avatar_url = EXCLUDED.avatar_url,
+               role = EXCLUDED.role`,
+            [
+              record.id,
+              record.tripId,
+              record.userId || record.id,
+              record.displayName || 'Member',
+              record.avatarUrl || null,
+              record.role || 'member',
+              record.joinedAt || new Date().toISOString(),
+            ]
+          ).catch(() => {});
+        } else if (tableName === 'expenses' && record.id && record.tripId) {
+          this.pgAdapter.query(
+            `INSERT INTO expenses (id, trip_id, title, amount_in_paise, category, paid_by_id, split_type, is_deleted)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             ON CONFLICT (id) DO UPDATE SET
+               title = EXCLUDED.title,
+               amount_in_paise = EXCLUDED.amount_in_paise,
+               category = EXCLUDED.category,
+               is_deleted = EXCLUDED.is_deleted`,
+            [
+              record.id,
+              record.tripId,
+              record.title || 'Expense',
+              record.amountInPaise || 0,
+              record.category || 'general',
+              record.paidById || record.paidByMemberId || 'unknown',
+              record.splitType || 'equal',
+              record.isDeleted || false,
+            ]
+          ).catch(() => {});
+        }
+      }
+    } catch (_) {}
   }
 
   _initStorage() {
@@ -260,6 +371,7 @@ class Database {
     table.set(item.id, cloned);
     this._addToIndexes(tableName, cloned);
     this._persistTable(tableName);
+    this._mirrorToPostgres('insert', tableName, cloned);
     return { ...cloned };
   }
 
@@ -277,6 +389,7 @@ class Database {
     table.set(id, updated);
     this._addToIndexes(tableName, updated);
     this._persistTable(tableName);
+    this._mirrorToPostgres('update', tableName, updated);
     return { ...updated };
   }
 
@@ -288,6 +401,7 @@ class Database {
     this._removeFromIndexes(tableName, existing);
     table.delete(id);
     this._persistTable(tableName);
+    this._mirrorToPostgres('delete', tableName, existing || { id });
     return true;
   }
 

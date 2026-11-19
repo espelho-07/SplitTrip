@@ -179,8 +179,6 @@ class _ProfileHomeTabState extends State<ProfileHomeTab> {
   void _showSignOutDialog(BuildContext context) async {
     final l10n = context.l10n;
     final authVm = context.read<AuthViewModel>();
-    final homeVm = context.read<HomeViewModel>();
-    final storage = context.read<LocalStorageService>();
 
     final confirm = await showDialog<bool>(
       context: context,
@@ -219,8 +217,6 @@ class _ProfileHomeTabState extends State<ProfileHomeTab> {
 
       try {
         await authVm.logout();
-        await storage.clearAllUserData();
-        homeVm.clearData();
       } finally {
         if (rootNav.canPop()) rootNav.pop();
         AppRouter.router.go('/onboarding');
@@ -236,8 +232,6 @@ class _ProfileHomeTabState extends State<ProfileHomeTab> {
   void _showDeleteAccountDialog(BuildContext context) async {
     final l10n = context.l10n;
     final authVm = context.read<AuthViewModel>();
-    final homeVm = context.read<HomeViewModel>();
-    final storage = context.read<LocalStorageService>();
 
     final confirm = await showDialog<bool>(
       context: context,
@@ -275,9 +269,7 @@ class _ProfileHomeTabState extends State<ProfileHomeTab> {
       );
 
       try {
-        await authVm.deleteAccount();
-        await storage.clearAllUserData();
-        homeVm.clearData();
+        await authVm.deleteAccountAndPurgeData();
       } finally {
         if (rootNav.canPop()) rootNav.pop();
         AppRouter.router.go('/onboarding');

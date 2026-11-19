@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../core/events/app_event_bus.dart';
+import '../../core/events/app_events.dart';
 import '../../core/network/realtime_client.dart';
 import '../../core/utils/error_formatter.dart';
 import '../../data/repositories/expense_repository.dart';
@@ -14,6 +16,7 @@ class HomeViewModel extends ChangeNotifier {
   final ExpenseRepository expenseRepo;
   final RealtimeClient? realtimeClient;
   final LocalStorageService? storage;
+  final AppEventBus? eventBus;
 
   List<Trip> _trips = [];
   final Map<String, BalanceSummary> _tripBalances = {};
@@ -25,6 +28,7 @@ class HomeViewModel extends ChangeNotifier {
   String? _errorMessage;
   String? _currentUserId;
   StreamSubscription? _realtimeSubscription;
+  StreamSubscription? _eventBusSubscription;
   /// Guards every notifyListeners() call that may fire after dispose()
   /// (async loadTrips completion, realtime stream events, etc.)
   bool _isDisposed = false;
@@ -34,9 +38,33 @@ class HomeViewModel extends ChangeNotifier {
     required this.expenseRepo,
     this.storage,
     this.realtimeClient,
+    this.eventBus,
   }) {
     storage?.addOnClearDataListener(clearData);
     _subscribeToRealtimeEvents();
+    _subscribeToEventBus();
+  }
+
+  void _subscribeToEventBus() {
+    if (eventBus == null) return;
+    _eventBusSubscription = eventBus!.on<AppEvent>().listen((event) {
+      if (_isDisposed) return;
+      final userId = _currentUserId ?? storage?.getSavedUser()?['id'] as String?;
+      if (userId == null) return;
+      _currentUserId ??= userId;
+
+      if (event is ExpenseCreatedEvent ||
+          event is ExpenseUpdatedEvent ||
+          event is ExpenseDeletedEvent ||
+          event is SettlementRecordedEvent) {
+        _computeLocalBalances(_trips, userId);
+        if (!_isDisposed) notifyListeners();
+      } else if (event is TripCreatedEvent) {
+        addTripLocally(event.trip, userId);
+      } else if (event is TripJoinedEvent) {
+        addTripLocally(event.trip, userId);
+      }
+    });
   }
 
   List<Trip> get trips => _trips;
@@ -224,6 +252,7 @@ class HomeViewModel extends ChangeNotifier {
     _isDisposed = true;
     storage?.removeOnClearDataListener(clearData);
     _realtimeSubscription?.cancel();
+    _eventBusSubscription?.cancel();
     super.dispose();
   }
 }

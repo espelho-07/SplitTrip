@@ -1848,6 +1848,7 @@ class LocalStorageService {
       _deviceIdKey,
       _customServerUrlKey,
       _localSchemaVersionKey,
+      _deletedRecoveryKeysKey,
     };
     final allKeys = _prefs.getKeys().toList();
     for (final k in allKeys) {

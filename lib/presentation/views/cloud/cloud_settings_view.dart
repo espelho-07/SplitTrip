@@ -11,11 +11,9 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/widgets/surface_card.dart';
-import '../../../data/services/local_storage_service.dart';
 import '../../../data/services/sync_service.dart';
 import '../../router/app_router.dart';
 import '../../viewmodels/auth_viewmodel.dart';
-import '../../viewmodels/home_viewmodel.dart';
 import '../../widgets/progress/kith_success_toast.dart';
 import 'cloud_sync_sheet.dart';
 
@@ -35,8 +33,6 @@ class CloudSettingsView extends StatelessWidget {
 
   void _showSignOutDialog(BuildContext context) async {
     final authVm = context.read<AuthViewModel>();
-    final homeVm = context.read<HomeViewModel>();
-    final storage = context.read<LocalStorageService>();
     final l10n = context.l10n;
 
     final confirm = await showDialog<bool>(
@@ -74,8 +70,6 @@ class CloudSettingsView extends StatelessWidget {
 
       try {
         await authVm.logout();
-        await storage.clearAllUserData();
-        homeVm.clearData();
       } finally {
         if (rootNav.canPop()) rootNav.pop();
         AppRouter.router.go('/onboarding');

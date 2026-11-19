@@ -1,9 +1,14 @@
 const crypto = require('crypto');
 const { db } = require('../db/database');
+const { dbManager } = require('../db/db_manager');
 const { AppError } = require('../middleware/error_handler');
 const settlementService = require('./settlement_service');
 
 class ExpenseService {
+  constructor(adapter = null) {
+    this.adapter = adapter || dbManager.getAdapter();
+  }
+
   createExpense(user, tripId, {
     id = null,
     title,

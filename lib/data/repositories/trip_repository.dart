@@ -4,6 +4,8 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../core/events/app_event_bus.dart';
+import '../../core/events/app_events.dart';
 import '../../core/network/api_client.dart';
 import '../../core/network/api_exceptions.dart';
 import '../../core/network/realtime_client.dart';
@@ -25,6 +27,7 @@ class TripRepository {
   final SyncService syncService;
   final ApiClient apiClient;
   final RealtimeClient? realtimeClient;
+  final AppEventBus? eventBus;
   final Uuid _uuid = const Uuid();
 
   TripRepository({
@@ -32,6 +35,7 @@ class TripRepository {
     required this.syncService,
     required this.apiClient,
     this.realtimeClient,
+    this.eventBus,
   }) {
     storage.addOnClearDataListener(clearLocalCache);
   }
@@ -358,6 +362,7 @@ class TripRepository {
     currentTrips.removeWhere((t) => t.id == newTrip.id);
     currentTrips.insert(0, newTrip);
     await _saveTripsAndCache(currentTrips.map((t) => t.toJson()).toList());
+    eventBus?.emit(TripCreatedEvent(trip: newTrip));
 
     // 2. Ensure auth credentials are active on API client
     if (creator.anonymousToken.isNotEmpty) {
@@ -396,6 +401,7 @@ class TripRepository {
           }
         }
         await _saveTripsAndCache(trips.map((t) => t.toJson()).toList());
+        eventBus?.emit(TripCreatedEvent(trip: finalTrip));
         return finalTrip;
       }
     } catch (_) {
@@ -474,6 +480,7 @@ class TripRepository {
             accountId: accountId,
           );
         } catch (_) {}
+        eventBus?.emit(TripJoinedEvent(trip: finalTrip));
         return finalTrip;
       }
     } on NotFoundException {
@@ -501,6 +508,7 @@ class TripRepository {
         }
         await _saveTripsAndCache(trips.map((t) => t.toJson()).toList());
         await syncService.enqueueMutation(MutationType.joinTrip, payload);
+        eventBus?.emit(TripJoinedEvent(trip: updatedTrip));
         return updatedTrip;
       }
       throw NotFoundException(
@@ -532,6 +540,7 @@ class TripRepository {
         }
         await _saveTripsAndCache(trips.map((t) => t.toJson()).toList());
         await syncService.enqueueMutation(MutationType.joinTrip, payload);
+        eventBus?.emit(TripJoinedEvent(trip: updatedTrip));
         return updatedTrip;
       }
       throw const NetworkException(
@@ -567,6 +576,7 @@ class TripRepository {
         }
         await _saveTripsAndCache(trips.map((t) => t.toJson()).toList());
         await syncService.enqueueMutation(MutationType.joinTrip, payload);
+        eventBus?.emit(TripJoinedEvent(trip: updatedTrip));
         return updatedTrip;
       }
       rethrow;
@@ -595,6 +605,7 @@ class TripRepository {
         }
         await _saveTripsAndCache(trips.map((t) => t.toJson()).toList());
         await syncService.enqueueMutation(MutationType.joinTrip, payload);
+        eventBus?.emit(TripJoinedEvent(trip: updatedTrip));
         return updatedTrip;
       }
       throw NetworkException(message: "Could not join trip: $e");

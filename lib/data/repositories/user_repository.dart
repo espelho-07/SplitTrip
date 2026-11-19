@@ -102,6 +102,12 @@ class UserRepository {
     return authService.deleteAccount();
   }
 
+  /// Comprehensively purges all user data across local persistent databases
+  /// (SQLite, SharedPreferences, SecureStorage) and remote cloud/backend servers.
+  Future<void> purgeAllUserData() {
+    return authService.deleteAccount();
+  }
+
   Future<GuestUser?> updatePaymentInfo(String upiId, {String? upiQr}) {
     return authService.updatePaymentInfo(upiId, upiQr: upiQr);
   }

@@ -14,6 +14,13 @@ class DatabaseManager {
     return this.pgAdapter !== null && this.pgAdapter.isConnected;
   }
 
+  getAdapter() {
+    if (process.env.DB_ENGINE === 'memory') {
+      return null;
+    }
+    return this.pgAdapter;
+  }
+
   async init() {
     console.log('[DB] initialization started');
 
@@ -28,6 +35,8 @@ class DatabaseManager {
           const migrationResult = await MigrationRunner.runMigrations(this.pgAdapter);
           console.log('[DB] migrations completed');
           console.log('[Kith Database] Migration summary:', migrationResult);
+          const { db } = require('./database');
+          db.setPostgresAdapter(this.pgAdapter);
           this.isReady = true;
           this.lastError = null;
         })();

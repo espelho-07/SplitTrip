@@ -288,12 +288,18 @@ class AuthViewModel extends ChangeNotifier {
 
   /// Permanently deletes the account and all associated cloud data.
   Future<bool> deleteAccount() async {
+    return deleteAccountAndPurgeData();
+  }
+
+  /// Permanently deletes the account and all associated local and cloud data.
+  /// Encapsulates multi-store purging across SQLite, SecureStorage, LocalStorage, and Remote backend.
+  Future<bool> deleteAccountAndPurgeData() async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      await userRepo.deleteAccount();
+      await userRepo.purgeAllUserData();
       _currentUser = null;
       _authState = AuthState.signedOut;
       return true;

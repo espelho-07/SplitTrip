@@ -1,9 +1,14 @@
 const crypto = require('crypto');
 const { db } = require('../db/database');
+const { dbManager } = require('../db/db_manager');
 const { AppError } = require('../middleware/error_handler');
 const pushNotificationService = require('./push_notification_service');
 
 class SettlementService {
+  constructor(adapter = null) {
+    this.adapter = adapter || dbManager.getAdapter();
+  }
+
   /**
    * Greedy min-cash-flow graph reduction algorithm.
    * Transforms O(N^2) pairwise debts into minimal O(N) direct transfers.

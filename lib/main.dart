@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/config/app_config.dart';
 import 'core/config/supabase_config.dart';
+import 'core/events/app_event_bus.dart';
 import 'core/network/api_client.dart';
 import 'core/network/realtime_client.dart' as kith_realtime;
 import 'core/localization/app_language.dart';
@@ -115,6 +116,9 @@ void main() async {
   unawaited(p2pSyncService.start());
   unawaited(appVersionService.checkVersion());
 
+  // Cross-ViewModel reactive event bus (created before repositories)
+  final appEventBus = AppEventBus();
+
   // Repositories
   final userRepo = UserRepository(authService: authService);
   final tripRepo = TripRepository(
@@ -122,12 +126,14 @@ void main() async {
     syncService: syncService,
     apiClient: apiClient,
     realtimeClient: realtimeClient,
+    eventBus: appEventBus,
   );
   final expenseRepo = ExpenseRepository(
     storage: storageService,
     syncService: syncService,
     apiClient: apiClient,
     realtimeClient: realtimeClient,
+    eventBus: appEventBus,
   );
 
 
@@ -178,6 +184,7 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
+        Provider<AppEventBus>.value(value: appEventBus),
         Provider<LocalStorageService>.value(value: storageService),
         Provider<NotificationService>.value(value: notificationService),
         Provider<FcmService>.value(value: fcmService),
@@ -206,6 +213,7 @@ void main() async {
             expenseRepo: expenseRepo,
             storage: storageService,
             realtimeClient: realtimeClient,
+            eventBus: appEventBus,
           ),
         ),
         ChangeNotifierProvider(

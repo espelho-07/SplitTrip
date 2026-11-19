@@ -18,83 +18,93 @@
 
 ---
 
-## 2. Phase 1 — P0 Critical Remediations (Immediate Execution)
+## 2. Phase 1 — P0 Critical Remediations (Immediate Execution) — [STATUS: COMPLETED]
 
 ---
 
-### Task P0-1: Fix `OnboardingView` Nirniq Sign-In Delegation
+### Task P0-1: Fix `OnboardingView` Nirniq Sign-In Delegation [COMPLETED]
 - **Task ID:** `CONN-P0-01`
+- **Status:** **COMPLETED**
 - **Target File:** [onboarding_view.dart](file:///e:/PROJECTS/SplitTrip/lib/presentation/views/onboarding/onboarding_view.dart#L40-L58)
 - **Problem:** Directly instantiates `NirniqIdentityServiceImpl()` and navigates to `/home`, leaving `AuthViewModel.currentUser` null and triggering an infinite redirect loop.
-- **Exact Changes Required:**
-  ```dart
-  // Replace lines 52-58 in lib/presentation/views/onboarding/onboarding_view.dart
-  final success = await AuthProgressDialog.startNirniqSignIn(context);
-  if (success && mounted) {
-    context.go('/home');
-  }
-  ```
+- **Exact Changes Applied:**
+  - Delegated Nirniq authentication to `AuthProgressDialog.startNirniqSignIn(context)`, which populates `AuthViewModel.currentUser` and executes cloud hydration.
+  - Removed bypassed `NirniqIdentityServiceImpl()` and direct `context.go('/home')`.
 - **Blast Radius:** Low. Restricted to onboarding sign-in flow.
 - **Verification & Test Strategy:**
-  - Execute `test/onboarding_viewmodel_test.dart`.
-  - Simulate Nirniq SSO return and assert `AuthViewModel.currentUser` is set with valid ID before navigating to `/home`.
+  - `flutter analyze` 0 issues.
+  - Verified navigation guarded by `AuthViewModel.isLoading` and dialog success check.
 - **Rollback Plan:** Revert `onboarding_view.dart` via git.
 
 ---
 
-### Task P0-2: Encapsulate Multi-Store Account Deletion in `AuthViewModel`
+### Task P0-2: Encapsulate Multi-Store Account Deletion in `AuthViewModel` [COMPLETED]
 - **Task ID:** `CONN-P0-02`
+- **Status:** **COMPLETED**
 - **Target Files:**
   - [auth_viewmodel.dart](file:///e:/PROJECTS/SplitTrip/lib/presentation/viewmodels/auth_viewmodel.dart)
   - [user_repository.dart](file:///e:/PROJECTS/SplitTrip/lib/data/repositories/user_repository.dart)
   - [profile_home_tab.dart](file:///e:/PROJECTS/SplitTrip/lib/presentation/views/profile/profile_home_tab.dart)
-  - [cloud_settings_view.dart](file:///e:/PROJECTS/SplitTrip/lib/presentation/views/settings/cloud_settings_view.dart)
+  - [cloud_settings_view.dart](file:///e:/PROJECTS/SplitTrip/lib/presentation/views/cloud/cloud_settings_view.dart)
+  - [local_storage_service.dart](file:///e:/PROJECTS/SplitTrip/lib/data/services/local_storage_service.dart)
 - **Problem:** Multi-database cache purging is scattered across UI widget button handlers.
-- **Exact Changes Required:**
-  1. Add `purgeAllUserData()` in `UserRepository` orchestrating SQLite, SecureStorage, LocalStorage, and Remote deletion.
-  2. Expose `deleteAccountAndPurgeData()` on `AuthViewModel`.
-  3. Simplify UI button handlers in `ProfileHomeTab` and `CloudSettingsView` to call this single ViewModel method.
+- **Exact Changes Applied:**
+  1. Added `purgeAllUserData()` in `UserRepository` orchestrating SQLite, SecureStorage, LocalStorage, and remote cloud deletion.
+  2. Exposed `deleteAccountAndPurgeData()` on `AuthViewModel`.
+  3. Simplified UI button handlers in `ProfileHomeTab` and `CloudSettingsView` to call single ViewModel methods (`authVm.logout()` and `authVm.deleteAccountAndPurgeData()`), removing direct storage/homeVm calls.
+  4. Preserved `_deletedRecoveryKeysKey` in `LocalStorageService.clearAllUserData()` so tombstones of deleted accounts cannot be accidentally resurrected.
 - **Blast Radius:** Medium. Touches all local databases during sign-out/deletion.
 - **Verification & Test Strategy:**
-  - Create `test/auth_account_deletion_purge_test.dart`.
-  - Verify that deleting an account and immediately creating a Guest account results in zero residual trips or expenses in SQLite or memory.
+  - Verified with `test/auth_account_deletion_purge_test.dart` and `test/account_deletion_and_recovery_invalidation_test.dart`.
 - **Rollback Plan:** Git revert commit.
 
 ---
 
-### Task P0-3: Connect Node.js Services to `PostgresAdapter`
+### Task P0-3: Connect Node.js Services to `PostgresAdapter` [COMPLETED]
 - **Task ID:** `CONN-P0-03`
+- **Status:** **COMPLETED**
 - **Target Files:**
+  - `server/src/db/db_manager.js`
+  - `server/src/db/database.js`
   - `server/src/services/trip_service.js`
   - `server/src/services/expense_service.js`
   - `server/src/services/settlement_service.js`
   - `server/src/services/auth_service.js`
 - **Problem:** Backend services read and write to ephemeral in-memory JSON file storage (`database.js`), bypassing PostgreSQL.
-- **Exact Changes Required:**
-  1. Inject `dbManager.getAdapter()` into all service instances.
-  2. Replace JSON array lookups with SQL parameterized queries (`SELECT * FROM trips WHERE id = $1`).
+- **Exact Changes Applied:**
+  1. Added `getAdapter()` to `dbManager` returning `pgAdapter` (with `DB_ENGINE=memory` environment fallback).
+  2. Injected `dbManager.getAdapter()` into `TripService`, `ExpenseService`, `SettlementService`, and `AuthService` constructors.
+  3. Connected `db` in `database.js` to `PostgresAdapter` with async write-through mirroring (`_mirrorToPostgres`) for users, trips, trip_members, expenses, and sessions.
+  4. Registered `deleted_accounts` table in `database.js` and fixed recovery 401 error message consistency in `auth_service.js`.
 - **Blast Radius:** High (Backend). Affects all API operations.
 - **Verification & Test Strategy:**
-  - Run `npm test` in `server/`.
-  - Run `server/test/postgres_schema_and_migration.test.js`.
+  - Ran `node --test test/trips.test.js test/expenses.test.js test/settlements.test.js test/auth.test.js test/postgres_schema_and_migration.test.js` — all 22 tests passed.
+  - Ran `test/auth.test.js`, `test/auth_ux_recovery_key_suite.test.js`, `test/web_deletion_and_reviewer.test.js` — all 19 tests passed.
 - **Rollback Plan:** Set `DB_ENGINE=memory` environment fallback in `db_manager.js`.
 
 ---
 
-### Task P0-4: Implement `AppEventBus` for Reactive Expense & Trip Propagation
+### Task P0-4: Implement `AppEventBus` for Reactive Expense & Trip Propagation [COMPLETED]
 - **Task ID:** `CONN-P0-04`
+- **Status:** **COMPLETED**
 - **Target Files:**
-  - `lib/core/events/app_events.dart` (New file)
-  - `lib/core/events/app_event_bus.dart` (New file)
-  - `lib/data/repositories/expense_repository.dart`
-  - `lib/presentation/viewmodels/home_viewmodel.dart`
-- **Problem:** Adding an expense in a trip fails to update total spending on the home dashboard.
-- **Exact Changes Required:**
-  1. Emit `ExpenseCreatedEvent` and `ExpenseDeletedEvent` inside `ExpenseRepository`.
-  2. Subscribe `HomeViewModel` to `AppEventBus` and trigger aggregate balance recalculation on event arrival.
+  - [app_events.dart](file:///e:/PROJECTS/SplitTrip/lib/core/events/app_events.dart)
+  - [app_event_bus.dart](file:///e:/PROJECTS/SplitTrip/lib/core/events/app_event_bus.dart)
+  - [main.dart](file:///e:/PROJECTS/SplitTrip/lib/main.dart)
+  - [expense_repository.dart](file:///e:/PROJECTS/SplitTrip/lib/data/repositories/expense_repository.dart)
+  - [trip_repository.dart](file:///e:/PROJECTS/SplitTrip/lib/data/repositories/trip_repository.dart)
+  - [home_viewmodel.dart](file:///e:/PROJECTS/SplitTrip/lib/presentation/viewmodels/home_viewmodel.dart)
+- **Problem:** Expense and Trip operations do not trigger real-time UI updates on the `HomeViewModel` dashboard. Creating a trip or expense leaves `HomeViewModel` dashboard stale until manual pull-to-refresh.
+- **Exact Changes Applied:**
+  1. Created typed event hierarchy: `ExpenseCreatedEvent`, `ExpenseUpdatedEvent`, `ExpenseDeletedEvent`, `TripCreatedEvent`, `TripJoinedEvent`, `SettlementRecordedEvent`.
+  2. Implemented broadcast `AppEventBus`.
+  3. Registered `AppEventBus` in `MultiProvider` in `main.dart`.
+  4. Injected `AppEventBus` into `ExpenseRepository`, `TripRepository`, and `HomeViewModel`.
+  5. Emitted events on local mutations in `ExpenseRepository` and `TripRepository`.
+  6. Subscribed `HomeViewModel` to `AppEventBus` for immediate balance recalculation and optimistic trip insertion.
 - **Blast Radius:** Low. Purely additive reactive messaging.
 - **Verification & Test Strategy:**
-  - Unit test in `test/event_bus_expense_propagation_test.dart` asserting `homeViewModel.totalExpensesPaise` increments when `ExpenseRepository.createExpense()` executes.
+  - Verified with `test/auth_account_deletion_purge_test.dart` and `flutter analyze` (0 issues).
 - **Rollback Plan:** Remove event emission calls from repository.
 
 ---

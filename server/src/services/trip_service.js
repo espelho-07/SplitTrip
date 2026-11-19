@@ -1,9 +1,14 @@
 const crypto = require('crypto');
 const { db } = require('../db/database');
+const { dbManager } = require('../db/db_manager');
 const { AppError } = require('../middleware/error_handler');
 const notificationService = require('./notification_service');
 
 class TripService {
+  constructor(adapter = null) {
+    this.adapter = adapter || dbManager.getAdapter();
+  }
+
   _generateInviteCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let code = '';
