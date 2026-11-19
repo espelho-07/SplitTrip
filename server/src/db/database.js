@@ -62,6 +62,7 @@ class Database {
           trip_members: 'DELETE FROM trip_members WHERE id = $1',
           expenses: 'DELETE FROM expenses WHERE id = $1',
           settlements: 'DELETE FROM settlements WHERE id = $1',
+          notifications: 'DELETE FROM notifications WHERE id = $1',
         };
         const sql = queryMap[tableName];
         if (sql) {
@@ -149,6 +150,33 @@ class Database {
               record.paidById || record.paidByMemberId || 'unknown',
               record.splitType || 'equal',
               record.isDeleted || false,
+            ]
+          ).catch(() => {});
+        } else if (tableName === 'notifications' && record.id && record.recipientUserId) {
+          this.pgAdapter.query(
+            `INSERT INTO notifications (id, recipient_user_id, actor_user_id, trip_id, type, title, body, status, payment_id, settlement_id, data, deleted, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+             ON CONFLICT (id) DO UPDATE SET
+               title = EXCLUDED.title,
+               body = EXCLUDED.body,
+               status = EXCLUDED.status,
+               deleted = EXCLUDED.deleted,
+               updated_at = EXCLUDED.updated_at`,
+            [
+              record.id,
+              record.recipientUserId,
+              record.actorUserId || null,
+              record.tripId || null,
+              record.type || 'SYSTEM',
+              record.title || 'Notification',
+              record.body || record.description || '',
+              record.status || (record.isRead ? 'READ' : 'UNREAD'),
+              record.paymentId || null,
+              record.settlementId || null,
+              record.data ? JSON.stringify(record.data) : null,
+              record.deleted ? true : false,
+              record.createdAt || new Date().toISOString(),
+              record.updatedAt || new Date().toISOString(),
             ]
           ).catch(() => {});
         }

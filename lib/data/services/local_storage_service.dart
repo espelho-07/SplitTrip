@@ -1391,6 +1391,22 @@ class LocalStorageService {
 
   static const String _notificationsKey = 'kith_notifications';
 
+  static int _compareNotificationMaps(Map<String, dynamic> a, Map<String, dynamic> b) {
+    final aRaw = a['timestamp'] ?? a['createdAt'] ?? a['created_at'];
+    final bRaw = b['timestamp'] ?? b['createdAt'] ?? b['created_at'];
+    final aTime = aRaw != null
+        ? (DateTime.tryParse(aRaw.toString()) ?? DateTime.fromMillisecondsSinceEpoch(0))
+        : DateTime.fromMillisecondsSinceEpoch(0);
+    final bTime = bRaw != null
+        ? (DateTime.tryParse(bRaw.toString()) ?? DateTime.fromMillisecondsSinceEpoch(0))
+        : DateTime.fromMillisecondsSinceEpoch(0);
+    final cmp = bTime.compareTo(aTime);
+    if (cmp != 0) return cmp;
+    final aId = (a['id'] ?? '').toString();
+    final bId = (b['id'] ?? '').toString();
+    return bId.compareTo(aId);
+  }
+
   List<Map<String, dynamic>> getSavedNotifications() {
     final raw = _prefs.getString(_notificationsKey);
 
@@ -1398,8 +1414,9 @@ class LocalStorageService {
 
     try {
       final list = jsonDecode(raw) as List<dynamic>;
-
-      return list.cast<Map<String, dynamic>>();
+      final notifs = list.cast<Map<String, dynamic>>().toList();
+      notifs.sort(_compareNotificationMaps);
+      return notifs;
     } catch (_) {
       return [];
     }
@@ -1414,17 +1431,55 @@ class LocalStorageService {
   Future<void> addNotification(Map<String, dynamic> notifJson) async {
     final current = getSavedNotifications();
 
-    current.removeWhere((n) => n['id'] == notifJson['id']);
+    current.removeWhere((n) =>
+        n['id'] == notifJson['id'] ||
+        (notifJson['idempotencyKey'] != null &&
+            notifJson['idempotencyKey'].toString().isNotEmpty &&
+            n['idempotencyKey'] == notifJson['idempotencyKey']));
 
-    current.insert(0, notifJson);
+    current.add(notifJson);
+    current.sort(_compareNotificationMaps);
 
-    // Keep last 100 notifications
-
-    if (current.length > 100) {
-      current.removeRange(100, current.length);
+    // Keep last 200 notifications
+    if (current.length > 200) {
+      current.removeRange(200, current.length);
     }
 
     await saveNotifications(current);
+  }
+
+  Future<void> addNotificationsBatch(List<Map<String, dynamic>> batch) async {
+    if (batch.isEmpty) return;
+    final current = getSavedNotifications();
+    final Map<String, Map<String, dynamic>> byId = {};
+
+    for (final item in current) {
+      final id = item['id']?.toString() ?? item['idempotencyKey']?.toString();
+      if (id != null) byId[id] = item;
+    }
+
+    for (final item in batch) {
+      final id = item['id']?.toString() ?? item['idempotencyKey']?.toString();
+      if (id != null && id.isNotEmpty) {
+        if (byId.containsKey(id)) {
+          final existing = byId[id]!;
+          final merged = Map<String, dynamic>.from(item);
+          if (existing['isRead'] == true) {
+            merged['isRead'] = true;
+          }
+          byId[id] = merged;
+        } else {
+          byId[id] = Map<String, dynamic>.from(item);
+        }
+      }
+    }
+
+    final all = byId.values.toList();
+    all.sort(_compareNotificationMaps);
+    if (all.length > 200) {
+      all.removeRange(200, all.length);
+    }
+    await saveNotifications(all);
   }
 
   Future<void> markAllNotificationsAsRead() async {

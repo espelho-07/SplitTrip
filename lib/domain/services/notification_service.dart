@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/services.dart';
 import '../../core/network/api_client.dart';
+import '../../core/network/realtime_client.dart';
 import '../../data/services/local_storage_service.dart';
 
 enum NotificationCategory {
@@ -29,6 +30,12 @@ class AppNotificationItem {
   final String? route;
   final String? actionLabel;
   final String? idempotencyKey;
+  final String? actorName;
+  final String? tripName;
+  final String? tripId;
+  final int? amountInPaise;
+  final String? subtype;
+  final Map<String, dynamic>? metadata;
 
   AppNotificationItem({
     required this.id,
@@ -40,6 +47,12 @@ class AppNotificationItem {
     this.route,
     this.actionLabel,
     this.idempotencyKey,
+    this.actorName,
+    this.tripName,
+    this.tripId,
+    this.amountInPaise,
+    this.subtype,
+    this.metadata,
   });
 
   Map<String, dynamic> toJson() => {
@@ -49,35 +62,100 @@ class AppNotificationItem {
     'timestamp': timestamp.toIso8601String(),
     'type': type.name,
     'isRead': isRead,
-    'route': route,
-    'actionLabel': actionLabel,
+    if (route != null) 'route': route,
+    if (actionLabel != null) 'actionLabel': actionLabel,
     if (idempotencyKey != null) 'idempotencyKey': idempotencyKey,
+    if (actorName != null) 'actorName': actorName,
+    if (tripName != null) 'tripName': tripName,
+    if (tripId != null) 'tripId': tripId,
+    if (amountInPaise != null) 'amountInPaise': amountInPaise,
+    if (subtype != null) 'subtype': subtype,
+    if (metadata != null) 'metadata': metadata,
   };
 
   factory AppNotificationItem.fromJson(Map<String, dynamic> json) {
+    final rawTs = json['timestamp'] ?? json['createdAt'] ?? json['created_at'];
+    DateTime parsedTime;
+    if (rawTs is DateTime) {
+      parsedTime = rawTs;
+    } else if (rawTs is int) {
+      parsedTime = DateTime.fromMillisecondsSinceEpoch(rawTs);
+    } else if (rawTs is String && rawTs.isNotEmpty) {
+      parsedTime = DateTime.tryParse(rawTs)?.toLocal() ?? DateTime.now();
+    } else {
+      parsedTime = DateTime.now();
+    }
+
+    final rawType = (json['type'] ?? json['subtype'] ?? '').toString();
+    final lowerType = rawType.toLowerCase();
+
+    NotificationType notifType;
+    if (NotificationType.values.any((e) => e.name == rawType)) {
+      notifType = NotificationType.values.firstWhere((e) => e.name == rawType);
+    } else if (lowerType.contains('expense')) {
+      notifType = NotificationType.expense;
+    } else if (lowerType.contains('settle') || lowerType.contains('pay')) {
+      notifType = NotificationType.settlement;
+    } else if (lowerType.contains('trip') || lowerType.contains('member')) {
+      notifType = NotificationType.trip;
+    } else if (lowerType.contains('ipo')) {
+      notifType = NotificationType.ipo;
+    } else {
+      notifType = NotificationType.system;
+    }
+
+    final meta = json['metadata'] is Map
+        ? Map<String, dynamic>.from(json['metadata'] as Map)
+        : (json['data'] is Map ? Map<String, dynamic>.from(json['data'] as Map) : null);
+
+    final actorName = (json['actorName'] ?? json['actor_name'] ?? meta?['actorName'] ?? meta?['actor_name']) as String?;
+    final tripName = (json['tripName'] ?? json['trip_name'] ?? meta?['tripName'] ?? meta?['trip_name']) as String?;
+    final tripId = (json['tripId'] ?? json['trip_id'] ?? meta?['tripId'] ?? meta?['trip_id']) as String?;
+
+    final rawAmt = json['amountInPaise'] ?? json['amount_in_paise'] ?? meta?['amountInPaise'] ?? meta?['amount_in_paise'] ?? meta?['amount'];
+    final amountInPaise = rawAmt is num ? rawAmt.toInt() : (rawAmt is String ? int.tryParse(rawAmt) : null);
+
+    final rawRoute = json['route'] as String? ?? (tripId != null ? '/trip/$tripId' : null);
+
     return AppNotificationItem(
-      id: json['id'] as String? ?? 'notif_${DateTime.now().millisecondsSinceEpoch}',
+      id: (json['id'] ?? 'notif_${parsedTime.millisecondsSinceEpoch}').toString(),
       title: json['title'] as String? ?? 'Notification',
-      description: json['description'] as String? ?? '',
-      timestamp: json['timestamp'] != null
-          ? DateTime.tryParse(json['timestamp'] as String) ?? DateTime.now()
-          : DateTime.now(),
-      type: NotificationType.values.firstWhere(
-        (e) => e.name == json['type'],
-        orElse: () => NotificationType.system,
-      ),
-      isRead: json['isRead'] as bool? ?? false,
-      route: json['route'] as String?,
+      description: json['description'] as String? ?? json['body'] as String? ?? '',
+      timestamp: parsedTime,
+      type: notifType,
+      isRead: json['isRead'] as bool? ?? (json['status'] == 'READ'),
+      route: rawRoute,
       actionLabel: json['actionLabel'] as String?,
       idempotencyKey: json['idempotencyKey'] as String?,
+      actorName: actorName,
+      tripName: tripName,
+      tripId: tripId,
+      amountInPaise: amountInPaise,
+      subtype: json['subtype'] as String? ?? rawType,
+      metadata: meta,
     );
+  }
+
+  static int compareNewestFirst(AppNotificationItem a, AppNotificationItem b) {
+    final timeDiff = b.timestamp.compareTo(a.timestamp);
+    if (timeDiff != 0) return timeDiff;
+    return b.id.compareTo(a.id);
+  }
+
+  String? get formattedAmount {
+    if (amountInPaise == null || amountInPaise! <= 0) return null;
+    final rupees = amountInPaise! / 100.0;
+    if (amountInPaise! % 100 == 0) {
+      return '₹${rupees.toInt()}';
+    }
+    return '₹${rupees.toStringAsFixed(2)}';
   }
 
   String get timeAgo {
     final now = DateTime.now();
     final diff = now.difference(timestamp);
 
-    if (diff.inSeconds < 45) return 'Just now';
+    if (diff.isNegative || diff.inSeconds < 45) return 'Just now';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
     if (diff.inHours < 24) return '${diff.inHours}h ago';
     if (diff.inDays < 7) return '${diff.inDays}d ago';
@@ -120,11 +198,40 @@ class NotificationService {
   static const String _prefSettlementKey = 'notif_pref_settlement';
   static const String _prefIpoKey = 'notif_pref_ipo';
 
+  static int _notifCounter = 0;
+
   final LocalStorageService? _storage;
   final StreamController<AppNotificationItem> _notificationStreamController =
       StreamController<AppNotificationItem>.broadcast();
 
-  NotificationService([this._storage]);
+  StreamSubscription? _realtimeSubscription;
+  RealtimeClient? _realtimeClient;
+
+  NotificationService([this._storage, this._realtimeClient]) {
+    if (_realtimeClient != null) {
+      attachRealtimeClient(_realtimeClient!);
+    }
+  }
+
+  void attachRealtimeClient(RealtimeClient client) {
+    _realtimeClient = client;
+    _realtimeSubscription?.cancel();
+    _realtimeSubscription = client.events.listen((event) {
+      _handleRealtimeEvent(event);
+    });
+  }
+
+  void _handleRealtimeEvent(RealtimeTripEvent event) {
+    if (event.type == 'notification_created') {
+      final notifMap = event.data;
+      if (notifMap.isEmpty) return;
+      try {
+        final parsedItem = AppNotificationItem.fromJson(notifMap);
+        _storage?.addNotification(parsedItem.toJson());
+        _notificationStreamController.add(parsedItem);
+      } catch (_) {}
+    }
+  }
 
   Stream<AppNotificationItem> get onNotification => _notificationStreamController.stream;
 
@@ -190,7 +297,9 @@ class NotificationService {
 
   List<AppNotificationItem> getNotifications() {
     final raw = _storage?.getSavedNotifications() ?? [];
-    return raw.map((json) => AppNotificationItem.fromJson(json)).toList();
+    final items = raw.map((json) => AppNotificationItem.fromJson(json)).toList();
+    items.sort(AppNotificationItem.compareNewestFirst);
+    return items;
   }
 
   int get unreadCount => _storage?.getUnreadNotificationCount() ?? 0;
@@ -202,6 +311,13 @@ class NotificationService {
     String? route,
     String? actionLabel,
     String? idempotencyKey,
+    String? actorName,
+    String? tripName,
+    String? tripId,
+    int? amountInPaise,
+    String? subtype,
+    Map<String, dynamic>? metadata,
+    DateTime? timestamp,
   }) async {
     // Check preference
     if (type == NotificationType.expense && !_expenseNotificationsEnabled) return;
@@ -216,16 +332,26 @@ class NotificationService {
       if (alreadyExists) return;
     }
 
+    final notifTime = timestamp ?? DateTime.now();
+    final notifId = (idempotencyKey != null && idempotencyKey.isNotEmpty)
+        ? idempotencyKey
+        : 'notif_${notifTime.microsecondsSinceEpoch}_${_notifCounter++}';
     final item = AppNotificationItem(
-      id: idempotencyKey ?? 'notif_${DateTime.now().microsecondsSinceEpoch}',
+      id: notifId,
       title: title,
       description: description,
-      timestamp: DateTime.now(),
+      timestamp: notifTime,
       type: type,
       isRead: false,
       route: route,
       actionLabel: actionLabel,
       idempotencyKey: idempotencyKey,
+      actorName: actorName,
+      tripName: tripName,
+      tripId: tripId,
+      amountInPaise: amountInPaise,
+      subtype: subtype,
+      metadata: metadata,
     );
 
     await _storage?.addNotification(item.toJson());
@@ -265,6 +391,7 @@ class NotificationService {
           ? res
           : (res is Map && res['data'] is List ? res['data'] as List : null);
       if (notifsList != null) {
+        final List<Map<String, dynamic>> parsedBatch = [];
         for (final item in notifsList) {
           if (item is Map) {
             final notifMap = Map<String, dynamic>.from(item);
@@ -275,7 +402,7 @@ class NotificationService {
                 ? NotificationType.expense
                 : (typeLower.contains('trip') || typeLower.contains('member'))
                     ? NotificationType.trip
-                    : NotificationType.settlement;
+                    : (typeLower.contains('ipo') ? NotificationType.ipo : NotificationType.settlement);
 
             String actionLabel = 'Open';
             if (typeStr == 'PAYMENT_CONFIRMATION_REQUIRED') {
@@ -284,26 +411,46 @@ class NotificationService {
               actionLabel = 'View Expense';
             } else if (typeStr == 'EXPENSE_DELETED') {
               actionLabel = 'View Trip';
+            } else if (typeStr == 'MEMBER_JOINED') {
+              actionLabel = 'View Trip';
             }
 
+            final data = notifMap['data'] is Map ? Map<String, dynamic>.from(notifMap['data']) : null;
+            final actorName = notifMap['actorName'] as String? ?? data?['actorName'] as String?;
+            final tripName = notifMap['tripName'] as String? ?? data?['tripName'] as String?;
+            final tripId = notifMap['tripId'] as String? ?? data?['tripId'] as String?;
+            final rawAmt = notifMap['amountInPaise'] ?? data?['amountInPaise'] ?? data?['amount'];
+            final amountInPaise = rawAmt is num ? rawAmt.toInt() : (rawAmt is String ? int.tryParse(rawAmt) : null);
+
+            final tsStr = notifMap['createdAt'] ?? notifMap['created_at'] ?? notifMap['timestamp'];
+            final timestamp = tsStr != null
+                ? (DateTime.tryParse(tsStr.toString())?.toLocal() ?? DateTime.now())
+                : DateTime.now();
+
+            final targetRoute = notifMap['route'] as String? ?? (tripId != null ? '/trip/$tripId' : null);
+
             final parsedItem = AppNotificationItem(
-              id: notifMap['id'] as String? ?? 'notif_${DateTime.now().millisecondsSinceEpoch}',
+              id: notifMap['id'] as String? ?? 'notif_${timestamp.millisecondsSinceEpoch}',
               title: notifMap['title'] as String? ?? 'Notification',
               description: notifMap['description'] as String? ?? notifMap['body'] as String? ?? '',
-              timestamp: notifMap['createdAt'] != null
-                  ? DateTime.tryParse(notifMap['createdAt'] as String) ?? DateTime.now()
-                  : DateTime.now(),
+              timestamp: timestamp,
               type: notifType,
-              isRead: notifMap['isRead'] as bool? ?? false,
-              route: notifMap['route'] as String?,
+              isRead: notifMap['isRead'] as bool? ?? (notifMap['status'] == 'READ'),
+              route: targetRoute,
               actionLabel: actionLabel,
-              idempotencyKey: notifMap['id'] as String? ?? (notifMap['expenseId'] != null ? '${notifMap['expenseId']}_$typeStr' : (notifMap['settlementId'] != null ? '${notifMap['settlementId']}_$typeStr' : null)),
+              idempotencyKey: notifMap['id'] as String?,
+              actorName: actorName,
+              tripName: tripName,
+              tripId: tripId,
+              amountInPaise: amountInPaise,
+              subtype: typeStr,
+              metadata: data,
             );
 
-            // Add without popping extra system status bar notification if syncing historical records
-            await _storage?.addNotification(parsedItem.toJson());
+            parsedBatch.add(parsedItem.toJson());
           }
         }
+        await _storage?.addNotificationsBatch(parsedBatch);
       }
     } catch (_) {
       // Non-blocking background sync
@@ -326,6 +473,11 @@ class NotificationService {
       type: NotificationType.settlement,
       route: tripId != null ? '/trip/$tripId' : null,
       actionLabel: 'Verify Payment',
+      actorName: payerName,
+      tripName: tripName,
+      tripId: tripId,
+      amountInPaise: amountInPaise,
+      subtype: 'PAYMENT_CONFIRMATION_REQUIRED',
     );
   }
 
@@ -344,6 +496,11 @@ class NotificationService {
       type: NotificationType.settlement,
       route: tripId != null ? '/trip/$tripId' : null,
       actionLabel: 'View Trip',
+      actorName: receiverName,
+      tripName: tripName,
+      tripId: tripId,
+      amountInPaise: amountInPaise,
+      subtype: 'PAYMENT_CONFIRMED',
     );
   }
 
@@ -363,6 +520,11 @@ class NotificationService {
       type: NotificationType.settlement,
       route: tripId != null ? '/trip/$tripId' : null,
       actionLabel: 'Send Proof',
+      actorName: receiverName,
+      tripName: tripName,
+      tripId: tripId,
+      amountInPaise: amountInPaise,
+      subtype: 'PAYMENT_DISPUTED',
     );
   }
 
@@ -383,6 +545,11 @@ class NotificationService {
       type: NotificationType.settlement,
       route: tripId != null ? '/trip/$tripId' : null,
       actionLabel: 'Review Proof',
+      actorName: payerName,
+      tripName: tripName,
+      tripId: tripId,
+      amountInPaise: amountInPaise,
+      subtype: 'PAYMENT_PROOF_SUBMITTED',
     );
   }
 
@@ -508,6 +675,7 @@ class NotificationService {
   }
 
   void dispose() {
+    _realtimeSubscription?.cancel();
     _notificationStreamController.close();
   }
 }

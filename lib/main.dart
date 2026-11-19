@@ -156,7 +156,7 @@ void main() async {
   }
 
   // Initialize Notification Service
-  final notificationService = NotificationService(storageService);
+  final notificationService = NotificationService(storageService, realtimeClient);
   await notificationService.init();
 
   // Initialize Firebase Cloud Messaging service for background/terminated push delivery

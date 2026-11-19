@@ -59,6 +59,14 @@ class NotificationService {
 
     db.insert('notifications', record);
     console.info(`[NotificationService] NOTIFICATION CREATED: id=${id}, recipient=${recipientUserId}, type=${type}`);
+
+    try {
+      const { realtimeHub } = require('../realtime/websocket_hub');
+      if (realtimeHub) {
+        realtimeHub.broadcastToUser(recipientUserId, 'notification_created', record);
+      }
+    } catch (_) {}
+
     return record;
   }
 
@@ -395,12 +403,20 @@ class NotificationService {
   }
 
   /**
-   * Retrieves all notifications for a specific user, newest first.
+   * Retrieves all notifications for a specific user, strictly newest first with deterministic tiebreaker.
    */
-  getNotificationsForUser(userId, { limit = 100, offset = 0 } = {}) {
+  getNotificationsForUser(userId, { limit = 100, offset = 0, type = null } = {}) {
     if (!userId) return [];
-    const notifs = db.find('notifications', (r) => r.recipientUserId === userId && !r.deleted);
-    const sorted = notifs.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    let notifs = db.find('notifications', (r) => r.recipientUserId === userId && !r.deleted);
+    if (type) {
+      const typeLower = type.toLowerCase();
+      notifs = notifs.filter((r) => r.type && r.type.toLowerCase() === typeLower);
+    }
+    const sorted = notifs.sort((a, b) => {
+      const timeDiff = new Date(b.createdAt) - new Date(a.createdAt);
+      if (timeDiff !== 0) return timeDiff;
+      return (b.id || '').localeCompare(a.id || '');
+    });
     const safeLimit = Math.min(200, Math.max(1, parseInt(limit, 10) || 100));
     const safeOffset = Math.max(0, parseInt(offset, 10) || 0);
     return sorted.slice(safeOffset, safeOffset + safeLimit);

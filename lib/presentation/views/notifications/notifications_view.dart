@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -11,6 +12,13 @@ import '../../../domain/models/payment_verification_request.dart';
 import '../../../domain/services/notification_service.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../payment/payment_verification_view.dart';
+
+enum _DateGroup {
+  today,
+  yesterday,
+  earlierThisWeek,
+  older,
+}
 
 class NotificationsView extends StatefulWidget {
   const NotificationsView({super.key});
@@ -29,16 +37,41 @@ class _NotificationsViewState extends State<NotificationsView> {
 
   List<AppNotificationItem> _notifications = [];
   String? _loadingNotificationId;
+  StreamSubscription<AppNotificationItem>? _notifSub;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadNotifications();
+      _setupRealtimeSubscription();
     });
   }
 
-  void _loadNotifications() {
+  @override
+  void dispose() {
+    _notifSub?.cancel();
+    super.dispose();
+  }
+
+  void _setupRealtimeSubscription() {
+    final notifService = Provider.of<NotificationService?>(context, listen: false);
+    _notifSub?.cancel();
+    _notifSub = notifService?.onNotification.listen((item) {
+      if (!mounted) return;
+      setState(() {
+        _notifications.removeWhere((n) =>
+            n.id == item.id ||
+            (item.idempotencyKey != null &&
+                item.idempotencyKey!.isNotEmpty &&
+                n.idempotencyKey == item.idempotencyKey));
+        _notifications.add(item);
+        _notifications.sort(AppNotificationItem.compareNewestFirst);
+      });
+    });
+  }
+
+  Future<void> _loadNotifications() async {
     final storage = context.read<LocalStorageService>();
     final raw = storage.getSavedNotifications();
     setState(() {
@@ -49,17 +82,22 @@ class _NotificationsViewState extends State<NotificationsView> {
       _ipoAlerts = storage.getBool('notif_pref_ipo') ?? true;
 
       _notifications = raw.map((json) => AppNotificationItem.fromJson(json)).toList();
+      _notifications.sort(AppNotificationItem.compareNewestFirst);
     });
 
-    // Background sync latest notifications & pending settlements from server
+    await _syncNotifications();
+  }
+
+  Future<void> _syncNotifications() async {
     final authVm = Provider.of<AuthViewModel?>(context, listen: false);
     final user = authVm?.currentUser;
     if (user != null) {
       final notifService = Provider.of<NotificationService?>(context, listen: false);
       final apiClient = Provider.of<ApiClient?>(context, listen: false);
       final expenseRepo = Provider.of<ExpenseRepository?>(context, listen: false);
+      final storage = context.read<LocalStorageService>();
       if (notifService != null && apiClient != null) {
-        Future.microtask(() async {
+        try {
           await notifService.syncServerNotifications(apiClient);
           if (expenseRepo != null) {
             await expenseRepo.syncPendingVerifications(user.id);
@@ -68,9 +106,10 @@ class _NotificationsViewState extends State<NotificationsView> {
             final updatedRaw = storage.getSavedNotifications();
             setState(() {
               _notifications = updatedRaw.map((json) => AppNotificationItem.fromJson(json)).toList();
+              _notifications.sort(AppNotificationItem.compareNewestFirst);
             });
           }
-        });
+        } catch (_) {}
       }
     }
   }
@@ -265,20 +304,63 @@ class _NotificationsViewState extends State<NotificationsView> {
   }
 
   List<AppNotificationItem> get _filteredList {
-    if (_selectedFilter == 'all') return _notifications;
-    if (_selectedFilter == 'expenses') {
-      return _notifications.where((n) => n.type == NotificationType.expense).toList();
+    List<AppNotificationItem> filtered;
+    switch (_selectedFilter) {
+      case 'unread':
+        filtered = _notifications.where((n) => !n.isRead).toList();
+        break;
+      case 'expenses':
+        filtered = _notifications.where((n) => n.type == NotificationType.expense).toList();
+        break;
+      case 'settlements':
+        filtered = _notifications.where((n) => n.type == NotificationType.settlement).toList();
+        break;
+      case 'members':
+      case 'trips':
+        filtered = _notifications.where((n) =>
+            n.type == NotificationType.trip ||
+            (n.subtype != null && n.subtype!.toLowerCase().contains('member'))).toList();
+        break;
+      case 'ipos':
+        filtered = _notifications.where((n) => n.type == NotificationType.ipo).toList();
+        break;
+      case 'all':
+      default:
+        filtered = List<AppNotificationItem>.from(_notifications);
+        break;
     }
-    if (_selectedFilter == 'settlements') {
-      return _notifications.where((n) => n.type == NotificationType.settlement).toList();
+    filtered.sort(AppNotificationItem.compareNewestFirst);
+    return filtered;
+  }
+
+  _DateGroup _classifyDate(DateTime dt) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final date = DateTime(dt.year, dt.month, dt.day);
+    final diffDays = today.difference(date).inDays;
+
+    if (diffDays <= 0) {
+      return _DateGroup.today;
+    } else if (diffDays == 1) {
+      return _DateGroup.yesterday;
+    } else if (diffDays <= 7) {
+      return _DateGroup.earlierThisWeek;
+    } else {
+      return _DateGroup.older;
     }
-    if (_selectedFilter == 'trips') {
-      return _notifications.where((n) => n.type == NotificationType.trip).toList();
+  }
+
+  String _groupLabel(_DateGroup group) {
+    switch (group) {
+      case _DateGroup.today:
+        return 'TODAY';
+      case _DateGroup.yesterday:
+        return 'YESTERDAY';
+      case _DateGroup.earlierThisWeek:
+        return 'EARLIER THIS WEEK';
+      case _DateGroup.older:
+        return 'OLDER';
     }
-    if (_selectedFilter == 'ipos') {
-      return _notifications.where((n) => n.type == NotificationType.ipo).toList();
-    }
-    return _notifications;
   }
 
   @override
@@ -346,9 +428,10 @@ class _NotificationsViewState extends State<NotificationsView> {
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
               children: [
                 _buildFilterChip('all', l10n.notificationsTabAll, isDark),
+                _buildFilterChip('unread', 'Unread', isDark, count: unreadCount),
                 _buildFilterChip('expenses', l10n.notificationsTabExpenses, isDark),
+                _buildFilterChip('members', 'Members', isDark),
                 _buildFilterChip('settlements', l10n.notificationsTabSettlements, isDark),
-                _buildFilterChip('trips', l10n.notificationsTabTrips, isDark),
                 _buildFilterChip('ipos', 'IPOs', isDark),
               ],
             ),
@@ -356,20 +439,72 @@ class _NotificationsViewState extends State<NotificationsView> {
           Expanded(
             child: items.isEmpty
                 ? _buildEmptyState(isDark, l10n)
-                : ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-                    physics: const BouncingScrollPhysics(),
-                    itemCount: items.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 10),
-                    itemBuilder: (ctx, idx) => _buildNotificationCard(items[idx], isDark),
-                  ),
+                : _buildGroupedList(items, isDark),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildFilterChip(String key, String label, bool isDark) {
+  Widget _buildGroupedList(List<AppNotificationItem> items, bool isDark) {
+    final grouped = <_DateGroup, List<AppNotificationItem>>{};
+    for (final item in items) {
+      final grp = _classifyDate(item.timestamp);
+      grouped.putIfAbsent(grp, () => []).add(item);
+    }
+
+    return RefreshIndicator(
+      onRefresh: _syncNotifications,
+      color: AppColors.emeraldLight,
+      backgroundColor: isDark ? const Color(0xFF0F1418) : Colors.white,
+      child: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+        children: [
+          for (final group in _DateGroup.values)
+            if (grouped.containsKey(group) && grouped[group]!.isNotEmpty) ...[
+              _buildSectionHeader(_groupLabel(group), isDark),
+              for (final item in grouped[group]!) ...[
+                _buildNotificationCard(item, isDark),
+                const SizedBox(height: 10),
+              ],
+              const SizedBox(height: 8),
+            ],
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8.0, bottom: 8.0, left: 4.0, right: 4.0),
+      child: Row(
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.1,
+              color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Container(
+              height: 1,
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : Colors.black.withValues(alpha: 0.06),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String key, String label, bool isDark, {int count = 0}) {
     final isSelected = _selectedFilter == key;
     return Padding(
       padding: const EdgeInsets.only(right: 8.0),
@@ -388,13 +523,38 @@ class _NotificationsViewState extends State<NotificationsView> {
             borderRadius: BorderRadius.circular(20),
           ),
           alignment: Alignment.center,
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: isSelected ? Colors.white : (isDark ? AppColors.darkTextSecondary : const Color(0xFF475569)),
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: isSelected
+                      ? Colors.white
+                      : (isDark ? AppColors.darkTextSecondary : const Color(0xFF475569)),
+                ),
+              ),
+              if (count > 0) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: isSelected ? Colors.white : AppColors.emeraldLight,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '$count',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: isSelected ? AppColors.emeraldPrimary : Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       ),
@@ -418,7 +578,10 @@ class _NotificationsViewState extends State<NotificationsView> {
         iconBg = AppColors.emeraldLight.withValues(alpha: 0.15);
         break;
       case NotificationType.trip:
-        icon = Icons.flight_takeoff_rounded;
+        final isMemberEvent = item.subtype?.toLowerCase().contains('member') == true ||
+            item.title.toLowerCase().contains('member') ||
+            item.title.toLowerCase().contains('joined');
+        icon = isMemberEvent ? Icons.person_add_alt_1_rounded : Icons.flight_takeoff_rounded;
         iconColor = AppColors.indigoAccent;
         iconBg = AppColors.indigoAccent.withValues(alpha: 0.15);
         break;
@@ -445,16 +608,24 @@ class _NotificationsViewState extends State<NotificationsView> {
         });
 
         final storage = context.read<LocalStorageService>();
-        storage.markNotificationAsRead(item.id);
+        final apiClient = Provider.of<ApiClient?>(context, listen: false);
+        final authVm = Provider.of<AuthViewModel?>(context, listen: false);
+        final expenseRepo = Provider.of<ExpenseRepository?>(context, listen: false);
+
+        await storage.markNotificationAsRead(item.id);
+
+        if (apiClient != null) {
+          try {
+            await apiClient.patch('/notifications/${item.id}/read', body: {});
+          } catch (_) {}
+        }
 
         try {
           if (item.type == NotificationType.settlement) {
-            final authVm = Provider.of<AuthViewModel?>(context, listen: false);
             final currentUserId = authVm?.currentUser?.id;
             if (currentUserId != null) {
               var pending = storage.getPendingVerificationsForReceiver(userId: currentUserId);
               if (pending.isEmpty) {
-                final expenseRepo = Provider.of<ExpenseRepository?>(context, listen: false);
                 if (expenseRepo != null) {
                   await expenseRepo.syncPendingVerifications(currentUserId);
                   pending = storage.getPendingVerificationsForReceiver(userId: currentUserId);
@@ -486,7 +657,6 @@ class _NotificationsViewState extends State<NotificationsView> {
           }
         }
       },
-
       child: Container(
         padding: const EdgeInsets.all(14.0),
         decoration: BoxDecoration(
@@ -496,17 +666,17 @@ class _NotificationsViewState extends State<NotificationsView> {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isDark
-                ? (item.isRead ? AppColors.darkBorderSubtle : AppColors.emeraldLight.withValues(alpha: 0.3))
-                : (item.isRead ? AppColors.lightBorderSubtle : AppColors.emeraldLight.withValues(alpha: 0.4)),
-            width: item.isRead ? 1 : 1.4,
+                ? (item.isRead ? AppColors.darkBorderSubtle : AppColors.emeraldLight.withValues(alpha: 0.35))
+                : (item.isRead ? AppColors.lightBorderSubtle : AppColors.emeraldLight.withValues(alpha: 0.45)),
+            width: item.isRead ? 1 : 1.5,
           ),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              width: 38,
-              height: 38,
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
                 color: iconBg,
                 shape: BoxShape.circle,
@@ -530,21 +700,24 @@ class _NotificationsViewState extends State<NotificationsView> {
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
                         child: Text(
                           item.title,
                           style: TextStyle(
                             fontSize: 14,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: item.isRead ? FontWeight.w600 : FontWeight.w800,
                             color: isDark ? AppColors.darkTextPrimary : const Color(0xFF0F172A),
                           ),
                         ),
                       ),
+                      const SizedBox(width: 8),
                       Text(
                         item.timeAgo,
                         style: TextStyle(
                           fontSize: 11,
+                          fontWeight: FontWeight.w500,
                           color: isDark ? AppColors.darkTextMuted : const Color(0xFF94A3B8),
                         ),
                       ),
@@ -559,57 +732,115 @@ class _NotificationsViewState extends State<NotificationsView> {
                       color: isDark ? AppColors.darkTextSecondary : const Color(0xFF475569),
                     ),
                   ),
-                  if (item.actionLabel != null || isLoadingThis) ...[
+                  if (item.tripName != null || item.formattedAmount != null || item.actionLabel != null || isLoadingThis) ...[
                     const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.emeraldLight.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (isLoadingThis) ...[
-                            const SizedBox(
-                              width: 11,
-                              height: 11,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 1.8,
-                                color: AppColors.emeraldLight,
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        if (item.tripName != null && item.tripName!.isNotEmpty)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF16202A) : const Color(0xFFEEF2F6),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
                               ),
                             ),
-                            const SizedBox(width: 6),
-                            const Text(
-                              'Opening...',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.emeraldLight,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.explore_outlined,
+                                  size: 11,
+                                  color: isDark ? AppColors.darkTextMuted : const Color(0xFF64748B),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  item.tripName!,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark ? AppColors.darkTextSecondary : const Color(0xFF475569),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (item.formattedAmount != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppColors.positiveGreenLight.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: AppColors.positiveGreenLight.withValues(alpha: 0.3),
                               ),
                             ),
-                          ] else ...[
-                            Text(
-                              '${item.actionLabel!} →',
+                            child: Text(
+                              item.formattedAmount!,
                               style: const TextStyle(
                                 fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.emeraldLight,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.positiveGreenLight,
                               ),
                             ),
-                          ],
-                        ],
-                      ),
+                          ),
+                        if (item.actionLabel != null || isLoadingThis)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppColors.emeraldLight.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (isLoadingThis) ...[
+                                  const SizedBox(
+                                    width: 11,
+                                    height: 11,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 1.8,
+                                      color: AppColors.emeraldLight,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  const Text(
+                                    'Opening...',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.emeraldLight,
+                                    ),
+                                  ),
+                                ] else ...[
+                                  Text(
+                                    '${item.actionLabel!} →',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.emeraldLight,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                      ],
                     ),
                   ],
                 ],
               ),
             ),
             if (!item.isRead) ...[
-              const SizedBox(width: 6),
+              const SizedBox(width: 8),
               Container(
                 width: 8,
                 height: 8,
+                margin: const EdgeInsets.only(top: 4),
                 decoration: const BoxDecoration(
                   color: AppColors.emeraldLight,
                   shape: BoxShape.circle,
