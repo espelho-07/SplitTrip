@@ -726,7 +726,17 @@ class AuthService {
 
   Future<void> logout() async {
     try {
-      await apiClient.post('/auth/fcm-token/delete', body: {});
+      final fcmToken = storage.getString('kith_fcm_token');
+      if (fcmToken != null && fcmToken.isNotEmpty) {
+        await apiClient.post('/auth/fcm-token/delete', body: {'token': fcmToken});
+        if (SupabaseConfig.isConfigured) {
+          try {
+            await _cloudSync.unregisterFcmToken(fcmToken);
+          } catch (_) {}
+        }
+      } else {
+        await apiClient.post('/auth/fcm-token/delete', body: {});
+      }
     } catch (_) {}
 
     try {

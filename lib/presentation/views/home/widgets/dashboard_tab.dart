@@ -519,7 +519,7 @@ class DashboardTab extends StatelessWidget {
                 HapticHelper.medium();
                 final scannedCode = await context.push<String>('/qr-scanner');
                 if (scannedCode != null && scannedCode.isNotEmpty && context.mounted) {
-                  context.push('/join-trip?code=$scannedCode');
+                  context.push('/trip-preview?code=$scannedCode');
                 }
               },
             ),

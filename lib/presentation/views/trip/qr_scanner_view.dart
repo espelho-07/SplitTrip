@@ -122,7 +122,7 @@ class _QrScannerViewState extends State<QrScannerView>
     if (Navigator.of(context).canPop()) {
       context.pop(cleanCode);
     } else {
-      context.pushReplacement('/join-trip?code=$cleanCode');
+      context.pushReplacement('/trip-preview?code=$cleanCode');
     }
   }
 
