@@ -241,24 +241,35 @@ class ReceiptParserService {
             final y = int.tryParse(matchIso.group(1)!);
             final m = int.tryParse(matchIso.group(2)!);
             final d = int.tryParse(matchIso.group(3)!);
-            if (y != null && m != null && d != null && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+            if (y != null && m != null && d != null && _isValidDate(y, m, d)) {
               date = DateTime(y, m, d);
             }
           } else {
             // Try DD/MM/YYYY or MM/DD/YYYY
             final matchNum = dateNumericRegex.firstMatch(line);
             if (matchNum != null) {
-              final dOrM = int.tryParse(matchNum.group(1)!);
-              final mOrD = int.tryParse(matchNum.group(2)!);
+              final first = int.tryParse(matchNum.group(1)!);
+              final second = int.tryParse(matchNum.group(2)!);
               var y = int.tryParse(matchNum.group(3)!);
               if (y != null && y < 100) y += 2000;
 
-              if (dOrM != null && mOrD != null && y != null) {
-                // In India, DD/MM/YYYY is standard. If dOrM > 12, it must be DD.
-                if (dOrM <= 31 && mOrD <= 12) {
-                  date = DateTime(y, mOrD, dOrM);
-                } else if (dOrM <= 12 && mOrD <= 31) {
-                  date = DateTime(y, dOrM, mOrD);
+              if (first != null && second != null && y != null) {
+                final isUsd = currency.toUpperCase() == 'USD';
+
+                if (isUsd) {
+                  // US convention: first is Month, second is Day
+                  if (first <= 12 && second <= 31 && _isValidDate(y, first, second)) {
+                    date = DateTime(y, first, second);
+                  } else if (first <= 31 && second <= 12 && _isValidDate(y, second, first)) {
+                    date = DateTime(y, second, first);
+                  }
+                } else {
+                  // Standard / Indian convention: first is Day, second is Month
+                  if (first <= 31 && second <= 12 && _isValidDate(y, second, first)) {
+                    date = DateTime(y, second, first);
+                  } else if (first <= 12 && second <= 31 && _isValidDate(y, first, second)) {
+                    date = DateTime(y, first, second);
+                  }
                 }
               }
             }
@@ -294,10 +305,19 @@ class ReceiptParserService {
     if (mIndex == -1) return null;
 
     final m = mIndex + 1;
-    if (d >= 1 && d <= 31) {
+    if (_isValidDate(y, m, d)) {
       return DateTime(y, m, d);
     }
     return null;
+  }
+
+  bool _isValidDate(int y, int m, int d) {
+    final currentYear = DateTime.now().year;
+    if (y < 2000 || y > currentYear + 1) return false;
+    if (m < 1 || m > 12) return false;
+    if (d < 1 || d > 31) return false;
+    final candidate = DateTime(y, m, d);
+    return candidate.year == y && candidate.month == m && candidate.day == d;
   }
 
   // ==========================================
@@ -313,42 +333,42 @@ class ReceiptParserService {
     int? additionalChargesInPaise;
     final taxes = <ReceiptTaxItem>[];
 
-    // Priority grand total regexes
+    // Priority grand total regexes (tolerant to OCR character confusion like O for 0, l for 1, S for 5)
     final totalRegex = RegExp(
-      r'\b(?:grand\s*total|net\s*payable|amount\s*payable|total\s*amount|total\s*due|net\s*amount|bill\s*amount|total\s*rs|total\s*inr|balance\s*due|total\b)[\s\.:₹=RsINR]*([0-9,]+(?:\.[0-9]{1,2})?)\b',
+      r'\b(?:grand\s*total|net\s*payable|amount\s*payable|total\s*amount|total\s*due|net\s*amount|bill\s*amount|total\s*rs|total\s*inr|balance\s*due|total\b)[\s\.:₹=RsINR]*([0-9OoSsIl,]+(?:\.[0-9OoSsIl]{1,2})?)\b',
       caseSensitive: false,
     );
 
     final subtotalRegex = RegExp(
-      r'\b(?:sub\s*total|subtotal|item\s*total|gross\s*amount|gross\s*total)[\s\.:₹=RsINR]*([0-9,]+(?:\.[0-9]{1,2})?)\b',
+      r'\b(?:sub\s*total|subtotal|item\s*total|gross\s*amount|gross\s*total)[\s\.:₹=RsINR]*([0-9OoSsIl,]+(?:\.[0-9OoSsIl]{1,2})?)\b',
       caseSensitive: false,
     );
 
     final discountRegex = RegExp(
-      r'\b(?:discount|disc|promo|offer|less)[\s\.:₹=RsINR\(\)]*([0-9,]+(?:\.[0-9]{1,2})?)\b',
+      r'\b(?:discount|disc|promo|offer|less)[\s\.:₹=RsINR\(\)]*([0-9OoSsIl,]+(?:\.[0-9OoSsIl]{1,2})?)\b',
       caseSensitive: false,
     );
 
     final roundOffRegex = RegExp(
-      r'\b(?:round\s*off|roundoff|rnd\s*off)[\s\.:₹=RsINR]*([+-]?[0-9,]+(?:\.[0-9]{1,2})?)\b',
+      r'\b(?:round\s*off|roundoff|rnd\s*off)[\s\.:₹=RsINR]*([+-]?[0-9OoSsIl,]+(?:\.[0-9OoSsIl]{1,2})?)\b',
       caseSensitive: false,
     );
 
     final tipRegex = RegExp(
-      r'\b(?:tip|gratuity)[\s\.:₹=RsINR]*([0-9,]+(?:\.[0-9]{1,2})?)\b',
+      r'\b(?:tip|gratuity)[\s\.:₹=RsINR]*([0-9OoSsIl,]+(?:\.[0-9OoSsIl]{1,2})?)\b',
       caseSensitive: false,
     );
 
     final serviceChargeRegex = RegExp(
-      r'\b(?:service\s*charge|delivery\s*charge|container\s*charge|packaging\s*charge)[\s\.:₹=RsINR]*([0-9,]+(?:\.[0-9]{1,2})?)\b',
+      r'\b(?:service\s*charge|delivery\s*charge|container\s*charge|packaging\s*charge)[\s\.:₹=RsINR]*([0-9OoSsIl,]+(?:\.[0-9OoSsIl]{1,2})?)\b',
       caseSensitive: false,
     );
 
     // GST/Tax regexes
-    final cgstRegex = RegExp(r'\b(?:cgst|c\.gst)\s*@?\s*([0-9]+(?:\.[0-9]+)?)?%?[\s\.:₹=RsINR]*([0-9,]+(?:\.[0-9]{1,2})?)\b', caseSensitive: false);
-    final sgstRegex = RegExp(r'\b(?:sgst|s\.gst)\s*@?\s*([0-9]+(?:\.[0-9]+)?)?%?[\s\.:₹=RsINR]*([0-9,]+(?:\.[0-9]{1,2})?)\b', caseSensitive: false);
-    final igstRegex = RegExp(r'\b(?:igst|i\.gst)\s*@?\s*([0-9]+(?:\.[0-9]+)?)?%?[\s\.:₹=RsINR]*([0-9,]+(?:\.[0-9]{1,2})?)\b', caseSensitive: false);
-    final vatRegex = RegExp(r'\b(?:vat|tax|gst)\s*@?\s*([0-9]+(?:\.[0-9]+)?)?%?[\s\.:₹=RsINR]*([0-9,]+(?:\.[0-9]{1,2})?)\b', caseSensitive: false);
+    final cgstRegex = RegExp(r'\b(?:cgst|c\.gst)\s*@?\s*([0-9]+(?:\.[0-9]+)?)?%?[\s\.:₹=RsINR]*([0-9OoSsIl,]+(?:\.[0-9OoSsIl]{1,2})?)\b', caseSensitive: false);
+    final sgstRegex = RegExp(r'\b(?:sgst|s\.gst)\s*@?\s*([0-9]+(?:\.[0-9]+)?)?%?[\s\.:₹=RsINR]*([0-9OoSsIl,]+(?:\.[0-9OoSsIl]{1,2})?)\b', caseSensitive: false);
+    final igstRegex = RegExp(r'\b(?:igst|i\.gst)\s*@?\s*([0-9]+(?:\.[0-9]+)?)?%?[\s\.:₹=RsINR]*([0-9OoSsIl,]+(?:\.[0-9OoSsIl]{1,2})?)\b', caseSensitive: false);
+    final vatRegex = RegExp(r'\b(?:vat|tax|gst)\s*@?\s*([0-9]+(?:\.[0-9]+)?)?%?[\s\.:₹=RsINR]*([0-9OoSsIl,]+(?:\.[0-9OoSsIl]{1,2})?)\b', caseSensitive: false);
 
     // Scan bottom-up for totals as they typically appear near the bottom
     for (int i = lines.length - 1; i >= 0; i--) {
@@ -482,7 +502,7 @@ class ReceiptParserService {
     // Pattern 1: Item Name [optional qty 'x' or 'nos'] [Price] [Total]
     // e.g. "Paneer Masala 2 x 150.00 300.00" or "Burger 1 120.00" or "Coffee 150.00"
     final lineItemRegex = RegExp(
-      r'^(.*?)\s+(?:(\d+(?:\.\d+)?)\s*(?:x|nos|kg|qty|pc|pcs)?\s+)?(?:[₹=RsINR\s]*([0-9,]+(?:\.[0-9]{1,2})?)\s+)?([0-9,]+(?:\.[0-9]{1,2}))\s*$',
+      r'^(.*?)\s+(?:(\d+(?:\.\d+)?)\s*(?:x|nos|kg|qty|pc|pcs)?\s+)?(?:[₹=RsINR\s]*([0-9OoSsIl,]+(?:\.[0-9OoSsIl]{1,2})?)\s+)?([0-9OoSsIl,]+(?:\.[0-9OoSsIl]{1,2}))\s*$',
       caseSensitive: false,
     );
 
@@ -698,17 +718,38 @@ class ReceiptParserService {
 
   // ==========================================
   // HELPER: PARSE PAISE (ZERO FLOATING ARITHMETIC)
+  // Tolerant to optical OCR character confusion and signed micro-amounts
   // ==========================================
 
   int? _parsePaise(String? amountStr) {
     if (amountStr == null) return null;
-    final cleaned = amountStr.replaceAll(',', '').trim();
+    var cleaned = amountStr
+        .replaceAll(RegExp(r'[₹$€£\s]'), '')
+        .replaceAll(',', '')
+        .trim();
     if (cleaned.isEmpty) return null;
+
+    final isNegative = cleaned.startsWith('-');
+    if (isNegative || cleaned.startsWith('+')) {
+      cleaned = cleaned.substring(1).trim();
+    }
+    if (cleaned.isEmpty) return null;
+
+    // Optical OCR confusion sanitization for price tokens:
+    // e.g. 'O' or 'o' -> '0', 'I' or 'l' -> '1', 'S' or 's' -> '5'
+    if (RegExp(r'[0-9\.]').hasMatch(cleaned)) {
+      cleaned = cleaned
+          .replaceAll(RegExp(r'[Oo]'), '0')
+          .replaceAll(RegExp(r'[Il]'), '1')
+          .replaceAll(RegExp(r'[Ss]'), '5');
+    }
 
     final parts = cleaned.split('.');
     if (parts.length == 1) {
       final rupees = int.tryParse(parts[0]);
-      return rupees != null ? rupees * 100 : null;
+      if (rupees == null) return null;
+      final total = rupees * 100;
+      return isNegative ? -total : total;
     } else if (parts.length == 2) {
       final rupees = int.tryParse(parts[0]);
       var paiseStr = parts[1];
@@ -717,10 +758,8 @@ class ReceiptParserService {
       final paise = int.tryParse(paiseStr);
 
       if (rupees != null && paise != null) {
-        if (rupees < 0) {
-          return rupees * 100 - paise;
-        }
-        return rupees * 100 + paise;
+        final total = (rupees.abs() * 100) + paise;
+        return isNegative ? -total : total;
       }
     }
     return null;

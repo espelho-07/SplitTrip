@@ -112,5 +112,31 @@ void main() {
       expect(vm.receipt.summary.totalInPaise, 40000);
       expect(vm.isConsistent, isTrue);
     });
+
+    test('clamps total to 0 when discount exceeds subtotal', () {
+      const discountedReceipt = ReceiptData(
+        id: 'rcpt-discount',
+        imagePath: '/tmp/test.jpg',
+        items: [
+          ReceiptItem(
+            id: 'item-1',
+            name: 'Cookie',
+            quantity: 1,
+            unitPriceInPaise: 5000,
+            totalPriceInPaise: 5000,
+          ),
+        ],
+        summary: ReceiptSummary(
+          subtotalInPaise: 5000,
+          discountInPaise: 8000, // Discount > Subtotal
+          totalInPaise: 0,
+        ),
+      );
+
+      final vm = ReceiptReviewViewModel(initialReceipt: discountedReceipt);
+      // Trigger sync by updating item
+      vm.updateItem('item-1', quantity: 1);
+      expect(vm.receipt.summary.totalInPaise, 0);
+    });
   });
 }

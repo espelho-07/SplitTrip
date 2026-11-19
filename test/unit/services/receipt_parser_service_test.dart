@@ -214,5 +214,85 @@ Grand Total: 500.00
       expect(receipt.items, isEmpty);
       expect(receipt.summary.totalInPaise, isNull);
     });
+
+    test('recovers from optical OCR character confusion in amounts and items', () {
+      const sampleText = '''
+THE COFFEE CLUB
+Cappuccino 1 I50.OO
+Croissant 1 12O.00
+Grand Total: 27O.00
+''';
+
+      final receipt = parser.parse(
+        rawText: sampleText,
+        imagePath: '/tmp/ocr_confused.jpg',
+      );
+
+      expect(receipt.summary.totalInPaise, 27000);
+      expect(receipt.items.length, 2);
+      expect(receipt.items[0].totalPriceInPaise, 15000);
+      expect(receipt.items[1].totalPriceInPaise, 12000);
+      expect(receipt.isCalculationConsistent, isTrue);
+    });
+
+    test('correctly parses negative fractional round-off and discounts without sign inversion', () {
+      const sampleText = '''
+METRO SUPERSTORE
+Bread 1 45.00
+Butter 1 55.00
+Sub Total: 100.00
+Round Off: -0.40
+Grand Total: 99.60
+''';
+
+      final receipt = parser.parse(
+        rawText: sampleText,
+        imagePath: '/tmp/roundoff.jpg',
+      );
+
+      expect(receipt.summary.roundOffInPaise, -40);
+      expect(receipt.summary.totalInPaise, 9960);
+      expect(receipt.summary.subtotalInPaise, 10000);
+    });
+
+    test('disambiguates dates by trip currency and rejects invalid calendar dates', () {
+      const sampleIndia = '''
+MUMBAI CAFE
+Date: 05/11/2024
+Total: 250.00
+''';
+      final receiptInr = parser.parse(
+        rawText: sampleIndia,
+        imagePath: '/tmp/date_inr.jpg',
+        tripCurrencyCode: 'INR',
+      );
+      // In INR, 05/11/2024 is 5th November 2024
+      expect(receiptInr.receipt.date, DateTime(2024, 11, 5));
+
+      const sampleUS = '''
+NEW YORK DINER
+Date: 05/11/2024
+Total: 25.00
+''';
+      final receiptUsd = parser.parse(
+        rawText: sampleUS,
+        imagePath: '/tmp/date_usd.jpg',
+        tripCurrencyCode: 'USD',
+      );
+      // In USD, 05/11/2024 is May 11, 2024
+      expect(receiptUsd.receipt.date, DateTime(2024, 5, 11));
+
+      // Invalid date (Feb 31) should be safely rejected
+      const sampleInvalidDate = '''
+ANY PLACE
+Date: 31/02/2024
+Total: 100.00
+''';
+      final receiptInvalid = parser.parse(
+        rawText: sampleInvalidDate,
+        imagePath: '/tmp/date_inv.jpg',
+      );
+      expect(receiptInvalid.receipt.date, isNull);
+    });
   });
 }

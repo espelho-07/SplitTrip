@@ -193,5 +193,60 @@ void main() {
 
       expect(find.text('⚡ Sync Total to Items Sum'), findsNothing);
     });
+
+    testWidgets('allows manual editing of Grand Total to unblock confirmation when OCR missed total', (tester) async {
+      const zeroTotalReceipt = ReceiptData(
+        id: 'zero-total-test',
+        imagePath: '/tmp/test.jpg',
+        merchant: ReceiptMerchant(name: 'Corner Tea Stall'),
+        items: [],
+        summary: ReceiptSummary(
+          totalInPaise: 0,
+        ),
+      );
+
+      ReceiptData? confirmedData;
+      await tester.pumpWidget(
+        createReviewWidget(
+          receipt: zeroTotalReceipt,
+          onConfirmed: (data) => confirmedData = data,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Should show 'Tap to enter total'
+      final tapToEnter = find.text('Tap to enter total');
+      expect(tapToEnter, findsOneWidget);
+
+      // Ensure visible in scrollable before tapping
+      await tester.ensureVisible(tapToEnter);
+      await tester.pumpAndSettle();
+
+      // Tap on Grand Total row to open edit sheet
+      await tester.tap(tapToEnter);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Edit Grand Total'), findsOneWidget);
+
+      // Enter 125.50
+      final totalField = find.widgetWithText(TextField, 'Total Amount (₹)');
+      await tester.enterText(totalField, '125.50');
+      await tester.pumpAndSettle();
+
+      // Save
+      await tester.tap(find.text('Save Total'));
+      await tester.pumpAndSettle();
+
+      // Now total should be formatted
+      expect(find.textContaining('125.50'), findsWidgets);
+
+      // Continue to Add Expense
+      final continueBtn = find.textContaining('Continue to Add Expense');
+      await tester.tap(continueBtn);
+      await tester.pumpAndSettle();
+
+      expect(confirmedData, isNotNull);
+      expect(confirmedData!.summary.totalInPaise, 12550);
+    });
   });
 }

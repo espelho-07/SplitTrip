@@ -86,31 +86,69 @@ class ReceiptScannerService {
     }
   }
 
+  /// Deletes a local receipt file safely from storage.
+  /// Typically called when the user cancels review or detaches a receipt.
+  Future<bool> deleteReceiptFile(String? filePath) async {
+    if (filePath == null || filePath.trim().isEmpty) return false;
+    try {
+      final file = File(filePath);
+      if (await file.exists()) {
+        await file.delete();
+        debugPrint('[ReceiptScannerService] Deleted local receipt file: $filePath');
+        return true;
+      }
+    } catch (e) {
+      debugPrint('[ReceiptScannerService] Error deleting receipt file $filePath: $e');
+    }
+    return false;
+  }
+
   /// Processes an image via ML Kit on-device OCR and parses it into [ReceiptData].
   Future<ReceiptData> processReceiptImage(
     String imagePath, {
     String? tripCurrencyCode,
   }) async {
+    final currency = tripCurrencyCode ?? 'INR';
+
     try {
+      final file = File(imagePath);
+      if (!await file.exists() || await file.length() == 0) {
+        return ReceiptData(
+          id: _uuid.v4(),
+          imagePath: imagePath,
+          receipt: ReceiptMetadata(currency: currency),
+          ocr: const ReceiptOcrResult(
+            status: 'failed',
+            confidence: OcrConfidenceLevel.low,
+            warnings: ['Receipt image file does not exist or is empty.'],
+            rawText: '',
+          ),
+        );
+      }
+
       final inputImage = InputImage.fromFilePath(imagePath);
       final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
 
-      final RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
-      await textRecognizer.close();
+      final RecognizedText recognizedText;
+      try {
+        recognizedText = await textRecognizer.processImage(inputImage);
+      } finally {
+        await textRecognizer.close();
+      }
 
       final rawText = recognizedText.text;
 
       return _parser.parse(
         rawText: rawText,
         imagePath: imagePath,
-        tripCurrencyCode: tripCurrencyCode,
+        tripCurrencyCode: currency,
       );
     } catch (e) {
       debugPrint('[ReceiptScannerService] OCR processing error: $e');
       return ReceiptData(
         id: _uuid.v4(),
         imagePath: imagePath,
-        receipt: ReceiptMetadata(currency: tripCurrencyCode ?? 'INR'),
+        receipt: ReceiptMetadata(currency: currency),
         ocr: ReceiptOcrResult(
           status: 'failed',
           confidence: OcrConfidenceLevel.low,

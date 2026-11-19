@@ -134,7 +134,9 @@ class ReceiptReviewViewModel extends ChangeNotifier {
   void _syncSummaryFromItems() {
     // When line items are added or modified, update subtotal to reflect items sum
     final itemsSum = _receipt.itemsSumInPaise;
-    final currentSubtotal = itemsSum > 0 ? itemsSum : (_receipt.summary.subtotalInPaise ?? 0);
+    final int currentSubtotal = _receipt.items.isNotEmpty
+        ? itemsSum
+        : (_receipt.summary.subtotalInPaise ?? 0);
 
     // Recalculate grand total
     final discount = _receipt.summary.discountInPaise ?? 0;
@@ -143,12 +145,15 @@ class ReceiptReviewViewModel extends ChangeNotifier {
     final tip = _receipt.summary.tipInPaise ?? 0;
     final roundOff = _receipt.summary.roundOffInPaise ?? 0;
 
-    final expectedTotal = currentSubtotal - discount + taxes + charges + tip + roundOff;
+    final rawExpected = currentSubtotal - discount + taxes + charges + tip + roundOff;
+    final expectedTotal = rawExpected > 0 ? rawExpected : 0;
 
     _receipt = _receipt.copyWith(
       summary: _receipt.summary.copyWith(
-        subtotalInPaise: currentSubtotal,
-        totalInPaise: expectedTotal > 0 ? expectedTotal : _receipt.summary.totalInPaise,
+        subtotalInPaise: currentSubtotal > 0 ? currentSubtotal : null,
+        totalInPaise: expectedTotal > 0
+            ? expectedTotal
+            : (_receipt.items.isEmpty ? _receipt.summary.totalInPaise : 0),
       ),
     );
     _checkForDuplicates();

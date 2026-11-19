@@ -677,6 +677,9 @@ class _AddExpenseViewState extends State<AddExpenseView> {
 
       if (confirmedReceipt != null && mounted) {
         _onReceiptConfirmed(confirmedReceipt, addVm);
+      } else {
+        // User cancelled without confirming. Delete the temporary receipt file to avoid storage leakage.
+        _receiptScannerService.deleteReceiptFile(imagePath);
       }
     } catch (e) {
       if (mounted) {
@@ -952,7 +955,11 @@ class _AddExpenseViewState extends State<AddExpenseView> {
             tooltip: 'Remove receipt',
             onPressed: () {
               HapticHelper.light();
+              final currentPath = addVm.receiptUrl;
               addVm.setReceiptUrl(null);
+              if (currentPath != null) {
+                _receiptScannerService.deleteReceiptFile(currentPath);
+              }
             },
           ),
         ],

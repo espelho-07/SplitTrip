@@ -337,6 +337,85 @@ class _ReceiptReviewViewState extends State<ReceiptReviewView> {
     );
   }
 
+  void _showEditTotalDialog(BuildContext context, ReceiptReviewViewModel vm, int currentTotalPaise) {
+    HapticHelper.medium();
+    final totalRupees = currentTotalPaise > 0 ? (currentTotalPaise / 100.0) : 0.0;
+    final totalCtrl = TextEditingController(
+      text: totalRupees > 0
+          ? (totalRupees % 1 == 0 ? totalRupees.toInt().toString() : totalRupees.toStringAsFixed(2))
+          : '',
+    );
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).viewInsets.bottom,
+          ),
+          child: Container(
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E2630) : Colors.white,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Edit Grand Total',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded),
+                      onPressed: () => Navigator.of(ctx).pop(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: totalCtrl,
+                  autofocus: true,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Total Amount (₹)',
+                    hintText: 'e.g. 450.00',
+                    prefixText: '₹ ',
+                  ),
+                ),
+                const SizedBox(height: 20),
+                AppButton(
+                  text: 'Save Total',
+                  onPressed: () {
+                    final entered = double.tryParse(totalCtrl.text.trim()) ?? 0.0;
+                    final paise = (entered * 100).round();
+                    if (paise > 0) {
+                      vm.updateSummary(totalInPaise: paise);
+                      _totalController.text = totalCtrl.text.trim();
+                      HapticHelper.light();
+                      Navigator.of(ctx).pop();
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   void _handleContinue() {
     HapticHelper.light();
     final receipt = _viewModel.receipt;
@@ -781,22 +860,57 @@ class _ReceiptReviewViewState extends State<ReceiptReviewView> {
           if (summary.roundOffInPaise != null && summary.roundOffInPaise != 0)
             _buildSummaryRow('Round Off', CurrencyFormatter.formatPaise(summary.roundOffInPaise!)),
           const Divider(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Grand Total',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+          InkWell(
+            onTap: () => _showEditTotalDialog(context, vm, totalPaise),
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Grand Total',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(width: 6),
+                      Icon(
+                        Icons.edit_outlined,
+                        size: 16,
+                        color: isDark ? Colors.white60 : const Color(0xFF64748B),
+                      ),
+                    ],
+                  ),
+                  if (totalPaise > 0)
+                    Text(
+                      CurrencyFormatter.formatPaise(totalPaise),
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF10B981),
+                      ),
+                    )
+                  else
+                    const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Tap to enter total',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFFF59E0B),
+                          ),
+                        ),
+                        SizedBox(width: 4),
+                        Icon(Icons.edit_rounded, size: 14, color: Color(0xFFF59E0B)),
+                      ],
+                    ),
+                ],
               ),
-              Text(
-                CurrencyFormatter.formatPaise(totalPaise),
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                  color: Color(0xFF10B981),
-                ),
-              ),
-            ],
+            ),
           ),
         ],
       ),
