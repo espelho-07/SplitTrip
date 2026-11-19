@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/theme/app_colors.dart';
@@ -10,7 +11,6 @@ import '../../../data/repositories/trip_repository.dart';
 import '../../../domain/models/trip.dart';
 import '../../../domain/models/trip_member.dart';
 import '../../viewmodels/auth_viewmodel.dart';
-import 'manage_members_view.dart';
 
 /// Complete participant experience view with distinct categorization:
 /// - All Participants
@@ -94,7 +94,7 @@ class _TripMembersViewState extends State<TripMembersView> {
               tooltip: 'Manage & Merge Members',
               onPressed: () {
                 HapticHelper.light();
-                Navigator.push(context, ManageMembersView.route(trip.id));
+                context.push('/trip/${trip.id}/members/manage');
               },
             ),
           IconButton(

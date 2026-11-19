@@ -15,6 +15,7 @@ import '../views/trip/join_trip_view.dart';
 import '../views/trip/qr_scanner_view.dart';
 import '../views/trip/trip_detail_view.dart';
 import '../views/trip/trip_members_view.dart';
+import '../views/trip/manage_members_view.dart';
 import '../views/trip/trip_memories_view.dart';
 import '../views/widgets/widget_gallery_view.dart';
 import '../views/settings/master_settings_view.dart';
@@ -207,6 +208,15 @@ class AppRouter {
               final tripId = state.pathParameters['tripId']!;
               return TripMembersView(tripId: tripId);
             },
+            routes: [
+              GoRoute(
+                path: 'manage',
+                builder: (context, state) {
+                  final tripId = state.pathParameters['tripId']!;
+                  return ManageMembersView(tripId: tripId);
+                },
+              ),
+            ],
           ),
           GoRoute(
             path: 'memories',

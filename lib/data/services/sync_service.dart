@@ -1828,38 +1828,46 @@ await _cloudSync.syncPersonalDebt(payload, accountId: accountId);
         break;
 
       case MutationType.recordTripSettlement:
-        final tripId = mutation.payload['tripId'] as String;
-        await apiClient.post('/trips/$tripId/settlements', body: payload);
+        final tripId = mutation.payload['tripId'] as String? ?? mutation.tripId;
+        if (tripId != null && tripId.isNotEmpty) {
+          await apiClient.post('/trips/$tripId/settlements', body: payload);
+        }
         break;
 
       case MutationType.confirmTripSettlement:
-        final tripId = mutation.payload['tripId'] as String;
+        final tripId = mutation.payload['tripId'] as String? ?? mutation.tripId;
         final settlementId =
-            payload['id'] as String? ?? payload['settlementId'] as String;
-        await apiClient.post(
-          '/trips/$tripId/settlements/$settlementId/confirm',
-          body: payload,
-        );
+            payload['id'] as String? ?? payload['settlementId'] as String?;
+        if (tripId != null && tripId.isNotEmpty && settlementId != null && settlementId.isNotEmpty) {
+          await apiClient.post(
+            '/trips/$tripId/settlements/$settlementId/confirm',
+            body: payload,
+          );
+        }
         break;
 
       case MutationType.disputeTripSettlement:
-        final tripId = mutation.payload['tripId'] as String;
+        final tripId = mutation.payload['tripId'] as String? ?? mutation.tripId;
         final settlementId =
-            payload['id'] as String? ?? payload['settlementId'] as String;
-        await apiClient.post(
-          '/trips/$tripId/settlements/$settlementId/dispute',
-          body: payload,
-        );
+            payload['id'] as String? ?? payload['settlementId'] as String?;
+        if (tripId != null && tripId.isNotEmpty && settlementId != null && settlementId.isNotEmpty) {
+          await apiClient.post(
+            '/trips/$tripId/settlements/$settlementId/dispute',
+            body: payload,
+          );
+        }
         break;
 
       case MutationType.submitSettlementProof:
-        final tripId = mutation.payload['tripId'] as String;
+        final tripId = mutation.payload['tripId'] as String? ?? mutation.tripId;
         final settlementId =
-            payload['id'] as String? ?? payload['settlementId'] as String;
-        await apiClient.post(
-          '/trips/$tripId/settlements/$settlementId/proof',
-          body: payload,
-        );
+            payload['id'] as String? ?? payload['settlementId'] as String?;
+        if (tripId != null && tripId.isNotEmpty && settlementId != null && settlementId.isNotEmpty) {
+          await apiClient.post(
+            '/trips/$tripId/settlements/$settlementId/proof',
+            body: payload,
+          );
+        }
         break;
     }
   }

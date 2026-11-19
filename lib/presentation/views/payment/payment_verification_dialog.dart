@@ -462,7 +462,7 @@ class PaymentDisputeAlertSheet extends StatelessWidget {
                 tripId: request.tripId,
                 fromMemberId: request.payerMemberId,
                 toMemberId: request.receiverMemberId,
-                paymentService: PaymentService(),
+                paymentService: context.read<PaymentService>(),
                 onConfirmSettlement: ({
                   required String paymentReference,
                   required String recipientUpiId,

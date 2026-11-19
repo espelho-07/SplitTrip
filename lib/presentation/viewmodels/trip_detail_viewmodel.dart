@@ -391,14 +391,24 @@ class TripDetailViewModel extends ChangeNotifier {
   }
 
   Future<void> loadTrip(String tripId, String currentUserId) async {
+    // If switching away from a previous active trip, unsubscribe from its socket room
+    if (_trip != null && _trip!.id != tripId) {
+      realtimeClient?.unsubscribeFromTrip(_trip!.id);
+    }
+
     hydrateLocally(tripId, currentUserId);
 
     _isLoading = _trip == null;
     _errorMessage = null;
     notifyListeners();
 
-    // Subscribe to WebSocket room non-blocking
-    realtimeClient?.subscribeToTrip(tripId);
+    // Ensure connection is active and subscribe to trip WebSocket room
+    if (realtimeClient != null) {
+      if (!realtimeClient!.isConnected) {
+        realtimeClient!.connect();
+      }
+      realtimeClient!.subscribeToTrip(tripId);
+    }
 
     try {
       final results = await Future.wait([
@@ -784,6 +794,13 @@ class TripDetailViewModel extends ChangeNotifier {
         _isLoadingActivity = false;
         notifyListeners();
       }
+    }
+  }
+
+  /// Unsubscribes from the active trip room when navigating away from TripDetailView.
+  void unsubscribeCurrentTrip() {
+    if (_trip != null) {
+      realtimeClient?.unsubscribeFromTrip(_trip!.id);
     }
   }
 

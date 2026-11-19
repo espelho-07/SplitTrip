@@ -43,7 +43,6 @@ import '../../../core/localization/app_localizations.dart';
 import '../add_expense/add_expense_view.dart';
 import '../payment/payment_verification_dialog.dart';
 import '../payment/payment_verification_view.dart';
-import 'manage_members_view.dart';
 import 'trip_members_view.dart';
 import 'widgets/activity_log_sheet.dart';
 import 'widgets/add_journey_moment_sheet.dart';
@@ -172,6 +171,9 @@ class _TripDetailViewState extends State<TripDetailView> {
   void dispose() {
     _notifSubscription?.cancel();
     _searchController.dispose();
+    try {
+      context.read<TripDetailViewModel>().unsubscribeCurrentTrip();
+    } catch (_) {}
     super.dispose();
   }
 
@@ -1540,7 +1542,7 @@ class _TripDetailViewState extends State<TripDetailView> {
                     InkWell(
                       onTap: () {
                         HapticHelper.light();
-                        Navigator.push(context, ManageMembersView.route(trip.id));
+                        context.push('/trip/${trip.id}/members/manage');
                       },
                       borderRadius: BorderRadius.circular(8),
                       child: Container(

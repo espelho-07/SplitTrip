@@ -1277,21 +1277,21 @@ class SupabaseCloudSync {
 
     try {
       await _client.from(tableSettlements).upsert({
-        'id': settlementJson['id'],
+        'id': settlementJson['id'] ?? settlementJson['settlementId'],
 
-        'trip_id': settlementJson['tripId'],
+        'trip_id': settlementJson['tripId'] ?? settlementJson['trip_id'],
 
-        'from_member_id': settlementJson['fromMemberId'],
+        'from_member_id': settlementJson['fromMemberId'] ?? settlementJson['from_member_id'],
 
-        'to_member_id': settlementJson['toMemberId'],
+        'to_member_id': settlementJson['toMemberId'] ?? settlementJson['to_member_id'],
 
-        'amount_in_paise': settlementJson['amountInPaise'],
+        'amount_in_paise': settlementJson['amountInPaise'] ?? settlementJson['amount_in_paise'],
 
         'status': settlementJson['status'] ?? 'completed',
 
-        'payment_reference': settlementJson['paymentReference'],
+        'payment_reference': settlementJson['paymentReference'] ?? settlementJson['payment_reference'],
 
-        'proof_url': settlementJson['proofUrl'],
+        'proof_url': settlementJson['proofUrl'] ?? settlementJson['proof_url'],
 
         'settled_at':
             settlementJson['settledAt'] ??

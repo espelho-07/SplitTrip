@@ -69,7 +69,11 @@ class _SettlementSheetState extends State<SettlementSheet> {
   @override
   void initState() {
     super.initState();
-    _paymentService = widget.paymentService ?? PaymentService();
+    PaymentService? providerService;
+    try {
+      providerService = context.read<PaymentService>();
+    } catch (_) {}
+    _paymentService = widget.paymentService ?? providerService ?? PaymentService();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final curMember = _getCurrentMember();
       if (curMember != null && mounted) {

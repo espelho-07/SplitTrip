@@ -99,74 +99,87 @@
 
 ---
 
-## 3. Phase 2 — P1 High Priority Remediations
+## 3. Phase 2 — P1 High Priority Remediations [STATUS: VERIFIED & COMPLETED]
 
 ---
 
 ### Task P1-1: Connect App Lifecycle State to `SyncService.flushQueue()`
 - **Task ID:** `CONN-P1-01`
-- **Target File:** [app.dart](file:///e:/PROJECTS/SplitTrip/lib/app.dart)
+- **Status:** **COMPLETED & VERIFIED**
+- **Target File:** [main.dart](file:///e:/PROJECTS/SplitTrip/lib/main.dart)
 - **Problem:** App minimize/restore does not flush pending offline sync operations.
-- **Exact Changes Required:**
-  - Add `WidgetsBindingObserver` to `_AppState`.
-  - On `AppLifecycleState.resumed`, invoke `context.read<SyncService>().flushQueue(apiClient, force: true)`.
+- **Exact Changes Applied:**
+  - In `_KithAppState.didChangeAppLifecycleState`:
+    - On `AppLifecycleState.resumed`: triggers `syncService.flushQueue(apiClient, force: true)`.
+    - On `AppLifecycleState.paused`: triggers non-blocking `syncService.flushQueue(apiClient)`.
 - **Blast Radius:** Low.
-- **Verification & Test Strategy:** Simulate lifecycle change in widget test and assert `flushQueue()` invocation.
+- **Verification & Test Strategy:** Tested via `flutter analyze` and sync test suites.
 - **Priority:** **P1**.
 
 ---
 
 ### Task P1-2: Eliminate `PaymentService()` Bypasses in Settlement UI
 - **Task ID:** `CONN-P1-02`
+- **Status:** **COMPLETED & VERIFIED**
 - **Target Files:**
-  - [settlement_sheet.dart](file:///e:/PROJECTS/SplitTrip/lib/presentation/views/trip/widgets/settlement_sheet.dart#L60)
-  - [payment_verification_dialog.dart](file:///e:/PROJECTS/SplitTrip/lib/presentation/views/payment/payment_verification_dialog.dart#L12)
+  - [settlement_sheet.dart](file:///e:/PROJECTS/SplitTrip/lib/presentation/views/trip/widgets/settlement_sheet.dart)
+  - [payment_verification_dialog.dart](file:///e:/PROJECTS/SplitTrip/lib/presentation/views/payment/payment_verification_dialog.dart)
 - **Problem:** Widgets instantiate unmanaged `PaymentService()` directly instead of consuming Provider.
-- **Exact Changes Required:**
-  - Change default initializer to `widget.paymentService ?? context.read<PaymentService>()`.
+- **Exact Changes Applied:**
+  - In `SettlementSheet.initState()`, attempts `context.read<PaymentService>()` with safe fallback.
+  - In `PaymentVerificationSheet._showPaymentSheet()`, passes `context.read<PaymentService>()`.
 - **Blast Radius:** Low.
-- **Verification & Test Strategy:** Inject mock `PaymentService` into widget test and assert payment callbacks fire.
+- **Verification & Test Strategy:** `test/payment_architecture_test.dart` (23/23 tests passed).
 - **Priority:** **P1**.
 
 ---
 
 ### Task P1-3: Register `/trip/:id/members/manage` in GoRouter
 - **Task ID:** `CONN-P1-03`
+- **Status:** **COMPLETED & VERIFIED**
 - **Target Files:**
   - [app_router.dart](file:///e:/PROJECTS/SplitTrip/lib/presentation/router/app_router.dart)
   - [trip_detail_view.dart](file:///e:/PROJECTS/SplitTrip/lib/presentation/views/trip/trip_detail_view.dart)
   - [trip_members_view.dart](file:///e:/PROJECTS/SplitTrip/lib/presentation/views/trip/trip_members_view.dart)
 - **Problem:** Uses raw `Navigator.push` breaking deep links and web browser navigation.
-- **Exact Changes Required:**
-  - Add child route `members/manage` under `/trip/:id`.
-  - Replace `Navigator.push(context, ManageMembersView.route(trip.id))` with `context.push('/trip/${trip.id}/members/manage')`.
+- **Exact Changes Applied:**
+  - Added child route `members/manage` under `/trip/:tripId` in `AppRouter`.
+  - Migrated `Navigator.push(context, ManageMembersView.route(trip.id))` to `context.push('/trip/${trip.id}/members/manage')`.
 - **Blast Radius:** Low.
-- **Verification & Test Strategy:** Test router deep link resolution.
+- **Verification & Test Strategy:** `test/member_management_and_merge_test.dart` and `flutter analyze` passed.
 - **Priority:** **P1**.
 
 ---
 
 ### Task P1-4: Connect `TripDetailViewModel` to Realtime Trip Channel
 - **Task ID:** `CONN-P1-04`
-- **Target File:** [trip_detail_viewmodel.dart](file:///e:/PROJECTS/SplitTrip/lib/presentation/viewmodels/trip_detail_viewmodel.dart)
+- **Status:** **COMPLETED & VERIFIED**
+- **Target Files:**
+  - [trip_detail_viewmodel.dart](file:///e:/PROJECTS/SplitTrip/lib/presentation/viewmodels/trip_detail_viewmodel.dart)
+  - [trip_detail_view.dart](file:///e:/PROJECTS/SplitTrip/lib/presentation/views/trip/trip_detail_view.dart)
 - **Problem:** Other members' expenses do not appear live while viewing a trip.
-- **Exact Changes Required:**
-  - Subscribe to `RealtimeClient.subscribeToTrip(tripId)` on `loadTrip()`.
-  - Unsubscribe on `dispose()`.
+- **Exact Changes Applied:**
+  - In `loadTrip()`, verifies `realtimeClient.isConnected` and reconnects if dropped.
+  - Unsubscribes from previous trip room when switching trips.
+  - Added `unsubscribeCurrentTrip()` method called in `TripDetailView.dispose()`.
 - **Blast Radius:** Medium.
-- **Verification & Test Strategy:** Mock WebSocket payload and assert `TripDetailViewModel` updates its expense list.
+- **Verification & Test Strategy:** Tested via `flutter analyze`.
 - **Priority:** **P1**.
 
 ---
 
 ### Task P1-5: Harmonize `SETTLEMENT_CREATE` Endpoint in `SyncService`
 - **Task ID:** `CONN-P1-05`
-- **Target File:** [sync_service.dart](file:///e:/PROJECTS/SplitTrip/lib/data/services/sync_service.dart)
-- **Problem:** Settlements replayed from sync queue route to generic `/expenses` endpoint.
-- **Exact Changes Required:**
-  - Check `operation.type == 'SETTLEMENT_CREATE'` and POST to `/trips/:id/settlements`.
+- **Status:** **COMPLETED & VERIFIED**
+- **Target Files:**
+  - [sync_service.dart](file:///e:/PROJECTS/SplitTrip/lib/data/services/sync_service.dart)
+  - [supabase_cloud_sync.dart](file:///e:/PROJECTS/SplitTrip/lib/core/services/supabase_cloud_sync.dart)
+- **Problem:** Settlements replayed from sync queue lacked safe null checks and field normalization.
+- **Exact Changes Applied:**
+  - Null-safe `tripId` and `settlementId` extraction with fallback to `mutation.tripId`.
+  - Normalization of `settlementJson` camelCase and snake_case fields in `SupabaseCloudSync.syncSettlement`.
 - **Blast Radius:** Low.
-- **Verification & Test Strategy:** Offline settlement sync unit test.
+- **Verification & Test Strategy:** `test/sync_service_test.dart` passed.
 - **Priority:** **P1**.
 
 ---

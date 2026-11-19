@@ -284,13 +284,18 @@ class _KithAppState extends State<KithApp> with WidgetsBindingObserver {
     if (state == AppLifecycleState.paused) {
       final security = context.read<SecurityLockService>();
       security.lock();
+      try {
+        final syncService = context.read<SyncService>();
+        final apiClient = context.read<ApiClient>();
+        unawaited(syncService.flushQueue(apiClient));
+      } catch (_) {}
     } else if (state == AppLifecycleState.resumed) {
       final versionVm = context.read<VersionViewModel>();
       versionVm.checkForUpdates();
       try {
         final syncService = context.read<SyncService>();
         final apiClient = context.read<ApiClient>();
-        syncService.flushQueue(apiClient);
+        unawaited(syncService.flushQueue(apiClient, force: true));
       } catch (_) {}
     }
   }
