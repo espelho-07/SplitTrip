@@ -15,6 +15,7 @@ import '../../../core/utils/kith_calculator_engine.dart';
 import '../../../core/services/location_service.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/kith_amount_calculator_field.dart';
+import '../../../core/widgets/kith_description_input_field.dart';
 import '../../../core/widgets/member_avatar.dart';
 import '../../../domain/enums/expense_category.dart';
 import '../../../domain/enums/split_type.dart';
@@ -253,10 +254,26 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     final trip = tripDetailVm.trip;
     if (trip == null || addVm.isSaving) return;
 
-    // Resolve any pending expression in the calculator field
-    final evaluatedPaise = KithCalculatorEngine.evaluateToPaise(_amountController.text);
-    if (evaluatedPaise > 0 && addVm.amountInPaise != evaluatedPaise) {
-      addVm.setAmountInPaise(evaluatedPaise);
+    // Resolve and validate any mathematical expression in the calculator field
+    final evalResult = KithCalculatorEngine.evaluateExpression(
+      _amountController.text,
+      currencyCode: trip.currencyCode,
+    );
+
+    if (evalResult.isError) {
+      HapticHelper.medium();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(evalResult.errorMessage ?? 'Please enter a valid expense amount expression'),
+          backgroundColor: AppColors.negativeRedDark,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    if (evalResult.amountInPaise > 0 && addVm.amountInPaise != evalResult.amountInPaise) {
+      addVm.setAmountInPaise(evalResult.amountInPaise);
     }
 
     // If title is empty, auto-fill with category or 'Expense' (description is optional)
@@ -287,7 +304,15 @@ class _AddExpenseViewState extends State<AddExpenseView> {
     HapticHelper.light();
     final expense = await addVm.saveExpense(trip.id);
     if (expense != null && mounted) {
-      context.pop(true);
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context, true);
+      } else {
+        try {
+          context.pop(true);
+        } catch (_) {
+          // No enclosing GoRouter in test harnesses
+        }
+      }
       KithSuccessToast.show(context, widget.existingExpense != null ? '${l10n.expenseUpdateBtn} ✓' : l10n.translate('add_expense_success'));
     } else if (mounted) {
       HapticHelper.error();
@@ -1133,109 +1158,29 @@ class _AddExpenseViewState extends State<AddExpenseView> {
 
           const SizedBox(height: 14),
           Divider(height: 1, color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
 
-          // Title input — clean, unified seamless styling
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.edit_note_rounded,
-                  color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-                  size: 22,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: _titleController,
-                    textInputAction: TextInputAction.done,
-                    textCapitalization: TextCapitalization.sentences,
-                    style: TextStyle(
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.white : const Color(0xFF0F172A),
-                    ),
-                    decoration: InputDecoration(
-                      hintText: 'Expense description (optional — e.g. Dinner, Fuel)',
-                      hintStyle: TextStyle(
-                        color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                        fontSize: 13.5,
-                      ),
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.zero,
-                      isDense: true,
-                    ),
-                    onChanged: (val) {
-                      addVm.setTitle(val);
-                      setState(() {});
-                    },
-                  ),
-                ),
-                if (_titleController.text.isNotEmpty)
-                  GestureDetector(
-                    onTap: () {
-                      HapticHelper.light();
-                      _titleController.clear();
-                      addVm.setTitle('');
-                      setState(() {});
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.all(4.0),
-                      child: Icon(Icons.close_rounded, size: 18, color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 10),
-
-          // Quick Idea Chips
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: quickIdeas.map((idea) {
-                final isCurrent = _titleController.text.toLowerCase() == (idea['title'] as String).toLowerCase();
-                return Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: GestureDetector(
-                    onTap: () {
-                      HapticHelper.selection();
-                      _titleController.text = idea['title'] as String;
-                      addVm.setTitle(idea['title'] as String);
-                      addVm.setCategory(idea['cat'] as ExpenseCategory);
-                      setState(() {});
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: isCurrent
-                            ? const Color(0xFF14B8A6).withValues(alpha: isDark ? 0.25 : 0.15)
-                            : (isDark ? const Color(0xFF141A21) : const Color(0xFFF1F5F9)),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: isCurrent
-                              ? const Color(0xFF14B8A6)
-                              : (isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0)),
-                          width: isCurrent ? 1.2 : 0.8,
-                        ),
-                      ),
-                      child: Text(
-                        '${idea['emoji']} ${idea['title']}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
-                          color: isCurrent
-                              ? (isDark ? Colors.white : const Color(0xFF0F766E))
-                              : (isDark ? AppColors.darkTextSecondary : const Color(0xFF475569)),
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
+          // Redesigned Description Input UI with multiline comfort, animated focus, and quick idea chips
+          KithDescriptionInputField(
+            controller: _titleController,
+            label: 'DESCRIPTION',
+            hintText: 'What was this expense for? (e.g. Dinner, Fuel, Groceries)',
+            suggestions: quickIdeas.map((idea) => '${idea['emoji']} ${idea['title']}').toList(),
+            onChanged: (val) {
+              addVm.setTitle(val);
+              setState(() {});
+            },
+            onSuggestionSelected: (fullSuggestion) {
+              final matchingIdea = quickIdeas.firstWhere(
+                (i) => '${i['emoji']} ${i['title']}' == fullSuggestion,
+                orElse: () => quickIdeas.first,
+              );
+              _titleController.text = matchingIdea['title'] as String;
+              _titleController.selection = TextSelection.collapsed(offset: (matchingIdea['title'] as String).length);
+              addVm.setTitle(matchingIdea['title'] as String);
+              addVm.setCategory(matchingIdea['cat'] as ExpenseCategory);
+              setState(() {});
+            },
           ),
         ],
       ),
