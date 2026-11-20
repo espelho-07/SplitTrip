@@ -35,7 +35,12 @@ class ParticipantSyncInfo {
   final int acknowledgedRevision;
   final int pendingCount;
   final DateTime? lastSeenAt;
+  final DateTime? lastHeartbeatAt;
   final String lastSyncFormatted;
+  final String presenceStatus; // 'ONLINE', 'RECENTLY_ACTIVE', 'OFFLINE', 'UNKNOWN', 'VIRTUAL_ACCOUNTED'
+  final String consentStatus;  // 'NONE', 'PENDING', 'CONFIRMED_AVAILABLE', 'UNAVAILABLE', 'EXPIRED'
+  final String? activeRequestId;
+  final String? consentResponseNote;
 
   const ParticipantSyncInfo({
     required this.memberId,
@@ -50,10 +55,18 @@ class ParticipantSyncInfo {
     this.acknowledgedRevision = 1,
     this.pendingCount = 0,
     this.lastSeenAt,
+    this.lastHeartbeatAt,
     this.lastSyncFormatted = 'Unknown',
+    this.presenceStatus = 'UNKNOWN',
+    this.consentStatus = 'NONE',
+    this.activeRequestId,
+    this.consentResponseNote,
   });
 
   bool get isSynced => isVirtual || (syncStatus == ParticipantSyncState.synced && pendingCount == 0);
+  bool get isConsentConfirmed => consentStatus == 'CONFIRMED_AVAILABLE';
+  bool get isConsentRejected => consentStatus == 'UNAVAILABLE';
+  bool get isConsentPending => consentStatus == 'PENDING';
 
   factory ParticipantSyncInfo.fromJson(Map<String, dynamic> json) => ParticipantSyncInfo(
     memberId: json['memberId'] as String? ?? '',
@@ -70,7 +83,12 @@ class ParticipantSyncInfo {
     acknowledgedRevision: json['acknowledgedRevision'] as int? ?? 1,
     pendingCount: json['pendingCount'] as int? ?? 0,
     lastSeenAt: json['lastSeenAt'] != null ? DateTime.tryParse(json['lastSeenAt'] as String) : null,
+    lastHeartbeatAt: json['lastHeartbeatAt'] != null ? DateTime.tryParse(json['lastHeartbeatAt'] as String) : null,
     lastSyncFormatted: json['lastSyncFormatted'] as String? ?? 'Unknown',
+    presenceStatus: json['presenceStatus'] as String? ?? (json['isOnline'] == true ? 'ONLINE' : 'UNKNOWN'),
+    consentStatus: json['consentStatus'] as String? ?? 'NONE',
+    activeRequestId: json['activeRequestId'] as String?,
+    consentResponseNote: json['consentResponseNote'] as String?,
   );
 
   Map<String, dynamic> toJson() => {
@@ -86,7 +104,12 @@ class ParticipantSyncInfo {
     'acknowledgedRevision': acknowledgedRevision,
     'pendingCount': pendingCount,
     'lastSeenAt': lastSeenAt?.toIso8601String(),
+    'lastHeartbeatAt': lastHeartbeatAt?.toIso8601String(),
     'lastSyncFormatted': lastSyncFormatted,
+    'presenceStatus': presenceStatus,
+    'consentStatus': consentStatus,
+    'activeRequestId': activeRequestId,
+    'consentResponseNote': consentResponseNote,
   };
 }
 
@@ -101,6 +124,8 @@ class TripSyncStatus {
   final String? completedBy;
   final bool isFullySynced;
   final bool canCompleteNormally;
+  final bool isCompletionBlocked;
+  final String? blockReason;
   final int totalParticipants;
   final int syncedParticipantsCount;
   final int unsyncedParticipantsCount;
@@ -116,6 +141,8 @@ class TripSyncStatus {
     this.completedBy,
     required this.isFullySynced,
     required this.canCompleteNormally,
+    this.isCompletionBlocked = false,
+    this.blockReason,
     required this.totalParticipants,
     required this.syncedParticipantsCount,
     required this.unsyncedParticipantsCount,
@@ -163,6 +190,8 @@ class TripSyncStatus {
     completedBy: json['completedBy'] as String?,
     isFullySynced: json['isFullySynced'] as bool? ?? false,
     canCompleteNormally: json['canCompleteNormally'] as bool? ?? false,
+    isCompletionBlocked: json['isCompletionBlocked'] as bool? ?? false,
+    blockReason: json['blockReason'] as String?,
     totalParticipants: json['totalParticipants'] as int? ?? 0,
     syncedParticipantsCount: json['syncedParticipantsCount'] as int? ?? 0,
     unsyncedParticipantsCount: json['unsyncedParticipantsCount'] as int? ?? 0,
@@ -182,6 +211,8 @@ class TripSyncStatus {
     'completedBy': completedBy,
     'isFullySynced': isFullySynced,
     'canCompleteNormally': canCompleteNormally,
+    'isCompletionBlocked': isCompletionBlocked,
+    'blockReason': blockReason,
     'totalParticipants': totalParticipants,
     'syncedParticipantsCount': syncedParticipantsCount,
     'unsyncedParticipantsCount': unsyncedCount,

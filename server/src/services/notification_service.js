@@ -403,6 +403,214 @@ class NotificationService {
   }
 
   /**
+   * Dispatches notifications and push alerts when a trip completion consent is requested from a member.
+   */
+  async notifyTripCompletionConsentRequested({ trip, member, actor, request, realtimeHub = null }) {
+    if (!trip || !member || !actor || !request) return;
+    const pushService = require('./push_notification_service');
+    const actorName = actor.displayName || 'Trip Owner';
+    const tripName = trip.name || 'Trip';
+    const recipientUserId = member.userId;
+
+    if (!recipientUserId || recipientUserId.startsWith('unclaimed_') || recipientUserId === actor.id) {
+      return;
+    }
+
+    const title = 'Trip Completion Confirmation Required';
+    const body = `${actorName} wants to complete "${tripName}". Please confirm if all your expenses and settlements are up to date.`;
+    const route = `/trip/${trip.id}?action=confirm_completion&requestId=${request.id}`;
+
+    const notification = this.createNotification({
+      recipientUserId,
+      actorUserId: actor.id,
+      actorName,
+      tripId: trip.id,
+      tripName,
+      type: 'TRIP_COMPLETION_CONSENT_REQUESTED',
+      title,
+      body,
+      route,
+      metadata: {
+        tripId: trip.id,
+        requestId: request.id,
+        memberId: member.id,
+      },
+    });
+
+    pushService.sendToUser(db, recipientUserId, {
+      title,
+      body,
+      data: {
+        type: 'trip_completion_consent_requested',
+        tripId: trip.id,
+        tripName,
+        requestId: request.id,
+        actorUserId: actor.id,
+        actorName,
+        route,
+        channelId: 'kith_activity',
+      },
+    });
+
+    return notification;
+  }
+
+  /**
+   * Dispatches notifications and push alerts when a member blocks completion (responds NO).
+   */
+  async notifyTripCompletionBlocked({ trip, member, actor, note, realtimeHub = null }) {
+    if (!trip || !member) return;
+    const pushService = require('./push_notification_service');
+    const memberName = member.displayName || 'A member';
+    const tripName = trip.name || 'Trip';
+    const recipientUserId = trip.creatorId;
+
+    if (!recipientUserId) return;
+
+    const title = 'Trip Completion Blocked';
+    const body = `${memberName} marked themselves unavailable or reported pending expenses for "${tripName}"${note ? `: "${note}"` : '.'}`;
+    const route = `/trip/${trip.id}`;
+
+    const notification = this.createNotification({
+      recipientUserId,
+      actorUserId: member.userId || null,
+      actorName: memberName,
+      tripId: trip.id,
+      tripName,
+      type: 'TRIP_COMPLETION_BLOCKED',
+      title,
+      body,
+      route,
+      metadata: {
+        tripId: trip.id,
+        memberId: member.id,
+        note: note || null,
+      },
+    });
+
+    pushService.sendToUser(db, recipientUserId, {
+      title,
+      body,
+      data: {
+        type: 'trip_completion_blocked',
+        tripId: trip.id,
+        tripName,
+        memberId: member.id,
+        route,
+        channelId: 'kith_activity',
+      },
+    });
+
+    return notification;
+  }
+
+  /**
+   * Dispatches notifications when a member requests reopening a completed trip.
+   */
+  async notifyTripReopeningRequested({ trip, actor, reasonCategory, note, request, realtimeHub = null }) {
+    if (!trip || !actor || !request) return;
+    const pushService = require('./push_notification_service');
+    const actorName = actor.displayName || 'A member';
+    const tripName = trip.name || 'Trip';
+    const recipientUserId = trip.creatorId;
+
+    if (!recipientUserId || recipientUserId === actor.id) return;
+
+    const title = 'Trip Reopening Requested';
+    const body = `${actorName} requested to reopen "${tripName}" (${reasonCategory.replace(/_/g, ' ')})${note ? `: "${note}"` : '.'}`;
+    const route = `/trip/${trip.id}?action=review_reopen&requestId=${request.id}`;
+
+    const notification = this.createNotification({
+      recipientUserId,
+      actorUserId: actor.id,
+      actorName,
+      tripId: trip.id,
+      tripName,
+      type: 'TRIP_REOPENING_REQUESTED',
+      title,
+      body,
+      route,
+      metadata: {
+        tripId: trip.id,
+        requestId: request.id,
+        reasonCategory,
+        note: note || null,
+      },
+    });
+
+    pushService.sendToUser(db, recipientUserId, {
+      title,
+      body,
+      data: {
+        type: 'trip_reopening_requested',
+        tripId: trip.id,
+        tripName,
+        requestId: request.id,
+        actorUserId: actor.id,
+        actorName,
+        route,
+        channelId: 'kith_activity',
+      },
+    });
+
+    return notification;
+  }
+
+  /**
+   * Dispatches notifications when a trip is reopened.
+   */
+  async notifyTripReopened({ trip, actor, realtimeHub = null }) {
+    if (!trip || !actor) return;
+    const pushService = require('./push_notification_service');
+    const actorName = actor.displayName || 'Trip Owner';
+    const tripName = trip.name || 'Trip';
+
+    const members = db.find('trip_members', (m) => m.tripId === trip.id && m.status !== 'merged');
+    const recipientUserIds = new Set();
+
+    for (const m of members) {
+      if (m.userId && !m.userId.startsWith('unclaimed_') && m.userId !== actor.id) {
+        recipientUserIds.add(m.userId);
+      }
+    }
+
+    for (const recipientUserId of recipientUserIds) {
+      const title = 'Trip Reopened';
+      const body = `"${tripName}" was reopened by ${actorName}. You can now add or edit expenses.`;
+      const route = `/trip/${trip.id}`;
+
+      this.createNotification({
+        recipientUserId,
+        actorUserId: actor.id,
+        actorName,
+        tripId: trip.id,
+        tripName,
+        type: 'TRIP_REOPENED',
+        title,
+        body,
+        route,
+        metadata: {
+          tripId: trip.id,
+        },
+      });
+
+      pushService.sendToUser(db, recipientUserId, {
+        title,
+        body,
+        data: {
+          type: 'trip_reopened',
+          tripId: trip.id,
+          tripName,
+          actorUserId: actor.id,
+          actorName,
+          route,
+          channelId: 'kith_activity',
+        },
+      });
+    }
+  }
+
+  /**
    * Retrieves all notifications for a specific user, strictly newest first with deterministic tiebreaker.
    */
   getNotificationsForUser(userId, { limit = 100, offset = 0, type = null } = {}) {

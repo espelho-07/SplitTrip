@@ -12,7 +12,6 @@ import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/member_avatar.dart';
 import '../../../../data/repositories/trip_repository.dart';
 import '../../../../data/services/sync_service.dart';
-import '../../../../domain/models/trip.dart';
 import '../../../../domain/models/trip_sync_status.dart';
 import '../../../viewmodels/auth_viewmodel.dart';
 import '../../../viewmodels/home_viewmodel.dart';
@@ -72,6 +71,7 @@ class _TripCompletionVerificationSheetState
   TripSyncStatus? _syncStatus;
   String? _errorMessage;
   bool _isOffline = false;
+  bool _isRequestingConsent = false;
 
   @override
   void initState() {
@@ -97,7 +97,7 @@ class _TripCompletionVerificationSheetState
 
     try {
       // Step 1: Connectivity check (10%)
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+      await Future<void>.delayed(const Duration(milliseconds: 150));
 
       // Step 2: Flush current device local pending changes (25%)
       if (mounted) {
@@ -131,8 +131,7 @@ class _TripCompletionVerificationSheetState
         (m) => m.isVirtual || m.userId == currentUid || m.id == currentUid,
       );
 
-      // Step 4: If participants are not synced and real remote devices exist, request realtime sync (75%)
-      // If trip only contains virtual members, bypass remote device sync waiting completely.
+      // Step 4: Realtime sync request if needed
       if (!status.isFullySynced && !hasOnlyVirtualPeers) {
         if (mounted) {
           setState(() {
@@ -143,14 +142,11 @@ class _TripCompletionVerificationSheetState
         }
 
         await tripRepo.requestTripSync(widget.tripId);
-        // Grace period for online participants to acknowledge
-        await Future<void>.delayed(const Duration(milliseconds: 600));
-
-        // Re-query authoritative status
+        await Future<void>.delayed(const Duration(milliseconds: 400));
         status = await tripRepo.getTripSyncStatus(widget.tripId);
       }
 
-      // Step 5: Final verification evaluation (90% -> 100%)
+      // Step 5: Final verification evaluation (100%)
       if (mounted) {
         setState(() {
           _stage = VerificationStage.verifying;
@@ -159,7 +155,7 @@ class _TripCompletionVerificationSheetState
         });
       }
 
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+      await Future<void>.delayed(const Duration(milliseconds: 150));
 
       if (mounted) {
         setState(() {
@@ -170,58 +166,95 @@ class _TripCompletionVerificationSheetState
             _statusMessage = l10n.tripCompReadyDesc;
           } else {
             _stage = VerificationStage.syncBlocked;
-            _statusMessage = l10n.tripCompPendingDesc;
+            _statusMessage = status.blockReason ?? l10n.tripCompPendingDesc;
           }
         });
         HapticHelper.selection();
       }
     } on NetworkException catch (e) {
+      // Mandatory Rule: Trip Owner MUST be online. If offline: block trip completion.
+      // Do NOT fall back to local offline completion or mark ready to complete.
       if (mounted) {
-        final localTrip = tripRepo.getCachedTripById(widget.tripId);
-        if (localTrip != null) {
-          final authVm = Provider.of<AuthViewModel?>(context, listen: false);
-          final fallbackStatus = TripSyncStatus.fromLocalTrip(
-            localTrip,
-            currentUserId: authVm?.currentUser?.id ?? '',
-          );
-          setState(() {
-            _syncStatus = fallbackStatus;
-            _progress = 1.0;
-            _stage = VerificationStage.readyToComplete;
-            _statusMessage = l10n.tripCompReadyDesc;
-            _isOffline = true;
-          });
-          HapticHelper.selection();
-          return;
-        }
         setState(() {
           _stage = VerificationStage.error;
           _isOffline = true;
-          _errorMessage = e.message;
+          _errorMessage = e.message.contains('offline')
+              ? e.message
+              : "You're currently offline. Connect to the internet before completing this trip.";
         });
+        HapticHelper.error();
       }
     } catch (e) {
       if (mounted) {
-        final localTrip = tripRepo.getCachedTripById(widget.tripId);
-        if (localTrip != null) {
-          final authVm = Provider.of<AuthViewModel?>(context, listen: false);
-          final fallbackStatus = TripSyncStatus.fromLocalTrip(
-            localTrip,
-            currentUserId: authVm?.currentUser?.id ?? '',
-          );
-          setState(() {
-            _syncStatus = fallbackStatus;
-            _progress = 1.0;
-            _stage = VerificationStage.readyToComplete;
-            _statusMessage = l10n.tripCompReadyDesc;
-          });
-          HapticHelper.selection();
-          return;
-        }
         setState(() {
           _stage = VerificationStage.error;
           _errorMessage = e.toString().replaceAll('Exception: ', '');
         });
+        HapticHelper.error();
+      }
+    }
+  }
+
+  Future<void> _requestConsent(ParticipantSyncInfo p) async {
+    final tripRepo = context.read<TripRepository>();
+    setState(() => _isRequestingConsent = true);
+    try {
+      await tripRepo.requestCompletionConsent(widget.tripId, p.memberId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Confirmation request sent to ${p.displayName}'),
+            backgroundColor: AppColors.emeraldPrimary,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        HapticHelper.success();
+        await _startVerification();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to request confirmation: ${e.toString().replaceAll('Exception: ', '')}'),
+            backgroundColor: AppColors.negativeRedLight,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isRequestingConsent = false);
+      }
+    }
+  }
+
+  Future<void> _requestAllConsent() async {
+    final tripRepo = context.read<TripRepository>();
+    setState(() => _isRequestingConsent = true);
+    try {
+      final reqs = await tripRepo.batchRequestCompletionConsent(widget.tripId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Sent confirmation requests to ${reqs.length} members'),
+            backgroundColor: AppColors.emeraldPrimary,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        HapticHelper.success();
+        await _startVerification();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed: ${e.toString().replaceAll('Exception: ', '')}'),
+            backgroundColor: AppColors.negativeRedLight,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isRequestingConsent = false);
       }
     }
   }
@@ -240,42 +273,38 @@ class _TripCompletionVerificationSheetState
 
     try {
       final mode = forced ? 'FORCED_WITH_PENDING_SYNC' : 'NORMAL';
-      final completedTrip = await tripRepo.completeTrip(
+      await tripRepo.completeTrip(
         tripId: widget.tripId,
         completionMode: mode,
         expectedRevision: _syncStatus?.currentRevision,
+        isOwnerOnline: !_isOffline,
       );
+
+      final currentUid = authVm.currentUser?.id ?? '';
 
       // Update HomeViewModel directly if present in provider tree
       if (mounted) {
         try {
           final homeVm = Provider.of<HomeViewModel?>(context, listen: false);
-          if (homeVm != null && authVm.currentUser != null) {
-            homeVm.updateTripInPlace(completedTrip, authVm.currentUser!.id);
-          }
+          homeVm?.refresh(currentUid);
         } catch (_) {}
       }
 
-
-      // Update viewmodel & notify listeners
-      await tripDetailVm.loadTrip(widget.tripId, authVm.currentUser?.id ?? '');
-      HapticHelper.heavy();
+      await tripDetailVm.refresh(currentUid);
 
       if (mounted) {
-        Navigator.pop(context, true);
+        HapticHelper.success();
         widget.onTripCompleted?.call();
+        Navigator.pop(context, true);
       }
-
-    } on ConflictException catch (_) {
-      // Revision changed while finalizing: prompt to re-verify
+    } on NetworkException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Trip state changed on server while finalizing. Refreshing sync status...'),
-            backgroundColor: AppColors.amberAccent,
-          ),
-        );
-        _startVerification();
+        setState(() {
+          _stage = VerificationStage.error;
+          _isOffline = true;
+          _errorMessage = e.message;
+        });
+        HapticHelper.error();
       }
     } catch (e) {
       if (mounted) {
@@ -283,6 +312,7 @@ class _TripCompletionVerificationSheetState
           _stage = VerificationStage.error;
           _errorMessage = e.toString().replaceAll('Exception: ', '');
         });
+        HapticHelper.error();
       }
     }
   }
@@ -290,6 +320,7 @@ class _TripCompletionVerificationSheetState
   void _promptForcedCompletionConfirmation() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final l10n = context.l10n;
+
     showDialog(
       context: context,
       builder: (dialogCtx) => AlertDialog(
@@ -352,7 +383,7 @@ class _TripCompletionVerificationSheetState
 
     return Container(
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.88,
+        maxHeight: MediaQuery.of(context).size.height * 0.90,
       ),
       padding: AppSpacing.bottomSheetPadding,
       child: Column(
@@ -398,7 +429,7 @@ class _TripCompletionVerificationSheetState
           ),
           const SizedBox(height: AppSpacing.sm),
 
-          // Scrollable middle section preventing orientation/landscape RenderFlex overflow
+          // Scrollable middle section
           Expanded(
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
@@ -445,11 +476,24 @@ class _TripCompletionVerificationSheetState
                     const SizedBox(height: AppSpacing.md),
                   ],
 
-                  // Participant Sync Status Breakdown Card
+                  // Participant Presence & Consent Breakdown Card
                   if (_syncStatus != null && _syncStatus!.participants.isNotEmpty) ...[
-                    Text(
-                      l10n.tripCompParticipantHeader,
-                      style: AppTypography.bodySmall(isDark: isDark).copyWith(fontWeight: FontWeight.w600),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Member Availability & Consent',
+                          style: AppTypography.bodySmall(isDark: isDark).copyWith(fontWeight: FontWeight.w600),
+                        ),
+                        if (_hasUnconfirmedMembers())
+                          TextButton.icon(
+                            icon: _isRequestingConsent
+                                ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2))
+                                : const Icon(Icons.send_rounded, size: 14),
+                            label: const Text('Ask All', style: TextStyle(fontSize: 12)),
+                            onPressed: _isRequestingConsent ? null : _requestAllConsent,
+                          ),
+                      ],
                     ),
                     const SizedBox(height: 8),
                     Container(
@@ -476,32 +520,37 @@ class _TripCompletionVerificationSheetState
                     const SizedBox(height: AppSpacing.md),
                   ],
 
-                  // Warning / Notice Banners
+                  // Notice Banners
                   if (_stage == VerificationStage.readyToComplete) ...[
                     _buildNoticeBanner(
                       isDark: isDark,
                       color: AppColors.emeraldPrimary,
                       icon: Icons.check_circle_outline,
                       title: l10n.tripCompReadyTitle,
-                      description: l10n.tripCompReadyDesc,
+                      description: 'All trip members are accounted for and all balances are settled. You can safely complete the trip.',
                     ),
                     const SizedBox(height: AppSpacing.md),
                   ] else if (_stage == VerificationStage.syncBlocked) ...[
                     _buildNoticeBanner(
                       isDark: isDark,
-                      color: AppColors.amberAccent,
+                      color: _syncStatus?.isCompletionBlocked == true
+                          ? (isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight)
+                          : AppColors.amberAccent,
                       icon: Icons.warning_amber_rounded,
-                      title: l10n.tripCompPendingTitle,
-                      description: l10n.tripCompPendingDesc,
+                      title: _syncStatus?.isCompletionBlocked == true
+                          ? 'Completion Blocked'
+                          : l10n.tripCompPendingTitle,
+                      description: _syncStatus?.blockReason ??
+                          'One or more members are offline and have not confirmed their availability.',
                     ),
                     const SizedBox(height: AppSpacing.md),
                   ] else if (_stage == VerificationStage.error) ...[
                     _buildNoticeBanner(
                       isDark: isDark,
                       color: isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight,
-                      icon: Icons.error_outline,
-                      title: _isOffline ? l10n.tripCompOfflineTitle : l10n.tripCompOfflineDesc,
-                      description: _errorMessage ?? l10n.tripCompOfflineDesc,
+                      icon: Icons.cloud_off_outlined,
+                      title: _isOffline ? "You're Offline" : 'Verification Failed',
+                      description: _errorMessage ?? "You're currently offline. Connect to the internet before completing this trip.",
                     ),
                     const SizedBox(height: AppSpacing.md),
                   ],
@@ -519,13 +568,19 @@ class _TripCompletionVerificationSheetState
     );
   }
 
+  bool _hasUnconfirmedMembers() {
+    if (_syncStatus == null) return false;
+    return _syncStatus!.participants.any(
+      (p) => !p.isVirtual && !p.isCurrentUser && !p.isCreator && p.consentStatus != 'CONFIRMED_AVAILABLE',
+    );
+  }
+
   Widget _buildParticipantRow(ParticipantSyncInfo p, bool isDark, AppLocalizations l10n) {
-    Trip? localTrip;
-    try {
-      localTrip = context.read<TripRepository>().getCachedTripById(widget.tripId);
-    } catch (_) {}
-    final localMember = localTrip?.members.where((m) => m.id == p.memberId || m.displayName.trim().toLowerCase() == p.displayName.trim().toLowerCase()).firstOrNull;
-    final isEffectivelyVirtual = p.isVirtual || (localMember != null && localMember.isVirtual) || p.userId.startsWith('unclaimed_');
+    final isOnline = p.presenceStatus == 'ONLINE' || p.isOnline;
+    final isVirtual = p.isVirtual || p.presenceStatus == 'VIRTUAL_ACCOUNTED';
+    final isConfirmed = p.consentStatus == 'CONFIRMED_AVAILABLE';
+    final isRejected = p.consentStatus == 'UNAVAILABLE';
+    final isPending = p.consentStatus == 'PENDING';
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -545,7 +600,7 @@ class _TripCompletionVerificationSheetState
                   width: 10,
                   height: 10,
                   decoration: BoxDecoration(
-                    color: p.isOnline ? AppColors.positiveGreenLight : AppColors.lightTextMuted,
+                    color: isOnline ? AppColors.positiveGreenLight : AppColors.lightTextMuted,
                     shape: BoxShape.circle,
                     border: Border.all(
                       color: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
@@ -592,117 +647,122 @@ class _TripCompletionVerificationSheetState
                   ],
                 ),
                 Text(
-                  isEffectivelyVirtual
-                      ? 'Virtual member • Synced with device'
-                      : (p.isOnline ? l10n.tripCompStatusOnline : l10n.tripCompLastSync(p.lastSyncFormatted)),
-                  style: AppTypography.bodySmall(isDark: isDark),
+                  isVirtual
+                      ? 'Managed by you • Auto-accounted'
+                      : (isConfirmed
+                          ? 'Availability confirmed'
+                          : (isRejected
+                              ? (p.consentResponseNote ?? 'Blocked: has pending expenses')
+                              : (isPending
+                                  ? 'Awaiting response...'
+                                  : (isOnline ? 'Online now' : 'Last active ${p.lastSyncFormatted}')))),
+                  style: AppTypography.bodySmall(isDark: isDark).copyWith(
+                    color: isRejected
+                        ? (isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight)
+                        : (isConfirmed ? AppColors.positiveGreenLight : null),
+                  ),
                 ),
               ],
             ),
           ),
-          _buildSyncBadge(p, isDark, l10n, isVirtualOverride: isEffectivelyVirtual),
+          if (!isVirtual && !p.isCurrentUser && !isConfirmed && !isRejected && !isPending && !isOnline)
+            IconButton(
+              icon: const Icon(Icons.send_rounded, size: 18, color: AppColors.emeraldPrimary),
+              tooltip: 'Request Confirmation',
+              onPressed: _isRequestingConsent ? null : () => _requestConsent(p),
+            )
+          else
+            _buildPresenceBadge(p, isDark, l10n),
         ],
       ),
     );
   }
 
-  Widget _buildSyncBadge(ParticipantSyncInfo p, bool isDark, AppLocalizations l10n, {bool isVirtualOverride = false}) {
-    if (p.isVirtual || isVirtualOverride) {
+  Widget _buildPresenceBadge(ParticipantSyncInfo p, bool isDark, AppLocalizations l10n) {
+    if (p.isVirtual || p.presenceStatus == 'VIRTUAL_ACCOUNTED') {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: AppColors.indigoAccent.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Text('Virtual', style: TextStyle(color: AppColors.indigoAccent, fontSize: 11, fontWeight: FontWeight.w600)),
+      );
+    }
+
+    if (p.consentStatus == 'CONFIRMED_AVAILABLE') {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
           color: AppColors.positiveGreenLight.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Row(
+        child: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.check, size: 14, color: AppColors.positiveGreenLight),
-            const SizedBox(width: 4),
-            Text(
-              l10n.tripCompStatusSynced,
-              style: AppTypography.bodySmall(isDark: isDark).copyWith(
-                color: AppColors.positiveGreenLight,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            Icon(Icons.check_circle_outline, size: 12, color: AppColors.positiveGreenLight),
+            SizedBox(width: 4),
+            Text('Confirmed', style: TextStyle(color: AppColors.positiveGreenLight, fontSize: 11, fontWeight: FontWeight.w600)),
           ],
         ),
       );
     }
-    switch (p.syncStatus) {
-      case ParticipantSyncState.synced:
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: AppColors.positiveGreenLight.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.check, size: 14, color: AppColors.positiveGreenLight),
-              const SizedBox(width: 4),
-              Text(
-                l10n.tripCompStatusSynced,
-                style: AppTypography.bodySmall(isDark: isDark).copyWith(
-                  color: AppColors.positiveGreenLight,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        );
-      case ParticipantSyncState.pending:
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: AppColors.amberAccent.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(
-                width: 10,
-                height: 10,
-                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.amberAccent),
-              ),
-              const SizedBox(width: 5),
-              Text(
-                l10n.tripCompStatusSyncing,
-                style: AppTypography.bodySmall(isDark: isDark).copyWith(
-                  color: AppColors.amberAccent,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        );
-      case ParticipantSyncState.offline:
-      case ParticipantSyncState.unknown:
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted).withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.cloud_off_outlined, size: 14, color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
-              const SizedBox(width: 4),
-              Text(
-                l10n.tripCompStatusOffline,
-                style: AppTypography.bodySmall(isDark: isDark).copyWith(
-                  color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        );
+
+    if (p.consentStatus == 'UNAVAILABLE') {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: AppColors.negativeRedLight.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.block, size: 12, color: AppColors.negativeRedLight),
+            SizedBox(width: 4),
+            Text('Unavailable', style: TextStyle(color: AppColors.negativeRedLight, fontSize: 11, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      );
     }
+
+    if (p.consentStatus == 'PENDING') {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: AppColors.amberAccent.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(width: 8, height: 8, child: CircularProgressIndicator(strokeWidth: 1.5, color: AppColors.amberAccent)),
+            SizedBox(width: 4),
+            Text('Pending', style: TextStyle(color: AppColors.amberAccent, fontSize: 11, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      );
+    }
+
+    if (p.presenceStatus == 'ONLINE' || p.isOnline) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: AppColors.positiveGreenLight.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Text('Online', style: TextStyle(color: AppColors.positiveGreenLight, fontSize: 11, fontWeight: FontWeight.w600)),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted).withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text('Offline', style: TextStyle(color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted, fontSize: 11, fontWeight: FontWeight.w600)),
+    );
   }
 
   Widget _buildNoticeBanner({
@@ -783,7 +843,7 @@ class _TripCompletionVerificationSheetState
               child: AppButton(
                 text: l10n.tripCompMarkAnywayBtn,
                 variant: AppButtonVariant.outline,
-                onPressed: _promptForcedCompletionConfirmation,
+                onPressed: _syncStatus?.isCompletionBlocked == true ? null : _promptForcedCompletionConfirmation,
               ),
             ),
           ],
@@ -859,7 +919,7 @@ class _TripCompletionVerificationSheetState
       case VerificationStage.syncBlocked:
         return l10n.tripCompPendingTitle;
       case VerificationStage.error:
-        return l10n.tripCompOfflineTitle;
+        return _isOffline ? "You're Offline" : l10n.tripCompOfflineTitle;
       case VerificationStage.completing:
         return l10n.tripCompTitle;
       default:

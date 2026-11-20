@@ -410,6 +410,8 @@ class TripDetailViewModel extends ChangeNotifier {
       realtimeClient!.subscribeToTrip(tripId);
     }
 
+    startHeartbeat(tripId);
+
     try {
       final results = await Future.wait([
         tripRepo.getTripById(tripId),
@@ -805,8 +807,28 @@ class TripDetailViewModel extends ChangeNotifier {
     }
   }
 
+  Timer? _heartbeatTimer;
+
+  /// Starts periodic presence heartbeat for [tripId] while actively viewing the trip.
+  void startHeartbeat(String tripId) {
+    _heartbeatTimer?.cancel();
+    tripRepo.sendHeartbeat(tripId);
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 25), (_) {
+      if (!_isDisposed && _trip != null && _trip!.id == tripId) {
+        tripRepo.sendHeartbeat(tripId);
+      }
+    });
+  }
+
+  /// Stops periodic presence heartbeat.
+  void stopHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+  }
+
   /// Unsubscribes from the active trip room when navigating away from TripDetailView.
   void unsubscribeCurrentTrip() {
+    stopHeartbeat();
     if (_trip != null) {
       realtimeClient?.unsubscribeFromTrip(_trip!.id);
     }
@@ -815,6 +837,7 @@ class TripDetailViewModel extends ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
+    stopHeartbeat();
     storage?.removeOnClearDataListener(clearData);
     if (_trip != null) {
       realtimeClient?.unsubscribeFromTrip(_trip!.id);

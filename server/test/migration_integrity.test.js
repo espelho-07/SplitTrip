@@ -9,7 +9,7 @@ describe('Supabase Migrations Integrity & Foreign Key Static Audit', () => {
   it('Verifies all migration files exist in supabase/migrations/ in valid sequence', () => {
     assert.ok(fs.existsSync(migrationsDir), 'supabase/migrations directory must exist');
     const files = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql'));
-    assert.strictEqual(files.length, 13, `Expected 13 migration files, found ${files.length}: ${files.join(', ')}`);
+    assert.strictEqual(files.length, 14, `Expected 14 migration files, found ${files.length}: ${files.join(', ')}`);
   });
 
   it('Verifies all migration files use valid 14-digit timestamp prefixes in ascending order', () => {
@@ -35,7 +35,8 @@ describe('Supabase Migrations Integrity & Foreign Key Static Audit', () => {
       '20261101000006_ipo_atomic_upsert_and_quota_lock.sql',
       '20261120000001_offline_sync_and_free_tier_optimization.sql',
       '20261120000002_allow_unclaimed_member_spot_claim.sql',
-      '20261120000003_authoritative_account_deletion_and_revocation.sql'
+      '20261120000003_authoritative_account_deletion_and_revocation.sql',
+      '20261120000004_smart_trip_completion_and_member_consent.sql'
     ];
 
     assert.deepStrictEqual(files, expected, 'Migration files must match exact ordered sequence');

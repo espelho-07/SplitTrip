@@ -26,6 +26,9 @@ class Database {
       ipo_applications: new Map(),
       ipo_allotment_records: new Map(),
       deleted_accounts: new Map(),
+      trip_completion_requests: new Map(),
+      trip_reopening_requests: new Map(),
+      trip_lifecycle_history: new Map(),
     };
 
     // Secondary Indexes for O(1) concurrent lookups
@@ -39,6 +42,9 @@ class Database {
       notifications: { byRecipientUserId: new Map() },
       processed_operations: { byTripId: new Map() },
       ipo_applications: { byUserId: new Map(), byIpoId: new Map() },
+      trip_completion_requests: { byTripId: new Map() },
+      trip_reopening_requests: { byTripId: new Map() },
+      trip_lifecycle_history: { byTripId: new Map() },
     };
 
     this.pgAdapter = null;

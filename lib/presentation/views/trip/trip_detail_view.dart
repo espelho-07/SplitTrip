@@ -54,6 +54,7 @@ import 'widgets/nearby_trip_friends_radar_sheet.dart';
 import 'widgets/trip_sync_sheet.dart';
 import 'widgets/settlement_sheet.dart';
 import 'widgets/trip_completion_verification_sheet.dart';
+import 'widgets/trip_reopen_sheet.dart';
 import 'widgets/trip_qr_sheet.dart';
 
 class TripDetailView extends StatefulWidget {
@@ -1332,6 +1333,25 @@ class _TripDetailViewState extends State<TripDetailView> {
               isFullWidth: true,
               height: 44,
               onPressed: _showSettlementSheet,
+            ),
+            const SizedBox(height: 8),
+            TextButton.icon(
+              icon: const Icon(Icons.lock_open_rounded, size: 16, color: AppColors.amberAccent),
+              label: const Text('Request to Reopen Trip', style: TextStyle(color: AppColors.amberAccent, fontSize: 13)),
+              onPressed: () {
+                final authVm = context.read<AuthViewModel>();
+                final currentUid = authVm.currentUser?.id ?? '';
+                final isCreator = trip.creatorId == currentUid;
+                TripReopenSheet.show(
+                  context,
+                  tripId: trip.id,
+                  tripName: trip.name,
+                  isOwner: isCreator,
+                  onCompleted: () {
+                    context.read<TripDetailViewModel>().refresh(currentUid);
+                  },
+                );
+              },
             ),
           ],
         ),

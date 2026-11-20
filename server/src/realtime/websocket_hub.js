@@ -130,6 +130,23 @@ class RealtimeHub {
       return;
     }
 
+    // Handle heartbeat action
+    if (action === 'heartbeat') {
+      const now = new Date().toISOString();
+      const currentUid = ws.user ? ws.user.id : userId;
+      if (currentUid && tripId) {
+        const member = db.findOne('trip_members', (m) => m.tripId === tripId && m.userId === currentUid);
+        if (member) {
+          db.update('trip_members', member.id, {
+            lastHeartbeatAt: now,
+            lastSeenAt: now,
+          });
+        }
+      }
+      ws.send(JSON.stringify({ type: 'heartbeat_ack', tripId, timestamp: now }));
+      return;
+    }
+
     // Handle room subscription
     if (action === 'subscribe') {
       const checkId = userId || ws.user?.id;

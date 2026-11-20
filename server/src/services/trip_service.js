@@ -859,6 +859,27 @@ class TripService {
     return `${diffDay}d ago`;
   }
 
+  recordHeartbeat(tripId, currentUserId) {
+    const trip = db.get('trips', tripId);
+    if (!trip) throw AppError.notFound('Trip not found');
+
+    const authMember = db.findOne('trip_members', (m) => m.tripId === tripId && m.userId === currentUserId);
+    if (!authMember) throw AppError.forbidden('Not a member of this trip');
+
+    const now = new Date().toISOString();
+    db.update('trip_members', authMember.id, {
+      lastHeartbeatAt: now,
+      lastSeenAt: now,
+    });
+
+    return {
+      tripId,
+      userId: currentUserId,
+      memberId: authMember.id,
+      timestamp: now,
+    };
+  }
+
   getTripSyncStatus(tripId, currentUserId, realtimeHub = null) {
     const trip = db.get('trips', tripId);
     if (!trip) throw AppError.notFound('Trip not found');
@@ -866,21 +887,79 @@ class TripService {
     const authMember = db.findOne('trip_members', (m) => m.tripId === tripId && m.userId === currentUserId);
     if (!authMember) throw AppError.forbidden('Not a member of this trip');
 
-    // Update current user's lastSeenAt
+    // Update current user's lastSeenAt and heartbeat
     const now = new Date().toISOString();
-    db.update('trip_members', authMember.id, { lastSeenAt: now });
+    db.update('trip_members', authMember.id, { lastSeenAt: now, lastHeartbeatAt: now });
 
     const members = this._getMembersForTrip(tripId);
     const tripRevision = trip.revision || 1;
     const nowDate = new Date();
 
+    // Fetch active completion requests for this trip
+    const activeRequests = db.find('trip_completion_requests', (r) => r.tripId === tripId);
+
     const participants = members.map((m) => {
       const isCurrentUser = m.userId === currentUserId || (authMember && m.id === authMember.id);
       const isVirtual = m.isVirtual === true || m.isClaimed === false || !m.userId || (m.userId && (m.userId.startsWith('unclaimed_') || m.userId.startsWith('virtual_'))) || m.role === 'virtual' || Boolean(m.claimToken);
-      const isOnline = isCurrentUser || isVirtual ? true : (realtimeHub ? realtimeHub.isTripMemberConnected(tripId, m.userId) : false);
+      const isConnected = realtimeHub ? realtimeHub.isTripMemberConnected(tripId, m.userId) : false;
+      const isOnline = isCurrentUser || isVirtual ? true : isConnected;
       const memberRevision = isVirtual ? tripRevision : (m.lastSyncedRevision || 1);
       const pendingCount = isVirtual ? 0 : (m.pendingMutationsCount || 0);
-      const lastSeenDate = m.lastSeenAt ? new Date(m.lastSeenAt) : null;
+
+      // Presence Status Calculation (Server-Authoritative):
+      // < 45 seconds: ONLINE
+      // 45 seconds - 5 minutes: RECENTLY_ACTIVE
+      // > 5 minutes: OFFLINE
+      // No heartbeat recorded: UNKNOWN
+      let presenceStatus = 'UNKNOWN';
+      const lastActiveTime = Math.max(
+        m.lastHeartbeatAt ? new Date(m.lastHeartbeatAt).getTime() : 0,
+        m.lastSeenAt ? new Date(m.lastSeenAt).getTime() : 0
+      );
+
+      if (isVirtual) {
+        presenceStatus = 'VIRTUAL_ACCOUNTED';
+      } else if (isCurrentUser || isConnected) {
+        presenceStatus = 'ONLINE';
+      } else if (lastActiveTime > 0) {
+        const diffSec = (nowDate.getTime() - lastActiveTime) / 1000;
+        if (diffSec < 45) {
+          presenceStatus = 'ONLINE';
+        } else if (diffSec <= 300) {
+          presenceStatus = 'RECENTLY_ACTIVE';
+        } else {
+          presenceStatus = 'OFFLINE';
+        }
+      } else {
+        presenceStatus = 'UNKNOWN';
+      }
+
+      // Check member consent request status
+      const memberReq = activeRequests
+        .filter((r) => r.memberId === m.id)
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+
+      let consentStatus = 'NONE';
+      let activeRequestId = null;
+      let consentResponseNote = null;
+
+      if (memberReq) {
+        activeRequestId = memberReq.id;
+        consentResponseNote = memberReq.responseNote || null;
+        if (memberReq.status === 'PENDING') {
+          if (nowDate > new Date(memberReq.expiresAt)) {
+            consentStatus = 'EXPIRED';
+          } else {
+            consentStatus = 'PENDING';
+          }
+        } else if (memberReq.status === 'CONFIRMED_AVAILABLE') {
+          consentStatus = 'CONFIRMED_AVAILABLE';
+        } else if (memberReq.status === 'UNAVAILABLE') {
+          consentStatus = 'UNAVAILABLE';
+        } else if (memberReq.status === 'EXPIRED') {
+          consentStatus = 'EXPIRED';
+        }
+      }
 
       const freshAckMs = 2 * 60 * 1000;
       let syncStatus = 'synced';
@@ -891,9 +970,7 @@ class TripService {
       } else if (memberRevision < tripRevision) {
         syncStatus = isOnline ? 'pending' : 'offline';
       } else if (!isOnline && !isCurrentUser) {
-        const acknowledgedRecently = lastSeenDate && (nowDate - lastSeenDate) <= freshAckMs;
-        // An offline participant can create expenses after the last acknowledgement.
-        // A stale ack is not evidence that their local queue is empty.
+        const acknowledgedRecently = lastActiveTime > 0 && (nowDate.getTime() - lastActiveTime) <= freshAckMs;
         syncStatus = acknowledgedRecently ? 'synced' : 'unknown';
       }
 
@@ -906,16 +983,44 @@ class TripService {
         isCurrentUser,
         isVirtual,
         isOnline,
+        presenceStatus,
+        consentStatus,
+        activeRequestId,
+        consentResponseNote,
         syncStatus,
         acknowledgedRevision: memberRevision,
         pendingCount,
         lastSeenAt: m.lastSeenAt || null,
-        lastSyncFormatted: isVirtual ? 'Virtual member' : this._formatLastSync(m.lastSeenAt),
+        lastHeartbeatAt: m.lastHeartbeatAt || null,
+        lastSyncFormatted: isVirtual ? 'Virtual member' : this._formatLastSync(m.lastSeenAt || m.lastHeartbeatAt),
       };
     });
 
     const unsyncedCount = participants.filter((p) => !p.isVirtual && (p.syncStatus !== 'synced' || p.pendingCount > 0)).length;
     const isFullySynced = unsyncedCount === 0;
+
+    // Check if any member blocked completion or has pending consent
+    const rejectedMembers = participants.filter((p) => !p.isVirtual && p.consentStatus === 'UNAVAILABLE');
+    const pendingConsentMembers = participants.filter((p) => !p.isVirtual && p.consentStatus === 'PENDING');
+    const offlineUnconfirmedMembers = participants.filter(
+      (p) => !p.isVirtual && !p.isCurrentUser && p.presenceStatus === 'OFFLINE' && p.consentStatus !== 'CONFIRMED_AVAILABLE'
+    );
+
+    const isCompletionBlocked = rejectedMembers.length > 0;
+    const canCompleteNormally = isFullySynced &&
+      !isCompletionBlocked &&
+      pendingConsentMembers.length === 0 &&
+      offlineUnconfirmedMembers.length === 0 &&
+      (trip.lifecycleState === 'active' || trip.lifecycleState === 'completing');
+
+    let blockReason = null;
+    if (rejectedMembers.length > 0) {
+      blockReason = `Completion blocked by ${rejectedMembers.map((m) => m.displayName).join(', ')}`;
+    } else if (pendingConsentMembers.length > 0) {
+      blockReason = `Waiting for confirmation from ${pendingConsentMembers.map((m) => m.displayName).join(', ')}`;
+    } else if (!isFullySynced) {
+      blockReason = 'One or more participants have un-synced changes';
+    }
 
     return {
       tripId: trip.id,
@@ -926,7 +1031,9 @@ class TripService {
       completedAt: trip.completedAt || null,
       completedBy: trip.completedBy || null,
       isFullySynced,
-      canCompleteNormally: isFullySynced && (trip.lifecycleState === 'active' || trip.lifecycleState === 'completing'),
+      canCompleteNormally,
+      isCompletionBlocked,
+      blockReason,
       totalParticipants: participants.length,
       syncedParticipantsCount: participants.length - unsyncedCount,
       unsyncedParticipantsCount: unsyncedCount,
@@ -948,6 +1055,7 @@ class TripService {
       lastSyncedRevision: ackRevision,
       pendingMutationsCount: typeof pendingCount === 'number' ? pendingCount : 0,
       lastSeenAt: now,
+      lastHeartbeatAt: now,
     });
 
     return {
@@ -983,7 +1091,314 @@ class TripService {
     };
   }
 
-  completeTrip(tripId, currentUserId, { completionMode = 'NORMAL', expectedRevision = null } = {}, realtimeHub = null) {
+  requestCompletionConsent(tripId, currentUserId, memberId, realtimeHub = null) {
+    const trip = db.get('trips', tripId);
+    if (!trip) throw AppError.notFound('Trip not found');
+
+    const authMember = db.findOne('trip_members', (m) => m.tripId === tripId && m.userId === currentUserId);
+    if (!authMember) throw AppError.forbidden('Not a member of this trip');
+
+    if (trip.creatorId !== currentUserId && authMember.role !== 'creator') {
+      throw AppError.forbidden('Only the trip owner can initiate completion or request consent');
+    }
+
+    const targetMember = db.findOne('trip_members', (m) => m.tripId === tripId && m.id === memberId);
+    if (!targetMember) throw AppError.notFound('Target member not found in trip');
+
+    if (targetMember.id === authMember.id || targetMember.userId === currentUserId) {
+      throw AppError.badRequest('Cannot request completion consent from trip owner');
+    }
+
+    const isVirtual = targetMember.isVirtual === true || targetMember.isClaimed === false || !targetMember.userId || targetMember.userId.startsWith('unclaimed_');
+    if (isVirtual) {
+      throw AppError.badRequest('Cannot request consent from virtual or unclaimed members. Their expenses are managed by the trip creator.');
+    }
+
+    const now = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+    // Expire/cancel any previously existing pending request for this member
+    const existingReqs = db.find('trip_completion_requests', (r) => r.tripId === tripId && r.memberId === memberId && r.status === 'PENDING');
+    for (const req of existingReqs) {
+      db.update('trip_completion_requests', req.id, { status: 'CANCELLED', updatedAt: now });
+    }
+
+    const requestId = 'tcr_' + crypto.randomUUID().replace(/-/g, '').substring(0, 12);
+    const requestRecord = {
+      id: requestId,
+      tripId,
+      memberId,
+      userId: targetMember.userId,
+      requestedBy: currentUserId,
+      status: 'PENDING',
+      response: null,
+      responseNote: null,
+      createdAt: now,
+      expiresAt,
+      respondedAt: null,
+      version: 1,
+    };
+    db.insert('trip_completion_requests', requestRecord);
+
+    // Transition trip state to 'completing' if currently active
+    if (trip.lifecycleState === 'active') {
+      db.update('trips', tripId, { lifecycleState: 'completing', updatedAt: now });
+      const historyId = 'tlh_' + crypto.randomUUID().replace(/-/g, '').substring(0, 12);
+      db.insert('trip_lifecycle_history', {
+        id: historyId,
+        tripId,
+        previousStatus: 'active',
+        newStatus: 'completing',
+        changedBy: currentUserId,
+        reason: `Owner requested completion consent from ${targetMember.displayName}`,
+        relatedRequestId: requestId,
+        createdAt: now,
+      });
+
+      this.logActivity(tripId, {
+        type: 'lifecycle_updated',
+        actorId: currentUserId,
+        actorName: authMember.displayName,
+        description: `${authMember.displayName} initiated trip completion verification`,
+        metadata: { lifecycleState: 'completing' },
+      });
+    }
+
+    // Dispatch in-app notification and push alert
+    notificationService.notifyTripCompletionConsentRequested({
+      trip,
+      member: targetMember,
+      actor: { id: currentUserId, displayName: authMember.displayName },
+      request: requestRecord,
+      realtimeHub,
+    });
+
+    if (realtimeHub) {
+      realtimeHub.broadcastToTrip(tripId, 'completion_consent_requested', {
+        tripId,
+        requestId,
+        memberId,
+        targetUserId: targetMember.userId,
+        targetDisplayName: targetMember.displayName,
+        requestedByUserId: currentUserId,
+        expiresAt,
+        timestamp: now,
+      });
+    }
+
+    return requestRecord;
+  }
+
+  batchRequestCompletionConsent(tripId, currentUserId, realtimeHub = null) {
+    const syncStatus = this.getTripSyncStatus(tripId, currentUserId, realtimeHub);
+    const createdRequests = [];
+
+    // Find all real members who are not the creator and need confirmation
+    for (const p of syncStatus.participants) {
+      if (p.isVirtual || p.isCurrentUser || p.isCreator) continue;
+      if (p.consentStatus !== 'CONFIRMED_AVAILABLE') {
+        const req = this.requestCompletionConsent(tripId, currentUserId, p.memberId, realtimeHub);
+        createdRequests.push(req);
+      }
+    }
+
+    return createdRequests;
+  }
+
+  respondCompletionConsent(tripId, requestId, currentUserId, { response, note } = {}, realtimeHub = null) {
+    const normalizedResponse = (response || '').toUpperCase().trim();
+    if (normalizedResponse !== 'YES' && normalizedResponse !== 'NO') {
+      throw AppError.badRequest('Response must be either "YES" or "NO"');
+    }
+
+    const trip = db.get('trips', tripId);
+    if (!trip) throw AppError.notFound('Trip not found');
+
+    const request = db.get('trip_completion_requests', requestId);
+    if (!request || request.tripId !== tripId) {
+      throw AppError.notFound('Completion request not found');
+    }
+
+    if (request.status !== 'PENDING') {
+      throw AppError.badRequest(`Request has already been finalized with status: ${request.status}`);
+    }
+
+    const now = new Date().toISOString();
+    if (new Date(now) > new Date(request.expiresAt)) {
+      db.update('trip_completion_requests', requestId, { status: 'EXPIRED', updatedAt: now });
+      throw AppError.badRequest('This completion request has expired');
+    }
+
+    // Verify caller is the intended member
+    const targetMember = db.get('trip_members', request.memberId);
+    if (!targetMember || (targetMember.userId !== currentUserId && request.userId !== currentUserId)) {
+      throw AppError.forbidden('You are not authorized to respond to this completion request');
+    }
+
+    const isConfirmed = normalizedResponse === 'YES';
+    const newStatus = isConfirmed ? 'CONFIRMED_AVAILABLE' : 'UNAVAILABLE';
+
+    const updatedRequest = db.update('trip_completion_requests', requestId, {
+      status: newStatus,
+      response: normalizedResponse,
+      responseNote: note ? note.trim() : null,
+      respondedAt: now,
+      version: (request.version || 1) + 1,
+      updatedAt: now,
+    });
+
+    // Update responder's heartbeat and last seen
+    db.update('trip_members', targetMember.id, {
+      lastSeenAt: now,
+      lastHeartbeatAt: now,
+    });
+
+    if (isConfirmed) {
+      this.logActivity(tripId, {
+        type: 'consent_confirmed',
+        actorId: currentUserId,
+        actorName: targetMember.displayName,
+        description: `${targetMember.displayName} confirmed availability for trip completion`,
+        metadata: { requestId, memberId: targetMember.id },
+      });
+
+      if (realtimeHub) {
+        realtimeHub.broadcastToTrip(tripId, 'completion_consent_responded', {
+          tripId,
+          requestId,
+          memberId: targetMember.id,
+          userId: currentUserId,
+          displayName: targetMember.displayName,
+          response: 'YES',
+          timestamp: now,
+        });
+      }
+    } else {
+      // Member said NO -> completion is blocked!
+      // Revert trip lifecycle back to 'active'
+      db.update('trips', tripId, {
+        lifecycleState: 'active',
+        updatedAt: now,
+      });
+
+      const historyId = 'tlh_' + crypto.randomUUID().replace(/-/g, '').substring(0, 12);
+      db.insert('trip_lifecycle_history', {
+        id: historyId,
+        tripId,
+        previousStatus: 'completing',
+        newStatus: 'active',
+        changedBy: currentUserId,
+        reason: `Member rejected completion: ${note ? note.trim() : 'Marked unavailable'}`,
+        relatedRequestId: requestId,
+        createdAt: now,
+      });
+
+      this.logActivity(tripId, {
+        type: 'consent_rejected',
+        actorId: currentUserId,
+        actorName: targetMember.displayName,
+        description: `${targetMember.displayName} rejected trip completion: ${note ? note.trim() : 'Unavailable'}`,
+        metadata: { requestId, memberId: targetMember.id, note },
+      });
+
+      // Dispatch alert to trip owner
+      notificationService.notifyTripCompletionBlocked({
+        trip,
+        member: targetMember,
+        actor: { id: currentUserId, displayName: targetMember.displayName },
+        note: note ? note.trim() : null,
+        realtimeHub,
+      });
+
+      if (realtimeHub) {
+        realtimeHub.broadcastToTrip(tripId, 'completion_blocked_by_member', {
+          tripId,
+          requestId,
+          memberId: targetMember.id,
+          userId: currentUserId,
+          displayName: targetMember.displayName,
+          response: 'NO',
+          note: note ? note.trim() : null,
+          timestamp: now,
+        });
+      }
+    }
+
+    return updatedRequest;
+  }
+
+  getCompletionRequests(tripId, currentUserId) {
+    const trip = db.get('trips', tripId);
+    if (!trip) throw AppError.notFound('Trip not found');
+
+    const authMember = db.findOne('trip_members', (m) => m.tripId === tripId && m.userId === currentUserId);
+    if (!authMember) throw AppError.forbidden('Not a member of this trip');
+
+    const requests = db.find('trip_completion_requests', (r) => r.tripId === tripId);
+    return requests.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }
+
+  getTripCompletionStatus(tripId, currentUserId, realtimeHub = null) {
+    const syncStatus = this.getTripSyncStatus(tripId, currentUserId, realtimeHub);
+    const trip = db.get('trips', tripId);
+
+    const completionRequests = db.find('trip_completion_requests', (r) => r.tripId === tripId);
+    const reopeningRequests = db.find('trip_reopening_requests', (r) => r.tripId === tripId);
+    const lifecycleHistory = db.find('trip_lifecycle_history', (h) => h.tripId === tripId);
+
+    // Calculate metrics
+    let onlineCount = 0;
+    let recentlyActiveCount = 0;
+    let offlineCount = 0;
+    let confirmedCount = 0;
+    let unavailableCount = 0;
+    let pendingConsentCount = 0;
+    let virtualCount = 0;
+
+    for (const p of syncStatus.participants) {
+      if (p.isVirtual) {
+        virtualCount++;
+      } else {
+        if (p.presenceStatus === 'ONLINE') onlineCount++;
+        else if (p.presenceStatus === 'RECENTLY_ACTIVE') recentlyActiveCount++;
+        else offlineCount++;
+
+        if (p.consentStatus === 'CONFIRMED_AVAILABLE') confirmedCount++;
+        else if (p.consentStatus === 'UNAVAILABLE') unavailableCount++;
+        else if (p.consentStatus === 'PENDING') pendingConsentCount++;
+      }
+    }
+
+    const ownerParticipant = syncStatus.participants.find((p) => p.isCreator);
+    const isOwnerOnline = ownerParticipant ? (ownerParticipant.presenceStatus === 'ONLINE' || ownerParticipant.isCurrentUser) : true;
+
+    return {
+      tripId: trip.id,
+      tripName: trip.name,
+      lifecycleState: trip.lifecycleState,
+      currentRevision: trip.revision || 1,
+      isOwnerOnline,
+      canCompleteNormally: syncStatus.canCompleteNormally && isOwnerOnline,
+      isCompletionBlocked: syncStatus.isCompletionBlocked,
+      blockReason: syncStatus.blockReason,
+      summary: {
+        totalMembers: syncStatus.participants.length,
+        onlineCount,
+        recentlyActiveCount,
+        offlineCount,
+        confirmedCount,
+        unavailableCount,
+        pendingConsentCount,
+        virtualCount,
+      },
+      participants: syncStatus.participants,
+      activeCompletionRequests: completionRequests.filter((r) => r.status === 'PENDING'),
+      pendingReopeningRequests: reopeningRequests.filter((r) => r.status === 'PENDING'),
+      lifecycleHistory: lifecycleHistory.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
+    };
+  }
+
+  completeTrip(tripId, currentUserId, { completionMode = 'NORMAL', expectedRevision = null, isOwnerOnline = true } = {}, realtimeHub = null) {
     const trip = db.get('trips', tripId);
     if (!trip) throw AppError.notFound('Trip not found');
 
@@ -992,6 +1407,11 @@ class TripService {
 
     if (trip.creatorId !== currentUserId && authMember.role !== 'creator') {
       throw AppError.forbidden('Only the trip creator can complete or change trip lifecycle state');
+    }
+
+    // Rule: Trip Owner MUST be online to initiate or finalize completion
+    if (isOwnerOnline === false) {
+      throw AppError.badRequest("You're currently offline. Connect to the internet before completing this trip.");
     }
 
     // Idempotency: if already completed, return existing trip
@@ -1013,6 +1433,31 @@ class TripService {
 
     if (!isForced) {
       const syncStatus = this.getTripSyncStatus(tripId, currentUserId, realtimeHub);
+
+      // Financial Integrity Check: If any member has pending mutations / un-synced expenses
+      const hasPendingExpenses = syncStatus.participants.some((p) => (p.pendingCount || 0) > 0);
+      if (hasPendingExpenses) {
+        throw AppError.badRequest('Some expenses are still waiting to sync. Please synchronize them before completing this trip.');
+      }
+
+      // Member Consent Check:
+      // 1. If any member has explicitly rejected completion (UNAVAILABLE)
+      const rejected = syncStatus.participants.filter((p) => !p.isVirtual && p.consentStatus === 'UNAVAILABLE');
+      if (rejected.length > 0) {
+        throw AppError.badRequest(
+          `Completion blocked: ${rejected.map((m) => m.displayName).join(', ')} indicated they are unavailable or have unsettled expenses.`
+        );
+      }
+
+      // 2. If any member has a pending consent request
+      const pending = syncStatus.participants.filter((p) => !p.isVirtual && p.consentStatus === 'PENDING');
+      if (pending.length > 0) {
+        throw AppError.badRequest(
+          `Cannot complete trip: Waiting for confirmation from ${pending.map((m) => m.displayName).join(', ')}.`
+        );
+      }
+
+      // 3. If any member is un-synced or offline without consent
       if (!syncStatus.isFullySynced) {
         throw AppError.badRequest(
           'Cannot complete trip normally: one or more participants have un-synced changes. Use forced completion if intended.',
@@ -1032,6 +1477,17 @@ class TripService {
       completedBy: currentUserId,
       revision: currentRevision + 1,
       updatedAt: now,
+    });
+
+    const historyId = 'tlh_' + crypto.randomUUID().replace(/-/g, '').substring(0, 12);
+    db.insert('trip_lifecycle_history', {
+      id: historyId,
+      tripId,
+      previousStatus: trip.lifecycleState,
+      newStatus: targetState,
+      changedBy: currentUserId,
+      reason: isForced ? 'Forced completion with pending sync warnings' : 'All members synced and verified',
+      createdAt: now,
     });
 
     this.logActivity(tripId, {
@@ -1075,6 +1531,201 @@ class TripService {
     });
 
     return enriched;
+  }
+
+  requestTripReopening(tripId, currentUserId, { reasonCategory = 'OTHER', note = null } = {}, realtimeHub = null) {
+    const trip = db.get('trips', tripId);
+    if (!trip) throw AppError.notFound('Trip not found');
+
+    const authMember = db.findOne('trip_members', (m) => m.tripId === tripId && m.userId === currentUserId);
+    if (!authMember) throw AppError.forbidden('Not a member of this trip');
+
+    if (trip.lifecycleState !== 'completed' && trip.lifecycleState !== 'completed_with_pending_changes' && trip.lifecycleState !== 'settled') {
+      throw AppError.badRequest('Only completed or settled trips can be requested for reopening');
+    }
+
+    const validCategories = ['MISSING_EXPENSE', 'INCORRECT_PAYER', 'WRONG_SPLIT', 'PAYMENT_DISPUTE', 'OTHER'];
+    const cat = (reasonCategory || 'OTHER').toUpperCase().trim();
+    if (!validCategories.includes(cat)) {
+      throw AppError.badRequest(`Invalid reason category: ${reasonCategory}. Valid options: ${validCategories.join(', ')}`);
+    }
+
+    const now = new Date().toISOString();
+    const requestId = 'trr_' + crypto.randomUUID().replace(/-/g, '').substring(0, 12);
+    const record = {
+      id: requestId,
+      tripId,
+      requestedBy: currentUserId,
+      reasonCategory: cat,
+      note: note ? note.trim() : null,
+      status: 'PENDING',
+      reviewedBy: null,
+      reviewedAt: null,
+      reviewNote: null,
+      createdAt: now,
+    };
+    db.insert('trip_reopening_requests', record);
+
+    this.logActivity(tripId, {
+      type: 'trip_reopening_requested',
+      actorId: currentUserId,
+      actorName: authMember.displayName,
+      description: `${authMember.displayName} requested to reopen the trip (${cat.replace(/_/g, ' ')})`,
+      metadata: { requestId, reasonCategory: cat, note },
+    });
+
+    notificationService.notifyTripReopeningRequested({
+      trip,
+      actor: { id: currentUserId, displayName: authMember.displayName },
+      reasonCategory: cat,
+      note,
+      request: record,
+      realtimeHub,
+    });
+
+    if (realtimeHub) {
+      realtimeHub.broadcastToTrip(tripId, 'trip_reopening_requested', {
+        tripId,
+        requestId,
+        requestedByUserId: currentUserId,
+        requestedByName: authMember.displayName,
+        reasonCategory: cat,
+        note,
+        timestamp: now,
+      });
+    }
+
+    return record;
+  }
+
+  reviewTripReopening(tripId, requestId, currentUserId, { action, reviewNote } = {}, realtimeHub = null) {
+    const normalizedAction = (action || '').toUpperCase().trim();
+    if (normalizedAction !== 'APPROVE' && normalizedAction !== 'REJECT') {
+      throw AppError.badRequest('Action must be either "APPROVE" or "REJECT"');
+    }
+
+    const trip = db.get('trips', tripId);
+    if (!trip) throw AppError.notFound('Trip not found');
+
+    const authMember = db.findOne('trip_members', (m) => m.tripId === tripId && m.userId === currentUserId);
+    if (!authMember) throw AppError.forbidden('Not a member of this trip');
+
+    if (trip.creatorId !== currentUserId && authMember.role !== 'creator') {
+      throw AppError.forbidden('Only the trip owner can review reopening requests');
+    }
+
+    const request = db.get('trip_reopening_requests', requestId);
+    if (!request || request.tripId !== tripId) {
+      throw AppError.notFound('Reopening request not found');
+    }
+
+    if (request.status !== 'PENDING') {
+      throw AppError.badRequest(`Request has already been reviewed with status: ${request.status}`);
+    }
+
+    const now = new Date().toISOString();
+    const isApproved = normalizedAction === 'APPROVE';
+    const newStatus = isApproved ? 'APPROVED' : 'REJECTED';
+
+    const updatedRequest = db.update('trip_reopening_requests', requestId, {
+      status: newStatus,
+      reviewedBy: currentUserId,
+      reviewedAt: now,
+      reviewNote: reviewNote ? reviewNote.trim() : null,
+      updatedAt: now,
+    });
+
+    if (isApproved) {
+      const newRevision = (trip.revision || 1) + 1;
+      const updatedTrip = db.update('trips', tripId, {
+        lifecycleState: 'active',
+        revision: newRevision,
+        updatedAt: now,
+      });
+
+      const historyId = 'tlh_' + crypto.randomUUID().replace(/-/g, '').substring(0, 12);
+      db.insert('trip_lifecycle_history', {
+        id: historyId,
+        tripId,
+        previousStatus: trip.lifecycleState,
+        newStatus: 'active',
+        changedBy: currentUserId,
+        reason: `Reopening approved: ${request.reasonCategory}${request.note ? ` - ${request.note}` : ''}`,
+        relatedRequestId: requestId,
+        createdAt: now,
+      });
+
+      this.logActivity(tripId, {
+        type: 'trip_reopened',
+        actorId: currentUserId,
+        actorName: authMember.displayName,
+        description: `${authMember.displayName} approved reopening "${trip.name}"`,
+        metadata: { requestId, reasonCategory: request.reasonCategory },
+      });
+
+      const enriched = this._enrichTrip(updatedTrip);
+
+      notificationService.notifyTripReopened({
+        trip: enriched,
+        actor: { id: currentUserId, displayName: authMember.displayName },
+        realtimeHub,
+      });
+
+      if (realtimeHub) {
+        realtimeHub.broadcastToTrip(tripId, 'trip_reopened', {
+          tripId,
+          requestId,
+          reviewedByUserId: currentUserId,
+          reviewedByName: authMember.displayName,
+          trip: enriched,
+          timestamp: now,
+        });
+      }
+
+      return { request: updatedRequest, trip: enriched };
+    } else {
+      this.logActivity(tripId, {
+        type: 'trip_reopening_rejected',
+        actorId: currentUserId,
+        actorName: authMember.displayName,
+        description: `${authMember.displayName} rejected reopening request`,
+        metadata: { requestId, reviewNote },
+      });
+
+      if (realtimeHub) {
+        realtimeHub.broadcastToTrip(tripId, 'trip_reopening_reviewed', {
+          tripId,
+          requestId,
+          status: 'REJECTED',
+          reviewNote: reviewNote || null,
+          timestamp: now,
+        });
+      }
+
+      return { request: updatedRequest, trip: this._enrichTrip(trip) };
+    }
+  }
+
+  getReopeningRequests(tripId, currentUserId) {
+    const trip = db.get('trips', tripId);
+    if (!trip) throw AppError.notFound('Trip not found');
+
+    const authMember = db.findOne('trip_members', (m) => m.tripId === tripId && m.userId === currentUserId);
+    if (!authMember) throw AppError.forbidden('Not a member of this trip');
+
+    const requests = db.find('trip_reopening_requests', (r) => r.tripId === tripId);
+    return requests.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }
+
+  getLifecycleHistory(tripId, currentUserId) {
+    const trip = db.get('trips', tripId);
+    if (!trip) throw AppError.notFound('Trip not found');
+
+    const authMember = db.findOne('trip_members', (m) => m.tripId === tripId && m.userId === currentUserId);
+    if (!authMember) throw AppError.forbidden('Not a member of this trip');
+
+    const history = db.find('trip_lifecycle_history', (h) => h.tripId === tripId);
+    return history.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }
 
   reconcileDuplicateMembers(tripId) {

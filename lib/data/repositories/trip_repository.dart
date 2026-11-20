@@ -19,6 +19,7 @@ import '../../domain/models/trip_member.dart';
 import '../../domain/models/trip_memory.dart';
 import '../../domain/models/trip_preview.dart';
 import '../../domain/models/trip_sync_status.dart';
+import '../../domain/models/trip_completion_models.dart';
 import '../services/local_storage_service.dart';
 import '../services/sync_service.dart';
 
@@ -864,6 +865,139 @@ class TripRepository {
     );
   }
 
+  /// Fetches detailed smart completion status including member presence, active requests, and reopening status.
+  Future<TripCompletionDetail> getTripCompletionStatus(String tripId) async {
+    final res = await apiClient.get('/trips/$tripId/completion-status');
+    if (res is Map<String, dynamic>) {
+      return TripCompletionDetail.fromJson(res);
+    }
+    throw const NetworkException(
+      message: 'Invalid response from completion status endpoint',
+    );
+  }
+
+  /// Sends a presence heartbeat to the server for [tripId].
+  Future<void> sendHeartbeat(String tripId) async {
+    try {
+      await apiClient.post('/trips/$tripId/heartbeat');
+    } catch (_) {
+      // Heartbeats are non-blocking / best-effort
+    }
+  }
+
+  /// Requests completion consent from an individual member.
+  Future<TripCompletionRequest> requestCompletionConsent(
+    String tripId,
+    String memberId,
+  ) async {
+    final res = await apiClient.post(
+      '/trips/$tripId/completion-requests',
+      body: {'memberId': memberId},
+    );
+    if (res is Map<String, dynamic>) {
+      return TripCompletionRequest.fromJson(res);
+    }
+    throw const NetworkException(message: 'Failed to request member consent');
+  }
+
+  /// Requests completion consent in batch from all unconfirmed members.
+  Future<List<TripCompletionRequest>> batchRequestCompletionConsent(
+    String tripId,
+  ) async {
+    final res = await apiClient.post(
+      '/trips/$tripId/completion-requests/batch',
+    );
+    if (res is List) {
+      return res
+          .map((e) => TripCompletionRequest.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+    return [];
+  }
+
+  /// Responds to a completion consent request with [response] ('YES' or 'NO') and optional [note].
+  Future<TripCompletionRequest> respondCompletionConsent(
+    String tripId,
+    String requestId,
+    String response, {
+    String? note,
+  }) async {
+    final res = await apiClient.post(
+      '/trips/$tripId/completion-requests/$requestId/respond',
+      body: {'response': response, 'note': note},
+    );
+    if (res is Map<String, dynamic>) {
+      return TripCompletionRequest.fromJson(res);
+    }
+    throw const NetworkException(message: 'Failed to submit completion response');
+  }
+
+  /// Fetches all completion consent requests for [tripId].
+  Future<List<TripCompletionRequest>> getCompletionRequests(String tripId) async {
+    final res = await apiClient.get('/trips/$tripId/completion-requests');
+    if (res is List) {
+      return res
+          .map((e) => TripCompletionRequest.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+    return [];
+  }
+
+  /// Requests reopening of a completed or settled trip.
+  Future<TripReopeningRequest> requestTripReopening(
+    String tripId, {
+    required String reasonCategory,
+    String? note,
+  }) async {
+    final res = await apiClient.post(
+      '/trips/$tripId/reopening-requests',
+      body: {'reasonCategory': reasonCategory, 'note': note},
+    );
+    if (res is Map<String, dynamic>) {
+      return TripReopeningRequest.fromJson(res);
+    }
+    throw const NetworkException(message: 'Failed to submit reopening request');
+  }
+
+  /// Reviews a trip reopening request (owner only) with [action] ('APPROVE' or 'REJECT').
+  Future<Map<String, dynamic>> reviewTripReopening(
+    String tripId,
+    String requestId, {
+    required String action,
+    String? reviewNote,
+  }) async {
+    final res = await apiClient.post(
+      '/trips/$tripId/reopening-requests/$requestId/review',
+      body: {'action': action, 'reviewNote': reviewNote},
+    );
+    if (res is Map<String, dynamic>) {
+      return res;
+    }
+    throw const NetworkException(message: 'Failed to review reopening request');
+  }
+
+  /// Fetches all reopening requests for [tripId].
+  Future<List<TripReopeningRequest>> getReopeningRequests(String tripId) async {
+    final res = await apiClient.get('/trips/$tripId/reopening-requests');
+    if (res is List) {
+      return res
+          .map((e) => TripReopeningRequest.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+    return [];
+  }
+
+  /// Fetches lifecycle transition audit history for [tripId].
+  Future<List<TripLifecycleHistoryEntry>> getLifecycleHistory(String tripId) async {
+    final res = await apiClient.get('/trips/$tripId/lifecycle-history');
+    if (res is List) {
+      return res
+          .map((e) => TripLifecycleHistoryEntry.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+    return [];
+  }
+
   /// Broadcasts a real-time sync request to all online participants in the trip.
   Future<void> requestTripSync(String tripId) async {
     try {
@@ -889,15 +1023,23 @@ class TripRepository {
     }
   }
 
-  /// Atomically completes a trip with server-side sync verification and concurrency protection.
+  /// Atomically completes a trip with server-side sync verification, member consent, and concurrency protection.
+  /// Rule: The trip owner MUST be online. If offline, completion is blocked without local queue bypass.
   Future<Trip> completeTrip({
     required String tripId,
     required String completionMode, // 'NORMAL' or 'FORCED_WITH_PENDING_SYNC'
     int? expectedRevision,
+    bool isOwnerOnline = true,
   }) async {
     debugPrint(
-      '[TripRepository] TRIP COMPLETION REQUEST: tripId=$tripId, mode=$completionMode',
+      '[TripRepository] TRIP COMPLETION REQUEST: tripId=$tripId, mode=$completionMode, isOwnerOnline=$isOwnerOnline',
     );
+
+    if (!isOwnerOnline) {
+      throw const NetworkException(
+        message: "You're currently offline. Connect to the internet before completing this trip.",
+      );
+    }
 
     final normalizedMode = completionMode.toUpperCase();
     if (normalizedMode == 'NORMAL') {
@@ -907,8 +1049,8 @@ class TripRepository {
         // The pending-queue check below decides whether completion may proceed.
       }
       if (syncService.hasPendingMutationsForTrip(tripId)) {
-        throw StateError(
-          'This device still has unsynced trip changes. Sync them before normal completion, or complete with pending changes.',
+        throw const NetworkException(
+          message: 'Some expenses are still waiting to sync. Please synchronize them before completing this trip.',
         );
       }
     }
@@ -919,6 +1061,7 @@ class TripRepository {
         body: {
           'completionMode': completionMode,
           'expectedRevision': expectedRevision,
+          'isOwnerOnline': isOwnerOnline,
         },
       );
 
@@ -950,35 +1093,10 @@ class TripRepository {
 
         return completedTrip;
       }
+    } on NetworkException {
+      // Re-throw authoritative network exception: Rule 2 strictly prohibits silent local offline completion bypass
+      rethrow;
     } catch (e) {
-      // Offline / network failure self-healing fallback:
-      // If trip exists in local storage, mark it completed locally and enqueue completion mutation
-      final cached = getCachedTrips();
-      final idx = cached.indexWhere((t) => t.id == tripId);
-      if (idx != -1) {
-        final now = DateTime.now();
-        final completedTrip = cached[idx].copyWith(
-          lifecycleState: TripLifecycle.completed,
-          completedAt: now,
-          updatedAt: now,
-        );
-        cached[idx] = completedTrip;
-        await _saveTripsAndCache(cached.map((t) => t.toJson()).toList());
-
-        await syncService.enqueueMutation(
-          MutationType.updateTripLifecycle,
-          {
-            'tripId': tripId,
-            'lifecycleState': TripLifecycle.completed.name,
-            'completionMode': completionMode,
-            'expectedRevision': expectedRevision,
-          },
-          idempotencyKey: 'complete_$tripId',
-          backgroundApiClient: apiClient,
-        );
-
-        return completedTrip;
-      }
       rethrow;
     }
 

@@ -141,14 +141,135 @@ router.get('/:id/operations', (req, res, next) => {
   }
 });
 
+// POST /api/trips/:id/heartbeat - Record member presence heartbeat
+router.post('/:id/heartbeat', (req, res, next) => {
+  try {
+    const result = tripService.recordHeartbeat(req.params.id, req.user.id);
+    res.status(200).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// GET /api/trips/:id/completion-status - Detailed smart completion & member consent status
+router.get('/:id/completion-status', (req, res, next) => {
+  try {
+    const status = tripService.getTripCompletionStatus(req.params.id, req.user.id, realtimeHub);
+    res.status(200).json({ data: status });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// POST /api/trips/:id/completion-requests - Request completion consent from specific member
+router.post('/:id/completion-requests', (req, res, next) => {
+  try {
+    const { memberId } = req.body;
+    const request = tripService.requestCompletionConsent(req.params.id, req.user.id, memberId, realtimeHub);
+    res.status(201).json({ data: request });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// POST /api/trips/:id/completion-requests/batch - Request completion consent from all unconfirmed members
+router.post('/:id/completion-requests/batch', (req, res, next) => {
+  try {
+    const requests = tripService.batchRequestCompletionConsent(req.params.id, req.user.id, realtimeHub);
+    res.status(200).json({ data: requests });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// POST /api/trips/:id/completion-requests/:requestId/respond - Member responds to consent request
+router.post('/:id/completion-requests/:requestId/respond', (req, res, next) => {
+  try {
+    const { response, note } = req.body;
+    const updated = tripService.respondCompletionConsent(
+      req.params.id,
+      req.params.requestId,
+      req.user.id,
+      { response, note },
+      realtimeHub
+    );
+    res.status(200).json({ data: updated });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// GET /api/trips/:id/completion-requests - List completion requests for a trip
+router.get('/:id/completion-requests', (req, res, next) => {
+  try {
+    const requests = tripService.getCompletionRequests(req.params.id, req.user.id);
+    res.status(200).json({ data: requests });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// POST /api/trips/:id/reopening-requests - Member requests reopening a completed trip
+router.post('/:id/reopening-requests', (req, res, next) => {
+  try {
+    const { reasonCategory, note } = req.body;
+    const request = tripService.requestTripReopening(
+      req.params.id,
+      req.user.id,
+      { reasonCategory, note },
+      realtimeHub
+    );
+    res.status(201).json({ data: request });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// POST /api/trips/:id/reopening-requests/:requestId/review - Owner reviews reopening request
+router.post('/:id/reopening-requests/:requestId/review', (req, res, next) => {
+  try {
+    const { action, reviewNote } = req.body;
+    const result = tripService.reviewTripReopening(
+      req.params.id,
+      req.params.requestId,
+      req.user.id,
+      { action, reviewNote },
+      realtimeHub
+    );
+    res.status(200).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// GET /api/trips/:id/reopening-requests - List reopening requests
+router.get('/:id/reopening-requests', (req, res, next) => {
+  try {
+    const requests = tripService.getReopeningRequests(req.params.id, req.user.id);
+    res.status(200).json({ data: requests });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// GET /api/trips/:id/lifecycle-history - Audit log of trip transitions
+router.get('/:id/lifecycle-history', (req, res, next) => {
+  try {
+    const history = tripService.getLifecycleHistory(req.params.id, req.user.id);
+    res.status(200).json({ data: history });
+  } catch (e) {
+    next(e);
+  }
+});
+
 // POST /api/trips/:id/complete - Complete trip with sync verification & optional force mode
 router.post('/:id/complete', (req, res, next) => {
   try {
-    const { completionMode, expectedRevision } = req.body;
+    const { completionMode, expectedRevision, isOwnerOnline } = req.body;
     const trip = tripService.completeTrip(
       req.params.id,
       req.user.id,
-      { completionMode, expectedRevision },
+      { completionMode, expectedRevision, isOwnerOnline },
       realtimeHub
     );
     res.status(200).json({ data: trip });
