@@ -132,7 +132,16 @@ void main() async {
     eventBus: appEventBus,
   );
 
-  apiClient.onConnectivityChanged = syncService.handleConnectivityChange;
+  apiClient.onConnectivityChanged = (isOnline) {
+    syncService.handleConnectivityChange(isOnline);
+    if (!isOnline) {
+      realtimeClient.disconnect();
+    } else {
+      if (!realtimeClient.isConnected) {
+        realtimeClient.connect();
+      }
+    }
+  };
 
   final widgetService = KithWidgetService(storage: storageService);
   widgetService.onDeepLinkReceived = (deepLinkUri) {

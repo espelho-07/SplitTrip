@@ -27,6 +27,7 @@ import '../../../domain/models/expense_draft.dart';
 import '../../../domain/models/receipt_data.dart';
 import '../../../domain/models/trip.dart';
 import '../../../domain/models/trip_member.dart';
+import '../../../data/services/sync_service.dart';
 import '../../viewmodels/add_expense_viewmodel.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
@@ -321,7 +322,21 @@ class _AddExpenseViewState extends State<AddExpenseView> {
           // No enclosing GoRouter in test harnesses
         }
       }
-      KithSuccessToast.show(context, widget.existingExpense != null ? '${l10n.expenseUpdateBtn} ✓' : l10n.translate('add_expense_success'));
+      final syncService = Provider.of<SyncService?>(context, listen: false);
+      if (syncService?.currentStatus == SyncStatus.offline ||
+          syncService?.currentStatus == SyncStatus.pending) {
+        KithSuccessToast.show(
+          context,
+          "Expense saved on this device. It will sync when you're online. ✓",
+        );
+      } else {
+        KithSuccessToast.show(
+          context,
+          widget.existingExpense != null
+              ? '${l10n.expenseUpdateBtn} ✓'
+              : l10n.translate('add_expense_success'),
+        );
+      }
     } else if (mounted) {
       HapticHelper.error();
       final err = addVm.errorMessage ?? l10n.translate('error_generic');

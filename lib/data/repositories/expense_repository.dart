@@ -141,9 +141,12 @@ class ExpenseRepository {
     currentExpenses.insert(0, expense);
 
     final queue = syncService.getPendingMutations();
+    final effectiveUserId = storage.getSavedUser()?['id'] as String? ??
+        storage.getSavedUser()?['accountId'] as String?;
     final mutation = SyncMutation(
       id: const Uuid().v4(),
       idempotencyKey: expense.id,
+      userId: effectiveUserId,
       type: MutationType.addExpense,
       payload: expense.toJson(),
       createdAt: DateTime.now(),
@@ -189,9 +192,12 @@ class ExpenseRepository {
     }
 
     final queue = syncService.getPendingMutations();
+    final effectiveUserId = storage.getSavedUser()?['id'] as String? ??
+        storage.getSavedUser()?['accountId'] as String?;
     final mutation = SyncMutation(
       id: const Uuid().v4(),
       idempotencyKey: expense.id,
+      userId: effectiveUserId,
       type: MutationType.updateExpense,
       payload: expense.toJson(),
       createdAt: DateTime.now(),
@@ -236,9 +242,12 @@ class ExpenseRepository {
     }
 
     final queue = syncService.getPendingMutations();
+    final effectiveUserId = storage.getSavedUser()?['id'] as String? ??
+        storage.getSavedUser()?['accountId'] as String?;
     final mutation = SyncMutation(
       id: const Uuid().v4(),
       idempotencyKey: 'del_$expenseId',
+      userId: effectiveUserId,
       type: MutationType.deleteExpense,
       payload: {'tripId': tripId, 'expenseId': expenseId},
       createdAt: DateTime.now(),

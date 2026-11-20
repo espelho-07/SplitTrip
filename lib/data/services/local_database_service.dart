@@ -206,14 +206,36 @@ class LocalDatabaseService {
         id TEXT PRIMARY KEY,
         mutation_type TEXT NOT NULL,
         trip_id TEXT,
+        user_id TEXT,
+        entity_id TEXT,
+        idempotency_key TEXT,
         payload TEXT NOT NULL,
         created_at TEXT NOT NULL,
+        updated_at TEXT,
+        last_attempt_at TEXT,
         status TEXT NOT NULL DEFAULT 'pending',
         retry_count INTEGER NOT NULL DEFAULT 0,
         error TEXT,
         raw_json TEXT NOT NULL
       );
     ''');
+
+    // Self-healing migrations for existing database files
+    try {
+      _db.execute('ALTER TABLE mutation_outbox ADD COLUMN user_id TEXT;');
+    } catch (_) {}
+    try {
+      _db.execute('ALTER TABLE mutation_outbox ADD COLUMN entity_id TEXT;');
+    } catch (_) {}
+    try {
+      _db.execute('ALTER TABLE mutation_outbox ADD COLUMN idempotency_key TEXT;');
+    } catch (_) {}
+    try {
+      _db.execute('ALTER TABLE mutation_outbox ADD COLUMN updated_at TEXT;');
+    } catch (_) {}
+    try {
+      _db.execute('ALTER TABLE mutation_outbox ADD COLUMN last_attempt_at TEXT;');
+    } catch (_) {}
 
     _db.execute('''
       CREATE TABLE IF NOT EXISTS processed_operations (
@@ -262,6 +284,18 @@ class LocalDatabaseService {
     _db.execute(
       'CREATE INDEX IF NOT EXISTS idx_mutation_outbox_trip_status ON mutation_outbox(trip_id, status);',
     );
+    _db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_mutation_outbox_user_status ON mutation_outbox(user_id, status);',
+    );
+    _db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_mutation_outbox_idempotency ON mutation_outbox(idempotency_key);',
+    );
+
+    if (isInMemory) {
+      _db.execute(
+        "INSERT OR REPLACE INTO migration_metadata (key, value, updated_at) VALUES ('shared_prefs_migrated_v1', 'completed', datetime('now'));",
+      );
+    }
   }
 
   /// Closes database connection.
@@ -291,6 +325,7 @@ class LocalDatabaseService {
 
   /// Checks if SharedPreferences data has already been migrated.
   bool isMigratedFromSharedPreferences() {
+    if (_isDisposed) return false;
     final stmt = _db.prepare(
       'SELECT value FROM migration_metadata WHERE key = ?;',
     );
@@ -727,20 +762,33 @@ class LocalDatabaseService {
       // Outbox Mutations
       final outboxStmt = db.prepare('''
         INSERT OR REPLACE INTO mutation_outbox (
-          id, mutation_type, trip_id, payload, created_at, status, retry_count, error, raw_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+          id, mutation_type, trip_id, user_id, entity_id, idempotency_key,
+          payload, created_at, updated_at, last_attempt_at, status, retry_count, error, raw_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
       ''');
       try {
         for (final m in outboxList) {
+          final payloadMap = m['payload'] is Map ? m['payload'] as Map : {};
+          final entityId = m['entityId'] ??
+              m['entity_id'] ??
+              payloadMap['id'] ??
+              payloadMap['expenseId'] ??
+              payloadMap['debtId'] ??
+              payloadMap['settlementId'];
           outboxStmt.execute([
             m['id']?.toString() ?? '',
             m['type'] ?? m['mutation_type'] ?? '',
             m['tripId'] ?? m['trip_id'],
-            jsonEncode(m['payload'] ?? {}),
+            m['userId'] ?? m['user_id'],
+            entityId?.toString(),
+            m['idempotencyKey'] ?? m['idempotency_key'] ?? m['id']?.toString(),
+            jsonEncode(payloadMap),
             m['createdAt'] ?? m['created_at'] ?? now.toIso8601String(),
+            m['updatedAt'] ?? m['updated_at'] ?? now.toIso8601String(),
+            m['lastAttemptAt'] ?? m['last_attempt_at'],
             m['status']?.toString() ?? 'pending',
             m['retryCount'] ?? m['retry_count'] ?? 0,
-            m['error']?.toString(),
+            m['error']?.toString() ?? m['lastError']?.toString(),
             jsonEncode(m),
           ]);
         }
@@ -1080,20 +1128,33 @@ class LocalDatabaseService {
         db.execute('DELETE FROM mutation_outbox;');
         final outboxStmt = db.prepare('''
           INSERT OR REPLACE INTO mutation_outbox (
-            id, mutation_type, trip_id, payload, created_at, status, retry_count, error, raw_json
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+            id, mutation_type, trip_id, user_id, entity_id, idempotency_key,
+            payload, created_at, updated_at, last_attempt_at, status, retry_count, error, raw_json
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
         ''');
         try {
           for (final m in updatedOutbox) {
+            final payloadMap = m['payload'] is Map ? m['payload'] as Map : {};
+            final entityId = m['entityId'] ??
+                m['entity_id'] ??
+                payloadMap['id'] ??
+                payloadMap['expenseId'] ??
+                payloadMap['debtId'] ??
+                payloadMap['settlementId'];
             outboxStmt.execute([
               m['id']?.toString() ?? '',
               m['type'] ?? m['mutation_type'] ?? '',
               m['tripId'] ?? m['trip_id'],
-              jsonEncode(m['payload'] ?? {}),
+              m['userId'] ?? m['user_id'],
+              entityId?.toString(),
+              m['idempotencyKey'] ?? m['idempotency_key'] ?? m['id']?.toString(),
+              jsonEncode(payloadMap),
               m['createdAt'] ?? m['created_at'] ?? nowIso,
-              m['status']?.toString() ?? 'pending',
+              m['updatedAt'] ?? m['updated_at'] ?? nowIso,
+              m['lastAttemptAt'] ?? m['last_attempt_at'],
+              m['status']?.toString() ?? m['syncState']?.toString() ?? 'pending',
               m['retryCount'] ?? m['retry_count'] ?? 0,
-              m['error']?.toString(),
+              m['error']?.toString() ?? m['lastError']?.toString(),
               jsonEncode(m),
             ]);
           }
@@ -1464,10 +1525,16 @@ class LocalDatabaseService {
         .toList();
   }
 
-  List<Map<String, dynamic>> getOutboxMutations() {
-    final res = _db.select(
-      'SELECT raw_json FROM mutation_outbox ORDER BY created_at ASC;',
-    );
+  List<Map<String, dynamic>> getOutboxMutations({String? userId}) {
+    if (_isDisposed) return [];
+    final res = userId != null
+        ? _db.select(
+            'SELECT raw_json FROM mutation_outbox WHERE user_id = ? OR user_id IS NULL ORDER BY created_at ASC;',
+            [userId],
+          )
+        : _db.select(
+            'SELECT raw_json FROM mutation_outbox ORDER BY created_at ASC;',
+          );
     return res
         .map((r) => jsonDecode(r['raw_json'] as String) as Map<String, dynamic>)
         .toList();
@@ -1505,8 +1572,11 @@ class LocalDatabaseService {
     return map;
   }
 
-  /// Wipes all business data from SQLite on account logout/reset.
-  void clearAllData() {
+  /// Wipes business data from SQLite on account logout/reset.
+  /// If [preserveOutbox] is true (default on logout), pending offline operations are retained
+  /// so that users do not lose unsynced changes when logging out.
+  /// If [purgeUserId] is specified (e.g. permanent account deletion), only that user's pending operations are wiped.
+  void clearAllData({bool preserveOutbox = true, String? purgeUserId}) {
     executeTransaction<void>((db) {
       db.execute('DELETE FROM trips;');
       db.execute('DELETE FROM trip_members;');
@@ -1514,7 +1584,16 @@ class LocalDatabaseService {
       db.execute('DELETE FROM settlements;');
       db.execute('DELETE FROM personal_expenses;');
       db.execute('DELETE FROM personal_debts;');
-      db.execute('DELETE FROM mutation_outbox;');
+      if (!preserveOutbox) {
+        db.execute('DELETE FROM mutation_outbox;');
+      } else if (purgeUserId != null) {
+        final delStmt = db.prepare('DELETE FROM mutation_outbox WHERE user_id = ?;');
+        try {
+          delStmt.execute([purgeUserId]);
+        } finally {
+          delStmt.close();
+        }
+      }
       db.execute('DELETE FROM expense_tombstones;');
       db.execute('DELETE FROM processed_operations;');
     });

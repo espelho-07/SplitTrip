@@ -400,10 +400,10 @@ class LocalStorageService {
 
   // --- Mutation Queue ---
 
-  List<Map<String, dynamic>> getMutationQueue() {
+  List<Map<String, dynamic>> getMutationQueue({String? userId}) {
     if (databaseService != null &&
         databaseService!.isMigratedFromSharedPreferences()) {
-      return databaseService!.getOutboxMutations();
+      return databaseService!.getOutboxMutations(userId: userId);
     }
 
     final raw = _prefs.getString(_mutationQueueKey);
@@ -412,8 +412,13 @@ class LocalStorageService {
 
     try {
       final list = jsonDecode(raw) as List<dynamic>;
-
-      return list.cast<Map<String, dynamic>>();
+      final casted = list.cast<Map<String, dynamic>>();
+      if (userId != null) {
+        return casted
+            .where((m) => m['userId'] == userId || m['userId'] == null)
+            .toList();
+      }
+      return casted;
     } catch (_) {
       return [];
     }
@@ -1886,16 +1891,27 @@ class LocalStorageService {
     _onClearDataListeners.remove(listener);
   }
 
-  /// Wipes all user-specific data on logout/deletion while preserving app settings (language, theme, hints)
-  Future<void> clearAllUserData() async {
+  /// Wipes all user-specific data on logout/deletion while preserving app settings (language, theme, hints).
+  /// If [isAccountDeletion] is false (normal logout), pending operations in the outbox are preserved
+  /// so that offline operations are not silently lost.
+  Future<void> clearAllUserData({
+    bool isAccountDeletion = false,
+    String? purgeUserId,
+  }) async {
+    final activeUserId = purgeUserId ??
+        getSavedUser()?['id'] as String? ??
+        getSavedUser()?['accountId'] as String?;
     if (databaseService != null) {
-      databaseService!.clearAllData();
+      databaseService!.clearAllData(
+        preserveOutbox: !isAccountDeletion,
+        purgeUserId: isAccountDeletion ? activeUserId : null,
+      );
     }
     await clearUser();
     await clearRecoveryVault();
 
     // Preserve strictly global device & app settings (e.g. theme, language, device ID)
-    const preservedKeys = {
+    final preservedKeys = {
       _themeModeKey,
       _languageKey,
       _initialLanguageSelectedKey,
@@ -1904,6 +1920,7 @@ class LocalStorageService {
       _customServerUrlKey,
       _localSchemaVersionKey,
       _deletedRecoveryKeysKey,
+      if (!isAccountDeletion) _mutationQueueKey,
     };
     final allKeys = _prefs.getKeys().toList();
     for (final k in allKeys) {

@@ -323,10 +323,16 @@ class SyncService {
   StreamSubscription? _realtimeSubscription;
   Timer? _periodicSyncTimer;
   ApiClient? _registeredApiClient;
+  bool _isSessionExpired = false;
+  String? _lastErrorMessage;
+
+  bool get isSessionExpired => _isSessionExpired;
+  String? get lastErrorMessage => _lastErrorMessage;
 
   SyncService(this._storage) {
     _storage.addOnClearDataListener(() {
-      clearQueue();
+      // Refresh status without destroying pending mutations in SQLite outbox
+      _setStatus(SyncStatus.synced);
     });
   }
 
@@ -389,8 +395,8 @@ class SyncService {
     }
   }
 
-  List<SyncMutation> getPendingMutations() {
-    final raw = _storage.getMutationQueue();
+  List<SyncMutation> getPendingMutations({String? userId}) {
+    final raw = _storage.getMutationQueue(userId: userId);
     return raw.map((json) => SyncMutation.fromJson(json)).toList();
   }
 
@@ -444,7 +450,9 @@ class SyncService {
     ApiClient? backgroundApiClient,
   }) async {
     final mutationId = _uuid.v4();
-    final effectiveUserId = userId ?? _storage.getSavedUser()?['id'] as String?;
+    final effectiveUserId = userId ??
+        _storage.getSavedUser()?['id'] as String? ??
+        _storage.getSavedUser()?['accountId'] as String?;
     final mutation = SyncMutation(
       id: mutationId,
       idempotencyKey: idempotencyKey ?? mutationId,
@@ -1048,13 +1056,13 @@ class SyncService {
       _setStatus(SyncStatus.syncing);
 
       try {
-        final queue = getPendingMutations();
+        final activeUser = _storage.getSavedUser();
+        final activeUserId = activeUser?['id'] as String? ?? activeUser?['accountId'] as String?;
+        final queue = getPendingMutations(userId: activeUserId);
         final now = DateTime.now();
 
         final blockedTripIds = <String>{};
         final completedMutationIds = <String>{};
-        final activeUser = _storage.getSavedUser();
-        final activeUserId = activeUser?['id'] as String?;
 
         for (final mutation in queue) {
           final tId = mutation.tripId;
@@ -1126,6 +1134,9 @@ class SyncService {
               debugPrint(
                 '[SyncService] Authentication expired (401). Pausing sync queue.',
               );
+              _isSessionExpired = true;
+              _lastErrorMessage =
+                  'Your session has expired. Sign in again to synchronize your changes.';
               _setStatus(SyncStatus.error);
               await _updateMutationAttempt(
                 mutation.id,
@@ -1232,8 +1243,10 @@ class SyncService {
           }
         }
 
-        final remaining = getPendingMutations();
+        final remaining = getPendingMutations(userId: activeUserId);
         if (remaining.isEmpty) {
+          _isSessionExpired = false;
+          _lastErrorMessage = null;
           _setStatus(SyncStatus.synced);
         } else if (_currentStatus != SyncStatus.offline &&
             _currentStatus != SyncStatus.error &&
@@ -1806,19 +1819,19 @@ await _cloudSync.syncPersonalDebt(payload, accountId: accountId);
         break;
 
       case MutationType.updateTripLifecycle:
-        final tripId = mutation.payload['tripId'] as String;
+        final tripId = mutation.tripId ?? (mutation.payload['tripId'] as String?) ?? '';
         await apiClient.patch('/trips/$tripId/lifecycle', body: payload);
         break;
 
       case MutationType.addExpense:
-        final tripId = mutation.payload['tripId'] as String;
+        final tripId = mutation.tripId ?? (mutation.payload['tripId'] as String?) ?? 'general';
         await apiClient.post('/trips/$tripId/expenses', body: payload);
         break;
 
       case MutationType.updateExpense:
-        final tripId = mutation.payload['tripId'] as String;
+        final tripId = mutation.tripId ?? (mutation.payload['tripId'] as String?) ?? 'general';
         final expenseId =
-            payload['id'] as String? ?? payload['expenseId'] as String;
+            payload['id'] as String? ?? payload['expenseId'] as String? ?? mutation.id;
         await apiClient.put(
           '/trips/$tripId/expenses/$expenseId',
           body: payload,
@@ -1826,9 +1839,9 @@ await _cloudSync.syncPersonalDebt(payload, accountId: accountId);
         break;
 
       case MutationType.deleteExpense:
-        final tripId = mutation.payload['tripId'] as String;
+        final tripId = mutation.tripId ?? (mutation.payload['tripId'] as String?) ?? 'general';
         final expenseId =
-            payload['id'] as String? ?? payload['expenseId'] as String;
+            payload['id'] as String? ?? payload['expenseId'] as String? ?? mutation.id;
         await apiClient.delete('/trips/$tripId/expenses/$expenseId');
         break;
 

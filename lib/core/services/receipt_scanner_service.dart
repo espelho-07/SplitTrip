@@ -26,13 +26,14 @@ class ReceiptScannerService {
         _uuid = uuid ?? const Uuid();
 
   /// Captures an image from the camera and stores a local cached copy.
+  /// Optimized for Supabase Free Tier storage limits (1200px max, 75% quality).
   Future<String?> captureFromCamera() async {
     try {
       final xFile = await _picker.pickImage(
         source: ImageSource.camera,
-        maxWidth: 2400,
-        maxHeight: 2400,
-        imageQuality: 88,
+        maxWidth: 1200,
+        maxHeight: 1200,
+        imageQuality: 75,
       );
       if (xFile == null) return null;
       return await persistReceiptFile(xFile.path);
@@ -43,13 +44,14 @@ class ReceiptScannerService {
   }
 
   /// Imports an image from the gallery and stores a local cached copy.
+  /// Optimized for Supabase Free Tier storage limits (1200px max, 75% quality).
   Future<String?> importFromGallery() async {
     try {
       final xFile = await _picker.pickImage(
         source: ImageSource.gallery,
-        maxWidth: 2400,
-        maxHeight: 2400,
-        imageQuality: 88,
+        maxWidth: 1200,
+        maxHeight: 1200,
+        imageQuality: 75,
       );
       if (xFile == null) return null;
       return await persistReceiptFile(xFile.path);

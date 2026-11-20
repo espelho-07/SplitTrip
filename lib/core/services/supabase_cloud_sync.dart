@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
@@ -164,6 +165,10 @@ class SupabaseCloudSync {
 
     String? accountId,
 
+    String? tripIdFilterColumn,
+
+    List<String>? activeTripIds,
+
     int pageSize = 500,
   }) async {
     final allRecords = <Map<String, dynamic>>[];
@@ -189,6 +194,12 @@ class SupabaseCloudSync {
           accountId != null &&
           accountId.isNotEmpty) {
         query = query.eq(accountIdFilterColumn, accountId);
+      }
+
+      if (tripIdFilterColumn != null &&
+          activeTripIds != null &&
+          activeTripIds.isNotEmpty) {
+        query = query.inFilter(tripIdFilterColumn, activeTripIds);
       }
 
       final pageRecords = await query
@@ -925,6 +936,10 @@ class SupabaseCloudSync {
         tableName: tableTrips,
 
         cursorIso: cursorIso,
+
+        tripIdFilterColumn: activeTripIds.isNotEmpty ? 'id' : null,
+
+        activeTripIds: activeTripIds.isNotEmpty ? activeTripIds : null,
       );
 
       final modifiedTrips = <Map<String, dynamic>>[];
@@ -978,6 +993,10 @@ class SupabaseCloudSync {
         tableName: tableExpenses,
 
         cursorIso: cursorIso,
+
+        tripIdFilterColumn: activeTripIds.isNotEmpty ? 'trip_id' : null,
+
+        activeTripIds: activeTripIds.isNotEmpty ? activeTripIds : null,
       );
 
       // 3. Fetch updated settlements paginated
@@ -986,6 +1005,10 @@ class SupabaseCloudSync {
         tableName: tableSettlements,
 
         cursorIso: cursorIso,
+
+        tripIdFilterColumn: activeTripIds.isNotEmpty ? 'trip_id' : null,
+
+        activeTripIds: activeTripIds.isNotEmpty ? activeTripIds : null,
       );
 
       // 4. Fetch updated personal expenses paginated
@@ -1177,6 +1200,42 @@ class SupabaseCloudSync {
     }
   }
 
+  /// Safely uploads a receipt image to Supabase Storage Free Tier bucket 'receipts'.
+  /// Guarantees:
+  /// 1. Idempotency: Uses deterministic path `{tripId}/{expenseId}.jpg`.
+  /// 2. Deduplication & Upsert: Overwrites safely without duplicate storage objects.
+  /// 3. Offline Safety: If offline or upload fails, local file is preserved and local file path is returned.
+  Future<String?> uploadReceiptImage({
+    required String localPath,
+    required String tripId,
+    required String expenseId,
+  }) async {
+    if (!isAvailable) return localPath;
+    final file = File(localPath);
+    if (!await file.exists()) return null;
+
+    final storagePath = '$tripId/$expenseId.jpg';
+    try {
+      final bytes = await file.readAsBytes();
+      await _client.storage.from('receipts').uploadBinary(
+        storagePath,
+        bytes,
+        fileOptions: const FileOptions(
+          contentType: 'image/jpeg',
+          upsert: true,
+        ),
+      );
+
+      final publicUrl =
+          _client.storage.from('receipts').getPublicUrl(storagePath);
+      debugPrint('[SupabaseCloudSync] Successfully uploaded receipt to $publicUrl');
+      return publicUrl;
+    } catch (e) {
+      debugPrint('[SupabaseCloudSync] Receipt upload deferred (retaining local file): $e');
+      return localPath;
+    }
+  }
+
   /// Upserts an expense to Supabase.
 
   Future<bool> syncExpense(
@@ -1186,6 +1245,23 @@ class SupabaseCloudSync {
     if (!isAvailable) return false;
 
     try {
+      final expId = expenseJson['id']?.toString() ?? '';
+      final tripId = (expenseJson['tripId'] ?? expenseJson['trip_id'])?.toString() ?? '';
+      String? receiptUrl =
+          expenseJson['receiptUrl'] ?? expenseJson['receipt_url'];
+      if (receiptUrl != null && !receiptUrl.startsWith('http') && expId.isNotEmpty && tripId.isNotEmpty) {
+        try {
+          final cloudUrl = await uploadReceiptImage(
+            localPath: receiptUrl,
+            tripId: tripId,
+            expenseId: expId,
+          );
+          if (cloudUrl != null && cloudUrl.startsWith('http')) {
+            receiptUrl = cloudUrl;
+          }
+        } catch (_) {}
+      }
+
       final paidById =
           expenseJson['paidById'] ??
           expenseJson['paid_by_id'] ??
@@ -1220,7 +1296,7 @@ class SupabaseCloudSync {
 
         'location': expenseJson['location'],
 
-        'receipt_url': expenseJson['receiptUrl'] ?? expenseJson['receipt_url'],
+        'receipt_url': receiptUrl,
 
         'is_deleted':
             expenseJson['isDeleted'] ?? expenseJson['is_deleted'] ?? false,

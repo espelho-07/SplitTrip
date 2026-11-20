@@ -83,7 +83,7 @@ class _GlobalSyncStatusBarState extends State<GlobalSyncStatusBar> {
           borderColor = isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
           textColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
           iconData = Icons.wifi_off_rounded;
-          message = 'Offline Mode • Viewing saved trips';
+          message = "You're offline. Your saved trips and expenses are still available.";
         }
         break;
 
@@ -101,7 +101,9 @@ class _GlobalSyncStatusBarState extends State<GlobalSyncStatusBar> {
         borderColor = AppColors.emeraldPrimary.withValues(alpha: 0.35);
         textColor = isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary;
         iconData = Icons.cloud_queue_rounded;
-        message = '$pendingCount change${pendingCount > 1 ? "s" : ""} waiting to sync';
+        message = pendingCount > 1
+            ? '$pendingCount changes waiting to sync'
+            : 'Your changes are waiting to sync.';
         actionLabel = 'Sync now';
         onAction = () {
           HapticHelper.medium();
@@ -125,9 +127,15 @@ class _GlobalSyncStatusBarState extends State<GlobalSyncStatusBar> {
         bgColor = isDark ? const Color(0xFF2B1116) : const Color(0xFFFFF1F2);
         borderColor = const Color(0xFFE11D48).withValues(alpha: 0.35);
         textColor = const Color(0xFFE11D48);
-        iconData = Icons.sync_problem_rounded;
-        message = 'Sync paused • Tap to review';
-        actionLabel = 'Review';
+        if (syncService.isSessionExpired) {
+          iconData = Icons.lock_clock_rounded;
+          message = 'Your session has expired. Sign in again to synchronize your changes.';
+          actionLabel = 'Sign in';
+        } else {
+          iconData = Icons.sync_problem_rounded;
+          message = 'Unable to sync right now. Your local changes are preserved.';
+          actionLabel = 'Review';
+        }
         onAction = () {
           HapticHelper.light();
           CloudSyncSheet.show(context);

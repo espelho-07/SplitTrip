@@ -13,6 +13,7 @@ import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/create_trip_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../widgets/progress/progress.dart';
+import '../../../data/services/sync_service.dart';
 
 /// Energetic, rich, and visually refined Create Trip Experience for Kith.
 /// Features interactive live hero preview, mode selection, gradient palette, and crew builder,
@@ -191,7 +192,16 @@ class _CreateTripViewState extends State<CreateTripView> {
         _friendController.clear();
         createVm.reset();
         context.pushReplacement('/trip/${trip.id}');
-        KithSuccessToast.show(context, '${l10n.tripsTitle} ✓');
+        final syncService = Provider.of<SyncService?>(context, listen: false);
+        if (syncService?.currentStatus == SyncStatus.offline ||
+            syncService?.currentStatus == SyncStatus.pending) {
+          KithSuccessToast.show(
+            context,
+            "Trip saved on this device. It will sync when you're online. ✓",
+          );
+        } else {
+          KithSuccessToast.show(context, '${l10n.tripsTitle} ✓');
+        }
       } else {
         HapticHelper.error();
         final err = createVm.errorMessage ?? l10n.statusErrorGeneral;
