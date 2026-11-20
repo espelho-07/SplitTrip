@@ -11,6 +11,7 @@ import 'package:uuid/uuid.dart';
 import '../../core/network/api_client.dart';
 import '../../core/network/api_exceptions.dart';
 import '../../core/network/realtime_client.dart';
+import '../../domain/engine/expense_merge.dart';
 import '../../domain/models/expense.dart';
 import '../../domain/models/trip.dart';
 import 'local_storage_service.dart';
@@ -670,23 +671,20 @@ class SyncService {
               final expenses = storage.getSavedExpenses(tripId);
               final idx = expenses.indexWhere((e) => e['id'] == expId);
               if (idx != -1) {
-                final localUpdated =
-                    DateTime.tryParse(
-                      expenses[idx]['updatedAt']?.toString() ?? '',
-                    ) ??
-                    DateTime.tryParse(
-                      expenses[idx]['createdAt']?.toString() ?? '',
-                    ) ??
-                    DateTime.fromMillisecondsSinceEpoch(0);
-                final remoteUpdated =
-                    DateTime.tryParse(payload['updatedAt']?.toString() ?? '') ??
-                    mutation.createdAt;
+                final localExpense = Expense.fromJson(expenses[idx]);
+                final incomingExpense = Expense.fromJson(payload);
+                final Expense? baseExpense = payload['baseExpense'] != null
+                    ? Expense.fromJson(payload['baseExpense'] as Map<String, dynamic>)
+                    : null;
 
-                if (remoteUpdated.isAfter(localUpdated) ||
-                    remoteUpdated.isAtSameMomentAs(localUpdated)) {
-                  expenses[idx] = {...expenses[idx], ...payload};
-                  await storage.saveExpenses(tripId, expenses);
-                }
+                final mergedExpense = ExpenseMergeEngine.merge3Way(
+                  local: localExpense,
+                  remote: incomingExpense,
+                  base: baseExpense,
+                );
+
+                expenses[idx] = mergedExpense.toJson();
+                await storage.saveExpenses(tripId, expenses);
               } else {
                 expenses.insert(0, payload);
                 await storage.saveExpenses(tripId, expenses);
@@ -972,6 +970,17 @@ class SyncService {
                   (m) => (m.payload['id'] ?? m.payload['expenseId']).toString(),
                 )
                 .toSet();
+            final pendingBaseExpenses = <String, Expense>{};
+            for (final m in pendingAfterBatch.where((m) => m.type == MutationType.updateExpense)) {
+              final expId = (m.payload['id'] ?? m.payload['expenseId'])?.toString();
+              if (expId != null && m.payload['baseExpense'] is Map<String, dynamic>) {
+                try {
+                  pendingBaseExpenses[expId] = Expense.fromJson(
+                    m.payload['baseExpense'] as Map<String, dynamic>,
+                  );
+                } catch (_) {}
+              }
+            }
 
             final mergedMap = <String, Expense>{};
             for (final local in localExpenses) {
@@ -985,18 +994,29 @@ class SyncService {
                 continue;
               }
               if (pendingUpdateIds.contains(server.id)) {
-                // Keep local pending edit unless server is strictly newer
+                // Reconcile non-conflicting field edits via 3-way merge
                 final localExisting = mergedMap[server.id];
-                if (localExisting != null &&
-                    localExisting.updatedAt.isAfter(server.updatedAt)) {
+                if (localExisting != null) {
+                  final baseExp = pendingBaseExpenses[server.id];
+                  mergedMap[server.id] = ExpenseMergeEngine.merge3Way(
+                    local: localExisting,
+                    remote: server,
+                    base: baseExp,
+                  );
                   continue;
                 }
               }
               if (!server.isDeleted) {
                 if (!mergedMap.containsKey(server.id)) {
                   receivedCount++;
+                  mergedMap[server.id] = server;
+                } else {
+                  final localExisting = mergedMap[server.id]!;
+                  mergedMap[server.id] = ExpenseMergeEngine.merge3Way(
+                    local: localExisting,
+                    remote: server,
+                  );
                 }
-                mergedMap[server.id] = server;
               } else {
                 mergedMap.remove(server.id);
               }

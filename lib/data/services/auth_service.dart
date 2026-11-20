@@ -5,6 +5,7 @@ import '../../core/config/supabase_config.dart';
 import '../../core/network/api_client.dart';
 import '../../core/network/api_exceptions.dart';
 import '../../core/network/realtime_client.dart';
+import '../../core/services/background_sync_worker.dart';
 import '../../core/services/google_auth_service.dart';
 import '../../core/services/recovery_key_service.dart';
 import '../../core/services/secure_id_service.dart';
@@ -799,6 +800,11 @@ class AuthService {
       purgeUserId: targetPurgeId,
     );
     await _secureId.clearSecureIdentity();
+    if (isAccountDeletion) {
+      try {
+        await BackgroundSyncWorker.cancelAll();
+      } catch (_) {}
+    }
   }
 
   Future<void> deleteAccount() async {

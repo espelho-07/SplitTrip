@@ -74,6 +74,7 @@ class ExpenseRepository {
             .map((m) => (m.payload['id'] ?? m.payload['expenseId']).toString())
             .toSet();
         final pendingUpserts = <String, Expense>{};
+        final pendingBaseExpenses = <String, Expense>{};
         for (final mutation in pendingMutations.where(
           (m) => m.type == MutationType.addExpense || m.type == MutationType.updateExpense,
         )) {
@@ -81,6 +82,13 @@ class ExpenseRepository {
           final current = pendingUpserts[pendingExpense.id];
           if (current == null || pendingExpense.updatedAt.isAfter(current.updatedAt)) {
             pendingUpserts[pendingExpense.id] = pendingExpense;
+            if (mutation.payload['baseExpense'] is Map<String, dynamic>) {
+              try {
+                pendingBaseExpenses[pendingExpense.id] = Expense.fromJson(
+                  mutation.payload['baseExpense'] as Map<String, dynamic>,
+                );
+              } catch (_) {}
+            }
           }
         }
 
@@ -93,6 +101,7 @@ class ExpenseRepository {
           serverExpenses: serverExpenses,
           pendingDeletedIds: pendingDeletedIds,
           pendingUpserts: pendingUpserts,
+          pendingBaseExpenses: pendingBaseExpenses,
           tombstonedIds: tombstonedIds,
         );
 
@@ -185,6 +194,8 @@ class ExpenseRepository {
     // 1. Update local persistent cache & outbox atomically
     final currentExpenses = getCachedExpenses(expense.tripId);
     final idx = currentExpenses.indexWhere((e) => e.id == expense.id);
+    final Expense? baseExpense = idx != -1 ? currentExpenses[idx] : null;
+
     if (idx != -1) {
       currentExpenses[idx] = expense;
     } else {
@@ -194,12 +205,16 @@ class ExpenseRepository {
     final queue = syncService.getPendingMutations();
     final effectiveUserId = storage.getSavedUser()?['id'] as String? ??
         storage.getSavedUser()?['accountId'] as String?;
+    final expensePayload = expense.toJson();
+    if (baseExpense != null) {
+      expensePayload['baseExpense'] = baseExpense.toJson();
+    }
     final mutation = SyncMutation(
       id: const Uuid().v4(),
       idempotencyKey: expense.id,
       userId: effectiveUserId,
       type: MutationType.updateExpense,
-      payload: expense.toJson(),
+      payload: expensePayload,
       createdAt: DateTime.now(),
       syncState: SyncState.localPending,
       originDeviceId: storage.getDeviceId(),

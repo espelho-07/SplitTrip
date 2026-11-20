@@ -279,7 +279,7 @@ class ExpenseService {
     return { expense, balanceSummary };
   }
 
-  updateExpense(user, tripId, expenseId, { title, amountInPaise, category = 'general', paidById, paidByMap = null, splitType = 'equal', splits = [], voiceTranscript, receiptUrl, updatedAt: clientUpdatedAt = null }, realtimeHub = null) {
+  updateExpense(user, tripId, expenseId, { title, amountInPaise, category = 'general', paidById, paidByMap = null, splitType = 'equal', splits = [], voiceTranscript, receiptUrl, updatedAt: clientUpdatedAt = null, baseExpense = null }, realtimeHub = null) {
     const trip = db.get('trips', tripId);
     if (!trip) throw AppError.notFound('Trip not found');
 
@@ -308,13 +308,91 @@ class ExpenseService {
       throw AppError.notFound('Expense not found');
     }
 
-    // Last-Write-Wins: an older client timestamp must not replace a newer server expense.
+    // 3-Way Merge for Concurrent Edits:
+    // When incoming client timestamp is older than server's current timestamp,
+    // merge non-conflicting fields (e.g. Member A changes title, Member B changes category).
     if (existing.updatedAt && clientUpdatedAt) {
       const clientTime = new Date(clientUpdatedAt).getTime();
       const serverTime = new Date(existing.updatedAt).getTime();
       if (!Number.isNaN(clientTime) && clientTime < serverTime) {
-        const balanceSummary = this.getBalanceSummary(tripId, user.id);
-        return { expense: existing, balanceSummary };
+        let hasMergedFields = false;
+        let effectiveTitle = existing.title;
+        let effectiveCategory = existing.category;
+        let effectiveReceiptUrl = existing.receiptUrl;
+        let effectiveVoiceTranscript = existing.voiceTranscript;
+        let effectiveAmount = existing.amountInPaise;
+        let effectivePaidById = existing.paidById;
+        let effectivePaidByMap = existing.paidByMap;
+        let effectiveSplitType = existing.splitType;
+        let effectiveSplits = existing.splits;
+
+        if (baseExpense) {
+          // If client changed title but server did NOT change title vs base: adopt client's title
+          if (title && title.trim() !== baseExpense.title && existing.title === baseExpense.title) {
+            effectiveTitle = title.trim();
+            hasMergedFields = true;
+          }
+          // If client changed category but server did NOT change category vs base: adopt client's category
+          if (category && category !== baseExpense.category && existing.category === baseExpense.category) {
+            effectiveCategory = category;
+            hasMergedFields = true;
+          }
+          // If client attached receipt and server has none: adopt client's receipt
+          if (receiptUrl && !existing.receiptUrl) {
+            effectiveReceiptUrl = receiptUrl;
+            hasMergedFields = true;
+          }
+          // If client attached voice transcript and server has none: adopt transcript
+          if (voiceTranscript && !existing.voiceTranscript) {
+            effectiveVoiceTranscript = voiceTranscript;
+            hasMergedFields = true;
+          }
+          // If client changed financial math but server did NOT change financial math vs base: adopt client's financial math
+          const clientFinChanged = (amountInPaise && amountInPaise !== baseExpense.amountInPaise) ||
+                                  (paidById && paidById !== baseExpense.paidById) ||
+                                  (splits && JSON.stringify(splits) !== JSON.stringify(baseExpense.splits));
+          const serverFinChanged = (existing.amountInPaise !== baseExpense.amountInPaise) ||
+                                  (existing.paidById !== baseExpense.paidById) ||
+                                  (JSON.stringify(existing.splits) !== JSON.stringify(baseExpense.splits));
+          if (clientFinChanged && !serverFinChanged) {
+            effectiveAmount = amountInPaise;
+            effectivePaidById = paidById;
+            effectivePaidByMap = paidByMap;
+            effectiveSplitType = splitType;
+            effectiveSplits = splits;
+            hasMergedFields = true;
+          }
+        } else {
+          // Heuristic reconciliation when base is omitted:
+          if (title && title.trim() !== existing.title && (!category || category === existing.category)) {
+            effectiveTitle = title.trim();
+            hasMergedFields = true;
+          }
+          if (category && category !== existing.category && (!title || title.trim() === existing.title)) {
+            effectiveCategory = category;
+            hasMergedFields = true;
+          }
+          if (receiptUrl && !existing.receiptUrl) {
+            effectiveReceiptUrl = receiptUrl;
+            hasMergedFields = true;
+          }
+        }
+
+        if (hasMergedFields) {
+          title = effectiveTitle;
+          category = effectiveCategory;
+          receiptUrl = effectiveReceiptUrl;
+          voiceTranscript = effectiveVoiceTranscript;
+          amountInPaise = effectiveAmount;
+          paidById = effectivePaidById;
+          paidByMap = effectivePaidByMap;
+          splitType = effectiveSplitType;
+          splits = effectiveSplits;
+        } else {
+          // Pure conflict or no non-conflicting changes: server's newer version wins
+          const balanceSummary = this.getBalanceSummary(tripId, user.id);
+          return { expense: existing, balanceSummary };
+        }
       }
     }
 

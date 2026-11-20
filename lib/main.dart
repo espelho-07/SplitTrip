@@ -14,6 +14,7 @@ import 'core/localization/app_language.dart';
 import 'core/localization/app_localizations.dart';
 import 'core/payment/payment_service.dart';
 import 'core/services/app_version_service.dart';
+import 'core/services/background_sync_worker.dart';
 import 'core/services/fcm_service.dart';
 import 'core/services/kith_widget_service.dart';
 import 'core/services/play_in_app_update_service.dart';
@@ -95,6 +96,15 @@ void main() async {
 
   final syncService = SyncService(storageService);
   final p2pSyncService = P2PSyncService(storageService, syncService);
+
+  // Register Android WorkManager periodic background sync (15-min cadence)
+  // Ensures queued offline mutations are reliably pushed to cloud even if app is terminated
+  try {
+    await BackgroundSyncWorker.initialize();
+    await BackgroundSyncWorker.registerPeriodicSync();
+  } catch (e) {
+    debugPrint('[WorkManager] Registration notice: $e');
+  }
   final authService = AuthService(
     storage: storageService,
     apiClient: apiClient,
