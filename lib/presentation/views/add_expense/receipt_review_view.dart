@@ -10,6 +10,7 @@ import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../domain/models/expense.dart';
 import '../../../domain/models/receipt_data.dart';
+import '../../../domain/models/trip_member.dart';
 import '../../viewmodels/receipt_review_viewmodel.dart';
 
 /// Production-grade Receipt Review & Correction Screen.
@@ -18,12 +19,16 @@ import '../../viewmodels/receipt_review_viewmodel.dart';
 class ReceiptReviewView extends StatefulWidget {
   final ReceiptData initialReceipt;
   final List<Expense> existingTripExpenses;
+  final List<TripMember> tripMembers;
+  final String? currentUserId;
   final ValueChanged<ReceiptData> onConfirmed;
 
   const ReceiptReviewView({
     super.key,
     required this.initialReceipt,
     this.existingTripExpenses = const [],
+    this.tripMembers = const [],
+    this.currentUserId,
     required this.onConfirmed,
   });
 
@@ -45,6 +50,10 @@ class _ReceiptReviewViewState extends State<ReceiptReviewView> {
       initialReceipt: widget.initialReceipt,
       existingTripExpenses: widget.existingTripExpenses,
     );
+
+    if (_viewModel.selectedPayerId == null && widget.currentUserId != null) {
+      _viewModel.setPayerId(widget.currentUserId);
+    }
 
     _merchantController = TextEditingController(text: _viewModel.receipt.merchant.name ?? '');
     _addressController = TextEditingController(text: _viewModel.receipt.merchant.address ?? '');
@@ -443,6 +452,7 @@ class _ReceiptReviewViewState extends State<ReceiptReviewView> {
         receiptNumber: _receiptNumController.text.trim().isNotEmpty ? _receiptNumController.text.trim() : null,
       ),
       summary: receipt.summary.copyWith(totalInPaise: totalInPaise),
+      selectedPayerId: _viewModel.selectedPayerId ?? widget.currentUserId,
     );
 
     widget.onConfirmed(confirmedReceipt);
@@ -488,20 +498,26 @@ class _ReceiptReviewViewState extends State<ReceiptReviewView> {
 
                   // DUPLICATE ALERT (IF ANY)
                   if (vm.duplicateMatch != null) ...[
-                    _buildDuplicateAlertCard(isDark, vm.duplicateMatch!),
+                    _buildDuplicateAlertCard(isDark, vm.duplicateMatch!, vm),
                     const SizedBox(height: 16),
                   ],
 
-                  // SECTION B: MERCHANT INFORMATION CARD
+                  // SECTION B: PAYER SELECTION (IF MEMBERS PROVIDED)
+                  if (widget.tripMembers.isNotEmpty) ...[
+                    _buildPayerCard(context, isDark, vm),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // SECTION C: MERCHANT INFORMATION CARD
                   _buildMerchantCard(isDark, dateStr),
                   const SizedBox(height: 16),
 
-                  // SECTION C: PURCHASED ITEMS CARD
+                  // SECTION D: PURCHASED ITEMS CARD
                   _buildItemsCard(context, isDark, vm),
                   const SizedBox(height: 16),
 
-                  // SECTION D: BILL BREAKDOWN & TOTAL
-                  _buildBreakdownCard(isDark, receipt, vm, totalPaise),
+                  // SECTION E: BILL BREAKDOWN & TOTAL
+                  _buildBreakdownCard(context, isDark, receipt, vm, totalPaise),
                   const SizedBox(height: 24),
                 ],
               ),
@@ -641,7 +657,7 @@ class _ReceiptReviewViewState extends State<ReceiptReviewView> {
     );
   }
 
-  Widget _buildDuplicateAlertCard(bool isDark, DuplicateReceiptMatch match) {
+  Widget _buildDuplicateAlertCard(bool isDark, DuplicateReceiptMatch match, ReceiptReviewViewModel vm) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -673,8 +689,150 @@ class _ReceiptReviewViewState extends State<ReceiptReviewView> {
               ],
             ),
           ),
+          IconButton(
+            icon: const Icon(Icons.close_rounded, size: 18, color: Color(0xFFF59E0B)),
+            tooltip: 'Dismiss warning',
+            onPressed: () {
+              HapticHelper.light();
+              vm.dismissDuplicate();
+            },
+          ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPayerCard(BuildContext context, bool isDark, ReceiptReviewViewModel vm) {
+    final payerId = vm.selectedPayerId ?? widget.currentUserId;
+    final payerMember = widget.tripMembers.firstWhere(
+      (m) => m.userId == payerId,
+      orElse: () => widget.tripMembers.first,
+    );
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF141A21) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isDark ? const Color(0xFF222B35) : const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0EA5E9).withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.person_rounded, color: Color(0xFF0EA5E9), size: 20),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'PAID BY',
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.5, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    payerMember.userId == widget.currentUserId
+                        ? '${payerMember.displayName} (You)'
+                        : payerMember.displayName,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          if (widget.tripMembers.length > 1)
+            TextButton.icon(
+              icon: const Icon(Icons.swap_horiz_rounded, size: 16),
+              label: const Text('Change'),
+              onPressed: () => _showSelectPayerModal(context, vm),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _showSelectPayerModal(BuildContext context, ReceiptReviewViewModel vm) {
+    HapticHelper.medium();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        return Container(
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E2630) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Who Paid This Bill?',
+                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded),
+                      onPressed: () => Navigator.of(ctx).pop(),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(),
+              for (final member in widget.tripMembers)
+                ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: member.userId == (vm.selectedPayerId ?? widget.currentUserId)
+                        ? const Color(0xFF10B981)
+                        : Colors.grey.withValues(alpha: 0.2),
+                    child: Text(
+                      member.displayName.isNotEmpty ? member.displayName[0].toUpperCase() : '?',
+                      style: TextStyle(
+                        color: member.userId == (vm.selectedPayerId ?? widget.currentUserId)
+                            ? Colors.white
+                            : (isDark ? Colors.white : Colors.black87),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  title: Text(
+                    member.userId == widget.currentUserId
+                        ? '${member.displayName} (You)'
+                        : member.displayName,
+                    style: TextStyle(
+                      fontWeight: member.userId == (vm.selectedPayerId ?? widget.currentUserId)
+                          ? FontWeight.w700
+                          : FontWeight.w500,
+                    ),
+                  ),
+                  trailing: member.userId == (vm.selectedPayerId ?? widget.currentUserId)
+                      ? const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981))
+                      : null,
+                  onTap: () {
+                    HapticHelper.selection();
+                    vm.setPayerId(member.userId);
+                    Navigator.of(ctx).pop();
+                  },
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -823,7 +981,106 @@ class _ReceiptReviewViewState extends State<ReceiptReviewView> {
     );
   }
 
+  void _showAddTaxDialog(BuildContext context, ReceiptReviewViewModel vm) {
+    HapticHelper.medium();
+    final nameCtrl = TextEditingController(text: 'GST');
+    final rateCtrl = TextEditingController(text: '5');
+    final amtCtrl = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).viewInsets.bottom,
+          ),
+          child: Container(
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E2630) : Colors.white,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Add Tax / Fee',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded),
+                      onPressed: () => Navigator.of(ctx).pop(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: TextField(
+                        controller: nameCtrl,
+                        decoration: const InputDecoration(labelText: 'Name (e.g. CGST, SGST, VAT)'),
+                        textCapitalization: TextCapitalization.characters,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 1,
+                      child: TextField(
+                        controller: rateCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: const InputDecoration(labelText: 'Rate %'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: amtCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Amount (₹)',
+                    prefixText: '₹ ',
+                  ),
+                ),
+                const SizedBox(height: 20),
+                AppButton(
+                  text: 'Add Tax Item',
+                  onPressed: () {
+                    final name = nameCtrl.text.trim();
+                    final rate = double.tryParse(rateCtrl.text.trim());
+                    final amtRupees = double.tryParse(amtCtrl.text.trim()) ?? 0.0;
+                    final amtPaise = (amtRupees * 100).round();
+
+                    if (name.isNotEmpty && amtPaise > 0) {
+                      vm.addTaxItem(name: name, rate: rate, amountInPaise: amtPaise);
+                      HapticHelper.light();
+                      Navigator.of(ctx).pop();
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildBreakdownCard(
+    BuildContext context,
     bool isDark,
     ReceiptData receipt,
     ReceiptReviewViewModel vm,
@@ -841,20 +1098,27 @@ class _ReceiptReviewViewState extends State<ReceiptReviewView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'BILL BREAKDOWN',
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.5, color: Colors.grey),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'BILL BREAKDOWN',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.5, color: Colors.grey),
+              ),
+              TextButton.icon(
+                icon: const Icon(Icons.add_rounded, size: 14),
+                label: const Text('Add Tax', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+                onPressed: () => _showAddTaxDialog(context, vm),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           if (summary.subtotalInPaise != null)
             _buildSummaryRow('Subtotal', CurrencyFormatter.formatPaise(summary.subtotalInPaise!)),
           if (summary.discountInPaise != null && summary.discountInPaise! > 0)
             _buildSummaryRow('Discount', '- ${CurrencyFormatter.formatPaise(summary.discountInPaise!)}', isGreen: true),
-          for (final tax in summary.taxes)
-            _buildSummaryRow(
-              '${tax.name}${tax.rate != null ? " (${tax.rate}%)" : ""}',
-              '+ ${CurrencyFormatter.formatPaise(tax.amountInPaise)}',
-            ),
+          for (int tIdx = 0; tIdx < summary.taxes.length; tIdx++)
+            _buildTaxRow(summary.taxes[tIdx], () => vm.removeTaxItem(tIdx)),
           if (summary.additionalChargesInPaise != null && summary.additionalChargesInPaise! > 0)
             _buildSummaryRow('Service / Extra Charges', '+ ${CurrencyFormatter.formatPaise(summary.additionalChargesInPaise!)}'),
           if (summary.roundOffInPaise != null && summary.roundOffInPaise != 0)
@@ -881,6 +1145,20 @@ class _ReceiptReviewViewState extends State<ReceiptReviewView> {
                         size: 16,
                         color: isDark ? Colors.white60 : const Color(0xFF64748B),
                       ),
+                      if (receipt.ocr.fieldConfidence.total == FieldVerificationStatus.inferred) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0EA5E9).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            'Inferred',
+                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF0EA5E9)),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                   if (totalPaise > 0)
@@ -910,6 +1188,38 @@ class _ReceiptReviewViewState extends State<ReceiptReviewView> {
                     ),
                 ],
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTaxRow(ReceiptTaxItem tax, VoidCallback onRemove) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '${tax.name}${tax.rate != null ? " (${tax.rate}%)" : ""}',
+                style: const TextStyle(fontSize: 13, color: Colors.grey),
+              ),
+              const SizedBox(width: 4),
+              InkWell(
+                onTap: onRemove,
+                child: const Icon(Icons.close_rounded, size: 14, color: Colors.grey),
+              ),
+            ],
+          ),
+          Text(
+            '+ ${CurrencyFormatter.formatPaise(tax.amountInPaise)}',
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],

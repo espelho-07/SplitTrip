@@ -7,6 +7,145 @@ enum OcrConfidenceLevel {
   low,
 }
 
+/// Represents a 2D bounding box from OCR for spatial reasoning and row alignment.
+class OcrBoundingBox {
+  final double left;
+  final double top;
+  final double right;
+  final double bottom;
+
+  const OcrBoundingBox({
+    required this.left,
+    required this.top,
+    required this.right,
+    required this.bottom,
+  });
+
+  double get width => right - left;
+  double get height => bottom - top;
+  double get centerY => (top + bottom) / 2.0;
+  double get centerX => (left + right) / 2.0;
+
+  Map<String, dynamic> toJson() => {
+    'left': left,
+    'top': top,
+    'right': right,
+    'bottom': bottom,
+  };
+
+  factory OcrBoundingBox.fromJson(Map<String, dynamic> json) => OcrBoundingBox(
+    left: (json['left'] as num).toDouble(),
+    top: (json['top'] as num).toDouble(),
+    right: (json['right'] as num).toDouble(),
+    bottom: (json['bottom'] as num).toDouble(),
+  );
+}
+
+/// Represents an OCR line with text and spatial bounding box geometry.
+class OcrLine {
+  final String text;
+  final OcrBoundingBox boundingBox;
+  final double? confidence;
+
+  const OcrLine({
+    required this.text,
+    required this.boundingBox,
+    this.confidence,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'text': text,
+    'boundingBox': boundingBox.toJson(),
+    'confidence': confidence,
+  };
+
+  factory OcrLine.fromJson(Map<String, dynamic> json) => OcrLine(
+    text: (json['text'] ?? '').toString(),
+    boundingBox: OcrBoundingBox.fromJson(json['boundingBox'] as Map<String, dynamic>),
+    confidence: (json['confidence'] as num?)?.toDouble(),
+  );
+}
+
+/// Verification status for a specific extracted receipt field.
+enum FieldVerificationStatus {
+  verified,
+  needsReview,
+  inferred,
+}
+
+/// Granular confidence and verification flags for each core receipt field.
+class ReceiptFieldConfidence {
+  final FieldVerificationStatus merchant;
+  final FieldVerificationStatus date;
+  final FieldVerificationStatus total;
+  final FieldVerificationStatus taxes;
+  final FieldVerificationStatus items;
+  final List<String> fieldWarnings;
+
+  const ReceiptFieldConfidence({
+    this.merchant = FieldVerificationStatus.verified,
+    this.date = FieldVerificationStatus.verified,
+    this.total = FieldVerificationStatus.verified,
+    this.taxes = FieldVerificationStatus.verified,
+    this.items = FieldVerificationStatus.verified,
+    this.fieldWarnings = const [],
+  });
+
+  ReceiptFieldConfidence copyWith({
+    FieldVerificationStatus? merchant,
+    FieldVerificationStatus? date,
+    FieldVerificationStatus? total,
+    FieldVerificationStatus? taxes,
+    FieldVerificationStatus? items,
+    List<String>? fieldWarnings,
+  }) {
+    return ReceiptFieldConfidence(
+      merchant: merchant ?? this.merchant,
+      date: date ?? this.date,
+      total: total ?? this.total,
+      taxes: taxes ?? this.taxes,
+      items: items ?? this.items,
+      fieldWarnings: fieldWarnings ?? this.fieldWarnings,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'merchant': merchant.name,
+    'date': date.name,
+    'total': total.name,
+    'taxes': taxes.name,
+    'items': items.name,
+    'fieldWarnings': fieldWarnings,
+  };
+
+  factory ReceiptFieldConfidence.fromJson(Map<String, dynamic> json) => ReceiptFieldConfidence(
+    merchant: FieldVerificationStatus.values.firstWhere(
+      (v) => v.name == json['merchant'],
+      orElse: () => FieldVerificationStatus.verified,
+    ),
+    date: FieldVerificationStatus.values.firstWhere(
+      (v) => v.name == json['date'],
+      orElse: () => FieldVerificationStatus.verified,
+    ),
+    total: FieldVerificationStatus.values.firstWhere(
+      (v) => v.name == json['total'],
+      orElse: () => FieldVerificationStatus.verified,
+    ),
+    taxes: FieldVerificationStatus.values.firstWhere(
+      (v) => v.name == json['taxes'],
+      orElse: () => FieldVerificationStatus.verified,
+    ),
+    items: FieldVerificationStatus.values.firstWhere(
+      (v) => v.name == json['items'],
+      orElse: () => FieldVerificationStatus.verified,
+    ),
+    fieldWarnings: (json['fieldWarnings'] as List<dynamic>?)
+            ?.map((e) => e.toString())
+            .toList() ??
+        const [],
+  );
+}
+
 class ReceiptMerchant {
   final String? name;
   final String? address;
@@ -267,12 +406,16 @@ class ReceiptOcrResult {
   final OcrConfidenceLevel confidence;
   final List<String> warnings;
   final String rawText;
+  final ReceiptFieldConfidence fieldConfidence;
+  final bool isTwoColumnDetected;
 
   const ReceiptOcrResult({
     this.status = 'completed',
     this.confidence = OcrConfidenceLevel.high,
     this.warnings = const [],
     this.rawText = '',
+    this.fieldConfidence = const ReceiptFieldConfidence(),
+    this.isTwoColumnDetected = false,
   });
 
   ReceiptOcrResult copyWith({
@@ -280,12 +423,16 @@ class ReceiptOcrResult {
     OcrConfidenceLevel? confidence,
     List<String>? warnings,
     String? rawText,
+    ReceiptFieldConfidence? fieldConfidence,
+    bool? isTwoColumnDetected,
   }) {
     return ReceiptOcrResult(
       status: status ?? this.status,
       confidence: confidence ?? this.confidence,
       warnings: warnings ?? this.warnings,
       rawText: rawText ?? this.rawText,
+      fieldConfidence: fieldConfidence ?? this.fieldConfidence,
+      isTwoColumnDetected: isTwoColumnDetected ?? this.isTwoColumnDetected,
     );
   }
 
@@ -294,6 +441,8 @@ class ReceiptOcrResult {
     'confidence': confidence.name,
     'warnings': warnings,
     'rawText': rawText,
+    'fieldConfidence': fieldConfidence.toJson(),
+    'isTwoColumnDetected': isTwoColumnDetected,
   };
 
   factory ReceiptOcrResult.fromJson(Map<String, dynamic> json) => ReceiptOcrResult(
@@ -304,6 +453,10 @@ class ReceiptOcrResult {
     ),
     warnings: (json['warnings'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? const [],
     rawText: (json['rawText'] ?? '').toString(),
+    fieldConfidence: json['fieldConfidence'] != null
+        ? ReceiptFieldConfidence.fromJson(json['fieldConfidence'] as Map<String, dynamic>)
+        : const ReceiptFieldConfidence(),
+    isTwoColumnDetected: json['isTwoColumnDetected'] as bool? ?? false,
   );
 }
 
@@ -317,6 +470,7 @@ class ReceiptData {
   final ReceiptPayment payment;
   final ReceiptOcrResult ocr;
   final ExpenseCategory? predictedCategory;
+  final String? selectedPayerId;
 
   const ReceiptData({
     required this.id,
@@ -328,6 +482,7 @@ class ReceiptData {
     this.payment = const ReceiptPayment(),
     this.ocr = const ReceiptOcrResult(),
     this.predictedCategory,
+    this.selectedPayerId,
   });
 
   /// Deterministic sum of items in integer paise
@@ -375,6 +530,7 @@ class ReceiptData {
     ReceiptPayment? payment,
     ReceiptOcrResult? ocr,
     ExpenseCategory? predictedCategory,
+    String? selectedPayerId,
   }) {
     return ReceiptData(
       id: id ?? this.id,
@@ -386,6 +542,7 @@ class ReceiptData {
       payment: payment ?? this.payment,
       ocr: ocr ?? this.ocr,
       predictedCategory: predictedCategory ?? this.predictedCategory,
+      selectedPayerId: selectedPayerId ?? this.selectedPayerId,
     );
   }
 
@@ -399,6 +556,7 @@ class ReceiptData {
     'payment': payment.toJson(),
     'ocr': ocr.toJson(),
     'predictedCategory': predictedCategory?.name,
+    'selectedPayerId': selectedPayerId,
   };
 
   factory ReceiptData.fromJson(Map<String, dynamic> json) => ReceiptData(
@@ -426,5 +584,6 @@ class ReceiptData {
     predictedCategory: json['predictedCategory'] != null
         ? ExpenseCategory.fromString(json['predictedCategory'] as String)
         : null,
+    selectedPayerId: json['selectedPayerId'] as String?,
   );
 }

@@ -11,6 +11,7 @@ class ReceiptReviewViewModel extends ChangeNotifier {
   ReceiptData _receipt;
   final List<Expense> _existingTripExpenses;
   DuplicateReceiptMatch? _duplicateMatch;
+  bool _duplicateDismissed = false;
   final Uuid _uuid;
 
   ReceiptReviewViewModel({
@@ -23,10 +24,35 @@ class ReceiptReviewViewModel extends ChangeNotifier {
   }
 
   ReceiptData get receipt => _receipt;
-  DuplicateReceiptMatch? get duplicateMatch => _duplicateMatch;
+  DuplicateReceiptMatch? get duplicateMatch => _duplicateDismissed ? null : _duplicateMatch;
+  bool get duplicateDismissed => _duplicateDismissed;
   int get calculatedTotalInPaise => _receipt.calculatedTotalInPaise;
   bool get isConsistent => _receipt.isCalculationConsistent;
   int get differenceInPaise => _receipt.calculationDifferenceInPaise;
+  String? get selectedPayerId => _receipt.selectedPayerId;
+
+  void dismissDuplicate() {
+    _duplicateDismissed = true;
+    notifyListeners();
+  }
+
+  void setPayerId(String? payerId) {
+    _receipt = _receipt.copyWith(selectedPayerId: payerId);
+    notifyListeners();
+  }
+
+  void addTaxItem({required String name, double? rate, required int amountInPaise}) {
+    final updatedTaxes = List<ReceiptTaxItem>.from(_receipt.summary.taxes)
+      ..add(ReceiptTaxItem(name: name, rate: rate, amountInPaise: amountInPaise));
+    updateSummary(taxes: updatedTaxes);
+  }
+
+  void removeTaxItem(int index) {
+    if (index >= 0 && index < _receipt.summary.taxes.length) {
+      final updatedTaxes = List<ReceiptTaxItem>.from(_receipt.summary.taxes)..removeAt(index);
+      updateSummary(taxes: updatedTaxes);
+    }
+  }
 
   void _checkForDuplicates() {
     _duplicateMatch = DuplicateReceiptDetector.detectDuplicate(

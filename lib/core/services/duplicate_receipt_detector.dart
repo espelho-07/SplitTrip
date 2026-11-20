@@ -43,18 +43,20 @@ class DuplicateReceiptDetector {
       }
     }
 
-    // 2. Probable match: Identical Amount in paise AND Similar Merchant Name
+    // 2. Probable match: Identical Amount in paise AND Similar Merchant Name (within 72 hours)
     if (receiptTotal != null && receiptTotal > 0 && merchantName != null && merchantName.length >= 3) {
       for (final exp in existingExpenses) {
         if (exp.isDeleted) continue;
         if (exp.amountInPaise == receiptTotal) {
           final expTitle = exp.title.toLowerCase();
-          final isSameMerchant = expTitle.contains(merchantName) || merchantName.contains(expTitle);
+          final isSameMerchant = expTitle.contains(merchantName) ||
+              merchantName.contains(expTitle) ||
+              _hasSignificantWordOverlap(expTitle, merchantName);
 
           if (isSameMerchant) {
-            // Check if within 48 hours or dates match
+            // Check if within 72 hours or dates match
             final isDateClose = receiptDate == null ||
-                (exp.createdAt.difference(receiptDate).inHours.abs() <= 48);
+                (exp.createdAt.difference(receiptDate).inHours.abs() <= 72);
 
             if (isDateClose) {
               return DuplicateReceiptMatch(
@@ -68,6 +70,38 @@ class DuplicateReceiptDetector {
       }
     }
 
+    // 3. Same Day & Same Amount Warning (even if merchant name was manually customized)
+    if (receiptTotal != null && receiptTotal > 0 && receiptDate != null) {
+      for (final exp in existingExpenses) {
+        if (exp.isDeleted) continue;
+        if (exp.amountInPaise == receiptTotal) {
+          final isSameDay = exp.createdAt.year == receiptDate.year &&
+              exp.createdAt.month == receiptDate.month &&
+              exp.createdAt.day == receiptDate.day;
+          if (isSameDay) {
+            return DuplicateReceiptMatch(
+              matchingExpense: exp,
+              reason: 'An expense of ₹${(receiptTotal / 100.0).toStringAsFixed(2)} ("${exp.title}") was already recorded on ${receiptDate.day}/${receiptDate.month}.',
+              isDefiniteMatch: false,
+            );
+          }
+        }
+      }
+    }
+
     return null;
+  }
+
+  static bool _hasSignificantWordOverlap(String title1, String title2) {
+    final words1 = title1
+        .split(RegExp(r'\s+'))
+        .where((w) => w.length > 3)
+        .toSet();
+    final words2 = title2
+        .split(RegExp(r'\s+'))
+        .where((w) => w.length > 3)
+        .toSet();
+    if (words1.isEmpty || words2.isEmpty) return false;
+    return words1.intersection(words2).isNotEmpty;
   }
 }

@@ -69,6 +69,18 @@ void main() {
 
     await authVm.createGuestSession('Darpan Parmar');
     await storage.saveTrips([testTrip.toJson()]);
+    addTearDown(() {
+      tripDetailVm.stopHeartbeat();
+    });
+  });
+
+  tearDown(() {
+    tripDetailVm.dispose();
+    homeVm.dispose();
+    addVm.dispose();
+    authVm.dispose();
+    currencyVm.dispose();
+    widgetService.dispose();
   });
 
   Widget createAddExpenseScreen({int initialTab = 1}) {
@@ -109,6 +121,7 @@ void main() {
       expect(find.text('TIPS FOR BEST ACCURACY'), findsOneWidget);
 
       await tester.pump(const Duration(seconds: 3));
+      tripDetailVm.stopHeartbeat();
     });
 
     testWidgets('switching between tabs updates displayed view', (tester) async {
@@ -128,6 +141,7 @@ void main() {
       expect(find.textContaining('Save Expense'), findsOneWidget);
 
       await tester.pump(const Duration(seconds: 3));
+      tripDetailVm.stopHeartbeat();
     });
 
     testWidgets('applyReceiptData pre-fills form, displays attached badge, and sets receiptUrl', (tester) async {
@@ -173,6 +187,7 @@ void main() {
       expect(find.textContaining('500'), findsWidgets);
 
       await tester.pump(const Duration(seconds: 3));
+      tripDetailVm.stopHeartbeat();
     });
 
     testWidgets('saves expense with receiptUrl and commits to repository', (tester) async {
@@ -201,6 +216,7 @@ void main() {
       expect(cached.any((e) => e.receiptUrl == '/tmp/receipt_stored.jpg'), isTrue);
 
       await tester.pump(const Duration(seconds: 3));
+      tripDetailVm.stopHeartbeat();
     });
   });
 }

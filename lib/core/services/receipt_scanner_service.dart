@@ -26,14 +26,15 @@ class ReceiptScannerService {
         _uuid = uuid ?? const Uuid();
 
   /// Captures an image from the camera and stores a local cached copy.
-  /// Optimized for Supabase Free Tier storage limits (1200px max, 75% quality).
+  /// High resolution (up to 2400x3600, 95% quality) ensures small thermal printer fonts
+  /// and decimals are preserved for on-device ML Kit OCR.
   Future<String?> captureFromCamera() async {
     try {
       final xFile = await _picker.pickImage(
         source: ImageSource.camera,
-        maxWidth: 1200,
-        maxHeight: 1200,
-        imageQuality: 75,
+        maxWidth: 2400,
+        maxHeight: 3600,
+        imageQuality: 95,
       );
       if (xFile == null) return null;
       return await persistReceiptFile(xFile.path);
@@ -44,14 +45,15 @@ class ReceiptScannerService {
   }
 
   /// Imports an image from the gallery and stores a local cached copy.
-  /// Optimized for Supabase Free Tier storage limits (1200px max, 75% quality).
+  /// High resolution (up to 2400x3600, 95% quality) ensures small thermal printer fonts
+  /// and decimals are preserved for on-device ML Kit OCR.
   Future<String?> importFromGallery() async {
     try {
       final xFile = await _picker.pickImage(
         source: ImageSource.gallery,
-        maxWidth: 1200,
-        maxHeight: 1200,
-        imageQuality: 75,
+        maxWidth: 2400,
+        maxHeight: 3600,
+        imageQuality: 95,
       );
       if (xFile == null) return null;
       return await persistReceiptFile(xFile.path);
@@ -140,8 +142,28 @@ class ReceiptScannerService {
 
       final rawText = recognizedText.text;
 
+      // Extract spatial lines with 2D bounding boxes from ML Kit blocks
+      final structuredLines = <OcrLine>[];
+      for (final block in recognizedText.blocks) {
+        for (final line in block.lines) {
+          structuredLines.add(
+            OcrLine(
+              text: line.text,
+              boundingBox: OcrBoundingBox(
+                left: line.boundingBox.left,
+                top: line.boundingBox.top,
+                right: line.boundingBox.right,
+                bottom: line.boundingBox.bottom,
+              ),
+              confidence: line.confidence,
+            ),
+          );
+        }
+      }
+
       return _parser.parse(
         rawText: rawText,
+        structuredLines: structuredLines,
         imagePath: imagePath,
         tripCurrencyCode: currency,
       );

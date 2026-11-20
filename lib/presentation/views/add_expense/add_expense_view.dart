@@ -708,11 +708,14 @@ class _AddExpenseViewState extends State<AddExpenseView> {
       });
 
       final tripExpenses = context.read<TripDetailViewModel>().expenses;
+      final currentUserId = context.read<AuthViewModel>().currentUser?.id;
       final confirmedReceipt = await Navigator.of(context).push<ReceiptData>(
         MaterialPageRoute(
           builder: (ctx) => ReceiptReviewView(
             initialReceipt: receiptData,
             existingTripExpenses: tripExpenses,
+            tripMembers: trip.members,
+            currentUserId: currentUserId,
             onConfirmed: (confirmed) {
               Navigator.of(ctx).pop(confirmed);
             },
@@ -741,6 +744,9 @@ class _AddExpenseViewState extends State<AddExpenseView> {
 
   void _onReceiptConfirmed(ReceiptData confirmedReceipt, AddExpenseViewModel addVm) {
     addVm.applyReceiptData(confirmedReceipt);
+    if (confirmedReceipt.selectedPayerId != null) {
+      addVm.setPayer(confirmedReceipt.selectedPayerId!);
+    }
     if (confirmedReceipt.merchant.name != null && confirmedReceipt.merchant.name!.trim().isNotEmpty) {
       _titleController.text = confirmedReceipt.merchant.name!.trim();
     }
