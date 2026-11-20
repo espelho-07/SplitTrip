@@ -17,6 +17,12 @@ void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     storage = await LocalStorageService.init();
+    await storage.saveUser({
+      'id': 'usr_creator',
+      'displayName': 'Darpan',
+      'recoveryKey': 'KITH-TEST-1234',
+      'anonymousToken': 'anon_token',
+    });
     syncService = SyncService(storage);
     tripRepo = TripRepository(
       storage: storage,

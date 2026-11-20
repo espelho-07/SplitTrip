@@ -7,6 +7,12 @@ import 'package:kith_app/data/services/local_storage_service.dart';
 import 'package:kith_app/core/network/api_client.dart';
 import 'package:kith_app/core/network/api_exceptions.dart';
 import 'package:kith_app/data/services/sync_service.dart';
+import 'package:kith_app/domain/models/balance_summary.dart';
+import 'package:kith_app/domain/models/expense.dart';
+import 'package:kith_app/domain/models/expense_split.dart';
+import 'package:kith_app/domain/models/settlement_transaction.dart';
+import 'package:kith_app/domain/enums/expense_category.dart';
+import 'package:kith_app/domain/services/trip_export_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -295,6 +301,158 @@ void main() {
         ),
         throwsA(isA<UnauthorizedException>()),
       );
+    });
+
+    test('10. User with matching display name joins without claimMemberId -> automatically claims unclaimed placeholder', () async {
+      final trip = await tripRepo.createTrip(
+        name: 'Rishikesh Adventure',
+        creator: creatorUser,
+        initialFriendNames: ['Rahul Sharma'],
+      );
+
+      final placeholderRahul = trip.members.firstWhere((m) => m.displayName == 'Rahul Sharma');
+      expect(placeholderRahul.isClaimed, isFalse);
+      expect(placeholderRahul.isUnclaimed, isTrue);
+
+      // Real user joins with matching name ('Rahul Sharma') without specifying claimMemberId
+      final updatedTrip = await tripRepo.joinTrip(
+        inviteCodeOrId: trip.inviteCode,
+        user: rahulUser, // rahulUser.displayName is 'Rahul Sharma'
+        claimMemberId: null,
+      );
+
+      // Members count remains 2 - NO duplicate member created!
+      expect(updatedTrip.members.length, equals(2));
+      final claimedMember = updatedTrip.members.firstWhere((m) => m.id == placeholderRahul.id);
+      expect(claimedMember.userId, equals(rahulUser.id));
+      expect(claimedMember.isClaimed, isTrue);
+      expect(claimedMember.isUnclaimed, isFalse);
+      expect(claimedMember.avatarUrl, equals(rahulUser.avatarUrl));
+      expect(claimedMember.upiId, equals(rahulUser.upiId));
+    });
+
+    test('11. Expense splits assigned to placeholder spot are preserved and belong to claimed user', () async {
+      final trip = await tripRepo.createTrip(
+        name: 'Goa Weekend',
+        creator: creatorUser,
+        initialFriendNames: ['Rahul Sharma'],
+      );
+
+      final placeholderRahul = trip.members.firstWhere((m) => m.displayName == 'Rahul Sharma');
+      final creatorMember = trip.members.firstWhere((m) => m.role == 'creator');
+
+      // Creator records an expense split equally with placeholder Rahul
+      final expense = Expense(
+        id: 'exp_dinner',
+        tripId: trip.id,
+        title: 'Dinner at Beach',
+        amountInPaise: 200000, // Rs 2000.00
+        category: ExpenseCategory.food,
+        paidById: creatorMember.id,
+        splits: [
+          ExpenseSplit(memberId: creatorMember.id, amountInPaise: 100000),
+          ExpenseSplit(memberId: placeholderRahul.id, amountInPaise: 100000),
+        ],
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      // Real user Rahul joins without claimMemberId (auto-claims placeholder spot)
+      final joinedTrip = await tripRepo.joinTrip(
+        inviteCodeOrId: trip.inviteCode,
+        user: rahulUser,
+        claimMemberId: null,
+      );
+
+      // The placeholder ID is preserved on joinedTrip
+      final userMember = joinedTrip.members.firstWhere((m) => m.userId == rahulUser.id);
+      expect(userMember.id, equals(placeholderRahul.id));
+
+      // User's allocated split matches the expense split - avoiding Rs 0 / blank share!
+      final userSplit = expense.splits.where((s) => s.memberId == userMember.id).firstOrNull;
+      expect(userSplit, isNotNull);
+      expect(userSplit!.amountInPaise, equals(100000));
+    });
+
+    test('12. TripExportService resolves member names when referenced by userId or merged member ID', () {
+      final members = [
+        TripMember(
+          id: 'mbr_creator',
+          userId: 'usr_creator',
+          displayName: 'Darpan',
+          role: 'creator',
+          joinedAt: DateTime.now(),
+          isClaimed: true,
+        ),
+        TripMember(
+          id: 'mbr_rahul_canonical',
+          userId: 'usr_rahul',
+          displayName: 'Rahul Sharma',
+          role: 'member',
+          joinedAt: DateTime.now(),
+          isClaimed: true,
+          mergedIntoMemberId: 'mbr_rahul_old_placeholder',
+        ),
+      ];
+
+      final testTrip = Trip(
+        id: 'trip_export_test',
+        inviteCode: 'EXPT01',
+        name: 'Export Test Trip',
+        creatorId: 'usr_creator',
+        members: members,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      // Expense where paidById is userId rather than memberId
+      final expenseByUserId = Expense(
+        id: 'exp_1',
+        tripId: testTrip.id,
+        title: 'Groceries',
+        amountInPaise: 50000,
+        category: ExpenseCategory.groceries,
+        paidById: 'usr_rahul', // User ID reference
+        splits: [
+          ExpenseSplit(memberId: 'mbr_creator', amountInPaise: 25000),
+          ExpenseSplit(memberId: 'mbr_rahul_canonical', amountInPaise: 25000),
+        ],
+        createdAt: DateTime(2026, 11, 20),
+        updatedAt: DateTime(2026, 11, 20),
+      );
+
+      final csv = TripExportService.generateCsvSummary(
+        trip: testTrip,
+        expenses: [expenseByUserId],
+      );
+
+      // Verify payer is resolved as "Rahul Sharma" instead of "Unknown"
+      expect(csv.contains('"Rahul Sharma"'), isTrue);
+      expect(csv.contains('"Unknown"'), isFalse);
+
+      final balanceSummary = BalanceSummary(
+        totalTripSpentInPaise: 50000,
+        memberNetBalances: {'mbr_creator': -25000, 'mbr_rahul_canonical': 25000},
+        currentUserNetBalanceInPaise: -25000,
+        debtsToPay: [],
+        debtsToReceive: [],
+        simplifiedSettlements: [
+          SettlementTransaction(
+            fromMemberId: 'usr_creator', // Referencing by userId
+            toMemberId: 'mbr_rahul_old_placeholder', // Referencing merged placeholder
+            amountInPaise: 25000,
+          ),
+        ],
+      );
+
+      final textSummary = TripExportService.generateTextSummary(
+        trip: testTrip,
+        expenses: [expenseByUserId],
+        balanceSummary: balanceSummary,
+      );
+
+      // Both from and to are correctly resolved to display names instead of fallback 'Member'
+      expect(textSummary.contains('• Darpan pays Rahul Sharma: INR 250.00'), isTrue);
     });
   });
 }

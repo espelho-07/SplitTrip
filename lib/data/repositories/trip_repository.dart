@@ -707,7 +707,41 @@ class TripRepository {
       );
     }
 
-    // 3. New member join (when no claimMemberId specified)
+    // 3. Auto-claim matching unclaimed virtual placeholder by display name
+    // When no claimMemberId is specified, check if there is an unclaimed virtual placeholder
+    // matching user.displayName (case-insensitive) to prevent duplicate member creation and
+    // preserve existing expense splits and balance history.
+    final userTrimmedName = user.displayName.trim().toLowerCase();
+    if (userTrimmedName.isNotEmpty) {
+      final candidateVirtualIndex = updatedMembers.indexWhere((m) =>
+          m.isUnclaimed &&
+          m.displayName.trim().isNotEmpty &&
+          m.displayName.trim().toLowerCase() == userTrimmedName);
+
+      if (candidateVirtualIndex != -1) {
+        final targetMember = updatedMembers[candidateVirtualIndex];
+        updatedMembers[candidateVirtualIndex] = targetMember.copyWith(
+          userId: user.id,
+          displayName: user.displayName.trim().isNotEmpty
+              ? user.displayName.trim()
+              : targetMember.displayName,
+          avatarUrl: user.avatarUrl ?? targetMember.avatarUrl,
+          isVirtualMember: false,
+          isClaimed: true,
+          status: 'claimed',
+          role: 'member',
+          joinedAt: DateTime.now(),
+          upiId: user.upiId ?? targetMember.upiId,
+        );
+
+        return match.copyWith(
+          members: updatedMembers,
+          updatedAt: DateTime.now(),
+        );
+      }
+    }
+
+    // 4. New member join (when no claimMemberId specified and no matching placeholder found)
     final newMember = TripMember(
       id: 'mbr_${const Uuid().v4().replaceAll('-', '').substring(0, 10)}',
       userId: user.id,

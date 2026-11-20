@@ -89,7 +89,12 @@ class _SettlementSheetState extends State<SettlementSheet> {
   }
 
   TripMember? _findMember(String memberId) {
-    return widget.trip.members.where((m) => m.id == memberId).firstOrNull;
+    if (memberId.isEmpty) return null;
+    final direct = widget.trip.members.where((m) => m.id == memberId).firstOrNull;
+    if (direct != null) return direct;
+    final byUserId = widget.trip.members.where((m) => m.userId.isNotEmpty && m.userId == memberId).firstOrNull;
+    if (byUserId != null) return byUserId;
+    return widget.trip.members.where((m) => m.mergedIntoMemberId == memberId).firstOrNull;
   }
 
   String get _effectiveCurrentUserId {

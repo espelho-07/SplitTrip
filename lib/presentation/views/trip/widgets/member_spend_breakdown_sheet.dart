@@ -271,7 +271,10 @@ class MemberSpendBreakdownSheet extends StatelessWidget {
                 itemBuilder: (context, index) {
                   final item = memberItems[index];
                   final exp = item.expense;
-                  final payer = trip.members.where((m) => m.id == exp.paidById).firstOrNull;
+                  final payer = trip.members.where((m) =>
+                      m.id == exp.paidById ||
+                      (m.userId.isNotEmpty && m.userId == exp.paidById) ||
+                      (m.mergedIntoMemberId != null && m.mergedIntoMemberId == exp.paidById)).firstOrNull;
                   final payerName = payer != null
                       ? (payer.userId == currentUserId ? 'You' : payer.displayName)
                       : 'Unknown';

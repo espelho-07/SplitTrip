@@ -1006,12 +1006,23 @@ class _TripDetailViewState extends State<TripDetailView> {
     for (final member in trip.members) {
       if (member.userId == currentUserId || member.id == currentUserId) {
         userMemberIds.add(member.id);
-        userMemberIds.add(member.userId);
+        if (member.userId.isNotEmpty) userMemberIds.add(member.userId);
+        if (member.mergedIntoMemberId != null && member.mergedIntoMemberId!.isNotEmpty) {
+          userMemberIds.add(member.mergedIntoMemberId!);
+        }
+      }
+    }
+    for (final member in trip.members) {
+      if (member.mergedIntoMemberId != null && userMemberIds.contains(member.mergedIntoMemberId)) {
+        userMemberIds.add(member.id);
+        if (member.userId.isNotEmpty) userMemberIds.add(member.userId);
       }
     }
     if (trip.creatorId == currentUserId && trip.members.isNotEmpty) {
       userMemberIds.add(trip.members.first.id);
-      userMemberIds.add(trip.members.first.userId);
+      if (trip.members.first.userId.isNotEmpty) {
+        userMemberIds.add(trip.members.first.userId);
+      }
     }
 
     int totalUserShare = 0;
@@ -1792,10 +1803,21 @@ class _TripDetailViewState extends State<TripDetailView> {
     }
 
     final userMember = trip.members.where((m) => m.userId == currentUserId || m.id == currentUserId).firstOrNull;
-    final userSplit = expense.splits.where((s) =>
-        s.memberId == currentUserId ||
-        (userMember != null && (s.memberId == userMember.id || s.memberId == userMember.userId))
-    ).firstOrNull;
+    final userMemberIds = <String>{currentUserId};
+    if (userMember != null) {
+      userMemberIds.add(userMember.id);
+      if (userMember.userId.isNotEmpty) userMemberIds.add(userMember.userId);
+      if (userMember.mergedIntoMemberId != null && userMember.mergedIntoMemberId!.isNotEmpty) {
+        userMemberIds.add(userMember.mergedIntoMemberId!);
+      }
+    }
+    for (final m in trip.members) {
+      if (m.mergedIntoMemberId != null && userMemberIds.contains(m.mergedIntoMemberId)) {
+        userMemberIds.add(m.id);
+        if (m.userId.isNotEmpty) userMemberIds.add(m.userId);
+      }
+    }
+    final userSplit = expense.splits.where((s) => userMemberIds.contains(s.memberId)).firstOrNull;
     final userSharePaise = userSplit?.amountInPaise ??
         (isPayerSelf
             ? expense.amountInPaise
@@ -2690,9 +2712,21 @@ class _TripDetailViewState extends State<TripDetailView> {
 
               // User's share of this expense
               final userMember = trip.members.where((m) => m.userId == currentUserId || m.id == currentUserId).firstOrNull;
-              final userSplit = userMember != null
-                  ? expense.splits.where((s) => s.memberId == userMember.id || s.memberId == userMember.userId).firstOrNull
-                  : null;
+              final userMemberIds = <String>{currentUserId};
+              if (userMember != null) {
+                userMemberIds.add(userMember.id);
+                if (userMember.userId.isNotEmpty) userMemberIds.add(userMember.userId);
+                if (userMember.mergedIntoMemberId != null && userMember.mergedIntoMemberId!.isNotEmpty) {
+                  userMemberIds.add(userMember.mergedIntoMemberId!);
+                }
+              }
+              for (final m in trip.members) {
+                if (m.mergedIntoMemberId != null && userMemberIds.contains(m.mergedIntoMemberId)) {
+                  userMemberIds.add(m.id);
+                  if (m.userId.isNotEmpty) userMemberIds.add(m.userId);
+                }
+              }
+              final userSplit = expense.splits.where((s) => userMemberIds.contains(s.memberId)).firstOrNull;
 
               return SurfaceCard(
                 onTap: () => _showExpenseDetailSheet(expense, trip, currentUserId),

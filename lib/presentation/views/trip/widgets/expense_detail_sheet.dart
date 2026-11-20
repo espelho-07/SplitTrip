@@ -30,7 +30,12 @@ class ExpenseDetailSheet extends StatelessWidget {
   });
 
   TripMember? _findMember(String memberId) {
-    return trip.members.where((m) => m.id == memberId).firstOrNull;
+    if (memberId.isEmpty) return null;
+    final direct = trip.members.where((m) => m.id == memberId).firstOrNull;
+    if (direct != null) return direct;
+    final byUserId = trip.members.where((m) => m.userId.isNotEmpty && m.userId == memberId).firstOrNull;
+    if (byUserId != null) return byUserId;
+    return trip.members.where((m) => m.mergedIntoMemberId == memberId).firstOrNull;
   }
 
   @override

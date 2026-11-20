@@ -1,8 +1,19 @@
 import '../models/balance_summary.dart';
 import '../models/expense.dart';
 import '../models/trip.dart';
+import '../models/trip_member.dart';
 
 class TripExportService {
+  static String _resolveMemberName(List<TripMember> members, String memberOrUserId, {String fallback = 'Member'}) {
+    if (memberOrUserId.isEmpty) return fallback;
+    final direct = members.where((m) => m.id == memberOrUserId).firstOrNull;
+    if (direct != null) return direct.displayName;
+    final byUserId = members.where((m) => m.userId.isNotEmpty && m.userId == memberOrUserId).firstOrNull;
+    if (byUserId != null) return byUserId.displayName;
+    final merged = members.where((m) => m.mergedIntoMemberId == memberOrUserId).firstOrNull;
+    return merged?.displayName ?? fallback;
+  }
+
   /// Generates a human-readable text summary of the trip financials.
   static String generateTextSummary({
     required Trip trip,
@@ -59,8 +70,8 @@ class TripExportService {
       buffer.writeln('All balances are fully settled!');
     } else {
       for (final s in balanceSummary.simplifiedSettlements) {
-        final from = trip.members.where((m) => m.id == s.fromMemberId).firstOrNull?.displayName ?? 'Member';
-        final to = trip.members.where((m) => m.id == s.toMemberId).firstOrNull?.displayName ?? 'Member';
+        final from = _resolveMemberName(trip.members, s.fromMemberId, fallback: 'Member');
+        final to = _resolveMemberName(trip.members, s.toMemberId, fallback: 'Member');
         final amtRupees = (s.amountInPaise / 100).toStringAsFixed(2);
         buffer.writeln('• $from pays $to: $currency $amtRupees');
       }
@@ -81,7 +92,7 @@ class TripExportService {
     buffer.writeln('Date,Title,Category,PaidBy,Amount,SplitType,Participants');
 
     for (final exp in expenses) {
-      final payer = trip.members.where((m) => m.id == exp.paidById).firstOrNull?.displayName ?? 'Unknown';
+      final payer = _resolveMemberName(trip.members, exp.paidById, fallback: 'Unknown');
       final amt = (exp.amountInPaise / 100).toStringAsFixed(2);
       final date = '${exp.createdAt.year}-${exp.createdAt.month.toString().padLeft(2, '0')}-${exp.createdAt.day.toString().padLeft(2, '0')}';
       final participants = exp.splits.length;
