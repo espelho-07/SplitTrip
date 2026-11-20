@@ -49,10 +49,11 @@ class _GlobalSyncStatusBarState extends State<GlobalSyncStatusBar> {
 
     final status = syncService.currentStatus;
     final pendingCount = syncService.pendingMutationCount;
+    final quarantinedCount = syncService.quarantinedCount;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // Normal state: fully synced and not offline -> hide completely
-    if (status == SyncStatus.synced && pendingCount == 0) {
+    if (status == SyncStatus.synced && pendingCount == 0 && quarantinedCount == 0) {
       return const SizedBox.shrink();
     }
 
@@ -108,7 +109,7 @@ class _GlobalSyncStatusBarState extends State<GlobalSyncStatusBar> {
         onAction = () {
           HapticHelper.medium();
           final apiClient = Provider.of<ApiClient?>(context, listen: false);
-          if (apiClient != null) {
+          if (apiClient != null && !syncService.isProcessing) {
             syncService.flushQueue(apiClient, force: true);
           }
         };
@@ -131,9 +132,13 @@ class _GlobalSyncStatusBarState extends State<GlobalSyncStatusBar> {
           iconData = Icons.lock_clock_rounded;
           message = 'Your session has expired. Sign in again to synchronize your changes.';
           actionLabel = 'Sign in';
+        } else if (quarantinedCount > 0) {
+          iconData = Icons.sync_problem_rounded;
+          message = '$quarantinedCount change${quarantinedCount > 1 ? "s" : ""} could not be synced.';
+          actionLabel = 'Review';
         } else {
           iconData = Icons.sync_problem_rounded;
-          message = 'Unable to sync right now. Your local changes are preserved.';
+          message = syncService.lastErrorMessage ?? 'Unable to sync right now. Your local changes are preserved.';
           actionLabel = 'Review';
         }
         onAction = () {

@@ -345,7 +345,7 @@ class SyncService {
     _registeredApiClient = apiClient;
     _periodicSyncTimer?.cancel();
     _periodicSyncTimer = Timer.periodic(interval, (_) {
-      if (getPendingMutations().isNotEmpty && !isProcessing) {
+      if (!isProcessing && getPendingMutations(includeQuarantined: false).isNotEmpty) {
         unawaited(flushQueue(_registeredApiClient!));
       }
     });
@@ -380,9 +380,10 @@ class SyncService {
     }
   }
 
-  int get pendingCount => getPendingMutations().length;
+  int get pendingCount => getPendingMutations(includeQuarantined: false).length;
   int get pendingMutationCount => pendingCount;
-  List<SyncMutation> getQueue() => getPendingMutations();
+  int get quarantinedCount => getQuarantinedMutations().length;
+  List<SyncMutation> getQueue() => getPendingMutations(includeQuarantined: false);
   SyncStatus get currentStatus => _currentStatus;
   Stream<SyncStatus> get statusStream => _statusController.stream;
 
@@ -395,20 +396,71 @@ class SyncService {
     }
   }
 
-  List<SyncMutation> getPendingMutations({String? userId}) {
+  /// Returns all mutations in the local storage outbox table (including quarantined).
+  List<SyncMutation> getAllMutations({String? userId}) {
     final raw = _storage.getMutationQueue(userId: userId);
     return raw.map((json) => SyncMutation.fromJson(json)).toList();
   }
 
+  /// Returns actionable pending mutations. By default, quarantined mutations are excluded
+  /// to prevent infinite retry loops and UI lockups.
+  List<SyncMutation> getPendingMutations({String? userId, bool includeQuarantined = false}) {
+    final all = getAllMutations(userId: userId);
+    if (includeQuarantined) return all;
+    return all.where((m) => m.syncState != SyncState.quarantined).toList();
+  }
+
+  /// Returns mutations that were quarantined due to unresolvable validation errors or exceeded retries.
+  List<SyncMutation> getQuarantinedMutations({String? userId}) {
+    return getAllMutations(userId: userId)
+        .where((m) => m.syncState == SyncState.quarantined)
+        .toList();
+  }
+
   Future<void> clearQueue() async {
     await _storage.clearMutationQueue();
+    _lastErrorMessage = null;
     _setStatus(SyncStatus.synced);
+  }
+
+  /// Clears only quarantined mutations from the outbox after user review.
+  Future<void> clearQuarantinedMutations() async {
+    final queue = getAllMutations();
+    queue.removeWhere((m) => m.syncState == SyncState.quarantined);
+    await _storage.saveMutationQueue(queue.map((m) => m.toJson()).toList());
+    final remaining = queue.where((m) => m.syncState != SyncState.quarantined);
+    if (remaining.isEmpty) {
+      _lastErrorMessage = null;
+      _setStatus(SyncStatus.synced);
+    }
+  }
+
+  /// Resets quarantined mutations back to localPending for user-directed retry.
+  Future<void> retryQuarantinedMutations(ApiClient apiClient) async {
+    final queue = getAllMutations();
+    bool updated = false;
+    for (int i = 0; i < queue.length; i++) {
+      if (queue[i].syncState == SyncState.quarantined) {
+        queue[i] = queue[i].copyWith(
+          syncState: SyncState.localPending,
+          retryCount: 0,
+          lastError: null,
+          lastAttemptAt: null,
+        );
+        updated = true;
+      }
+    }
+    if (updated) {
+      await _storage.saveMutationQueue(queue.map((m) => m.toJson()).toList());
+      _setStatus(SyncStatus.pending);
+      await flushQueue(apiClient, force: true);
+    }
   }
 
   /// Returns all pending mutations for a specific trip, excluding permanently quarantined operations.
   List<SyncMutation> getPendingMutationsForTrip(String tripId) {
-    return getPendingMutations()
-        .where((m) => m.tripId == tripId && m.syncState != SyncState.quarantined)
+    return getPendingMutations(includeQuarantined: false)
+        .where((m) => m.tripId == tripId)
         .toList();
   }
 
@@ -430,14 +482,19 @@ class SyncService {
       }
     } else {
       if (_currentStatus == SyncStatus.offline || _currentStatus == SyncStatus.reconnecting) {
-        final pending = getPendingMutations();
+        final pending = getPendingMutations(includeQuarantined: false);
         if (pending.isNotEmpty) {
           _setStatus(SyncStatus.pending);
           if (_registeredApiClient != null && !isProcessing) {
             unawaited(flushQueue(_registeredApiClient!));
           }
         } else {
-          _setStatus(SyncStatus.synced);
+          final quarantined = getQuarantinedMutations();
+          if (quarantined.isNotEmpty) {
+            _setStatus(SyncStatus.error);
+          } else {
+            _setStatus(SyncStatus.synced);
+          }
         }
       }
     }
@@ -467,7 +524,7 @@ class SyncService {
       originDeviceId: _storage.getDeviceId(),
     );
 
-    final queue = getPendingMutations();
+    final queue = getAllMutations();
     queue.add(mutation);
     await _storage.saveMutationQueue(queue.map((m) => m.toJson()).toList());
     _setStatus(SyncStatus.pending);
@@ -481,16 +538,23 @@ class SyncService {
   }
 
   Future<void> removeMutation(String id) async {
-    final queue = getPendingMutations();
+    final queue = getAllMutations();
     queue.removeWhere((m) => m.id == id);
     await _storage.saveMutationQueue(queue.map((m) => m.toJson()).toList());
-    if (queue.isEmpty) {
-      _setStatus(SyncStatus.synced);
+    final actionable = queue.where((m) => m.syncState != SyncState.quarantined);
+    if (actionable.isEmpty) {
+      if (queue.isEmpty) {
+        _lastErrorMessage = null;
+        _setStatus(SyncStatus.synced);
+      } else {
+        _setStatus(SyncStatus.error);
+        _lastErrorMessage = '${queue.length} change${queue.length > 1 ? "s" : ""} could not be synced.';
+      }
     }
   }
 
   Future<void> markMutationP2PShared(String id) async {
-    final queue = getPendingMutations();
+    final queue = getAllMutations();
     final idx = queue.indexWhere((m) => m.id == id);
     if (idx != -1) {
       queue[idx] = queue[idx].copyWith(syncState: SyncState.p2pShared);
@@ -782,7 +846,7 @@ class SyncService {
     String? errorMessage,
     SyncState syncState = SyncState.localPending,
   }) async {
-    final queue = getPendingMutations();
+    final queue = getAllMutations();
     final idx = queue.indexWhere((m) => m.id == id);
     if (idx != -1) {
       queue[idx] = queue[idx].copyWith(
@@ -1055,27 +1119,37 @@ class SyncService {
   /// Processes all pending offline mutations against the remote backend in dependency order.
   Future<void> flushQueue(ApiClient apiClient, {bool force = false}) async {
     return runWithTripLock('__outbox_queue__', () async {
+      final activeUser = _storage.getSavedUser();
+      final activeUserId = activeUser?['id'] as String? ?? activeUser?['accountId'] as String?;
+      final actionableQueue = getPendingMutations(userId: activeUserId, includeQuarantined: false);
+      final quarantinedQueue = getQuarantinedMutations(userId: activeUserId);
+
+      // Guard: Do not display "Sync in progress..." if there are no actionable operations!
+      if (actionableQueue.isEmpty) {
+        if (quarantinedQueue.isNotEmpty) {
+          _setStatus(SyncStatus.error);
+          _lastErrorMessage = '${quarantinedQueue.length} change${quarantinedQueue.length > 1 ? "s" : ""} could not be synced.';
+        } else {
+          _isSessionExpired = false;
+          _lastErrorMessage = null;
+          _setStatus(SyncStatus.synced);
+        }
+        return;
+      }
+
       _setStatus(SyncStatus.syncing);
 
       try {
-        final activeUser = _storage.getSavedUser();
-        final activeUserId = activeUser?['id'] as String? ?? activeUser?['accountId'] as String?;
-        final queue = getPendingMutations(userId: activeUserId);
         final now = DateTime.now();
 
         final blockedTripIds = <String>{};
         final completedMutationIds = <String>{};
 
-        for (final mutation in queue) {
+        for (final mutation in actionableQueue) {
           final tId = mutation.tripId;
 
           // Multi-user safety: Skip mutations created by a different user account on this device
           if (activeUserId != null && mutation.userId != null && mutation.userId != activeUserId) {
-            continue;
-          }
-
-          // Quarantined mutations are skipped to prevent infinite retry loops and head-of-line blocking
-          if (mutation.syncState == SyncState.quarantined) {
             continue;
           }
 
@@ -1085,7 +1159,7 @@ class SyncService {
           }
 
           // Dependency check
-          final pendingIds = queue.map((m) => m.id).toSet();
+          final pendingIds = actionableQueue.map((m) => m.id).toSet();
           final hasUnresolvedDependencies = mutation.dependsOn.any(
             (depId) =>
                 pendingIds.contains(depId) &&
@@ -1227,28 +1301,44 @@ class SyncService {
                    msgLower.contains('is not in this trip') ||
                    msgLower.contains('not a member'));
 
-              final isMaxRetryExceeded = mutation.retryCount >= 5 && (e.statusCode == 400 || e.statusCode == 422);
+              // Self-healing: Member or trip out of sync on server. Re-push trip & members and retry!
+              bool autoHealed = false;
+              if (isMembershipError && tId != null) {
+                final healed = await _ensureTripOnServer(apiClient, tId);
+                if (healed) {
+                  try {
+                    await _executeMutation(apiClient, mutation);
+                    completedMutationIds.add(mutation.id);
+                    await removeMutation(mutation.id);
+                    autoHealed = true;
+                  } catch (_) {}
+                }
+              }
 
-              if (isMembershipError || isMaxRetryExceeded) {
-                debugPrint(
-                  '[SyncService] Quarantining mutation ${mutation.id} due to ${isMembershipError ? "member-ID divergence" : "max retries exceeded"}: ${e.message}',
-                );
-                await _updateMutationAttempt(
-                  mutation.id,
-                  mutation.retryCount + 1,
-                  errorMessage: e.message,
-                  syncState: SyncState.quarantined,
-                );
-                // CRITICAL: Do NOT add tId to blockedTripIds so independent trip operations can proceed!
-              } else {
-                // Record failure reason and retry with backoff, NEVER silently drop financial mutations!
-                await _updateMutationAttempt(
-                  mutation.id,
-                  mutation.retryCount + 1,
-                  errorMessage: e.message,
-                  syncState: SyncState.failed,
-                );
-                if (tId != null) blockedTripIds.add(tId);
+              if (!autoHealed) {
+                final isMaxRetryExceeded = mutation.retryCount >= 5 && (e.statusCode == 400 || e.statusCode == 422);
+
+                if (isMembershipError || isMaxRetryExceeded) {
+                  debugPrint(
+                    '[SyncService] Quarantining mutation ${mutation.id} due to ${isMembershipError ? "member-ID divergence" : "max retries exceeded"}: ${e.message}',
+                  );
+                  await _updateMutationAttempt(
+                    mutation.id,
+                    mutation.retryCount + 1,
+                    errorMessage: e.message,
+                    syncState: SyncState.quarantined,
+                  );
+                  // CRITICAL: Do NOT add tId to blockedTripIds so independent trip operations can proceed!
+                } else {
+                  // Record failure reason and retry with backoff, NEVER silently drop financial mutations!
+                  await _updateMutationAttempt(
+                    mutation.id,
+                    mutation.retryCount + 1,
+                    errorMessage: e.message,
+                    syncState: SyncState.failed,
+                  );
+                  if (tId != null) blockedTripIds.add(tId);
+                }
               }
             }
           } catch (e) {
@@ -1267,15 +1357,28 @@ class SyncService {
           }
         }
 
-        final remaining = getPendingMutations(userId: activeUserId);
-        if (remaining.isEmpty) {
+        final remainingActionable = getPendingMutations(userId: activeUserId, includeQuarantined: false);
+        final remainingQuarantined = getQuarantinedMutations(userId: activeUserId);
+
+        if (remainingActionable.isEmpty) {
           _isSessionExpired = false;
           _lastErrorMessage = null;
-          _setStatus(SyncStatus.synced);
+          if (remainingQuarantined.isNotEmpty) {
+            _setStatus(SyncStatus.error);
+            _lastErrorMessage = '${remainingQuarantined.length} change${remainingQuarantined.length > 1 ? "s" : ""} could not be synced.';
+          } else {
+            _setStatus(SyncStatus.synced);
+          }
         } else if (_currentStatus != SyncStatus.offline &&
             _currentStatus != SyncStatus.error &&
             _currentStatus != SyncStatus.reconnecting) {
-          _setStatus(SyncStatus.pending);
+          final allFailed = remainingActionable.every((m) => m.retryCount > 0);
+          if (allFailed) {
+            _setStatus(SyncStatus.error);
+            _lastErrorMessage = 'Unable to sync right now. Will retry automatically.';
+          } else {
+            _setStatus(SyncStatus.pending);
+          }
         }
       } finally {
         // Per-trip lock releases in runWithTripLock

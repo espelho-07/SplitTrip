@@ -42,9 +42,22 @@ class ExpenseService {
     const trip = db.get('trips', tripId);
     if (!trip) throw AppError.notFound('Trip not found');
 
-    const authMember = db.findOne('trip_members', (m) => m.tripId === tripId && m.userId === user.id);
-    if (!authMember) throw AppError.forbidden('You are not a member of this trip');
+    let authMember = db.findOne('trip_members', (m) => m.tripId === tripId && m.userId === user.id);
     const now = new Date().toISOString();
+    if (!authMember && trip.creatorId === user.id) {
+      // Auto-heal missing creator membership
+      authMember = {
+        id: `mbr_${crypto.randomUUID().replace(/-/g, '').substring(0, 10)}`,
+        tripId,
+        userId: user.id,
+        displayName: user.displayName || 'Creator',
+        role: 'creator',
+        isVirtual: false,
+        joinedAt: now,
+      };
+      db.insert('trip_members', authMember);
+    }
+    if (!authMember) throw AppError.forbidden('You are not a member of this trip');
 
     // Lifecycle check & late expense handling
     let isLateReconciled = false;
@@ -79,9 +92,18 @@ class ExpenseService {
       let paidBySum = 0;
       validatedPaidByMap = {};
       for (const [pId, amt] of Object.entries(paidByMap)) {
-        const member = findMemberInTrip(pId);
+        let member = findMemberInTrip(pId);
         if (!member) {
-          throw AppError.badRequest(`Payer member ${pId} is not part of this trip`);
+          member = {
+            id: pId,
+            tripId,
+            displayName: `Member ${pId.replace(/^mbr_/, '').substring(0, 6)}`,
+            role: 'member',
+            isVirtual: true,
+            claimToken: `clm_${crypto.randomUUID().replace(/-/g, '').substring(0, 8)}`,
+            joinedAt: now,
+          };
+          db.insert('trip_members', member);
         }
         const numAmt = Number(amt);
         if (!Number.isInteger(numAmt) || numAmt < 0) {
@@ -107,11 +129,20 @@ class ExpenseService {
     }
 
     if (!payerMember) {
-      payerMember = authMember;
-    }
-
-    if (!payerMember) {
-      throw AppError.badRequest('Payer member is not part of this trip');
+      if (paidById) {
+        payerMember = {
+          id: paidById,
+          tripId,
+          displayName: `Member ${paidById.replace(/^mbr_/, '').substring(0, 6)}`,
+          role: 'member',
+          isVirtual: true,
+          claimToken: `clm_${crypto.randomUUID().replace(/-/g, '').substring(0, 8)}`,
+          joinedAt: now,
+        };
+        db.insert('trip_members', payerMember);
+      } else {
+        payerMember = authMember;
+      }
     }
 
     if (!Array.isArray(splits) || splits.length === 0) {
@@ -127,9 +158,18 @@ class ExpenseService {
         throw AppError.badRequest('Each split must specify a valid memberId');
       }
 
-      const member = findMemberInTrip(split.memberId);
+      let member = findMemberInTrip(split.memberId);
       if (!member) {
-        throw AppError.badRequest(`Split participant ${split.memberId} is not in this trip`);
+        member = {
+          id: split.memberId,
+          tripId,
+          displayName: split.displayName || `Member ${split.memberId.replace(/^mbr_/, '').substring(0, 6)}`,
+          role: 'member',
+          isVirtual: true,
+          claimToken: `clm_${crypto.randomUUID().replace(/-/g, '').substring(0, 8)}`,
+          joinedAt: now,
+        };
+        db.insert('trip_members', member);
       }
 
       if (!Number.isInteger(split.amountInPaise) || split.amountInPaise < 0) {
@@ -243,11 +283,24 @@ class ExpenseService {
     const trip = db.get('trips', tripId);
     if (!trip) throw AppError.notFound('Trip not found');
 
-    const authMember = db.findOne('trip_members', (m) => m.tripId === tripId && m.userId === user.id);
+    let authMember = db.findOne('trip_members', (m) => m.tripId === tripId && m.userId === user.id);
+    const now = new Date().toISOString();
+    if (!authMember && trip.creatorId === user.id) {
+      authMember = {
+        id: `mbr_${crypto.randomUUID().replace(/-/g, '').substring(0, 10)}`,
+        tripId,
+        userId: user.id,
+        displayName: user.displayName || 'Creator',
+        role: 'creator',
+        isVirtual: false,
+        joinedAt: now,
+      };
+      db.insert('trip_members', authMember);
+    }
     if (!authMember) throw AppError.forbidden('Not a member of this trip');
 
     if (trip.lifecycleState === 'completed' || trip.lifecycleState === 'settled') {
-      db.update('trips', tripId, { lifecycleState: 'active', updatedAt: new Date().toISOString() });
+      db.update('trips', tripId, { lifecycleState: 'active', updatedAt: now });
     }
 
     const existing = db.get('expenses', expenseId);
@@ -289,9 +342,18 @@ class ExpenseService {
       let paidBySum = 0;
       validatedPaidByMap = {};
       for (const [pId, amt] of Object.entries(paidByMap)) {
-        const member = db.findOne('trip_members', (m) => m.tripId === tripId && (m.id === pId || m.userId === pId));
+        let member = db.findOne('trip_members', (m) => m.tripId === tripId && (m.id === pId || m.userId === pId));
         if (!member) {
-          throw AppError.badRequest(`Payer member ${pId} is not part of this trip`);
+          member = {
+            id: pId,
+            tripId,
+            displayName: `Member ${pId.replace(/^mbr_/, '').substring(0, 6)}`,
+            role: 'member',
+            isVirtual: true,
+            claimToken: `clm_${crypto.randomUUID().replace(/-/g, '').substring(0, 8)}`,
+            joinedAt: now,
+          };
+          db.insert('trip_members', member);
         }
         const numAmt = Number(amt);
         if (!Number.isInteger(numAmt) || numAmt < 0) {
@@ -317,7 +379,20 @@ class ExpenseService {
     }
 
     if (!payerMember) {
-      throw AppError.badRequest('Payer must be a member of this trip');
+      if (paidById) {
+        payerMember = {
+          id: paidById,
+          tripId,
+          displayName: `Member ${paidById.replace(/^mbr_/, '').substring(0, 6)}`,
+          role: 'member',
+          isVirtual: true,
+          claimToken: `clm_${crypto.randomUUID().replace(/-/g, '').substring(0, 8)}`,
+          joinedAt: now,
+        };
+        db.insert('trip_members', payerMember);
+      } else {
+        payerMember = authMember;
+      }
     }
 
     if (!Array.isArray(splits) || splits.length === 0) {
@@ -328,8 +403,19 @@ class ExpenseService {
     const validatedSplits = [];
     for (const split of splits) {
       if (!split.memberId) throw AppError.badRequest('Each split must specify a valid memberId');
-      const member = db.findOne('trip_members', (m) => m.tripId === tripId && (m.id === split.memberId || m.userId === split.memberId));
-      if (!member) throw AppError.badRequest(`Split participant ${split.memberId} is not in this trip`);
+      let member = db.findOne('trip_members', (m) => m.tripId === tripId && (m.id === split.memberId || m.userId === split.memberId));
+      if (!member) {
+        member = {
+          id: split.memberId,
+          tripId,
+          displayName: split.displayName || `Member ${split.memberId.replace(/^mbr_/, '').substring(0, 6)}`,
+          role: 'member',
+          isVirtual: true,
+          claimToken: `clm_${crypto.randomUUID().replace(/-/g, '').substring(0, 8)}`,
+          joinedAt: now,
+        };
+        db.insert('trip_members', member);
+      }
       if (!Number.isInteger(split.amountInPaise) || split.amountInPaise < 0) {
         throw AppError.badRequest('Each split amount must be a non-negative integer in paise');
       }
@@ -348,7 +434,6 @@ class ExpenseService {
       );
     }
 
-    const now = new Date().toISOString();
     const updated = {
       ...existing,
       title: title.trim(),

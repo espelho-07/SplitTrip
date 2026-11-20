@@ -71,6 +71,7 @@ void main() {
     );
 
     await storage.saveTrips([testTrip.toJson()]);
+    await storage.saveUser(testUser.toJson());
   });
 
   group('Critical Offline Trip Completion & Dependency-Aware Sync Suite', () {

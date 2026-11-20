@@ -60,5 +60,92 @@ void main() {
       expect(processedRequests.length, 2);
       expect(processedRequests.any((p) => p.contains('/trips')), isTrue);
     });
+
+    test('Quarantined mutations do not count toward pendingMutationCount and do not cause infinite pending loop', () async {
+      final mockClient = MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'data': {'success': true}
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+      final apiClient = ApiClient(httpClient: mockClient);
+
+      // Enqueue a mutation
+      await syncService.enqueueMutation(MutationType.addExpense, {
+        'tripId': 'trip_100',
+        'title': 'Train',
+        'amountInPaise': 181600,
+      });
+
+      expect(syncService.pendingMutationCount, 1);
+      expect(syncService.quarantinedCount, 0);
+
+      // Quarantining the mutation directly simulates max retries or divergence
+      final rawQueue = syncService.getAllMutations();
+      rawQueue[0] = rawQueue[0].copyWith(syncState: SyncState.quarantined, retryCount: 5);
+      await storage.saveMutationQueue(rawQueue.map((m) => m.toJson()).toList());
+
+      // pendingMutationCount MUST be 0 now!
+      expect(syncService.pendingMutationCount, 0);
+      expect(syncService.quarantinedCount, 1);
+
+      // Status updates observed during flushQueue
+      final emittedStatuses = <SyncStatus>[];
+      final sub = syncService.statusStream.listen(emittedStatuses.add);
+
+      // flushQueue should NOT set syncing, and should transition to error with clear explanation
+      await syncService.flushQueue(apiClient);
+
+      expect(emittedStatuses.contains(SyncStatus.syncing), isFalse,
+          reason: 'flushQueue must not flash SyncStatus.syncing when no actionable mutations exist');
+      expect(syncService.currentStatus, SyncStatus.error);
+      expect(syncService.lastErrorMessage, contains('could not be synced'));
+
+      // Tapping retry unquarantines and flushes successfully
+      await syncService.retryQuarantinedMutations(apiClient);
+      expect(syncService.pendingMutationCount, 0);
+      expect(syncService.quarantinedCount, 0);
+      expect(syncService.currentStatus, SyncStatus.synced);
+
+      await sub.cancel();
+    });
+
+    test('flushQueue with empty queue immediately resolves to SyncStatus.synced without flashing syncing', () async {
+      final mockClient = MockClient((request) async {
+        return http.Response(jsonEncode({'data': {}}), 200);
+      });
+      final apiClient = ApiClient(httpClient: mockClient);
+
+      final emittedStatuses = <SyncStatus>[];
+      final sub = syncService.statusStream.listen(emittedStatuses.add);
+
+      await syncService.flushQueue(apiClient);
+
+      expect(emittedStatuses.contains(SyncStatus.syncing), isFalse);
+      expect(syncService.currentStatus, SyncStatus.synced);
+      await sub.cancel();
+    });
+
+    test('clearQuarantinedMutations purges quarantined items and resets status cleanly', () async {
+      await syncService.enqueueMutation(MutationType.addExpense, {
+        'tripId': 'trip_100',
+        'title': 'Stuck Expense',
+      });
+      final rawQueue = syncService.getAllMutations();
+      rawQueue[0] = rawQueue[0].copyWith(syncState: SyncState.quarantined);
+      await storage.saveMutationQueue(rawQueue.map((m) => m.toJson()).toList());
+
+      expect(syncService.quarantinedCount, 1);
+      expect(syncService.pendingMutationCount, 0);
+
+      await syncService.clearQuarantinedMutations();
+
+      expect(syncService.quarantinedCount, 0);
+      expect(syncService.pendingMutationCount, 0);
+      expect(syncService.currentStatus, SyncStatus.synced);
+    });
   });
 }
