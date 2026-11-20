@@ -2,7 +2,9 @@ import '../enums/expense_category.dart';
 import '../enums/split_type.dart';
 import '../models/expense_draft.dart';
 import '../models/trip_member.dart';
+import 'advanced_voice_expense_parser.dart';
 import 'multi_expense_voice_parser.dart';
+import 'number_normalization_service.dart';
 
 /// Structured intent extracted from spoken audio transcript.
 class VoiceExpenseIntent {
@@ -186,6 +188,15 @@ class VoiceIntentParser {
     List<TripMember> members,
     String currentUserId,
   ) {
+    final drafts = AdvancedVoiceExpenseParser.parse(
+      transcript,
+      members: members,
+      currentUserId: currentUserId,
+    );
+    if (drafts.isNotEmpty) {
+      return drafts.first;
+    }
+
     final intent = parse(transcript);
     final unresolved = <String>[];
     final candidatePayers = <TripMember>[];
@@ -344,6 +355,9 @@ class VoiceIntentParser {
   }
 
   static int? _extractAmountInPaise(String text) {
+    final normalized = NumberNormalizationService.extractAmountInPaise(text);
+    if (normalized != null) return normalized;
+
     // Check for "k" notation e.g., "6k", "6.5k"
     final kMatch = RegExp(r'(\d+(?:\.\d+)?)\s*k\b').firstMatch(text);
     if (kMatch != null) {

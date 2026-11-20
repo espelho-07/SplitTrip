@@ -22,6 +22,8 @@ class VoiceReviewItem {
   List<TripMember> candidatePayers;
   String? ambiguityMessage;
   String rawInput;
+  DateTime? expenseDate;
+  String currency;
 
   VoiceReviewItem({
     required this.id,
@@ -36,6 +38,8 @@ class VoiceReviewItem {
     this.candidatePayers = const [],
     this.ambiguityMessage,
     this.rawInput = '',
+    this.expenseDate,
+    this.currency = 'INR',
   });
 
   bool get isReady =>
@@ -58,6 +62,8 @@ class VoiceReviewItem {
     List<TripMember>? candidatePayers,
     String? ambiguityMessage,
     String? rawInput,
+    DateTime? expenseDate,
+    String? currency,
   }) {
     return VoiceReviewItem(
       id: id ?? this.id,
@@ -72,6 +78,8 @@ class VoiceReviewItem {
       candidatePayers: candidatePayers ?? this.candidatePayers,
       ambiguityMessage: ambiguityMessage ?? this.ambiguityMessage,
       rawInput: rawInput ?? this.rawInput,
+      expenseDate: expenseDate ?? this.expenseDate,
+      currency: currency ?? this.currency,
     );
   }
 
@@ -90,6 +98,8 @@ class VoiceReviewItem {
       unresolvedFields: unresolvedFields,
       candidatePayers: candidatePayers,
       ambiguityMessage: ambiguityMessage,
+      expenseDate: expenseDate,
+      currency: currency,
     );
   }
 }
@@ -197,6 +207,14 @@ class VoiceReviewViewModel extends ChangeNotifier {
     }
   }
 
+  void updateDate(String id, DateTime newDate) {
+    final idx = _items.indexWhere((i) => i.id == id);
+    if (idx != -1) {
+      _items[idx].expenseDate = newDate;
+      notifyListeners();
+    }
+  }
+
   void removeItem(String id) {
     _items.removeWhere((i) => i.id == id);
     notifyListeners();
@@ -255,6 +273,8 @@ class VoiceReviewViewModel extends ChangeNotifier {
       candidatePayers: List<TripMember>.from(draft.candidatePayers),
       ambiguityMessage: draft.ambiguityMessage,
       rawInput: draft.rawInput,
+      expenseDate: draft.expenseDate,
+      currency: draft.currency ?? trip?.currencyCode ?? 'INR',
     );
   }
 }

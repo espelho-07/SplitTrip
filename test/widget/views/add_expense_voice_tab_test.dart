@@ -70,6 +70,10 @@ void main() {
     await storage.saveTrips([testTrip.toJson()]);
   });
 
+  tearDown(() {
+    tripDetailVm.stopHeartbeat();
+  });
+
   Widget createAddExpenseScreen({int initialTab = 0}) {
     return MultiProvider(
       providers: [
@@ -112,7 +116,9 @@ void main() {
       expect(find.text('TRY SAYING'), findsOneWidget);
       expect(find.textContaining('Maine 4k train ke'), findsOneWidget);
 
+      tripDetailVm.stopHeartbeat();
       await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
     });
 
     testWidgets('Tapping example chip populates transcript and enables process button', (tester) async {
@@ -145,7 +151,9 @@ void main() {
       expect(find.text('DETECTED EXPENSES (3)'), findsOneWidget);
       expect(find.text('Confirm & Save (3)'), findsOneWidget);
 
+      tripDetailVm.stopHeartbeat();
       await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
     });
 
     testWidgets('Confirms and saves multi-expenses into trip repository', (tester) async {
@@ -179,7 +187,8 @@ void main() {
       expect(storedExpenses.any((e) => e.title == 'Train'), isTrue);
       expect(storedExpenses.any((e) => e.title == 'Hotel'), isTrue);
 
-      await tester.pump(const Duration(seconds: 3));
+      tripDetailVm.stopHeartbeat();
+      await tester.pumpAndSettle();
     });
   });
 }

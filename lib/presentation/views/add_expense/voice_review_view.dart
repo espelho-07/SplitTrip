@@ -458,6 +458,35 @@ class _VoiceReviewViewState extends State<VoiceReviewView> {
     );
   }
 
+  String _formatDateChip(DateTime? date) {
+    if (date == null) return 'Today';
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final target = DateTime(date.year, date.month, date.day);
+    final diff = today.difference(target).inDays;
+    if (diff == 0) return 'Today';
+    if (diff == 1) return 'Yesterday';
+    if (diff == 2) return '2 days ago';
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    final mName = (date.month >= 1 && date.month <= 12) ? months[date.month - 1] : '';
+    return '${date.day} $mName';
+  }
+
+  Future<void> _pickDateForItem(BuildContext context, VoiceReviewItem item) async {
+    final now = DateTime.now();
+    final initialDate = item.expenseDate ?? now;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate.isAfter(now) ? now : initialDate,
+      firstDate: DateTime(2020),
+      lastDate: now,
+    );
+    if (picked != null) {
+      HapticHelper.light();
+      _viewModel.updateDate(item.id, picked);
+    }
+  }
+
   void _handleConfirm() {
     if (!_viewModel.isValid) {
       HapticHelper.warning();
@@ -779,35 +808,87 @@ class _VoiceReviewViewState extends State<VoiceReviewView> {
             ],
           ),
 
-          // Payer & Split Info Row
+          // Payer & Date Info Row
           const SizedBox(height: 10),
-          GestureDetector(
-            onTap: () => _showPayerPicker(context, item),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1E2630) : const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.person_outline_rounded, size: 14, color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
-                  const SizedBox(width: 5),
-                  Text(
-                    'Paid by ${item.payerName ?? "You"} • Split equally',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                    ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              GestureDetector(
+                onTap: () => _showPayerPicker(context, item),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1E2630) : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  const SizedBox(width: 4),
-                  Icon(Icons.arrow_drop_down_rounded, size: 16, color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
-                ],
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.person_outline_rounded, size: 14, color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                      const SizedBox(width: 5),
+                      Text(
+                        'Paid by ${item.payerName ?? "You"} • Split equally',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(Icons.arrow_drop_down_rounded, size: 16, color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                    ],
+                  ),
+                ),
               ),
-            ),
+              GestureDetector(
+                onTap: () => _pickDateForItem(context, item),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1E2630) : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.calendar_today_rounded, size: 12, color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                      const SizedBox(width: 5),
+                      Text(
+                        _formatDateChip(item.expenseDate),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(Icons.edit_calendar_rounded, size: 12, color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
+
+          // Interactive Candidate Payer Disambiguation Chips
+          if (item.candidatePayers.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: item.candidatePayers.map((m) {
+                return ActionChip(
+                  avatar: const Icon(Icons.check_circle_outline_rounded, size: 14),
+                  label: Text('Select ${m.displayName}', style: const TextStyle(fontSize: 11)),
+                  onPressed: () {
+                    HapticHelper.selection();
+                    _viewModel.updatePayer(item.id, m.id, m.displayName);
+                  },
+                );
+              }).toList(),
+            ),
+          ],
 
           // Ambiguity or Error Warning
           if (hasWarning) ...[

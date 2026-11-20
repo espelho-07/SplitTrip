@@ -24,6 +24,8 @@ class ExpenseDraft {
   final List<String> unresolvedFields;
   final List<TripMember> candidatePayers;
   final String? ambiguityMessage;
+  final DateTime? expenseDate;
+  final String? currency;
 
   const ExpenseDraft({
     required this.amountInPaise,
@@ -39,6 +41,8 @@ class ExpenseDraft {
     this.unresolvedFields = const [],
     this.candidatePayers = const [],
     this.ambiguityMessage,
+    this.expenseDate,
+    this.currency,
   });
 
   bool get isReadyForConfirmation =>
@@ -62,6 +66,8 @@ class ExpenseDraft {
     List<String>? unresolvedFields,
     List<TripMember>? candidatePayers,
     String? ambiguityMessage,
+    DateTime? expenseDate,
+    String? currency,
   }) {
     return ExpenseDraft(
       amountInPaise: amountInPaise ?? this.amountInPaise,
@@ -77,6 +83,8 @@ class ExpenseDraft {
       unresolvedFields: unresolvedFields ?? this.unresolvedFields,
       candidatePayers: candidatePayers ?? this.candidatePayers,
       ambiguityMessage: ambiguityMessage ?? this.ambiguityMessage,
+      expenseDate: expenseDate ?? this.expenseDate,
+      currency: currency ?? this.currency,
     );
   }
 }

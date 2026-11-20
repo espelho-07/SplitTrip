@@ -564,6 +564,10 @@ class AddExpenseViewModel extends ChangeNotifier {
       _selectedParticipantMemberIds.addAll(draft.participantMemberIds);
     }
 
+    if (draft.expenseDate != null) {
+      _createdAt = draft.expenseDate;
+    }
+
     notifyListeners();
   }
 

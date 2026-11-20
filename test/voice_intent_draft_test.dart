@@ -46,7 +46,7 @@ void main() {
 
       expect(draft.source, ExpenseDraftSource.voice);
       expect(draft.amountInPaise, 600000);
-      expect(draft.title, 'Train Tickets');
+      expect(draft.title, 'Train');
       expect(draft.category, ExpenseCategory.transport);
       expect(draft.payerMemberId, 'mbr_alice');
       expect(draft.participantMemberIds.length, 4);
