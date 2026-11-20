@@ -3,7 +3,6 @@ import 'package:kith_app/domain/enums/trip_lifecycle.dart';
 import 'package:kith_app/domain/models/trip.dart';
 import 'package:kith_app/domain/models/trip_member.dart';
 import 'package:kith_app/domain/models/expense.dart';
-import 'package:kith_app/domain/models/expense_split.dart';
 
 void main() {
   group('Goa Beach Trip Critical Production Bug Regression Suite', () {

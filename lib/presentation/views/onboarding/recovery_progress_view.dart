@@ -101,12 +101,13 @@ class _RecoveryProgressViewState extends State<RecoveryProgressView> {
 
       if (user == null) {
         final storage = context.read<LocalStorageService>();
-        final isDeleted = storage.isRecoveryKeyDeleted(key);
+        final isDeleted = storage.isRecoveryKeyDeleted(key) ||
+            (authVm.errorMessage != null && authVm.errorMessage!.toLowerCase().contains('permanently deleted'));
         setState(() {
           _isRecovering = false;
           _errorMessage = isDeleted
               ? "Account Already Deleted\nThis account was permanently deleted and cannot be restored."
-              : "Account Not Found\nNo active account matches this Recovery Key. Please check your key or create a new account.";
+              : (authVm.errorMessage ?? "Account Not Found\nNo active account matches this Recovery Key. Please check your key or create a new account.");
         });
         HapticHelper.error();
         return;

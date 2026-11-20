@@ -320,6 +320,10 @@ class _KithAppState extends State<KithApp> with WidgetsBindingObserver {
       final versionVm = context.read<VersionViewModel>();
       versionVm.checkForUpdates();
       try {
+        final authVm = context.read<AuthViewModel>();
+        unawaited(authVm.validateActiveSession());
+      } catch (_) {}
+      try {
         final syncService = context.read<SyncService>();
         final apiClient = context.read<ApiClient>();
         unawaited(syncService.flushQueue(apiClient, force: true));

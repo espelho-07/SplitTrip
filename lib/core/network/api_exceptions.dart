@@ -54,6 +54,13 @@ class ForbiddenException extends ApiException {
       : super(code: 'FORBIDDEN', statusCode: 403);
 }
 
+class AccountDeletedException extends ApiException {
+  const AccountDeletedException({
+    super.message = 'This account has been permanently deleted.',
+    super.details,
+  }) : super(code: 'ACCOUNT_DELETED', statusCode: 403);
+}
+
 class NotFoundException extends ApiException {
   const NotFoundException({super.message = 'No trip found with this code. Please check and try again.'})
       : super(code: 'NOT_FOUND', statusCode: 404);

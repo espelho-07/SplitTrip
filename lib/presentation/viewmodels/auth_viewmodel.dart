@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../core/network/api_exceptions.dart';
 import '../../data/repositories/user_repository.dart';
 import '../../domain/enums/app_experience_mode.dart';
 import '../../domain/enums/kith_app_mode.dart';
@@ -22,12 +23,27 @@ class AuthViewModel extends ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
 
+  StreamSubscription? _accountDeletedSub;
+
   AuthViewModel({required this.userRepo}) {
     // Fast synchronous local restoration to prevent cold-boot race conditions
     _currentUser = userRepo.getCurrentUser();
     if (_currentUser != null) {
       _authState = AuthState.authenticated;
     }
+
+    _accountDeletedSub = userRepo.accountDeletedEvents.listen((reason) {
+      _currentUser = null;
+      _authState = AuthState.signedOut;
+      _errorMessage = reason;
+      notifyListeners();
+    });
+  }
+
+  @override
+  void dispose() {
+    _accountDeletedSub?.cancel();
+    super.dispose();
   }
 
   GuestUser? get currentUser => _currentUser ??= userRepo.getCurrentUser();
@@ -54,8 +70,9 @@ class AuthViewModel extends ChangeNotifier {
         _authState = AuthState.authenticated;
         _isLoading = false;
         notifyListeners();
-        // Fire non-blocking cloud session sync in background
+        // Fire non-blocking cloud session sync and authoritative active status validation
         unawaited(userRepo.syncSession(localUser));
+        unawaited(validateActiveSession());
         return;
       }
 
@@ -145,13 +162,33 @@ class AuthViewModel extends ChangeNotifier {
         await userRepo.syncSession(user);
       }
       return user;
+    } on AccountDeletedException catch (e) {
+      _currentUser = null;
+      _authState = AuthState.signedOut;
+      _errorMessage = e.message;
+      return null;
     } catch (e) {
+      _currentUser = null;
+      _authState = AuthState.signedOut;
       _errorMessage = 'Invalid recovery key';
       return null;
     } finally {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// Actively checks session status on app resume or periodic sync.
+  Future<void> validateActiveSession() async {
+    if (_currentUser == null) return;
+    try {
+      final isValid = await userRepo.validateActiveAccountStatus();
+      if (!isValid) {
+        _currentUser = null;
+        _authState = AuthState.signedOut;
+        notifyListeners();
+      }
+    } catch (_) {}
   }
 
   Future<GuestUser?> linkAccount({

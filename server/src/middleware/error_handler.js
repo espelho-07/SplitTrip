@@ -39,8 +39,12 @@ class AppError extends Error {
     return new AppError(401, 'UNAUTHORIZED', message);
   }
 
-  static forbidden(message) {
-    return new AppError(403, 'FORBIDDEN', message);
+  static forbidden(message, code = 'FORBIDDEN') {
+    return new AppError(403, code, message);
+  }
+
+  static accountDeleted(message = 'This account has been permanently deleted. Please create a new account.') {
+    return new AppError(403, 'ACCOUNT_DELETED', message);
   }
 
   static notFound(message) {

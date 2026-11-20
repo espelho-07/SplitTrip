@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../network/api_exceptions.dart';
 import 'recovery_key_service.dart';
 
 /// Thrown when a cloud snapshot fetch fails partially or is missing critical datasets,
@@ -394,6 +395,17 @@ class SupabaseCloudSync {
     if (accountId.isEmpty) return false;
 
     try {
+      // 0. Authoritative Security Definer RPC for tombstone tracking & atomic purge
+      try {
+        final rpcRes = await _client.rpc('kith_delete_account', params: {
+          'p_account_id': accountId,
+          'p_recovery_key': recoveryKey.isNotEmpty ? RecoveryKeyService.normalizeKey(recoveryKey) : null,
+        });
+        debugPrint('[SupabaseCloudSync] kith_delete_account RPC result: $rpcRes');
+      } catch (e) {
+        debugPrint('[SupabaseCloudSync] kith_delete_account RPC error: $e');
+      }
+
       // 1. Delete from guest_sessions table
 
       try {
@@ -555,51 +567,78 @@ class SupabaseCloudSync {
         },
       );
 
-      if (rpcRes is Map && rpcRes['success'] == true) {
-        final accountId =
-            rpcRes['id']?.toString() ?? rpcRes['accountId']?.toString() ?? '';
+      if (rpcRes is Map) {
+        if (rpcRes['error'] == 'ACCOUNT_DELETED' ||
+            (rpcRes['success'] == false && rpcRes['error']?.toString().contains('DELETED') == true)) {
+          throw const AccountDeletedException(
+            message: 'This account has been permanently deleted.',
+          );
+        }
+        if (rpcRes['success'] == true) {
+          final accountId =
+              rpcRes['id']?.toString() ?? rpcRes['accountId']?.toString() ?? '';
 
-        final resolvedName = rpcRes['displayName']?.toString() ?? 'Traveler';
+          final resolvedName = rpcRes['displayName']?.toString() ?? 'Traveler';
 
-        setSessionToken(newSessionToken);
+          setSessionToken(newSessionToken);
 
-        _ensureAccountHeader(accountId, sessionToken: newSessionToken);
+          _ensureAccountHeader(accountId, sessionToken: newSessionToken);
 
-        await registerDevice(
-          accountId: accountId,
+          await registerDevice(
+            accountId: accountId,
 
-          deviceId: deviceId,
+            deviceId: deviceId,
 
-          platform: 'android',
+            platform: 'android',
 
-          appVersion: '1.0.1+14',
-        );
+            appVersion: '1.0.1+14',
+          );
 
-        return {
-          'id': accountId,
+          return {
+            'id': accountId,
 
-          'accountId': accountId,
+            'accountId': accountId,
 
-          'displayName': resolvedName,
+            'displayName': resolvedName,
 
-          'display_name': resolvedName,
+            'display_name': resolvedName,
 
-          'recoveryKey': normalizedKey,
+            'recoveryKey': normalizedKey,
 
-          'sessionToken': newSessionToken,
+            'sessionToken': newSessionToken,
 
-          'anonymousToken': 'kith_rec_$accountId',
+            'anonymousToken': 'kith_rec_$accountId',
 
-          'createdAt': rpcRes['createdAt'] ?? DateTime.now().toIso8601String(),
-        };
+            'createdAt': rpcRes['createdAt'] ?? DateTime.now().toIso8601String(),
+          };
+        }
       }
     } catch (rpcErr) {
+      if (rpcErr is AccountDeletedException) rethrow;
       debugPrint(
         '[SupabaseCloudSync] RPC recovery notice (trying direct): $rpcErr',
       );
     }
 
-    // 2. Fallback to direct salted key verification
+    // 2. Direct tombstone check before any fallback
+    try {
+      final keyHash = RecoveryKeyService.hashRecoveryKey(normalizedKey);
+      final tombstoneRows = await _client
+          .from('deleted_accounts')
+          .select('id, account_id')
+          .or('recovery_key_hash.eq.$keyHash,account_id.eq.$normalizedKey')
+          .limit(1);
+      final tList = tombstoneRows as List<dynamic>? ?? [];
+      if (tList.isNotEmpty) {
+        throw const AccountDeletedException(
+          message: 'This account has been permanently deleted.',
+        );
+      }
+    } catch (e) {
+      if (e is AccountDeletedException) rethrow;
+    }
+
+    // 3. Fallback to direct salted key verification
 
     try {
       final response = await _client
@@ -704,10 +743,36 @@ class SupabaseCloudSync {
 
       return null;
     } catch (e) {
+      if (e is AccountDeletedException) rethrow;
       debugPrint('[SupabaseCloudSync] recoverAccount error: $e');
 
       return null;
     }
+  }
+
+  /// Authoritatively checks whether an account or recovery key has been deleted on Supabase.
+  Future<Map<String, dynamic>?> checkAccountStatus({
+    required String accountId,
+    String? recoveryKey,
+  }) async {
+    if (!isAvailable) return null;
+    try {
+      final rpcRes = await _client.rpc(
+        'kith_check_account_status',
+        params: {
+          'p_account_id': accountId,
+          'p_recovery_key': recoveryKey != null && recoveryKey.isNotEmpty
+              ? RecoveryKeyService.normalizeKey(recoveryKey)
+              : null,
+        },
+      );
+      if (rpcRes is Map) {
+        return Map<String, dynamic>.from(rpcRes);
+      }
+    } catch (e) {
+      debugPrint('[SupabaseCloudSync] checkAccountStatus notice: $e');
+    }
+    return null;
   }
 
   /// Fetches all cloud entities for an account to restore local storage.

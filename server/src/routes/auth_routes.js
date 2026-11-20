@@ -130,7 +130,8 @@ router.post('/logout', (req, res, next) => {
 // DELETE /api/auth/account - Permanently delete account and associated cloud data
 router.delete('/account', authMiddleware, (req, res, next) => {
   try {
-    const result = authService.deleteAccount(req.user.id);
+    const { realtimeHub } = require('../realtime/websocket_hub');
+    const result = authService.deleteAccount(req.user.id, realtimeHub);
     res.status(200).json({ data: result });
   } catch (e) {
     next(e);
@@ -140,7 +141,50 @@ router.delete('/account', authMiddleware, (req, res, next) => {
 // POST /api/auth/delete-account - Fallback endpoint for account deletion
 router.post('/delete-account', authMiddleware, (req, res, next) => {
   try {
-    const result = authService.deleteAccount(req.user.id);
+    const { realtimeHub } = require('../realtime/websocket_hub');
+    const result = authService.deleteAccount(req.user.id, realtimeHub);
+    res.status(200).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// POST /api/auth/status - Check whether an account or recovery key is active or permanently deleted
+router.post('/status', (req, res, next) => {
+  try {
+    const { userId: bodyUserId, recoveryKey } = req.body || {};
+    let userId = bodyUserId;
+
+    if (!userId && req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+      const tokenVal = req.headers.authorization.substring(7).trim();
+      const session = require('../db/database').db.findOne('sessions', (s) => s.token === tokenVal);
+      if (session) {
+        userId = session.userId;
+      }
+    }
+
+    const result = authService.checkAccountStatus({ userId, recoveryKey });
+    res.status(200).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// GET /api/auth/status - Query account status
+router.get('/status', (req, res, next) => {
+  try {
+    const { userId: qUserId, recoveryKey } = req.query || {};
+    let userId = qUserId;
+
+    if (!userId && req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+      const tokenVal = req.headers.authorization.substring(7).trim();
+      const session = require('../db/database').db.findOne('sessions', (s) => s.token === tokenVal);
+      if (session) {
+        userId = session.userId;
+      }
+    }
+
+    const result = authService.checkAccountStatus({ userId, recoveryKey });
     res.status(200).json({ data: result });
   } catch (e) {
     next(e);
@@ -162,7 +206,8 @@ router.post('/reviewer-login', (req, res, next) => {
 router.post('/web-delete-request', (req, res, next) => {
   try {
     const { identifier } = req.body || {};
-    const result = authService.deleteAccountByEmailOrKey(identifier);
+    const { realtimeHub } = require('../realtime/websocket_hub');
+    const result = authService.deleteAccountByEmailOrKey(identifier, realtimeHub);
     res.status(200).json({ data: result });
   } catch (e) {
     next(e);

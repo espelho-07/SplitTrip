@@ -9,6 +9,8 @@ class ApiClient {
   final http.Client _httpClient;
   String? _authToken;
   void Function(bool isOnline)? onConnectivityChanged;
+  void Function(String reason)? onAccountDeleted;
+  void Function()? onSessionRevoked;
 
   ApiClient({http.Client? httpClient}) : _httpClient = httpClient ?? http.Client();
 
@@ -186,8 +188,17 @@ class ApiClient {
       case 400:
         throw ValidationException(message: message, details: details);
       case 401:
+        if (code == 'ACCOUNT_DELETED' || message.toLowerCase().contains('permanently deleted')) {
+          onAccountDeleted?.call(message);
+          throw AccountDeletedException(message: message, details: details);
+        }
+        onSessionRevoked?.call();
         throw UnauthorizedException(message: message);
       case 403:
+        if (code == 'ACCOUNT_DELETED' || message.toLowerCase().contains('permanently deleted')) {
+          onAccountDeleted?.call(message);
+          throw AccountDeletedException(message: message, details: details);
+        }
         throw ForbiddenException(message: message);
       case 404:
         throw NotFoundException(message: message);

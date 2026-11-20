@@ -94,6 +94,12 @@ class UserRepository {
     return authService.restoreGuestIfNeeded();
   }
 
+  Stream<String> get accountDeletedEvents => authService.accountDeletedEvents;
+
+  Future<bool> validateActiveAccountStatus() {
+    return authService.validateActiveAccountStatus();
+  }
+
   Future<void> logout() {
     return authService.logout();
   }

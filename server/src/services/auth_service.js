@@ -139,11 +139,13 @@ class AuthService {
     const deletedMatch = db.findOne('deleted_accounts', (d) => {
       if (d.recoveryKeyHash && candidateHashes.has(d.recoveryKeyHash)) return true;
       if (d.recoveryKey && candidateHashes.has(this._hashKey(d.recoveryKey))) return true;
+      if (d.account_id && (d.account_id === rawClean || d.account_id === recoveryKey.trim())) return true;
+      if (d.userId && (d.userId === rawClean || d.userId === recoveryKey.trim())) return true;
       return false;
     });
 
     if (deletedMatch) {
-      throw AppError.forbidden('This account has been permanently deleted. Please create a new account.');
+      throw AppError.accountDeleted('This account has been permanently deleted. Please create a new account.');
     }
 
     if (!user) {
@@ -484,68 +486,100 @@ class AuthService {
     return { success: true };
   }
 
-  deleteAccount(userId) {
+  deleteAccount(userId, realtimeHub = null) {
     if (!userId) {
       throw AppError.badRequest('User ID is required');
     }
 
-    // 0. Register tombstone to permanently invalidate recovery key
+    const alreadyDeleted = db.findOne('deleted_accounts', (d) => d.userId === userId || d.account_id === userId);
+
+    // 0. Register tombstone to permanently invalidate recovery key & user identity
     const user = db.get('users', userId);
-    if (user) {
-      const recoveryKeyHash = user.recoveryKeyHash || (user.recoveryKey ? this._hashKey(user.recoveryKey) : null);
+    const recoveryKey = user ? user.recoveryKey : null;
+    const recoveryKeyHash = user ? (user.recoveryKeyHash || (recoveryKey ? this._hashKey(recoveryKey) : null)) : null;
+    const email = user ? user.email : null;
+
+    if (!alreadyDeleted) {
       db.insert('deleted_accounts', {
         id: crypto.randomUUID(),
+        account_id: userId,
         userId,
         recoveryKeyHash,
-        recoveryKey: user.recoveryKey,
-        email: user.email,
+        recoveryKey,
+        email,
+        reason: 'USER_REQUESTED',
         deletedAt: new Date().toISOString(),
       });
     }
 
-    // 1. Delete all user sessions
+    // 1. Proactive real-time push: broadcast account_deleted and close sockets for all user's devices
+    if (realtimeHub) {
+      try {
+        realtimeHub.broadcastToUser(userId, 'account_deleted', {
+          userId,
+          reason: 'ACCOUNT_DELETED',
+        });
+        realtimeHub.terminateUser(userId);
+      } catch (err) {
+        console.error('[AuthService] Realtime broadcast error on deleteAccount:', err.message);
+      }
+    }
+
+    // 2. Delete all user sessions
     const sessions = db.find('sessions', (s) => s.userId === userId);
     for (const s of sessions) {
       db.delete('sessions', s.id);
     }
 
-    // 2. Delete personal expenses
+    // 3. Unregister all FCM push notification tokens for this user
+    const fcmTokens = db.find('user_fcm_tokens', (t) => t.userId === userId);
+    for (const t of fcmTokens) {
+      db.delete('user_fcm_tokens', t.id);
+    }
+
+    // 4. Delete personal expenses
     const personalExpenses = db.find('personal_expenses', (e) => e.userId === userId);
     for (const exp of personalExpenses) {
       db.delete('personal_expenses', exp.id);
     }
 
-    // 3. Delete personal debts
+    // 5. Delete personal debts
     const personalDebts = db.find('personal_debts', (d) => d.userId === userId);
     for (const debt of personalDebts) {
       db.delete('personal_debts', debt.id);
     }
 
-    // 4. Delete personal repayments
+    // 6. Delete personal repayments
     const personalRepayments = db.find('personal_repayments', (r) => r.userId === userId);
     for (const rep of personalRepayments) {
       db.delete('personal_repayments', rep.id);
     }
 
-    // 5. Delete personal budgets
+    // 7. Delete personal budgets
     const personalBudgets = db.find('personal_budgets', (b) => b.userId === userId);
     for (const b of personalBudgets) {
       db.delete('personal_budgets', b.id);
     }
 
-    // 6. Delete trip memberships
+    // 8. Delete trip memberships
     const tripMembers = db.find('trip_members', (m) => m.userId === userId);
     for (const tm of tripMembers) {
       db.delete('trip_members', tm.id);
     }
 
-    // 7. Delete the user record
-    db.delete('users', userId);
+    // 9. Delete the user record
+    if (user) {
+      db.delete('users', userId);
+    }
 
-    return { success: true, message: 'Account and associated personal/cloud data permanently deleted.' };
+    return {
+      success: true,
+      message: 'Account and associated personal/cloud data permanently deleted.',
+      alreadyDeleted: !!alreadyDeleted,
+    };
   }
 
-  deleteAccountByEmailOrKey(identifier) {
+  deleteAccountByEmailOrKey(identifier, realtimeHub = null) {
     if (!identifier || typeof identifier !== 'string') {
       throw AppError.badRequest('Email address or Recovery Key is required.');
     }
@@ -561,12 +595,68 @@ class AuthService {
     }
 
     if (user) {
-      return this.deleteAccount(user.id);
+      return this.deleteAccount(user.id, realtimeHub);
     }
 
     return {
       success: true,
       message: 'Deletion request processed. No active cloud data found for the provided identifier.',
+    };
+  }
+
+  checkAccountStatus({ userId, recoveryKey }) {
+    if (!userId && !recoveryKey) {
+      throw AppError.badRequest('userId or recoveryKey is required');
+    }
+
+    let candidateHashes = null;
+    let rawClean = null;
+    if (recoveryKey) {
+      const normalizedKey = this._normalizeRecoveryKey(recoveryKey);
+      rawClean = String(recoveryKey).trim().toUpperCase();
+      const noSpecial = rawClean.replace(/[\s\-_:\r\n]/g, '');
+      const strippedKith = noSpecial.startsWith('KITH') ? noSpecial.substring(4) : noSpecial;
+      candidateHashes = new Set([
+        this._hashKey(recoveryKey),
+        this._hashKey(normalizedKey),
+        crypto.createHash('sha256').update(rawClean).digest('hex'),
+        crypto.createHash('sha256').update(noSpecial).digest('hex'),
+        crypto.createHash('sha256').update(normalizedKey).digest('hex'),
+        crypto.createHash('sha256').update(`KITH-${strippedKith}`).digest('hex'),
+        crypto.createHash('sha256').update(strippedKith).digest('hex'),
+      ]);
+    }
+
+    const deletedMatch = db.findOne('deleted_accounts', (d) => {
+      if (userId && (d.userId === userId || d.account_id === userId)) return true;
+      if (candidateHashes) {
+        if (d.recoveryKeyHash && candidateHashes.has(d.recoveryKeyHash)) return true;
+        if (d.recoveryKey && candidateHashes.has(this._hashKey(d.recoveryKey))) return true;
+      }
+      if (rawClean && (d.account_id === rawClean || d.userId === rawClean)) return true;
+      return false;
+    });
+
+    if (deletedMatch) {
+      return {
+        isDeleted: true,
+        status: 'DELETED',
+        deletedAt: deletedMatch.deletedAt || new Date().toISOString(),
+      };
+    }
+
+    const user = userId ? db.get('users', userId) : (candidateHashes ? db.findOne('users', (u) => u.recoveryKeyHash && candidateHashes.has(u.recoveryKeyHash)) : null);
+    if (user) {
+      return {
+        isDeleted: false,
+        status: 'ACTIVE',
+        userId: user.id,
+      };
+    }
+
+    return {
+      isDeleted: false,
+      status: 'NOT_FOUND',
     };
   }
 

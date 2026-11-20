@@ -1128,7 +1128,18 @@ class SyncService {
             if (tId != null) blockedTripIds.add(tId);
             _setStatus(SyncStatus.offline);
             break;
+          } on AccountDeletedException catch (e) {
+            debugPrint('[SyncService] Global account deletion encountered during flush: $e');
+            await clearQueue();
+            _setStatus(SyncStatus.error);
+            break;
           } on ApiException catch (e) {
+            if (e.code == 'ACCOUNT_DELETED' || e.message.toLowerCase().contains('permanently deleted')) {
+              debugPrint('[SyncService] Global account deletion code encountered during flush: ${e.message}');
+              await clearQueue();
+              _setStatus(SyncStatus.error);
+              break;
+            }
             debugPrint(
               '[SyncService] Client error ${e.statusCode} for mutation ${mutation.id}: ${e.message}',
             );

@@ -28,6 +28,14 @@ class RealtimeHub {
       if (token) {
         const session = db.findOne('sessions', (s) => s.token === token);
         if (session) {
+          const isDeleted = db.findOne('deleted_accounts', (d) => d.userId === session.userId || d.account_id === session.userId);
+          if (isDeleted) {
+            try {
+              ws.send(JSON.stringify({ type: 'account_deleted', reason: 'ACCOUNT_DELETED', userId: session.userId }));
+              ws.close(4003, 'Account deleted');
+            } catch (_) {}
+            return;
+          }
           authenticatedUser = db.get('users', session.userId);
         }
       }
@@ -103,6 +111,13 @@ class RealtimeHub {
       if (token) {
         const session = db.findOne('sessions', (s) => s.token === token);
         if (session) {
+          const isDeleted = db.findOne('deleted_accounts', (d) => d.userId === session.userId || d.account_id === session.userId);
+          if (isDeleted) {
+            ws.send(JSON.stringify({ type: 'account_deleted', reason: 'ACCOUNT_DELETED', userId: session.userId }));
+            this._cleanupClient(ws);
+            ws.close(4003, 'Account deleted');
+            return;
+          }
           ws.user = db.get('users', session.userId);
           if (ws.user) {
             this._subscribeUserRoom(ws, ws.user.id);
@@ -117,6 +132,17 @@ class RealtimeHub {
 
     // Handle room subscription
     if (action === 'subscribe') {
+      const checkId = userId || ws.user?.id;
+      if (checkId) {
+        const isDeleted = db.findOne('deleted_accounts', (d) => d.userId === checkId || d.account_id === checkId);
+        if (isDeleted) {
+          ws.send(JSON.stringify({ type: 'account_deleted', reason: 'ACCOUNT_DELETED', userId: checkId }));
+          this._cleanupClient(ws);
+          ws.close(4003, 'Account deleted');
+          return;
+        }
+      }
+
       // User room subscription
       if (userId || message.scope === 'user') {
         const targetUserId = userId || (ws.user ? ws.user.id : null);
@@ -314,6 +340,29 @@ class RealtimeHub {
       }
     }
     return this.isUserOnline(userId);
+  }
+
+  terminateUser(userId) {
+    if (!userId) return;
+    const room = this.userRooms.get(userId);
+    if (room && room.size > 0) {
+      const payload = JSON.stringify({
+        type: 'account_deleted',
+        eventType: 'account_deleted',
+        userId,
+        reason: 'ACCOUNT_DELETED',
+        timestamp: new Date().toISOString(),
+      });
+      for (const client of room) {
+        try {
+          if (client.readyState === WebSocket.OPEN) {
+            client.send(payload);
+            client.close(4003, 'Account deleted');
+          }
+        } catch (_) {}
+      }
+      this.userRooms.delete(userId);
+    }
   }
 
   close() {

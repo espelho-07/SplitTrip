@@ -94,6 +94,12 @@ class RecoveryKeyService {
     return sha256.convert(utf8.encode(token)).toString();
   }
 
+  /// Computes a standard SHA-256 hash of the normalized recovery key for tombstone indexing.
+  static String hashRecoveryKey(String rawKey) {
+    final normalized = normalizeKey(rawKey);
+    return sha256.convert(utf8.encode(normalized)).toString();
+  }
+
   /// Constant-time string equality comparison to protect against timing attacks.
   static bool constantTimeEquals(String a, String b) => _constantTimeEquals(a, b);
 

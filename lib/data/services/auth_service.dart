@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/config/supabase_config.dart';
 import '../../core/network/api_client.dart';
+import '../../core/network/api_exceptions.dart';
 import '../../core/network/realtime_client.dart';
 import '../../core/services/google_auth_service.dart';
 import '../../core/services/recovery_key_service.dart';
@@ -26,6 +27,10 @@ class AuthService {
   final SupabaseGuestSync _supabaseSync;
   final SupabaseCloudSync _cloudSync;
   final Uuid _uuid = const Uuid();
+  StreamSubscription? _realtimeSub;
+  final StreamController<String> _accountDeletedController = StreamController<String>.broadcast();
+
+  Stream<String> get accountDeletedEvents => _accountDeletedController.stream;
 
   AuthService({
     required this.storage,
@@ -37,6 +42,22 @@ class AuthService {
   })  : _secureId = secureIdService ?? SecureIdService(),
         _supabaseSync = supabaseGuestSync ?? SupabaseGuestSync(),
         _cloudSync = supabaseCloudSync ?? SupabaseCloudSync() {
+    // 1. Authoritative global account deletion listener from HTTP layer (401/403 ACCOUNT_DELETED)
+    apiClient.onAccountDeleted = (reason) {
+      unawaited(handleAccountDeletedGlobally(reason: reason));
+    };
+
+    // 2. Authoritative global account deletion listener from WebSocket layer
+    if (realtimeClient != null) {
+      _realtimeSub = realtimeClient!.events.listen((event) {
+        if (event.type == 'account_deleted') {
+          final reason = event.data['reason']?.toString() ??
+              'This account has been deleted on another device.';
+          unawaited(handleAccountDeletedGlobally(reason: reason));
+        }
+      });
+    }
+
     // Re-hydrate session token on startup and sync identity non-blocking
     final user = getCurrentUser();
     if (user != null && user.anonymousToken.isNotEmpty) {
@@ -355,10 +376,12 @@ class AuthService {
     final cleanKey = RecoveryKeyService.normalizeKey(recoveryKey);
     if (cleanKey.isEmpty) return null;
 
-    // Check if locally marked as deleted
+    // 0. Check if locally marked as deleted
     if (storage.isRecoveryKeyDeleted(cleanKey)) {
       debugPrint('[AuthService] Recovery attempt for deleted recovery key rejected: $cleanKey');
-      return null;
+      throw const AccountDeletedException(
+        message: 'This account has been permanently deleted. Please create a new account.',
+      );
     }
 
     final deviceId = storage.getDeviceId();
@@ -373,6 +396,11 @@ class AuthService {
     Map<String, dynamic>? supabaseRow;
     try {
       supabaseRow = await _cloudSync.recoverAccount(cleanKey, deviceId: deviceId);
+    } on AccountDeletedException catch (e) {
+      debugPrint('[AuthService] Supabase account permanently deleted: $e');
+      await storage.markRecoveryKeyDeleted(cleanKey);
+      await storage.removeUserFromRecoveryVault(cleanKey);
+      rethrow;
     } catch (e) {
       debugPrint('[AuthService] Supabase cloud recovery notice: $e');
     }
@@ -441,11 +469,25 @@ class AuthService {
           return user;
         }
       }
+    } on AccountDeletedException catch (e) {
+      debugPrint('[AuthService] Backend account permanently deleted: $e');
+      await storage.markRecoveryKeyDeleted(cleanKey);
+      await storage.removeUserFromRecoveryVault(cleanKey);
+      rethrow;
+    } on ApiException catch (e) {
+      if (e.code == 'ACCOUNT_DELETED' || e.statusCode == 403 || e.message.toLowerCase().contains('permanently deleted')) {
+        await storage.markRecoveryKeyDeleted(cleanKey);
+        await storage.removeUserFromRecoveryVault(cleanKey);
+        throw AccountDeletedException(
+          message: e.message.isNotEmpty ? e.message : 'This account has been permanently deleted.',
+        );
+      }
+      debugPrint('[AuthService] Backend server recovery notice: $e');
     } catch (e) {
-      debugPrint('[AuthService] Backend server recovery notice: ');
+      debugPrint('[AuthService] Backend server recovery notice: $e');
     }
 
-    // 4. Fallback to local device Recovery Vault (if not deleted)
+    // 4. Fallback to local device Recovery Vault (ONLY if not deleted)
     if (!storage.isRecoveryKeyDeleted(cleanKey)) {
       final vaultUserJson = storage.getUserByRecoveryKey(cleanKey);
       if (vaultUserJson != null) {
@@ -457,6 +499,10 @@ class AuthService {
         syncLocalGuestSession(user);
         return user;
       }
+    } else {
+      throw const AccountDeletedException(
+        message: 'This account has been permanently deleted. Please create a new account.',
+      );
     }
 
     return null;
@@ -724,7 +770,9 @@ class AuthService {
 
   Future<GuestUser?> restoreSupabaseSession() => restoreNirniqSession();
 
-  Future<void> logout() async {
+  Future<void> logout({bool isAccountDeletion = false, String? purgeUserId}) async {
+    final current = getCurrentUser();
+    final targetPurgeId = purgeUserId ?? current?.id;
     try {
       final fcmToken = storage.getString('kith_fcm_token');
       if (fcmToken != null && fcmToken.isNotEmpty) {
@@ -746,7 +794,10 @@ class AuthService {
     apiClient.setAuthToken(null);
     realtimeClient?.setAuthToken(null);
     realtimeClient?.disconnect();
-    await storage.clearAllUserData();
+    await storage.clearAllUserData(
+      isAccountDeletion: isAccountDeletion,
+      purgeUserId: targetPurgeId,
+    );
     await _secureId.clearSecureIdentity();
   }
 
@@ -779,7 +830,67 @@ class AuthService {
     }
 
     // 4. Wipe local data, Keystore anchor, and disconnect
-    await logout();
+    await logout(isAccountDeletion: true, purgeUserId: current?.id);
+  }
+
+  /// Authoritative global account deletion handler triggered by WebSocket or 401/403 HTTP response.
+  Future<void> handleAccountDeletedGlobally({String reason = 'This account has been permanently deleted.'}) async {
+    debugPrint('[AuthService] Authoritative global account deletion triggered: $reason');
+    final current = getCurrentUser();
+    if (current != null && current.recoveryKey.isNotEmpty) {
+      await storage.markRecoveryKeyDeleted(current.recoveryKey);
+      await storage.removeUserFromRecoveryVault(current.recoveryKey);
+    }
+    await logout(isAccountDeletion: true, purgeUserId: current?.id);
+    if (!_accountDeletedController.isClosed) {
+      _accountDeletedController.add(reason);
+    }
+  }
+
+  /// Actively validates that the active session has not been deleted on another device.
+  Future<bool> validateActiveAccountStatus() async {
+    final current = getCurrentUser();
+    if (current == null) return false;
+
+    // 1. Check Supabase
+    try {
+      final supaStatus = await _cloudSync.checkAccountStatus(
+        accountId: current.effectiveAccountId,
+        recoveryKey: current.recoveryKey,
+      );
+      if (supaStatus != null &&
+          (supaStatus['is_deleted'] == true ||
+              supaStatus['status'] == 'DELETED' ||
+              supaStatus['error'] == 'ACCOUNT_DELETED')) {
+        await handleAccountDeletedGlobally(reason: 'This account was deleted on another device.');
+        return false;
+      }
+    } catch (_) {}
+
+    // 2. Check Render Backend
+    try {
+      final res = await apiClient.post('/auth/status', body: {
+        'userId': current.id,
+        'recoveryKey': current.recoveryKey,
+      });
+      if (res is Map<String, dynamic>) {
+        final data = res['data'] is Map<String, dynamic> ? res['data'] as Map<String, dynamic> : res;
+        if (data['isDeleted'] == true || data['status'] == 'DELETED') {
+          await handleAccountDeletedGlobally(reason: 'This account was deleted on another device.');
+          return false;
+        }
+      }
+    } on AccountDeletedException catch (e) {
+      await handleAccountDeletedGlobally(reason: e.message);
+      return false;
+    } on ApiException catch (e) {
+      if (e.code == 'ACCOUNT_DELETED' || e.statusCode == 403 || e.message.toLowerCase().contains('permanently deleted')) {
+        await handleAccountDeletedGlobally(reason: e.message);
+        return false;
+      }
+    } catch (_) {}
+
+    return true;
   }
 
   Future<GuestUser?> updatePaymentInfo(String upiId, {String? upiQr}) async {
@@ -834,5 +945,10 @@ class AuthService {
       }
     } catch (_) {}
     return current?.upiId;
+  }
+
+  void dispose() {
+    _realtimeSub?.cancel();
+    _accountDeletedController.close();
   }
 }
