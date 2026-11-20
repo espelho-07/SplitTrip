@@ -9,6 +9,7 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/utils/haptic_feedback_helper.dart';
+import '../../../../core/utils/whatsapp_share_helper.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/currency_display.dart';
 import '../../../../core/widgets/member_avatar.dart';
@@ -2409,6 +2410,44 @@ class _SettlementSheetState extends State<SettlementSheet> {
                     ),
                   ),
                 ),
+
+                if (!isPaid && !isAlreadySettledInCache)
+                  InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () {
+                      final formattedAmt = CurrencyFormatter.formatPaise(s.amountInPaise, currencyCode: widget.trip.currencyCode);
+                      final reminderText = 'Hey $fromName! Just a friendly reminder for our trip "${widget.trip.name}" on Kith: your share of $formattedAmt is pending settlement with $toName. Let me know when settled!';
+                      WhatsAppShareHelper.sendWhatsAppMessage(
+                        context: context,
+                        text: reminderText,
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF25D366).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: const Color(0xFF25D366).withValues(alpha: 0.35),
+                        ),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.share_rounded, size: 14, color: Color(0xFF25D366)),
+                          SizedBox(width: 5),
+                          Text(
+                            'Remind',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF25D366),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
 
                 if (canRecord && widget.onRecordTransfer != null) ...[
                   if (isPaid || isAlreadySettledInCache)

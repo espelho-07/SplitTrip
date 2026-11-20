@@ -18,6 +18,7 @@ import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/kith_amount_calculator_field.dart';
 import '../../../core/widgets/kith_description_input_field.dart';
 import '../../../core/widgets/member_avatar.dart';
+import '../../../core/widgets/waveform_visualizer.dart';
 import '../../../domain/engine/multi_expense_voice_parser.dart';
 import '../../../domain/enums/expense_category.dart';
 import '../../../domain/enums/split_type.dart';
@@ -1219,6 +1220,14 @@ class _AddExpenseViewState extends State<AddExpenseView> {
                   height: 1.4,
                 ),
               ),
+              if (_isVoiceListening) ...[
+                const SizedBox(height: 14),
+                WaveformVisualizer(
+                  isListening: _isVoiceListening,
+                  height: 38,
+                  color: const Color(0xFFE11D48),
+                ),
+              ],
             ],
           ),
         ),

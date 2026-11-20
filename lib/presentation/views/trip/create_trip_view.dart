@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/localization/app_localizations.dart';
+import '../../../core/services/kith_contacts_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_typography.dart';
@@ -103,6 +104,21 @@ class _CreateTripViewState extends State<CreateTripView> {
       context.read<CreateTripViewModel>().addFriendName(text);
       _friendController.clear();
       HapticHelper.light();
+    }
+  }
+
+  Future<void> _pickContact() async {
+    HapticHelper.light();
+    try {
+      final contact = await KithContactsService.pickContact();
+      if (contact != null && contact.name.trim().isNotEmpty) {
+        if (mounted) {
+          context.read<CreateTripViewModel>().addFriendName(contact.name.trim());
+          HapticHelper.medium();
+        }
+      }
+    } catch (e) {
+      debugPrint('[CreateTripView] Failed to pick contact: $e');
     }
   }
 
@@ -1064,6 +1080,28 @@ class _CreateTripViewState extends State<CreateTripView> {
                       ),
                     ),
                     onSubmitted: (_) => _addFriend(),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: _pickContact,
+                child: Container(
+                  height: 46,
+                  width: 46,
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF18222C) : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDark ? const Color(0x1FFFFFFF) : const Color(0xFFE2E8F0),
+                      width: 1.0,
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.contacts_rounded,
+                    color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                    size: 20,
                   ),
                 ),
               ),

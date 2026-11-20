@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/services/kith_contacts_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
@@ -508,10 +509,26 @@ class _ManageMembersViewState extends State<ManageMembersView> {
               controller: controller,
               autofocus: true,
               textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Name',
                 hintText: 'e.g. Rahul',
-                prefixIcon: Icon(Icons.person_outline_rounded),
+                prefixIcon: const Icon(Icons.person_outline_rounded),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.contacts_rounded, color: AppColors.emeraldPrimary),
+                  tooltip: 'Pick from contacts',
+                  onPressed: () async {
+                    HapticHelper.light();
+                    try {
+                      final contact = await KithContactsService.pickContact();
+                      if (contact != null && contact.name.trim().isNotEmpty) {
+                        controller.text = contact.name.trim();
+                        HapticHelper.medium();
+                      }
+                    } catch (e) {
+                      debugPrint('[ManageMembersView] Failed to pick contact: $e');
+                    }
+                  },
+                ),
               ),
             ),
           ],

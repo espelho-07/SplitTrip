@@ -151,6 +151,8 @@ class _KithDescriptionInputFieldState extends State<KithDescriptionInputField> {
                   textCapitalization: TextCapitalization.sentences,
                   minLines: 1,
                   maxLines: 4,
+                  maxLength: 250,
+                  buildCounter: (context, {required currentLength, required isFocused, required maxLength}) => null,
                   style: TextStyle(
                     fontSize: 14.5,
                     fontWeight: FontWeight.w600,
