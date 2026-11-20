@@ -249,16 +249,16 @@ void main() {
         createdAt: now,
       );
 
-      // A. Missing claimToken must throw UnauthorizedException
-      expect(
-        () => TripRepository.processLocalParticipantClaim(
-          trip,
-          claimingUser,
-          claimMemberId: 'mbr_target_01',
-          claimToken: null,
-        ),
-        throwsA(isA<UnauthorizedException>()),
+      // A. QR Code / Invite Code join flow (claimToken is null) must succeed
+      final qrClaimedTrip = TripRepository.processLocalParticipantClaim(
+        trip,
+        claimingUser,
+        claimMemberId: 'mbr_target_01',
+        claimToken: null,
       );
+      final qrClaimedMember = qrClaimedTrip.members.firstWhere((m) => m.id == 'mbr_target_01');
+      expect(qrClaimedMember.userId, equals('usr_alice_real'));
+      expect(qrClaimedMember.isClaimed, isTrue);
 
       // B. Incorrect claimToken must throw UnauthorizedException
       expect(

@@ -6,10 +6,10 @@ const path = require('path');
 describe('Supabase Migrations Integrity & Foreign Key Static Audit', () => {
   const migrationsDir = path.join(__dirname, '..', '..', 'supabase', 'migrations');
 
-  it('Verifies exactly ten migration files exist in supabase/migrations/', () => {
+  it('Verifies all migration files exist in supabase/migrations/ in valid sequence', () => {
     assert.ok(fs.existsSync(migrationsDir), 'supabase/migrations directory must exist');
     const files = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql'));
-    assert.strictEqual(files.length, 10, `Expected 10 migration files, found ${files.length}: ${files.join(', ')}`);
+    assert.strictEqual(files.length, 12, `Expected 12 migration files, found ${files.length}: ${files.join(', ')}`);
   });
 
   it('Verifies all migration files use valid 14-digit timestamp prefixes in ascending order', () => {
@@ -32,7 +32,9 @@ describe('Supabase Migrations Integrity & Foreign Key Static Audit', () => {
       '20261101000003_ipo_guru_centralized_cache.sql',
       '20261101000004_ipo_internal_tables_defense_in_depth.sql',
       '20261101000005_ipo_gmp_last_valid_at.sql',
-      '20261101000006_ipo_atomic_upsert_and_quota_lock.sql'
+      '20261101000006_ipo_atomic_upsert_and_quota_lock.sql',
+      '20261120000001_offline_sync_and_free_tier_optimization.sql',
+      '20261120000002_allow_unclaimed_member_spot_claim.sql'
     ];
 
     assert.deepStrictEqual(files, expected, 'Migration files must match exact ordered sequence');

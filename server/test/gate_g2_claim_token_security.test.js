@@ -50,7 +50,7 @@ test('Gate G.2: Claim Token Security, Validation & IDOR Protection Suite', async
     assert.strictEqual(claimedBob.status, 'claimed');
   });
 
-  await t.test('3. Claiming with MISSING claimToken is rejected with 403 Forbidden', () => {
+  await t.test('3. Claiming via QR code / invite code without claimToken succeeds for unclaimed member', () => {
     const trip = tripService.createTrip(creator, {
       name: 'Beach Trip',
       initialFriendNames: ['Bob'],
@@ -58,17 +58,15 @@ test('Gate G.2: Claim Token Security, Validation & IDOR Protection Suite', async
 
     const bobPlaceholder = trip.members.find((m) => m.displayName === 'Bob');
 
-    assert.throws(() => {
-      // Attacker Eve knows bobPlaceholder.id but does NOT have claimToken
-      tripService.joinTripByCode(attackerEve, trip.inviteCode, {
-        claimMemberId: bobPlaceholder.id,
-      });
-    }, (err) => {
-      assert.strictEqual(err.statusCode, 403);
-      assert.strictEqual(err.code, 'FORBIDDEN');
-      assert.strictEqual(err.message, 'Invalid or missing claim token for this participant.');
-      return true;
+    // User joins via trip inviteCode (e.g. scanned trip QR) without claimToken
+    const updatedTrip = tripService.joinTripByCode(userBob, trip.inviteCode, {
+      claimMemberId: bobPlaceholder.id,
     });
+
+    const claimedBob = updatedTrip.members.find((m) => m.id === bobPlaceholder.id);
+    assert.strictEqual(claimedBob.userId, userBob.id);
+    assert.strictEqual(claimedBob.isClaimed, true);
+    assert.strictEqual(claimedBob.status, 'claimed');
   });
 
   await t.test('4. Claiming with INCORRECT claimToken is rejected with 403 Forbidden', () => {
@@ -121,7 +119,7 @@ test('Gate G.2: Claim Token Security, Validation & IDOR Protection Suite', async
     });
   });
 
-  await t.test('6. Legacy member without claimToken: unauthorized non-creator is rejected (403)', () => {
+  await t.test('6. Legacy member without claimToken: claiming via trip inviteCode succeeds', () => {
     const trip = tripService.createTrip(creator, { name: 'Legacy Trip' });
 
     // Manually simulate a legacy member created before claim tokens existed
@@ -142,17 +140,14 @@ test('Gate G.2: Claim Token Security, Validation & IDOR Protection Suite', async
       pendingMutationsCount: 0,
     });
 
-    // Eve tries to claim legacy member
-    assert.throws(() => {
-      tripService.joinTripByCode(attackerEve, trip.inviteCode, {
-        claimMemberId: legacyMemberId,
-      });
-    }, (err) => {
-      assert.strictEqual(err.statusCode, 403);
-      assert.strictEqual(err.code, 'FORBIDDEN');
-      assert.ok(err.message.includes('requires creator authorization'));
-      return true;
+    // Legitimate friend claiming legacy spot with trip inviteCode
+    const updatedTrip = tripService.joinTripByCode(userBob, trip.inviteCode, {
+      claimMemberId: legacyMemberId,
     });
+
+    const claimedLegacy = updatedTrip.members.find((m) => m.id === legacyMemberId);
+    assert.strictEqual(claimedLegacy.userId, userBob.id);
+    assert.strictEqual(claimedLegacy.isClaimed, true);
   });
 
   await t.test('7. Legacy member without claimToken: creator CAN reclaim their own slot', () => {

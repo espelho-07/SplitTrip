@@ -57,7 +57,7 @@ class _TripPreviewViewState extends State<TripPreviewView> {
     }
   }
 
-  Future<void> _executeJoin() async {
+  Future<void> _executeJoin({String? claimMemberId, String? claimToken}) async {
     if (_preview == null) return;
     final authVm = context.read<AuthViewModel>();
     final joinVm = context.read<JoinTripViewModel>();
@@ -103,7 +103,7 @@ class _TripPreviewViewState extends State<TripPreviewView> {
       if (mounted) stageNotifier.value = 2;
     });
 
-    final trip = await joinVm.joinTrip(user, _preview!.inviteCode);
+    final trip = await joinVm.joinTrip(user, _preview!.inviteCode, claimMemberId, claimToken);
     if (mounted) {
       Navigator.of(context, rootNavigator: true).pop();
       if (trip != null) {
@@ -267,6 +267,107 @@ class _TripPreviewViewState extends State<TripPreviewView> {
                       ),
                     ),
 
+                    if (_preview!.unclaimedMembers.isNotEmpty) ...[
+                      const SizedBox(height: 20),
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF132322) : const Color(0xFFE6F4F1),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: AppColors.emeraldLight.withValues(alpha: 0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.person_pin_rounded, size: 16, color: AppColors.emeraldLight),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Claim Your Spot'.toUpperCase(),
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.8,
+                                    color: AppColors.emeraldLight,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Were you added manually? Claim your spot below to keep your expenses and balance history intact.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            for (final member in _preview!.unclaimedMembers)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8.0),
+                                child: InkWell(
+                                  onTap: () {
+                                    HapticHelper.medium();
+                                    _executeJoin(
+                                      claimMemberId: member.id,
+                                      claimToken: member.claimToken,
+                                    );
+                                  },
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                    decoration: BoxDecoration(
+                                      color: isDark ? const Color(0xFF1B2B28) : Colors.white,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: AppColors.emeraldLight.withValues(alpha: 0.4),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        CircleAvatar(
+                                          radius: 15,
+                                          backgroundColor: AppColors.emeraldLight.withValues(alpha: 0.2),
+                                          child: Text(
+                                            member.displayName.isNotEmpty ? member.displayName[0].toUpperCase() : '?',
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w700,
+                                              color: AppColors.emeraldLight,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            'Join as ${member.displayName}',
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w700,
+                                              color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                                            ),
+                                          ),
+                                        ),
+                                        const Icon(
+                                          Icons.arrow_forward_ios_rounded,
+                                          size: 13,
+                                          color: AppColors.emeraldLight,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+
                     const SizedBox(height: 28),
 
                     // Join Action CTA Button
@@ -299,7 +400,9 @@ class _TripPreviewViewState extends State<TripPreviewView> {
                             const Icon(Icons.check_circle_outline_rounded, size: 20, color: Colors.white),
                             const SizedBox(width: 8),
                             Text(
-                              l10n.joinPreviewConfirm,
+                              _preview!.unclaimedMembers.isNotEmpty
+                                  ? 'Join as New Member'
+                                  : l10n.joinPreviewConfirm,
                               style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
                             ),
                           ],

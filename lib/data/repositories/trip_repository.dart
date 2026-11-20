@@ -212,7 +212,7 @@ class TripRepository {
               id: m.id,
               displayName: m.displayName,
               avatarUrl: m.avatarUrl,
-              claimToken: null,
+              claimToken: m.claimToken,
             ),
           )
           .toList();
@@ -672,14 +672,18 @@ class TripRepository {
         );
       }
 
-      // Secure claimToken validation: require matching claimToken when target member has one
-      if (targetMember.claimToken != null && targetMember.claimToken!.trim().isNotEmpty) {
-        if (claimToken == null || claimToken.trim().isEmpty || claimToken.trim() != targetMember.claimToken!.trim()) {
+      // Secure claimToken validation: If a claimToken was provided, verify it matches
+      if (claimToken != null && claimToken.trim().isNotEmpty) {
+        if (targetMember.claimToken != null &&
+            targetMember.claimToken!.trim().isNotEmpty &&
+            claimToken.trim() != targetMember.claimToken!.trim()) {
           throw const UnauthorizedException(
-            message: 'Invalid or missing claim token for this participant.',
+            message: 'Invalid claim token for this participant.',
           );
         }
       }
+      // If no claimToken was provided, possession of the valid trip invite code authorizes
+      // claiming an unclaimed participant in this trip.
 
       // Legitimate claim: update participant profile preserving ID and expense splits
       updatedMembers[existingIndex] = targetMember.copyWith(

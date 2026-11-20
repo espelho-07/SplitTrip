@@ -337,18 +337,17 @@ class TripService {
         throw AppError.conflict('This member participant has already been claimed.');
       }
 
-      // 2b. Strict claimToken validation
-      if (targetMember.claimToken && typeof targetMember.claimToken === 'string' && targetMember.claimToken.trim().length > 0) {
-        if (!claimToken || typeof claimToken !== 'string' || claimToken.trim() !== targetMember.claimToken.trim()) {
-          throw AppError.forbidden('Invalid or missing claim token for this participant.');
-        }
-      } else {
-        // Safe backward compatibility for legacy members without stored claim tokens:
-        // Prevent unauthorized hijacking by requiring creator authorization.
-        if (trip.creatorId !== user.id) {
-          throw AppError.forbidden('This legacy participant record requires creator authorization to claim.');
+      // 2b. Claim Token Validation:
+      // If a specific claimToken was passed in the request, verify it matches
+      if (claimToken && typeof claimToken === 'string' && claimToken.trim().length > 0) {
+        if (targetMember.claimToken && typeof targetMember.claimToken === 'string' && targetMember.claimToken.trim().length > 0) {
+          if (claimToken.trim() !== targetMember.claimToken.trim()) {
+            throw AppError.forbidden('Invalid or missing claim token for this participant.');
+          }
         }
       }
+      // If no claimToken was passed, possession of the valid trip inviteCode authorizes
+      // claiming any unclaimed participant placeholder in this trip.
 
       // Atomically link user identity to the existing participant record
       // Invalidate claimToken upon successful claim to prevent token reuse

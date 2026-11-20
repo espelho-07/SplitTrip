@@ -5,6 +5,7 @@ import 'package:kith_app/domain/models/trip.dart';
 import 'package:kith_app/domain/models/trip_member.dart';
 import 'package:kith_app/data/services/local_storage_service.dart';
 import 'package:kith_app/core/network/api_client.dart';
+import 'package:kith_app/core/network/api_exceptions.dart';
 import 'package:kith_app/data/services/sync_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -209,6 +210,91 @@ void main() {
       expect(cleanTrip.members.where((m) => m.userId == 'usr_rahul').length, equals(1));
       expect(cleanTrip.members.first.id, equals('mbr_1'));
       expect(cleanTrip.members.any((m) => m.isUnclaimed), isTrue);
+    });
+
+    test('6. User joins via QR / invite code and claims unclaimed spot WITHOUT claimToken -> succeeds', () async {
+      final trip = await tripRepo.createTrip(
+        name: 'Manali Expedition',
+        creator: creatorUser,
+        initialFriendNames: ['Pooja'],
+      );
+      final placeholderPooja = trip.members.firstWhere((m) => m.displayName == 'Pooja');
+      expect(placeholderPooja.isClaimed, isFalse);
+
+      // Pooja scans QR, has only trip.inviteCode, does NOT have a secret claimToken
+      final updatedTrip = await tripRepo.joinTrip(
+        inviteCodeOrId: trip.inviteCode,
+        user: rahulUser, // Rahul claims Pooja's spot
+        claimMemberId: placeholderPooja.id,
+        claimToken: null, // No claimToken provided!
+      );
+
+      expect(updatedTrip.members.length, equals(2));
+      final claimedSpot = updatedTrip.members.firstWhere((m) => m.id == placeholderPooja.id);
+      expect(claimedSpot.userId, equals(rahulUser.id));
+      expect(claimedSpot.isClaimed, isTrue);
+      expect(claimedSpot.isUnclaimed, isFalse);
+    });
+
+    test('7. Preview returns non-null claimToken for unclaimed member placeholders', () async {
+      final trip = await tripRepo.createTrip(
+        name: 'Kasol Trip',
+        creator: creatorUser,
+        initialFriendNames: ['Rohit'],
+      );
+      final placeholderRohit = trip.members.firstWhere((m) => m.displayName == 'Rohit');
+
+      final preview = await tripRepo.getTripPreview(trip.inviteCode);
+      expect(preview, isNotNull);
+      final rohitPreview = preview!.unclaimedMembers.firstWhere((m) => m.displayName == 'Rohit');
+      expect(rohitPreview.claimToken, equals(placeholderRohit.claimToken));
+      expect(rohitPreview.claimToken, isNotNull);
+      expect(rohitPreview.claimToken!.isNotEmpty, isTrue);
+    });
+
+    test('8. Attempting to claim an already claimed member throws ConflictException', () async {
+      final trip = await tripRepo.createTrip(
+        name: 'Shimla Trip',
+        creator: creatorUser,
+        initialFriendNames: ['Simran'],
+      );
+      final placeholderSimran = trip.members.firstWhere((m) => m.displayName == 'Simran');
+
+      // First user claims Simran
+      await tripRepo.joinTrip(
+        inviteCodeOrId: trip.inviteCode,
+        user: rahulUser,
+        claimMemberId: placeholderSimran.id,
+      );
+
+      // Second user tries to claim Simran again
+      expect(
+        () => tripRepo.joinTrip(
+          inviteCodeOrId: trip.inviteCode,
+          user: amanUser,
+          claimMemberId: placeholderSimran.id,
+        ),
+        throwsA(isA<ConflictException>()),
+      );
+    });
+
+    test('9. Supplying a mismatched/invalid claimToken throws UnauthorizedException', () async {
+      final trip = await tripRepo.createTrip(
+        name: 'Ooty Trip',
+        creator: creatorUser,
+        initialFriendNames: ['Karan'],
+      );
+      final placeholderKaran = trip.members.firstWhere((m) => m.displayName == 'Karan');
+
+      expect(
+        () => tripRepo.joinTrip(
+          inviteCodeOrId: trip.inviteCode,
+          user: rahulUser,
+          claimMemberId: placeholderKaran.id,
+          claimToken: 'wrong_secret_token_12345',
+        ),
+        throwsA(isA<UnauthorizedException>()),
+      );
     });
   });
 }

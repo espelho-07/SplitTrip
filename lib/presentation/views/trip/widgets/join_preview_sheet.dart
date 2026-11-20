@@ -248,9 +248,11 @@ class JoinPreviewSheet extends StatelessWidget {
                                 ? null
                                 : () {
                                     HapticHelper.medium();
-                                    final tokenToPass = (initialClaimMemberId == member.id)
+                                    final tokenToPass = (initialClaimMemberId == member.id &&
+                                            initialClaimToken != null &&
+                                            initialClaimToken!.isNotEmpty)
                                         ? initialClaimToken
-                                        : null;
+                                        : member.claimToken;
                                     onConfirmJoin(
                                       claimMemberId: member.id,
                                       claimToken: tokenToPass,
