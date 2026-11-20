@@ -10,7 +10,6 @@ import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/utils/haptic_feedback_helper.dart';
 import '../../../../core/utils/whatsapp_share_helper.dart';
-import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/currency_display.dart';
 import '../../../../core/widgets/member_avatar.dart';
 import '../../../../core/widgets/surface_card.dart';
@@ -1327,16 +1326,8 @@ class _SettlementSheetState extends State<SettlementSheet> {
             ),
           ),
 
-          if (widget.onMarkSettled != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8.0),
-              child: AppButton(
-                text: l10n.settlementMarkAllDone,
-                icon: Icons.check_circle_rounded,
-                isFullWidth: true,
-                onPressed: _handleMarkAllDone,
-              ),
-            ),
+          // Bottom spacer for comfortable scroll
+          const SizedBox(height: 8),
         ],
       ),
     );
@@ -2602,76 +2593,5 @@ class _SettlementSheetState extends State<SettlementSheet> {
         ],
       ),
     );
-  }
-
-  void _handleMarkAllDone() {
-    final remainingSettlements = widget.balanceSummary.simplifiedSettlements;
-    final totalPendingPaise = remainingSettlements.fold(0, (sum, s) => sum + s.amountInPaise);
-
-    if (totalPendingPaise > 0) {
-      final isDark = Theme.of(context).brightness == Brightness.dark;
-      final formattedTotal = CurrencyFormatter.formatPaise(totalPendingPaise, currencyCode: widget.trip.currencyCode);
-
-      showDialog(
-        context: context,
-        builder: (dCtx) => AlertDialog(
-          backgroundColor: isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard,
-          shape: const RoundedRectangleBorder(borderRadius: AppRadius.lgBorder),
-          title: Row(
-            children: [
-              const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF14B8A6), size: 24),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Mark All Dues as Settled',
-                  style: AppTypography.titleMedium(isDark: isDark),
-                ),
-              ),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'There is still $formattedTotal pending across members in this trip.\n\nAre you sure you want to mark all outstanding balances as settled?',
-                style: AppTypography.bodyMedium(isDark: isDark),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dCtx),
-              child: Text(
-                'Review Payments',
-                style: TextStyle(color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
-              ),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF14B8A6),
-                foregroundColor: Colors.white,
-                shape: const RoundedRectangleBorder(borderRadius: AppRadius.mdBorder),
-              ),
-              onPressed: () {
-                Navigator.pop(dCtx);
-                Navigator.pop(context);
-                final tripDetailVm = Provider.of<TripDetailViewModel?>(context, listen: false);
-                if (tripDetailVm != null) {
-                  tripDetailVm.settleAllRemainingDues(widget.currentUserId);
-                  KithSuccessToast.show(context, '🎉 All dues marked as settled!');
-                } else {
-                  widget.onMarkSettled?.call();
-                }
-              },
-              child: const Text('Yes, Settle All'),
-            ),
-          ],
-        ),
-      );
-    } else {
-      Navigator.pop(context);
-      widget.onMarkSettled?.call();
-    }
   }
 }

@@ -281,7 +281,6 @@ class _TripDetailViewState extends State<TripDetailView> {
 
   void _showCompleteTripConfirmation() {
     final tripDetailVm = context.read<TripDetailViewModel>();
-    final authVm = context.read<AuthViewModel>();
     final trip = tripDetailVm.trip;
     if (trip == null) return;
 
@@ -314,19 +313,16 @@ class _TripDetailViewState extends State<TripDetailView> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'There is still $formattedTotal pending across members in this trip.\n\nAre you sure you want to mark all remaining bills as settled and complete the trip?',
+                'There is still $formattedTotal pending across members in this trip.\n\nPlease settle outstanding balances between members before completing this trip.',
                 style: AppTypography.bodyMedium(isDark: isDark),
               ),
             ],
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.pop(dCtx);
-                _showSettlementSheet();
-              },
+              onPressed: () => Navigator.pop(dCtx),
               child: Text(
-                'Review Payments',
+                'Dismiss',
                 style: TextStyle(color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
               ),
             ),
@@ -336,21 +332,11 @@ class _TripDetailViewState extends State<TripDetailView> {
                 foregroundColor: Colors.white,
                 shape: const RoundedRectangleBorder(borderRadius: AppRadius.mdBorder),
               ),
-              onPressed: () async {
+              onPressed: () {
                 Navigator.pop(dCtx);
-                final currentUserId = authVm.currentUser?.id ?? '';
-                await tripDetailVm.settleAllRemainingDues(currentUserId);
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('🎉 All bills marked as settled & trip completed!'),
-                      backgroundColor: Color(0xFF14B8A6),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                }
+                _showSettlementSheet();
               },
-              child: const Text('Yes, Settle All & Complete'),
+              child: const Text('Review Payments'),
             ),
           ],
         ),
@@ -407,14 +393,6 @@ class _TripDetailViewState extends State<TripDetailView> {
             currentUserId: authVm.currentUser?.id ?? '',
             fromUserId: fromMember?.userId,
             toUserId: toMember?.userId,
-          );
-        },
-        onMarkSettled: () {
-          if (trip.lifecycleState == TripLifecycle.settling || trip.lifecycleState == TripLifecycle.completing) {
-            tripDetailVm.markAsSettled(authVm.currentUser?.id ?? '');
-          }
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('🎉 All dues marked as settled!')),
           );
         },
       ),
