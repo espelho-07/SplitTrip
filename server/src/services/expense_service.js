@@ -54,6 +54,23 @@ class ExpenseService {
       isLateReconciled = true;
     }
 
+    // Helper to resolve member across id, userId, mergedIntoMemberId, or display name
+    const findMemberInTrip = (idOrUserId) => {
+      if (!idOrUserId) return null;
+      let found = db.findOne('trip_members', (m) =>
+        m.tripId === tripId && (m.id === idOrUserId || m.userId === idOrUserId || m.mergedIntoMemberId === idOrUserId)
+      );
+      if (found) return found;
+
+      if (typeof idOrUserId === 'string' && idOrUserId.trim().length > 0) {
+        found = db.findOne('trip_members', (m) =>
+          m.tripId === tripId && m.displayName && m.displayName.trim().toLowerCase() === idOrUserId.trim().toLowerCase()
+        );
+        if (found) return found;
+      }
+      return null;
+    };
+
     // Verify payer member exists in trip or validate multi-payer allocation
     let validatedPaidByMap = null;
     let payerMember = null;
@@ -62,7 +79,7 @@ class ExpenseService {
       let paidBySum = 0;
       validatedPaidByMap = {};
       for (const [pId, amt] of Object.entries(paidByMap)) {
-        const member = db.findOne('trip_members', (m) => m.tripId === tripId && (m.id === pId || m.userId === pId));
+        const member = findMemberInTrip(pId);
         if (!member) {
           throw AppError.badRequest(`Payer member ${pId} is not part of this trip`);
         }
@@ -79,14 +96,18 @@ class ExpenseService {
         );
       }
       if (paidById) {
-        payerMember = db.findOne('trip_members', (m) => m.tripId === tripId && (m.id === paidById || m.userId === paidById));
+        payerMember = findMemberInTrip(paidById);
       }
       if (!payerMember && Object.keys(validatedPaidByMap).length > 0) {
         const firstPayerId = Object.keys(validatedPaidByMap)[0];
         payerMember = db.get('trip_members', firstPayerId);
       }
     } else {
-      payerMember = db.findOne('trip_members', (m) => m.tripId === tripId && (m.id === paidById || m.userId === paidById));
+      payerMember = findMemberInTrip(paidById);
+    }
+
+    if (!payerMember) {
+      payerMember = authMember;
     }
 
     if (!payerMember) {
@@ -106,7 +127,7 @@ class ExpenseService {
         throw AppError.badRequest('Each split must specify a valid memberId');
       }
 
-      const member = db.findOne('trip_members', (m) => m.tripId === tripId && (m.id === split.memberId || m.userId === split.memberId));
+      const member = findMemberInTrip(split.memberId);
       if (!member) {
         throw AppError.badRequest(`Split participant ${split.memberId} is not in this trip`);
       }

@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/haptic_feedback_helper.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../data/services/p2p_sync_service.dart';
 import '../../../../data/services/sync_service.dart';
 import '../../../../domain/models/trip.dart';
@@ -94,6 +96,14 @@ class _NearbyTripFriendsRadarSheetState extends State<NearbyTripFriendsRadarShee
     });
     HapticHelper.selection();
 
+    // 1. Opportunistically flush local outbox to cloud if online
+    try {
+      final apiClient = context.read<ApiClient>();
+      await widget.syncService.flushQueue(apiClient, force: true);
+      await widget.syncService.syncTripBatchWithServer(apiClient, widget.trip.id);
+    } catch (_) {}
+
+    // 2. Perform direct offline P2P mesh synchronization
     final res = await widget.p2pService.syncAllNearbyPeers(targetTripId: widget.trip.id);
 
     if (mounted) {
@@ -105,6 +115,58 @@ class _NearbyTripFriendsRadarSheetState extends State<NearbyTripFriendsRadarShee
         HapticHelper.success();
         widget.onSyncCompleted?.call();
       } else {
+        HapticHelper.error();
+      }
+    }
+  }
+
+  Future<void> _handleCloudAndMeshSync() async {
+    if (_isSyncingAll) return;
+    setState(() {
+      _isSyncingAll = true;
+      _meshResult = null;
+    });
+    HapticHelper.selection();
+
+    try {
+      final apiClient = context.read<ApiClient>();
+      // 1. Flush pending outbox mutations
+      await widget.syncService.flushQueue(apiClient, force: true);
+      // 2. Authoritative batch sync for this trip from server
+      await widget.syncService.syncTripBatchWithServer(apiClient, widget.trip.id);
+      // 3. Restart discovery beacon burst for nearby friends
+      await widget.p2pService.startDiscoverySession(timeout: const Duration(seconds: 30));
+      // 4. Try syncing with any newly detected peers
+      final res = await widget.p2pService.syncAllNearbyPeers(targetTripId: widget.trip.id);
+
+      if (mounted) {
+        setState(() {
+          _isSyncingAll = false;
+          _meshResult = res.success && res.totalPeersSynced > 0
+              ? res
+              : NearbyMeshSyncResult(
+                  success: true,
+                  totalPeersSynced: 0,
+                  operationsSent: 0,
+                  operationsReceived: 0,
+                  errorMessage: null,
+                );
+        });
+        HapticHelper.success();
+        widget.onSyncCompleted?.call();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isSyncingAll = false;
+          _meshResult = NearbyMeshSyncResult(
+            success: false,
+            totalPeersSynced: 0,
+            operationsSent: 0,
+            operationsReceived: 0,
+            errorMessage: 'Could not connect to cloud or mesh friends',
+          );
+        });
         HapticHelper.error();
       }
     }
@@ -318,7 +380,9 @@ class _NearbyTripFriendsRadarSheetState extends State<NearbyTripFriendsRadarShee
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: nearbyPeersForTrip.isNotEmpty && !_isSyncingAll ? _handleSyncAll : null,
+                  onPressed: !_isSyncingAll
+                      ? (nearbyPeersForTrip.isNotEmpty ? _handleSyncAll : _handleCloudAndMeshSync)
+                      : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
                     foregroundColor: Colors.white,
@@ -328,30 +392,35 @@ class _NearbyTripFriendsRadarSheetState extends State<NearbyTripFriendsRadarShee
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
                   child: _isSyncingAll
-                      ? const Row(
+                      ? Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            SizedBox(
+                            const SizedBox(
                               width: 18,
                               height: 18,
                               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                             ),
-                            SizedBox(width: 10),
+                            const SizedBox(width: 10),
                             Text(
-                              'Syncing Mesh with Friends...',
-                              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                              nearbyPeersForTrip.isNotEmpty
+                                  ? 'Syncing Mesh with Friends...'
+                                  : 'Syncing with Cloud & Friends...',
+                              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
                             ),
                           ],
                         )
                       : Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.bolt_rounded, size: 20),
-                            const SizedBox(width: 6),
+                            Icon(
+                              nearbyPeersForTrip.isNotEmpty ? Icons.bolt_rounded : Icons.cloud_sync_rounded,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
                             Text(
-                              nearbyPeersForTrip.isEmpty
-                                  ? 'No Friends in Range'
-                                  : 'Sync All Nearby Friends (${nearbyPeersForTrip.length})',
+                              nearbyPeersForTrip.isNotEmpty
+                                  ? 'Sync All Nearby Friends (${nearbyPeersForTrip.length})'
+                                  : 'Sync Trip with Cloud & Friends',
                               style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5),
                             ),
                           ],
@@ -442,7 +511,7 @@ class _NearbyTripFriendsRadarSheetState extends State<NearbyTripFriendsRadarShee
                   child: Text(
                     nearbyCount > 0
                         ? '$nearbyCount friend${nearbyCount > 1 ? "s" : ""} connected on mesh'
-                        : 'Broadcasting zero-data mesh beacon...',
+                        : 'Broadcasting zero-data mesh beacon (Wi-Fi/Hotspot)...',
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -481,7 +550,9 @@ class _NearbyTripFriendsRadarSheetState extends State<NearbyTripFriendsRadarShee
               isSuccess
                   ? (res.totalChanges > 0
                       ? 'Synced ${res.totalChanges} changes across ${res.totalPeersSynced} friends!'
-                      : 'All nearby friends are already up to date!')
+                      : (res.totalPeersSynced > 0
+                          ? 'All nearby friends are already up to date!'
+                          : 'Trip synced with Cloud! (Connect to same Wi-Fi or Hotspot for offline P2P mesh)'))
                   : 'Sync failed: ${res.errorMessage ?? "Network issue"}',
               style: TextStyle(
                 fontSize: 12.5,

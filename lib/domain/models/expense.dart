@@ -101,17 +101,24 @@ class Expense {
         (json['amount_in_paise'] as num?)?.toInt() ??
         ((json['amount'] as num?)?.toDouble() != null ? ((json['amount'] as num).toDouble() * 100).round() : 0),
     category: ExpenseCategory.fromString((json['category'] ?? 'general').toString()),
-    paidById: (json['paidById'] ?? json['paid_by_id'] ?? json['paidByMemberId'])?.toString() ??
+    paidById: (json['paidById'] ??
+            json['paid_by_id'] ??
+            json['paid_by_member_id'] ??
+            json['paidByMemberId'] ??
+            json['paidByUserId'] ??
+            json['paid_by_user_id'])?.toString() ??
         (json['paidByMap'] is Map && (json['paidByMap'] as Map).isNotEmpty
             ? (json['paidByMap'] as Map).keys.first.toString()
-            : ''),
+            : (json['paid_by_map'] is Map && (json['paid_by_map'] as Map).isNotEmpty
+                ? (json['paid_by_map'] as Map).keys.first.toString()
+                : '')),
     paidByMap: json['paidByMap'] != null && json['paidByMap'] is Map
         ? (json['paidByMap'] as Map).map((k, v) => MapEntry(k.toString(), (v as num).toInt()))
         : (json['paid_by_map'] != null && json['paid_by_map'] is Map
             ? (json['paid_by_map'] as Map).map((k, v) => MapEntry(k.toString(), (v as num).toInt()))
             : null),
     splits: (json['splits'] as List<dynamic>?)
-            ?.map((e) => ExpenseSplit.fromJson(e as Map<String, dynamic>))
+            ?.map((e) => ExpenseSplit.fromJson(e is Map<String, dynamic> ? e : Map<String, dynamic>.from(e as Map)))
             .toList() ??
         [],
     splitType: SplitType.fromString((json['splitType'] ?? json['split_type'] ?? 'equal').toString()),

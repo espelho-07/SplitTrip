@@ -779,6 +779,19 @@ class TripRepository {
       throw StateError('Trip not found');
     }
 
+    // Only the trip creator can transition a trip to completed or settled
+    final currentUser = storage.getSavedUser();
+    final currentUserId = currentUser?['id'] as String? ?? currentUser?['accountId'] as String?;
+    final targetTrip = trips[index];
+    final isCreator = currentUserId != null &&
+        (targetTrip.creatorId == currentUserId ||
+            targetTrip.members.any((m) => m.userId == currentUserId && m.isCreator));
+    if (!isCreator &&
+        (newLifecycle == TripLifecycle.completed ||
+            newLifecycle == TripLifecycle.settled)) {
+      throw StateError('Only the trip creator can complete or settle this trip.');
+    }
+
     // Determine target local lifecycle:
     // If completing a trip and pending un-synced operations exist for this trip,
     // transition locally to `completing` ("Finishing sync") rather than jumping to `completed`.
@@ -1333,31 +1346,55 @@ class TripRepository {
 
   /// Reconciles duplicate members sharing the same user ID safely.
   Trip reconcileDuplicateMembers(Trip trip) {
-    final byUserId = <String, List<TripMember>>{};
-    for (final m in trip.members) {
-      if (m.userId.isEmpty || m.isUnclaimed) continue;
-      byUserId.putIfAbsent(m.userId, () => []).add(m);
-    }
-
-    var hasDuplicates = false;
-    for (final list in byUserId.values) {
-      if (list.length > 1) {
-        hasDuplicates = true;
-        break;
-      }
-    }
-    if (!hasDuplicates) return trip;
-
+    final translationMap = <String, String>{};
     final deduplicated = <TripMember>[];
     final seenUserIds = <String>{};
+    final claimedNames = <String, TripMember>{};
 
+    // First pass: Index claimed non-virtual members by normalized display name
     for (final m in trip.members) {
-      if (m.isUnclaimed || m.userId.isEmpty) {
+      if (!m.isVirtual && m.isClaimed && m.userId.isNotEmpty && !m.userId.startsWith('unclaimed_')) {
+        final normName = m.displayName.trim().toLowerCase();
+        if (normName.isNotEmpty && normName != 'member' && normName != 'traveler') {
+          claimedNames[normName] = m;
+        }
+      }
+    }
+
+    // Second pass: Deduplicate by matching claimed name and by userId
+    for (final m in trip.members) {
+      if (m.isVirtual && !m.isClaimed && (m.userId.isEmpty || m.userId.startsWith('unclaimed_'))) {
+        final normName = m.displayName.trim().toLowerCase();
+        final matchingClaimed = claimedNames[normName];
+        if (matchingClaimed != null) {
+          // Collapse duplicate virtual member into claimed real member
+          translationMap[m.id] = matchingClaimed.id;
+          continue;
+        }
         deduplicated.add(m);
-      } else if (!seenUserIds.contains(m.userId)) {
-        seenUserIds.add(m.userId);
+      } else if (m.userId.isNotEmpty && !m.userId.startsWith('unclaimed_')) {
+        if (!seenUserIds.contains(m.userId)) {
+          seenUserIds.add(m.userId);
+          deduplicated.add(m);
+        } else {
+          // Find canonical member already added for this userId
+          final canonical = deduplicated.firstWhere((cand) => cand.userId == m.userId);
+          translationMap[m.id] = canonical.id;
+        }
+      } else {
         deduplicated.add(m);
       }
+    }
+
+    if (translationMap.isNotEmpty) {
+      storage.translateMemberIds(
+        tripId: trip.id,
+        translationMap: translationMap,
+      );
+    }
+
+    if (deduplicated.length == trip.members.length && translationMap.isEmpty) {
+      return trip;
     }
 
     return trip.copyWith(members: deduplicated, updatedAt: DateTime.now());

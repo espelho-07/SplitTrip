@@ -405,9 +405,11 @@ class SyncService {
     _setStatus(SyncStatus.synced);
   }
 
-  /// Returns all pending mutations for a specific trip.
+  /// Returns all pending mutations for a specific trip, excluding permanently quarantined operations.
   List<SyncMutation> getPendingMutationsForTrip(String tripId) {
-    return getPendingMutations().where((m) => m.tripId == tripId).toList();
+    return getPendingMutations()
+        .where((m) => m.tripId == tripId && m.syncState != SyncState.quarantined)
+        .toList();
   }
 
   /// Returns the number of pending mutations for a specific trip.
@@ -1162,6 +1164,17 @@ class SyncService {
               // Already resolved conflict / duplicate -> acknowledge safely
               completedMutationIds.add(mutation.id);
               await removeMutation(mutation.id);
+            } else if (e.statusCode == 403 &&
+                mutation.type == MutationType.updateTripLifecycle) {
+              // Unauthorized lifecycle transition by non-creator: Drop mutation and revert local trip state to active
+              debugPrint(
+                '[SyncService] Dropping unauthorized lifecycle mutation ${mutation.id} (403): ${e.message}',
+              );
+              completedMutationIds.add(mutation.id);
+              await removeMutation(mutation.id);
+              if (tId != null) {
+                _promoteLocalTripLifecycle(tId, 'active');
+              }
             } else if (e.statusCode == 404 &&
                 mutation.type == MutationType.deleteExpense &&
                 e.message.toLowerCase().contains('expense not found')) {
@@ -1824,18 +1837,56 @@ await _cloudSync.syncPersonalDebt(payload, accountId: accountId);
         break;
 
       case MutationType.addExpense:
-        final tripId = mutation.tripId ?? (mutation.payload['tripId'] as String?) ?? 'general';
-        await apiClient.post('/trips/$tripId/expenses', body: payload);
-        break;
-
       case MutationType.updateExpense:
         final tripId = mutation.tripId ?? (mutation.payload['tripId'] as String?) ?? 'general';
-        final expenseId =
-            payload['id'] as String? ?? payload['expenseId'] as String? ?? mutation.id;
-        await apiClient.put(
-          '/trips/$tripId/expenses/$expenseId',
-          body: payload,
-        );
+        final expensePayload = Map<String, dynamic>.from(payload);
+
+        // Dynamic member ID self-healing: rewrite any merged or translated member IDs in payload
+        final tripJson = _storage.getSavedTrips().where((t) => t['id'] == tripId).firstOrNull;
+        if (tripJson != null) {
+          final members = tripJson['members'] as List<dynamic>? ?? [];
+          final translationMap = <String, String>{};
+          for (final m in members) {
+            if (m is Map) {
+              final mergedInto = m['mergedIntoMemberId'] ?? m['merged_into_member_id'];
+              final mId = m['id']?.toString();
+              if (mergedInto != null && mId != null && mergedInto != mId) {
+                translationMap[mId] = mergedInto.toString();
+              }
+            }
+          }
+          if (translationMap.isNotEmpty) {
+            final oldPaidBy = expensePayload['paidById']?.toString() ?? expensePayload['paid_by_id']?.toString();
+            if (oldPaidBy != null && translationMap.containsKey(oldPaidBy)) {
+              expensePayload['paidById'] = translationMap[oldPaidBy];
+            }
+            if (expensePayload['splits'] is List) {
+              final splitsList = (expensePayload['splits'] as List).map((s) {
+                if (s is Map) {
+                  final sMap = Map<String, dynamic>.from(s);
+                  final mId = sMap['memberId']?.toString() ?? sMap['member_id']?.toString();
+                  if (mId != null && translationMap.containsKey(mId)) {
+                    sMap['memberId'] = translationMap[mId];
+                  }
+                  return sMap;
+                }
+                return s;
+              }).toList();
+              expensePayload['splits'] = splitsList;
+            }
+          }
+        }
+
+        if (mutation.type == MutationType.addExpense) {
+          await apiClient.post('/trips/$tripId/expenses', body: expensePayload);
+        } else {
+          final expenseId =
+              expensePayload['id'] as String? ?? expensePayload['expenseId'] as String? ?? mutation.id;
+          await apiClient.put(
+            '/trips/$tripId/expenses/$expenseId',
+            body: expensePayload,
+          );
+        }
         break;
 
       case MutationType.deleteExpense:

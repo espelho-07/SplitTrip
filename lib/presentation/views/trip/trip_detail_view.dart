@@ -1731,12 +1731,57 @@ class _TripDetailViewState extends State<TripDetailView> {
   }
 
   Widget _buildCleanExpenseRow(Expense expense, Trip trip, bool isDark, String currentUserId, AppLocalizations l10n) {
-    final payer = trip.members.where((m) => m.id == expense.paidById || m.userId == expense.paidById).firstOrNull;
-    final payerName = payer?.displayName ?? 'Member';
-    final isPayerSelf = payer?.userId == currentUserId || payer?.id == currentUserId;
+    TripMember? payer = trip.members
+        .where((m) =>
+            m.id == expense.paidById ||
+            m.userId == expense.paidById ||
+            (m.mergedIntoMemberId != null && m.mergedIntoMemberId == expense.paidById))
+        .firstOrNull;
 
-    final userSplit = expense.splits.where((s) => s.memberId == currentUserId || (payer != null && s.memberId == payer.id && isPayerSelf)).firstOrNull;
-    final userSharePaise = userSplit?.amountInPaise ?? (expense.amountInPaise ~/ (expense.splits.isNotEmpty ? expense.splits.length : 1));
+    if (payer == null && expense.paidByMap != null && expense.paidByMap!.isNotEmpty) {
+      for (final pId in expense.paidByMap!.keys) {
+        final cand = trip.members
+            .where((m) =>
+                m.id == pId ||
+                m.userId == pId ||
+                (m.mergedIntoMemberId != null && m.mergedIntoMemberId == pId))
+            .firstOrNull;
+        if (cand != null) {
+          payer = cand;
+          break;
+        }
+      }
+    }
+
+    if (payer == null && expense.paidById == trip.creatorId) {
+      payer = trip.members.where((m) => m.isCreator || m.userId == trip.creatorId).firstOrNull;
+    }
+
+    final isPayerSelf = payer?.userId == currentUserId ||
+        payer?.id == currentUserId ||
+        expense.paidById == currentUserId;
+
+    final String payerDisplayName;
+    if (isPayerSelf) {
+      payerDisplayName = l10n.tripDetailYou;
+    } else if (payer != null && payer.displayName.trim().isNotEmpty) {
+      payerDisplayName = payer.displayName.trim();
+    } else {
+      final creator = trip.members.where((m) => m.isCreator).firstOrNull;
+      payerDisplayName = creator?.displayName ?? 'Friend';
+    }
+
+    final userMember = trip.members.where((m) => m.userId == currentUserId || m.id == currentUserId).firstOrNull;
+    final userSplit = expense.splits.where((s) =>
+        s.memberId == currentUserId ||
+        (userMember != null && (s.memberId == userMember.id || s.memberId == userMember.userId))
+    ).firstOrNull;
+    final userSharePaise = userSplit?.amountInPaise ??
+        (isPayerSelf
+            ? expense.amountInPaise
+            : (expense.splits.isNotEmpty
+                ? (expense.amountInPaise ~/ expense.splits.length)
+                : 0));
 
     return SurfaceCard(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -1769,7 +1814,7 @@ class _TripDetailViewState extends State<TripDetailView> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${isPayerSelf ? l10n.tripDetailYou : payerName} paid · ${DateFormatter.formatRelative(expense.createdAt)}',
+                  '$payerDisplayName paid · ${DateFormatter.formatRelative(expense.createdAt)}',
                   style: TextStyle(
                     fontSize: 12,
                     color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
@@ -2593,13 +2638,40 @@ class _TripDetailViewState extends State<TripDetailView> {
             separatorBuilder: (context, index) => const SizedBox(height: AppSpacing.sm),
             itemBuilder: (context, index) {
               final expense = filtered[index];
-              final payer = trip.members.where((m) => m.id == expense.paidById).firstOrNull;
-              final isPayerCurrentUser = payer != null && payer.userId == currentUserId;
+              TripMember? payer = trip.members
+                  .where((m) =>
+                      m.id == expense.paidById ||
+                      m.userId == expense.paidById ||
+                      (m.mergedIntoMemberId != null && m.mergedIntoMemberId == expense.paidById))
+                  .firstOrNull;
+
+              if (payer == null && expense.paidByMap != null && expense.paidByMap!.isNotEmpty) {
+                for (final pId in expense.paidByMap!.keys) {
+                  final cand = trip.members
+                      .where((m) =>
+                          m.id == pId ||
+                          m.userId == pId ||
+                          (m.mergedIntoMemberId != null && m.mergedIntoMemberId == pId))
+                      .firstOrNull;
+                  if (cand != null) {
+                    payer = cand;
+                    break;
+                  }
+                }
+              }
+
+              if (payer == null && expense.paidById == trip.creatorId) {
+                payer = trip.members.where((m) => m.isCreator || m.userId == trip.creatorId).firstOrNull;
+              }
+
+              final isPayerCurrentUser = payer?.userId == currentUserId ||
+                  payer?.id == currentUserId ||
+                  expense.paidById == currentUserId;
 
               // User's share of this expense
-              final userMember = trip.members.where((m) => m.userId == currentUserId).firstOrNull;
+              final userMember = trip.members.where((m) => m.userId == currentUserId || m.id == currentUserId).firstOrNull;
               final userSplit = userMember != null
-                  ? expense.splits.where((s) => s.memberId == userMember.id).firstOrNull
+                  ? expense.splits.where((s) => s.memberId == userMember.id || s.memberId == userMember.userId).firstOrNull
                   : null;
 
               return SurfaceCard(

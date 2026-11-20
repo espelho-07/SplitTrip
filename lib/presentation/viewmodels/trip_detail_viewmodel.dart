@@ -549,9 +549,10 @@ class TripDetailViewModel extends ChangeNotifier {
           paymentReference: 'settle_all_${DateTime.now().millisecondsSinceEpoch}',
         );
       }
-      if (completeTrip ||
-          _trip!.lifecycleState == TripLifecycle.settling ||
-          _trip!.lifecycleState == TripLifecycle.completing) {
+      if ((completeTrip ||
+              _trip!.lifecycleState == TripLifecycle.settling ||
+              _trip!.lifecycleState == TripLifecycle.completing) &&
+          _trip!.isCreator(currentUserId)) {
         await markAsSettled(currentUserId);
       }
       await refresh(currentUserId);
@@ -701,6 +702,10 @@ class TripDetailViewModel extends ChangeNotifier {
 
   Future<void> markAsSettled(String currentUserId) async {
     if (_trip == null) return;
+    if (!_trip!.isCreator(currentUserId)) {
+      // Only the trip creator can settle or complete this trip
+      return;
+    }
     try {
       _trip = await tripRepo.updateLifecycle(
         tripId: _trip!.id,

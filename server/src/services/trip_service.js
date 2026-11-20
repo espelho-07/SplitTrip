@@ -371,31 +371,63 @@ class TripService {
         metadata: { memberId: activeMember.id, claimed: true, originalDisplayName: targetMember.displayName },
       });
     } else {
-      // 3. New Member Flow: create fresh member record
-      activeMember = {
-        id: `mbr_${crypto.randomUUID().replace(/-/g, '').substring(0, 10)}`,
-        tripId: trip.id,
-        userId: user.id,
-        displayName: user.displayName,
-        avatarUrl: user.avatarUrl || null,
-        role: 'member',
-        status: 'claimed',
-        isClaimed: true,
-        joinedAt: now,
-        lastSeenAt: now,
-        lastSyncedRevision: 1,
-        pendingMutationsCount: 0,
-        upiId: user.upiId || null,
-      };
-      db.insert('trip_members', activeMember);
+      // 3. Check for matching unclaimed virtual placeholder by display name
+      const candidateVirtual = db.findOne('trip_members', (m) =>
+        m.tripId === trip.id &&
+        (m.status === 'unclaimed' || (m.userId && m.userId.startsWith('unclaimed_')) || m.isClaimed === false || m.isVirtual === true) &&
+        m.displayName &&
+        user.displayName &&
+        m.displayName.trim().toLowerCase() === user.displayName.trim().toLowerCase()
+      );
 
-      this.logActivity(trip.id, {
-        type: 'member_joined',
-        actorId: user.id,
-        actorName: user.displayName,
-        description: `${user.displayName} joined the trip`,
-        metadata: { memberId: activeMember.id, claimed: false },
-      });
+      if (candidateVirtual) {
+        // Automatically claim the matching placeholder to prevent duplicate members
+        db.update('trip_members', candidateVirtual.id, {
+          userId: user.id,
+          avatarUrl: user.avatarUrl || candidateVirtual.avatarUrl || null,
+          status: 'claimed',
+          isClaimed: true,
+          claimToken: null,
+          joinedAt: now,
+          lastSeenAt: now,
+          upiId: user.upiId || candidateVirtual.upiId || null,
+        });
+        activeMember = db.get('trip_members', candidateVirtual.id);
+
+        this.logActivity(trip.id, {
+          type: 'member_joined',
+          actorId: user.id,
+          actorName: user.displayName,
+          description: `${user.displayName} joined as ${candidateVirtual.displayName}`,
+          metadata: { memberId: activeMember.id, claimed: true, originalDisplayName: candidateVirtual.displayName },
+        });
+      } else {
+        // Create fresh member record
+        activeMember = {
+          id: `mbr_${crypto.randomUUID().replace(/-/g, '').substring(0, 10)}`,
+          tripId: trip.id,
+          userId: user.id,
+          displayName: user.displayName,
+          avatarUrl: user.avatarUrl || null,
+          role: 'member',
+          status: 'claimed',
+          isClaimed: true,
+          joinedAt: now,
+          lastSeenAt: now,
+          lastSyncedRevision: 1,
+          pendingMutationsCount: 0,
+          upiId: user.upiId || null,
+        };
+        db.insert('trip_members', activeMember);
+
+        this.logActivity(trip.id, {
+          type: 'member_joined',
+          actorId: user.id,
+          actorName: user.displayName,
+          description: `${user.displayName} joined the trip`,
+          metadata: { memberId: activeMember.id, claimed: false },
+        });
+      }
     }
 
     db.update('trips', trip.id, { updatedAt: now });
