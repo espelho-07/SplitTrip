@@ -1903,12 +1903,13 @@ class LocalStorageService {
         getSavedUser()?['accountId'] as String?;
     if (databaseService != null) {
       databaseService!.clearAllData(
-        preserveOutbox: !isAccountDeletion,
-        purgeUserId: isAccountDeletion ? activeUserId : null,
+        preserveOutbox: false,
+        purgeUserId: activeUserId,
       );
     }
     await clearUser();
     await clearRecoveryVault();
+    await clearMutationQueue();
 
     // Preserve strictly global device & app settings (e.g. theme, language, device ID)
     final preservedKeys = {
@@ -1920,7 +1921,6 @@ class LocalStorageService {
       _customServerUrlKey,
       _localSchemaVersionKey,
       _deletedRecoveryKeysKey,
-      if (!isAccountDeletion) _mutationQueueKey,
     };
     final allKeys = _prefs.getKeys().toList();
     for (final k in allKeys) {

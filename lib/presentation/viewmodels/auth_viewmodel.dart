@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../router/app_router.dart';
 import '../../core/network/api_exceptions.dart';
 import '../../data/repositories/user_repository.dart';
 import '../../domain/enums/app_experience_mode.dart';
@@ -37,6 +38,9 @@ class AuthViewModel extends ChangeNotifier {
       _authState = AuthState.signedOut;
       _errorMessage = reason;
       notifyListeners();
+      try {
+        AppRouter.router.go('/onboarding');
+      } catch (_) {}
     });
   }
 
