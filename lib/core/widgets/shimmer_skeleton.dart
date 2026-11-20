@@ -46,21 +46,20 @@ class _ShimmerSkeletonState extends State<ShimmerSkeleton> with SingleTickerProv
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final baseColor = isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceSubtle;
 
-    return AnimatedBuilder(
-      animation: _opacityAnim,
-      builder: (context, child) {
-        return Opacity(
-          opacity: _opacityAnim.value,
-          child: Container(
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+        animation: _opacityAnim,
+        builder: (context, child) {
+          return Container(
             width: widget.width,
             height: widget.height,
             decoration: BoxDecoration(
-              color: baseColor,
+              color: baseColor.withValues(alpha: _opacityAnim.value),
               borderRadius: widget.borderRadius ?? AppRadius.mdBorder,
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }

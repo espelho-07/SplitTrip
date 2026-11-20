@@ -211,13 +211,15 @@ class HomeViewModel extends ChangeNotifier {
       _trips = remoteTrips;
       debugPrint('[HomeViewModel] ALL TRIPS QUERY: result count=${remoteTrips.length}');
 
-      // Hydrate expenses for each trip so balances are immediately available
-      for (final trip in remoteTrips) {
-        if (_isDisposed) return;
-        try {
-          await expenseRepo.getExpenses(trip.id);
-        } catch (_) {}
-      }
+      // Hydrate expenses for each trip concurrently so balances are immediately available
+      await Future.wait(
+        remoteTrips.map((trip) async {
+          if (_isDisposed) return;
+          try {
+            await expenseRepo.getExpenses(trip.id);
+          } catch (_) {}
+        }),
+      );
 
       if (!_isDisposed) _computeLocalBalances(_trips, currentUserId);
     } catch (e) {

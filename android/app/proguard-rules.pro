@@ -23,3 +23,13 @@
 -keep class com.google.android.play.core.** { *; }
 -keep class de.ffuf.in_app_update.** { *; }
 -dontwarn com.google.android.play.core.**
+
+# ML Kit & Google Vision
+-keep class com.google.mlkit.** { *; }
+-keep class com.google.android.gms.vision.** { *; }
+-dontwarn com.google.mlkit.**
+-dontwarn com.google.android.gms.vision.**
+
+# Firebase Messaging & Core
+-keep class com.google.firebase.** { *; }
+-dontwarn com.google.firebase.**

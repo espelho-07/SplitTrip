@@ -32,6 +32,56 @@ class AppRouter {
 
   static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
+  static Page<dynamic> _smoothPage({
+    required GoRouterState state,
+    required Widget child,
+    bool isModal = false,
+  }) {
+    return CustomTransitionPage<void>(
+      key: state.pageKey,
+      child: child,
+      transitionDuration: const Duration(milliseconds: 240),
+      reverseTransitionDuration: const Duration(milliseconds: 200),
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        final curvedAnimation = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+
+        if (isModal) {
+          return SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0.0, 0.08),
+              end: Offset.zero,
+            ).animate(curvedAnimation),
+            child: FadeTransition(
+              opacity: CurvedAnimation(
+                parent: animation,
+                curve: const Interval(0.0, 0.8, curve: Curves.easeOut),
+              ),
+              child: child,
+            ),
+          );
+        }
+
+        return SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0.04, 0.0),
+            end: Offset.zero,
+          ).animate(curvedAnimation),
+          child: FadeTransition(
+            opacity: CurvedAnimation(
+              parent: animation,
+              curve: const Interval(0.0, 0.8, curve: Curves.easeOut),
+            ),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+
   static final GoRouter router = GoRouter(
     navigatorKey: navigatorKey,
     initialLocation: '/splash',
@@ -61,129 +111,199 @@ class AppRouter {
       ),
       GoRoute(
         path: '/update-required',
-        builder: (context, state) => const UpdateRequiredView(),
+        pageBuilder: (context, state) => _smoothPage(
+          state: state,
+          child: const UpdateRequiredView(),
+        ),
       ),
       GoRoute(
         path: '/language-select',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final isSettings = state.uri.queryParameters['isSettings'] == 'true';
-          return LanguageSelectView(isFromSettings: isSettings);
+          return _smoothPage(
+            state: state,
+            child: LanguageSelectView(isFromSettings: isSettings),
+          );
         },
       ),
       GoRoute(
         path: '/walkthrough',
-        builder: (context, state) => const WalkthroughView(),
+        pageBuilder: (context, state) => _smoothPage(
+          state: state,
+          child: const WalkthroughView(),
+        ),
       ),
       GoRoute(
         path: '/onboarding',
-        builder: (context, state) => const OnboardingView(),
+        pageBuilder: (context, state) => _smoothPage(
+          state: state,
+          child: const OnboardingView(),
+        ),
       ),
       GoRoute(
         path: '/home',
-        builder: (context, state) => const HomeView(),
+        pageBuilder: (context, state) => _smoothPage(
+          state: state,
+          child: const HomeView(),
+        ),
       ),
       GoRoute(
         path: '/notifications',
-        builder: (context, state) => const NotificationsView(),
+        pageBuilder: (context, state) => _smoothPage(
+          state: state,
+          child: const NotificationsView(),
+        ),
       ),
       GoRoute(
         path: '/qr-scanner',
-        builder: (context, state) => const QrScannerView(),
+        pageBuilder: (context, state) => _smoothPage(
+          state: state,
+          child: const QrScannerView(),
+          isModal: true,
+        ),
       ),
       GoRoute(
         path: '/profile/edit',
-        builder: (context, state) => const NirniqProfileView(),
+        pageBuilder: (context, state) => _smoothPage(
+          state: state,
+          child: const NirniqProfileView(),
+        ),
       ),
       GoRoute(
         path: '/payment-methods',
-        builder: (context, state) => const PaymentMethodsView(),
+        pageBuilder: (context, state) => _smoothPage(
+          state: state,
+          child: const PaymentMethodsView(),
+        ),
       ),
       GoRoute(
         path: '/trip-preview',
-        builder: (context, state) => TripPreviewView(code: state.uri.queryParameters['code']),
+        pageBuilder: (context, state) => _smoothPage(
+          state: state,
+          child: TripPreviewView(code: state.uri.queryParameters['code']),
+        ),
       ),
       GoRoute(
         path: '/settings',
-        builder: (context, state) => const MasterSettingsView(),
+        pageBuilder: (context, state) => _smoothPage(
+          state: state,
+          child: const MasterSettingsView(),
+        ),
       ),
       GoRoute(
         path: '/widgets',
-        builder: (context, state) => const WidgetGalleryView(),
+        pageBuilder: (context, state) => _smoothPage(
+          state: state,
+          child: const WidgetGalleryView(),
+        ),
       ),
       GoRoute(
         path: '/guide',
-        builder: (context, state) => const SetupGuideView(),
+        pageBuilder: (context, state) => _smoothPage(
+          state: state,
+          child: const SetupGuideView(),
+        ),
       ),
       GoRoute(
         path: '/help',
-        builder: (context, state) => const HelpFaqView(),
+        pageBuilder: (context, state) => _smoothPage(
+          state: state,
+          child: const HelpFaqView(),
+        ),
       ),
       GoRoute(
         path: '/privacy-policy',
-        builder: (context, state) => const PrivacyPolicyView(),
+        pageBuilder: (context, state) => _smoothPage(
+          state: state,
+          child: const PrivacyPolicyView(),
+        ),
       ),
       GoRoute(
         path: '/cloud-settings',
-        builder: (context, state) => const CloudSettingsView(),
+        pageBuilder: (context, state) => _smoothPage(
+          state: state,
+          child: const CloudSettingsView(),
+        ),
       ),
       GoRoute(
         path: '/admin',
-        builder: (context, state) => const AdminShellView(initialSection: AdminSection.overview),
+        pageBuilder: (context, state) => _smoothPage(
+          state: state,
+          child: const AdminShellView(initialSection: AdminSection.overview),
+        ),
       ),
       GoRoute(
         path: '/admin/:section',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final sectionParam = state.pathParameters['section'];
           final section = AdminSection.fromRoute(sectionParam);
-          return AdminShellView(initialSection: section);
+          return _smoothPage(
+            state: state,
+            child: AdminShellView(initialSection: section),
+          );
         },
       ),
       GoRoute(
         path: '/create-trip',
-        builder: (context, state) => const CreateTripView(),
+        pageBuilder: (context, state) => _smoothPage(
+          state: state,
+          child: const CreateTripView(),
+          isModal: true,
+        ),
       ),
       GoRoute(
         path: '/join-trip',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final code = state.uri.queryParameters['code'];
           final memberId = state.uri.queryParameters['memberId'] ?? state.uri.queryParameters['claimMemberId'];
           final token = state.uri.queryParameters['token'] ?? state.uri.queryParameters['claimToken'];
-          return JoinTripView(
-            initialCode: code,
-            claimMemberId: memberId,
-            claimToken: token,
+          return _smoothPage(
+            state: state,
+            child: JoinTripView(
+              initialCode: code,
+              claimMemberId: memberId,
+              claimToken: token,
+            ),
+            isModal: true,
           );
         },
       ),
       GoRoute(
         path: '/join',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final code = state.uri.queryParameters['code'];
           final memberId = state.uri.queryParameters['memberId'] ?? state.uri.queryParameters['claimMemberId'];
           final token = state.uri.queryParameters['token'] ?? state.uri.queryParameters['claimToken'];
-          return JoinTripView(
-            initialCode: code,
-            claimMemberId: memberId,
-            claimToken: token,
+          return _smoothPage(
+            state: state,
+            child: JoinTripView(
+              initialCode: code,
+              claimMemberId: memberId,
+              claimToken: token,
+            ),
+            isModal: true,
           );
         },
       ),
       GoRoute(
         path: '/trip/:tripId',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final tripId = state.pathParameters['tripId']!;
           final settlementId = state.uri.queryParameters['settlementId'];
           final expenseId = state.uri.queryParameters['expenseId'];
-          return TripDetailView(
-            tripId: tripId,
-            settlementId: settlementId,
-            expenseId: expenseId,
+          return _smoothPage(
+            state: state,
+            child: TripDetailView(
+              tripId: tripId,
+              settlementId: settlementId,
+              expenseId: expenseId,
+            ),
           );
         },
         routes: [
           GoRoute(
             path: 'add-expense',
-            builder: (context, state) {
+            pageBuilder: (context, state) {
               final tripId = state.pathParameters['tripId']!;
               final tabStr = state.uri.queryParameters['tab'];
               final initialTab = tabStr != null ? (int.tryParse(tabStr) ?? 2) : 2;
@@ -192,37 +312,50 @@ class AppRouter {
               final title = state.uri.queryParameters['title'];
               final amountStr = state.uri.queryParameters['amount'];
               final amountInPaise = amountStr != null ? int.tryParse(amountStr) : null;
-              return AddExpenseView(
-                tripId: tripId,
-                initialTab: initialTab,
-                initialPersonName: personName,
-                initialMemberId: memberId,
-                initialTitle: title,
-                initialAmountInPaise: amountInPaise,
+              return _smoothPage(
+                state: state,
+                child: AddExpenseView(
+                  tripId: tripId,
+                  initialTab: initialTab,
+                  initialPersonName: personName,
+                  initialMemberId: memberId,
+                  initialTitle: title,
+                  initialAmountInPaise: amountInPaise,
+                ),
+                isModal: true,
               );
             },
           ),
           GoRoute(
             path: 'members',
-            builder: (context, state) {
+            pageBuilder: (context, state) {
               final tripId = state.pathParameters['tripId']!;
-              return TripMembersView(tripId: tripId);
+              return _smoothPage(
+                state: state,
+                child: TripMembersView(tripId: tripId),
+              );
             },
             routes: [
               GoRoute(
                 path: 'manage',
-                builder: (context, state) {
+                pageBuilder: (context, state) {
                   final tripId = state.pathParameters['tripId']!;
-                  return ManageMembersView(tripId: tripId);
+                  return _smoothPage(
+                    state: state,
+                    child: ManageMembersView(tripId: tripId),
+                  );
                 },
               ),
             ],
           ),
           GoRoute(
             path: 'memories',
-            builder: (context, state) {
+            pageBuilder: (context, state) {
               final tripId = state.pathParameters['tripId']!;
-              return TripMemoriesView(tripId: tripId);
+              return _smoothPage(
+                state: state,
+                child: TripMemoriesView(tripId: tripId),
+              );
             },
           ),
         ],

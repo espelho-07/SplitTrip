@@ -112,12 +112,6 @@ void main() async {
   // Initialize Production Security Lock Service
   final securityLockService = SecurityLockService(storageService);
 
-  // Trigger continuous background sync, offline queue flush, P2P discovery start, and non-blocking version check
-  syncService.startPeriodicSync(apiClient);
-  unawaited(syncService.flushQueue(apiClient));
-  unawaited(p2pSyncService.start());
-  unawaited(appVersionService.checkVersion());
-
   // Cross-ViewModel reactive event bus (created before repositories)
   final appEventBus = AppEventBus();
 
@@ -138,24 +132,10 @@ void main() async {
     eventBus: appEventBus,
   );
 
-
   final widgetService = KithWidgetService(storage: storageService);
   widgetService.onDeepLinkReceived = (deepLinkUri) {
     AppRouter.handleDeepLink(deepLinkUri);
   };
-  unawaited(widgetService.checkInitialDeepLink());
-
-  // Instant pre-sync widgets on startup from local storage
-  final currentUser = authService.getCurrentUser();
-  if (currentUser != null) {
-    final cachedTrips = tripRepo.getCachedTrips();
-    unawaited(widgetService.syncSnapshot(
-      currentUser: currentUser,
-      trips: cachedTrips,
-    ));
-  } else {
-    unawaited(widgetService.syncSnapshot(currentUser: null));
-  }
 
   // Initialize Notification Service
   final notificationService = NotificationService(storageService, realtimeClient);
@@ -171,8 +151,28 @@ void main() async {
   fcmService.onNavigate = (route) {
     AppRouter.router.go(route);
   };
-  // Non-blocking: FCM init failure must not prevent app from launching
-  unawaited(fcmService.init());
+
+  // Defer non-critical background services until after first frame renders to maximize cold-start speed
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    syncService.startPeriodicSync(apiClient);
+    unawaited(syncService.flushQueue(apiClient));
+    unawaited(p2pSyncService.start());
+    unawaited(appVersionService.checkVersion());
+    unawaited(widgetService.checkInitialDeepLink());
+
+    final currentUser = authService.getCurrentUser();
+    if (currentUser != null) {
+      final cachedTrips = tripRepo.getCachedTrips();
+      unawaited(widgetService.syncSnapshot(
+        currentUser: currentUser,
+        trips: cachedTrips,
+      ));
+    } else {
+      unawaited(widgetService.syncSnapshot(currentUser: null));
+    }
+
+    unawaited(fcmService.init());
+  });
 
   // Initialize Administration Services
   final adminService = AdminService();

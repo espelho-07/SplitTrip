@@ -31,42 +31,60 @@ class SurfaceCard extends StatefulWidget {
 }
 
 class _SurfaceCardState extends State<SurfaceCard> with SingleTickerProviderStateMixin {
-  late AnimationController _animController;
-  late Animation<double> _scaleAnimation;
+  AnimationController? _animController;
+  Animation<double>? _scaleAnimation;
 
   @override
   void initState() {
     super.initState();
+    if (widget.onTap != null) {
+      _initAnimation();
+    }
+  }
+
+  void _initAnimation() {
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 100),
     );
     _scaleAnimation = Tween<double>(begin: 1.0, end: 0.985).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic),
+      CurvedAnimation(parent: _animController!, curve: Curves.easeOutCubic),
     );
   }
 
   @override
+  void didUpdateWidget(covariant SurfaceCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.onTap == null && widget.onTap != null) {
+      _initAnimation();
+    } else if (oldWidget.onTap != null && widget.onTap == null) {
+      _animController?.dispose();
+      _animController = null;
+      _scaleAnimation = null;
+    }
+  }
+
+  @override
   void dispose() {
-    _animController.dispose();
+    _animController?.dispose();
     super.dispose();
   }
 
   void _onTapDown(TapDownDetails _) {
     if (widget.onTap != null) {
-      _animController.forward();
+      _animController?.forward();
     }
   }
 
   void _onTapUp(TapUpDetails _) {
     if (widget.onTap != null) {
-      _animController.reverse();
+      _animController?.reverse();
     }
   }
 
   void _onTapCancel() {
     if (widget.onTap != null) {
-      _animController.reverse();
+      _animController?.reverse();
     }
   }
 
@@ -104,7 +122,7 @@ class _SurfaceCardState extends State<SurfaceCard> with SingleTickerProviderStat
 
     if (widget.onTap != null) {
       return ScaleTransition(
-        scale: _scaleAnimation,
+        scale: _scaleAnimation ?? const AlwaysStoppedAnimation<double>(1.0),
         child: GestureDetector(
           onTapDown: _onTapDown,
           onTapUp: _onTapUp,
