@@ -132,6 +132,8 @@ void main() async {
     eventBus: appEventBus,
   );
 
+  apiClient.onConnectivityChanged = syncService.handleConnectivityChange;
+
   final widgetService = KithWidgetService(storage: storageService);
   widgetService.onDeepLinkReceived = (deepLinkUri) {
     AppRouter.handleDeepLink(deepLinkUri);

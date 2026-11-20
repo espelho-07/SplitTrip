@@ -8,6 +8,7 @@ import 'api_exceptions.dart';
 class ApiClient {
   final http.Client _httpClient;
   String? _authToken;
+  void Function(bool isOnline)? onConnectivityChanged;
 
   ApiClient({http.Client? httpClient}) : _httpClient = httpClient ?? http.Client();
 
@@ -50,8 +51,10 @@ class ApiClient {
           .timeout(_defaultTimeout);
       return _processResponse(response);
     } on SocketException catch (_) {
+      onConnectivityChanged?.call(false);
       throw const NetworkException(message: 'Unable to reach server. Operating in offline mode.');
     } on TimeoutException catch (_) {
+      onConnectivityChanged?.call(false);
       throw const NetworkException(message: 'Request timed out. Please check your network and retry.');
     } catch (e) {
       if (e is ApiException) rethrow;
@@ -71,8 +74,10 @@ class ApiClient {
           .timeout(_defaultTimeout);
       return _processResponse(response);
     } on SocketException catch (_) {
+      onConnectivityChanged?.call(false);
       throw const NetworkException(message: 'Unable to reach server. Operating in offline mode.');
     } on TimeoutException catch (_) {
+      onConnectivityChanged?.call(false);
       throw const NetworkException(message: 'Request timed out. Please check your network and retry.');
     } catch (e) {
       if (e is ApiException) rethrow;
@@ -92,8 +97,10 @@ class ApiClient {
           .timeout(_defaultTimeout);
       return _processResponse(response);
     } on SocketException catch (_) {
+      onConnectivityChanged?.call(false);
       throw const NetworkException(message: 'Unable to reach server. Operating in offline mode.');
     } on TimeoutException catch (_) {
+      onConnectivityChanged?.call(false);
       throw const NetworkException(message: 'Request timed out. Please check your network and retry.');
     } catch (e) {
       if (e is ApiException) rethrow;
@@ -113,8 +120,10 @@ class ApiClient {
           .timeout(_defaultTimeout);
       return _processResponse(response);
     } on SocketException catch (_) {
+      onConnectivityChanged?.call(false);
       throw const NetworkException(message: 'Unable to reach server. Operating in offline mode.');
     } on TimeoutException catch (_) {
+      onConnectivityChanged?.call(false);
       throw const NetworkException(message: 'Request timed out. Please check your network and retry.');
     } catch (e) {
       if (e is ApiException) rethrow;
@@ -130,8 +139,10 @@ class ApiClient {
           .timeout(_defaultTimeout);
       return _processResponse(response);
     } on SocketException catch (_) {
+      onConnectivityChanged?.call(false);
       throw const NetworkException(message: 'Unable to reach server. Operating in offline mode.');
     } on TimeoutException catch (_) {
+      onConnectivityChanged?.call(false);
       throw const NetworkException(message: 'Request timed out. Please check your network and retry.');
     } catch (e) {
       if (e is ApiException) rethrow;
@@ -150,6 +161,7 @@ class ApiClient {
     }
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
+      onConnectivityChanged?.call(true);
       if (decoded is Map<String, dynamic> && decoded.containsKey('data')) {
         return decoded['data'];
       }

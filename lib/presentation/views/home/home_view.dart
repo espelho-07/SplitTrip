@@ -24,6 +24,7 @@ import '../trip/trips_home_tab.dart';
 import '../version/update_available_banner.dart';
 import '../version/kith_update_popup_dialog.dart';
 import '../payment/payment_verification_dialog.dart';
+import '../../widgets/progress/global_sync_status_bar.dart';
 import 'widgets/dashboard_tab.dart';
 
 class HomeView extends StatefulWidget {
@@ -432,6 +433,7 @@ class _HomeViewState extends State<HomeView> {
       body: SafeArea(
         child: Column(
           children: [
+            const GlobalSyncStatusBar(),
             Expanded(
               child: Stack(
                 children: [

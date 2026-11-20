@@ -117,6 +117,7 @@ class TripSyncReport {
 class SyncMutation {
   final String id;
   final String idempotencyKey;
+  final String? userId;
   final String payloadChecksum;
   final MutationType type;
   final Map<String, dynamic> payload;
@@ -135,6 +136,7 @@ class SyncMutation {
   SyncMutation({
     required this.id,
     String? idempotencyKey,
+    this.userId,
     String? payloadChecksum,
     required this.type,
     required this.payload,
@@ -214,6 +216,7 @@ class SyncMutation {
   Map<String, dynamic> toJson() => {
     'id': id,
     'idempotencyKey': idempotencyKey,
+    'userId': userId,
     'payloadChecksum': payloadChecksum,
     'type': type.name,
     'payload': payload,
@@ -233,6 +236,7 @@ class SyncMutation {
   factory SyncMutation.fromJson(Map<String, dynamic> json) => SyncMutation(
     id: json['id'] as String,
     idempotencyKey: json['idempotencyKey'] as String? ?? json['id'] as String,
+    userId: json['userId'] as String?,
     payloadChecksum: json['payloadChecksum'] as String?,
     type: MutationType.values.firstWhere(
       (e) => e.name == json['type'],
@@ -282,9 +286,11 @@ class SyncMutation {
     List<String>? forwardedBy,
     SyncOperationOutcome? outcome,
     String? payloadChecksum,
+    String? userId,
   }) => SyncMutation(
     id: id,
     idempotencyKey: idempotencyKey,
+    userId: userId ?? this.userId,
     payloadChecksum: payloadChecksum ?? this.payloadChecksum,
     type: type,
     payload: payload,
@@ -408,17 +414,41 @@ class SyncService {
     return getPendingCountForTrip(tripId) > 0;
   }
 
+  /// Reactively responds to network connectivity status changes detected by ApiClient or NetworkMonitor.
+  void handleConnectivityChange(bool isOnline) {
+    if (!isOnline) {
+      if (_currentStatus != SyncStatus.offline) {
+        _setStatus(SyncStatus.offline);
+      }
+    } else {
+      if (_currentStatus == SyncStatus.offline || _currentStatus == SyncStatus.reconnecting) {
+        final pending = getPendingMutations();
+        if (pending.isNotEmpty) {
+          _setStatus(SyncStatus.pending);
+          if (_registeredApiClient != null && !isProcessing) {
+            unawaited(flushQueue(_registeredApiClient!));
+          }
+        } else {
+          _setStatus(SyncStatus.synced);
+        }
+      }
+    }
+  }
+
   Future<SyncMutation> enqueueMutation(
     MutationType type,
     Map<String, dynamic> payload, {
     String? idempotencyKey,
+    String? userId,
     List<String>? dependsOn,
     ApiClient? backgroundApiClient,
   }) async {
     final mutationId = _uuid.v4();
+    final effectiveUserId = userId ?? _storage.getSavedUser()?['id'] as String?;
     final mutation = SyncMutation(
       id: mutationId,
       idempotencyKey: idempotencyKey ?? mutationId,
+      userId: effectiveUserId,
       type: type,
       payload: payload,
       createdAt: DateTime.now(),
@@ -1023,9 +1053,16 @@ class SyncService {
 
         final blockedTripIds = <String>{};
         final completedMutationIds = <String>{};
+        final activeUser = _storage.getSavedUser();
+        final activeUserId = activeUser?['id'] as String?;
 
         for (final mutation in queue) {
           final tId = mutation.tripId;
+
+          // Multi-user safety: Skip mutations created by a different user account on this device
+          if (activeUserId != null && mutation.userId != null && mutation.userId != activeUserId) {
+            continue;
+          }
 
           // Quarantined mutations are skipped to prevent infinite retry loops and head-of-line blocking
           if (mutation.syncState == SyncState.quarantined) {
@@ -1085,7 +1122,32 @@ class SyncService {
             debugPrint(
               '[SyncService] Client error ${e.statusCode} for mutation ${mutation.id}: ${e.message}',
             );
-            if (e.statusCode == 409) {
+            if (e.statusCode == 401) {
+              debugPrint(
+                '[SyncService] Authentication expired (401). Pausing sync queue.',
+              );
+              _setStatus(SyncStatus.error);
+              await _updateMutationAttempt(
+                mutation.id,
+                mutation.retryCount,
+                errorMessage: 'Session expired. Please sign in again.',
+                syncState: SyncState.localPending,
+              );
+              break;
+            } else if (e.statusCode >= 500) {
+              debugPrint(
+                '[SyncService] Server error ${e.statusCode} for mutation ${mutation.id}. Pausing sync with exponential backoff.',
+              );
+              await _updateMutationAttempt(
+                mutation.id,
+                mutation.retryCount + 1,
+                errorMessage: 'Kith servers temporarily unavailable (${e.statusCode}). Will retry.',
+                syncState: SyncState.localPending,
+              );
+              if (tId != null) blockedTripIds.add(tId);
+              _setStatus(SyncStatus.reconnecting);
+              break;
+            } else if (e.statusCode == 409) {
               // Already resolved conflict / duplicate -> acknowledge safely
               completedMutationIds.add(mutation.id);
               await removeMutation(mutation.id);
@@ -1174,7 +1236,8 @@ class SyncService {
         if (remaining.isEmpty) {
           _setStatus(SyncStatus.synced);
         } else if (_currentStatus != SyncStatus.offline &&
-            _currentStatus != SyncStatus.error) {
+            _currentStatus != SyncStatus.error &&
+            _currentStatus != SyncStatus.reconnecting) {
           _setStatus(SyncStatus.pending);
         }
       } finally {
