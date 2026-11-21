@@ -104,9 +104,13 @@ class _CloudSyncSheetState extends State<CloudSyncSheet> {
     if (mounted) setState(() {});
   }
 
-  Future<void> _clearQuarantined() async {
+  Future<void> _clearAllStuck() async {
     final syncService = context.read<SyncService>();
-    await syncService.clearQuarantinedMutations();
+    if (syncService.quarantinedCount > 0) {
+      await syncService.clearQuarantinedMutations();
+    } else {
+      await syncService.clearAllPendingMutations();
+    }
     if (mounted) {
       setState(() {});
       KithSuccessToast.show(context, 'Stuck changes cleared');
@@ -131,6 +135,10 @@ class _CloudSyncSheetState extends State<CloudSyncSheet> {
     final pendingCount = syncService.pendingCount;
     final quarantinedCount = syncService.quarantinedCount;
     final lastSync = authVm.lastSyncTime;
+    final hasStuckIssues = quarantinedCount > 0 ||
+        (pendingCount > 0 &&
+            (syncService.currentStatus == SyncStatus.error ||
+                syncService.lastErrorMessage != null));
 
     return Container(
       decoration: BoxDecoration(
@@ -277,7 +285,7 @@ class _CloudSyncSheetState extends State<CloudSyncSheet> {
                   ],
                 ),
               ),
-              if (quarantinedCount > 0) ...[
+              if (hasStuckIssues) ...[
                 const SizedBox(height: AppSpacing.md),
                 SurfaceCard(
                   backgroundColor: isDark ? const Color(0xFF2B1116) : const Color(0xFFFFF1F2),
@@ -290,7 +298,9 @@ class _CloudSyncSheetState extends State<CloudSyncSheet> {
                           const Icon(Icons.warning_amber_rounded, color: Color(0xFFE11D48), size: 20),
                           const SizedBox(width: 8),
                           Text(
-                            '$quarantinedCount change${quarantinedCount > 1 ? "s" : ""} need review',
+                            quarantinedCount > 0
+                                ? '$quarantinedCount change${quarantinedCount > 1 ? "s" : ""} need review'
+                                : '$pendingCount change${pendingCount > 1 ? "s" : ""} could not sync',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
@@ -301,7 +311,8 @@ class _CloudSyncSheetState extends State<CloudSyncSheet> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Some offline changes encountered a server or membership issue and were paused to prevent data conflicts.',
+                        syncService.lastErrorMessage ??
+                            'Some offline changes encountered a server or membership issue and could not be synced.',
                         style: TextStyle(
                           fontSize: 12,
                           color: isDark ? Colors.white70 : const Color(0xFF881337),
@@ -312,7 +323,7 @@ class _CloudSyncSheetState extends State<CloudSyncSheet> {
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
                           TextButton(
-                            onPressed: _clearQuarantined,
+                            onPressed: _clearAllStuck,
                             child: const Text('Dismiss', style: TextStyle(color: Color(0xFFE11D48), fontSize: 13)),
                           ),
                           const SizedBox(width: 8),
@@ -322,7 +333,7 @@ class _CloudSyncSheetState extends State<CloudSyncSheet> {
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                             ),
-                            onPressed: _retryQuarantined,
+                            onPressed: quarantinedCount > 0 ? _retryQuarantined : _performSync,
                             child: const Text('Retry', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                           ),
                         ],

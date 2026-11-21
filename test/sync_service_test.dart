@@ -147,5 +147,74 @@ void main() {
       expect(syncService.pendingMutationCount, 0);
       expect(syncService.currentStatus, SyncStatus.synced);
     });
+
+    test('flushQueue auto-adopts device mutations from old guest session to active user', () async {
+      // 1. Setup an active logged in user
+      await storage.saveUser({
+        'id': 'usr_active_canonical',
+        'accountId': 'usr_active_canonical',
+        'displayName': 'Darpan',
+        'anonymousToken': 'valid_token_123',
+      });
+
+      // 2. Enqueue mutation with old guest ID
+      await syncService.enqueueMutation(
+        MutationType.addExpense,
+        {'tripId': 'trip_manali', 'title': 'Trek Guide'},
+        userId: 'usr_old_guest_id',
+      );
+
+      final processedRequests = <String>[];
+      final mockClient = MockClient((request) async {
+        processedRequests.add(request.url.path);
+        return http.Response(jsonEncode({'data': {'id': 'exp_123'}}), 200);
+      });
+      final apiClient = ApiClient(httpClient: mockClient);
+
+      expect(syncService.pendingMutationCount, 1);
+
+      // 3. flushQueue should auto-adopt the mutation and flush it cleanly
+      await syncService.flushQueue(apiClient);
+
+      expect(syncService.pendingMutationCount, 0);
+      expect(processedRequests.length, 1);
+      expect(processedRequests.first, contains('/trips/trip_manali/expenses'));
+      expect(syncService.currentStatus, SyncStatus.synced);
+    });
+
+    test('flushQueue(force: true) when server fails transitions to SyncStatus.error and does NOT get stuck in pending', () async {
+      await storage.saveUser({
+        'id': 'usr_active_canonical',
+        'displayName': 'Darpan',
+        'anonymousToken': 'token_xyz',
+      });
+
+      await syncService.enqueueMutation(MutationType.createTrip, {
+        'id': 'trip_manali',
+        'name': 'Manali Trek',
+      });
+
+      // Server returns 400 Bad Request
+      final mockClient = MockClient((request) async {
+        return http.Response(
+          jsonEncode({'error': {'message': 'Trip name already exists on remote'}}),
+          400,
+        );
+      });
+      final apiClient = ApiClient(httpClient: mockClient);
+
+      // Force flush (like tapping "Sync now")
+      await syncService.flushQueue(apiClient, force: true);
+
+      // Status must transition to SyncStatus.error so the user gets actionable Review/Dismiss UI
+      expect(syncService.currentStatus, SyncStatus.error);
+      expect(syncService.lastErrorMessage, contains('Trip name already exists'));
+      expect(syncService.pendingMutationCount, 1);
+
+      // User taps Dismiss to clear stuck mutation
+      await syncService.clearAllPendingMutations();
+      expect(syncService.pendingMutationCount, 0);
+      expect(syncService.currentStatus, SyncStatus.synced);
+    });
   });
 }

@@ -702,12 +702,15 @@ class AuthService {
 
       final mutations = storage.getMutationQueue();
       for (final m in mutations) {
+        if (m['userId'] == oldGuestId || m['userId'] == null) {
+          m['userId'] = canonicalUserId;
+        }
         final payload = m['payload'] as Map<String, dynamic>?;
         if (payload != null) {
-          if (payload['userId'] == oldGuestId) {
+          if (payload['userId'] == oldGuestId || payload['userId'] == null) {
             payload['userId'] = canonicalUserId;
           }
-          if (payload['creatorId'] == oldGuestId) {
+          if (payload['creatorId'] == oldGuestId || payload['creatorId'] == null) {
             payload['creatorId'] = canonicalUserId;
           }
         }

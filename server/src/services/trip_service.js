@@ -464,14 +464,42 @@ class TripService {
     const trip = db.get('trips', tripId);
     if (!trip) throw AppError.notFound('Trip not found');
 
-    const authMember = db.findOne('trip_members', (m) => m.tripId === tripId && m.userId === currentUserId);
-    if (!authMember) throw AppError.forbidden('You are not authorized to add members to this trip');
+    const now = new Date().toISOString();
+
+    let authMember = db.findOne('trip_members', (m) => m.tripId === tripId && m.userId === currentUserId);
+    if (!authMember) {
+      // Auto-heal: If user is the creator of the trip (trip.creatorId === currentUserId)
+      // or if there is an unclaimed/unlinked creator or member placeholder, auto-link them!
+      const isCreator = trip.creatorId === currentUserId;
+      const creatorMember = db.findOne('trip_members', (m) => m.tripId === tripId && m.role === 'creator');
+      if (isCreator || (creatorMember && (!creatorMember.userId || creatorMember.userId.startsWith('unclaimed_')))) {
+        if (creatorMember) {
+          creatorMember.userId = currentUserId;
+          creatorMember.status = 'claimed';
+          creatorMember.isClaimed = true;
+          db.update('trip_members', creatorMember.id, creatorMember);
+          authMember = creatorMember;
+        } else {
+          authMember = {
+            id: `mbr_${crypto.randomUUID().replace(/-/g, '').substring(0, 10)}`,
+            tripId,
+            userId: currentUserId,
+            displayName: displayName || 'Creator',
+            role: 'creator',
+            status: 'claimed',
+            isClaimed: true,
+            joinedAt: now,
+          };
+          db.insert('trip_members', authMember);
+        }
+      } else {
+        throw AppError.forbidden('You are not authorized to add members to this trip');
+      }
+    }
 
     if (trip.lifecycleState === 'settled') {
       throw AppError.badRequest('Cannot add members to a settled trip');
     }
-
-    const now = new Date().toISOString();
     const finalId = memberId || `mbr_${crypto.randomUUID().replace(/-/g, '').substring(0, 10)}`;
 
     // Check if member already exists by ID (idempotency)

@@ -151,63 +151,70 @@ class _GlobalSyncStatusBarState extends State<GlobalSyncStatusBar> {
         return const SizedBox.shrink();
     }
 
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: borderColor, width: 1.0),
-      ),
-      child: Row(
-        children: [
-          if (showSpinner)
-            SizedBox(
-              width: 14,
-              height: 14,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: textColor,
-              ),
-            )
-          else
-            Icon(iconData, size: 15, color: textColor),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              message,
-              style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w600,
-                color: textColor,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          if (actionLabel != null && onAction != null) ...[
-            const SizedBox(width: 8),
-            GestureDetector(
-              onTap: onAction,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                decoration: BoxDecoration(
-                  color: textColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        HapticHelper.light();
+        CloudSyncSheet.show(context);
+      },
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: borderColor, width: 1.0),
+        ),
+        child: Row(
+          children: [
+            if (showSpinner)
+              SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: textColor,
                 ),
-                child: Text(
-                  actionLabel,
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                    color: textColor,
+              )
+            else
+              Icon(iconData, size: 15, color: textColor),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                message,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: textColor,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: onAction,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: textColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    actionLabel,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      color: textColor,
+                    ),
                   ),
                 ),
               ),
-            ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

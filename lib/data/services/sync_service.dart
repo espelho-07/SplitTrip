@@ -288,13 +288,14 @@ class SyncMutation {
     SyncOperationOutcome? outcome,
     String? payloadChecksum,
     String? userId,
+    Map<String, dynamic>? payload,
   }) => SyncMutation(
     id: id,
     idempotencyKey: idempotencyKey,
     userId: userId ?? this.userId,
     payloadChecksum: payloadChecksum ?? this.payloadChecksum,
     type: type,
-    payload: payload,
+    payload: payload ?? this.payload,
     createdAt: createdAt,
     retryCount: retryCount ?? this.retryCount,
     lastAttemptAt: lastAttemptAt ?? this.lastAttemptAt,
@@ -434,6 +435,13 @@ class SyncService {
       _lastErrorMessage = null;
       _setStatus(SyncStatus.synced);
     }
+  }
+
+  /// Purges all pending and quarantined mutations from local storage outbox.
+  Future<void> clearAllPendingMutations() async {
+    await clearQueue();
+    _lastErrorMessage = null;
+    _setStatus(SyncStatus.synced);
   }
 
   /// Resets quarantined mutations back to localPending for user-directed retry.
@@ -1141,6 +1149,38 @@ class SyncService {
     return runWithTripLock('__outbox_queue__', () async {
       final activeUser = _storage.getSavedUser();
       final activeUserId = activeUser?['id'] as String? ?? activeUser?['accountId'] as String?;
+      final token = activeUser?['anonymousToken'] as String? ?? activeUser?['token'] as String?;
+      if (token != null && token.isNotEmpty && (apiClient.authToken == null || apiClient.authToken!.isEmpty)) {
+        apiClient.setAuthToken(token);
+      }
+
+      // Auto-adopt any mutations created on this device by earlier guest sessions
+      if (activeUserId != null) {
+        final allMutations = getAllMutations();
+        bool queueChanged = false;
+        for (int i = 0; i < allMutations.length; i++) {
+          final m = allMutations[i];
+          if (m.originDeviceId == _storage.getDeviceId() &&
+              (m.userId == null || m.userId != activeUserId)) {
+            final payload = Map<String, dynamic>.from(m.payload);
+            if (payload['userId'] == m.userId || payload['userId'] == null) {
+              payload['userId'] = activeUserId;
+            }
+            if (payload['creatorId'] == m.userId || payload['creatorId'] == null) {
+              payload['creatorId'] = activeUserId;
+            }
+            allMutations[i] = m.copyWith(
+              userId: activeUserId,
+              payload: payload,
+            );
+            queueChanged = true;
+          }
+        }
+        if (queueChanged) {
+          await _storage.saveMutationQueue(allMutations.map((m) => m.toJson()).toList());
+        }
+      }
+
       final actionableQueue = getPendingMutations(userId: activeUserId, includeQuarantined: false);
       final quarantinedQueue = getQuarantinedMutations(userId: activeUserId);
 
@@ -1168,13 +1208,16 @@ class SyncService {
         for (final mutation in actionableQueue) {
           final tId = mutation.tripId;
 
-          // Multi-user safety: Skip mutations created by a different user account on this device
-          if (activeUserId != null && mutation.userId != null && mutation.userId != activeUserId) {
+          // Multi-user safety: Skip mutations created by a different user account on another device
+          if (activeUserId != null &&
+              mutation.userId != null &&
+              mutation.userId != activeUserId &&
+              mutation.originDeviceId != _storage.getDeviceId()) {
             continue;
           }
 
-          // If trip is blocked due to prior failure in this cycle, skip
-          if (tId != null && blockedTripIds.contains(tId)) {
+          // If trip is blocked due to prior failure in this cycle (unless forced by user), skip
+          if (!force && tId != null && blockedTripIds.contains(tId)) {
             continue;
           }
 
@@ -1218,6 +1261,7 @@ class SyncService {
               }
             }
           } on NetworkException catch (_) {
+            _lastErrorMessage = 'No internet connection. Changes saved locally.';
             await _updateMutationAttempt(mutation.id, mutation.retryCount + 1);
             if (tId != null) blockedTripIds.add(tId);
             _setStatus(SyncStatus.offline);
@@ -1237,6 +1281,7 @@ class SyncService {
             debugPrint(
               '[SyncService] Client error ${e.statusCode} for mutation ${mutation.id}: ${e.message}',
             );
+            _lastErrorMessage = e.message;
             if (e.statusCode == 401) {
               debugPrint(
                 '[SyncService] Authentication expired (401). Pausing sync queue.',
@@ -1303,6 +1348,7 @@ class SyncService {
                 }
               }
               if (!autoHealed) {
+                _lastErrorMessage = e.message;
                 await _updateMutationAttempt(
                   mutation.id,
                   mutation.retryCount + 1,
@@ -1336,6 +1382,7 @@ class SyncService {
               }
 
               if (!autoHealed) {
+                _lastErrorMessage = e.message;
                 final isMaxRetryExceeded = mutation.retryCount >= 5 && (e.statusCode == 400 || e.statusCode == 422);
 
                 if (isMembershipError || isMaxRetryExceeded) {
@@ -1365,6 +1412,7 @@ class SyncService {
             debugPrint(
               '[SyncService] Unexpected error on mutation ${mutation.id}: $e',
             );
+            _lastErrorMessage = e.toString();
             await _updateMutationAttempt(
               mutation.id,
               mutation.retryCount + 1,
@@ -1392,10 +1440,12 @@ class SyncService {
         } else if (_currentStatus != SyncStatus.offline &&
             _currentStatus != SyncStatus.error &&
             _currentStatus != SyncStatus.reconnecting) {
-          final allFailed = remainingActionable.every((m) => m.retryCount > 0);
-          if (allFailed) {
+          if (completedMutationIds.isNotEmpty) {
+            _setStatus(SyncStatus.pending);
+          } else if (force || blockedTripIds.isNotEmpty || remainingActionable.any((m) => m.retryCount > 0)) {
             _setStatus(SyncStatus.error);
-            _lastErrorMessage = 'Unable to sync right now. Will retry automatically.';
+            _lastErrorMessage = _lastErrorMessage ??
+                'Unable to sync ${remainingActionable.length} change${remainingActionable.length > 1 ? "s" : ""}. Tap to review.';
           } else {
             _setStatus(SyncStatus.pending);
           }
@@ -1443,6 +1493,7 @@ class SyncService {
         'p2pTripSecret': tripJson['p2pTripSecret'] ?? tripJson['p2p_trip_secret'],
         'p2p_trip_secret': tripJson['p2pTripSecret'] ?? tripJson['p2p_trip_secret'],
         'initialFriendNames': friendNames,
+        'members': members,
       };
 
       await apiClient.post('/trips', body: payload);
