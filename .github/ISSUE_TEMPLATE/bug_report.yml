@@ -1,0 +1,58 @@
+name: Bug Report
+description: Report a bug, crash, or unexpected behavior in Kith
+title: "[BUG]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting an issue! Please provide as much detail as possible to help us reproduce and fix it.
+  - type: input
+    id: environment
+    attributes:
+      label: Environment & Devices
+      description: What device, OS version, and app version are you running?
+      placeholder: "e.g., Pixel 8 Pro, Android 14, Kith v2.0.25 (Debug/Release)"
+    validations:
+      required: true
+  - type: dropdown
+    id: category
+    attributes:
+      label: Affected Component
+      options:
+        - "Trip Management & Membership"
+        - "Expense & Split Calculation"
+        - "Offline Sync & Outbox Queue"
+        - "Nearby Discovery & Bluetooth LE Mesh"
+        - "Receipt Scanner & OCR"
+        - "Voice Expense Input"
+        - "Indian IPO & Portfolio Engine"
+        - "UI / Animations / Design System"
+        - "Backend Server & API"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction Steps
+      description: Provide clear, numbered steps to reproduce the issue.
+      placeholder: |
+        1. Create a trip with 2 members.
+        2. Turn off Wi-Fi and mobile data.
+        3. Add an expense of ₹500.
+        4. Observe unexpected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Error Messages
+      description: Paste any Flutter or Logcat logs here (redacting any private tokens or UPI IDs).
+      render: shell

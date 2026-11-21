@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security Vulnerabilities
+    url: https://github.com/espelho-07/SplitTrip/security/advisories/new
+    about: Please report security vulnerabilities privately through GitHub Advisory.
+  - name: Community & Discussions
+    url: https://github.com/espelho-07/SplitTrip/discussions
+    about: Ask questions, share ideas, and discuss Kith development.
