@@ -31,6 +31,7 @@ class KithSurface extends StatelessWidget {
     final radius = borderRadius ?? AppRadius.lgBorder;
 
     final content = Container(
+      clipBehavior: Clip.antiAlias,
       padding: padding,
       margin: margin,
       decoration: BoxDecoration(
@@ -81,6 +82,8 @@ class KithButton extends StatefulWidget {
   final bool isLoading;
   final double? width;
   final double height;
+  final bool isFullWidth;
+  final EdgeInsetsGeometry? padding;
 
   const KithButton({
     super.key,
@@ -90,7 +93,9 @@ class KithButton extends StatefulWidget {
     this.icon,
     this.isLoading = false,
     this.width,
-    this.height = 50,
+    this.height = 48,
+    this.isFullWidth = false,
+    this.padding,
   });
 
   @override
@@ -149,24 +154,30 @@ class _KithButtonState extends State<KithButton> {
           Icon(widget.icon, size: 18, color: fg),
           const SizedBox(width: AppSpacing.xs),
         ],
-        Text(
-          widget.label,
-          style: TextStyle(
-            color: fg,
-            fontSize: 14.5,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.2,
+        Flexible(
+          child: Text(
+            widget.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: fg,
+              fontSize: 14.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.2,
+            ),
           ),
         ),
       ],
     );
+
+    final effectiveWidth = widget.isFullWidth ? double.infinity : widget.width;
 
     return AnimatedScale(
       scale: _isPressed ? 0.98 : 1.0,
       duration: const Duration(milliseconds: 100),
       curve: Curves.easeOutCubic,
       child: SizedBox(
-        width: widget.width,
+        width: effectiveWidth,
         height: widget.height,
         child: Material(
           color: bg,
@@ -183,7 +194,7 @@ class _KithButtonState extends State<KithButton> {
             onTapCancel: () => setState(() => _isPressed = false),
             borderRadius: AppRadius.mdBorder,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              padding: widget.padding ?? const EdgeInsets.symmetric(horizontal: AppSpacing.md),
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 borderRadius: AppRadius.mdBorder,
@@ -575,6 +586,7 @@ class KithCard extends StatefulWidget {
   final Border? border;
   final bool hasShadow;
   final bool enableScale;
+  final bool isSelected;
 
   const KithCard({
     super.key,
@@ -587,6 +599,7 @@ class KithCard extends StatefulWidget {
     this.border,
     this.hasShadow = true,
     this.enableScale = true,
+    this.isSelected = false,
   });
 
   @override
@@ -603,11 +616,14 @@ class _KithCardState extends State<KithCard> {
         (isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard);
     final effectiveBorder = widget.border ??
         Border.all(
-          color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
-          width: 1.0,
+          color: widget.isSelected
+              ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
+              : (isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle),
+          width: widget.isSelected ? 1.5 : 1.0,
         );
 
     final cardContent = Container(
+      clipBehavior: Clip.antiAlias,
       padding: widget.padding,
       margin: widget.margin,
       decoration: BoxDecoration(
@@ -645,6 +661,139 @@ class _KithCardState extends State<KithCard> {
         onTapCancel: () => setState(() => _isPressed = false),
         behavior: HitTestBehavior.opaque,
         child: cardContent,
+      ),
+    );
+  }
+}
+
+/// Animated, Airbnb-level segmented control.
+/// Adheres strictly to the nested radius formula: outer radius = 16, padding = 4, inner radius = 12.
+class KithSegmentedControl<T> extends StatelessWidget {
+  final List<T> items;
+  final T selectedItem;
+  final String Function(T item) labelBuilder;
+  final IconData? Function(T item)? iconBuilder;
+  final int? Function(T item)? badgeBuilder;
+  final ValueChanged<T> onSelected;
+  final EdgeInsetsGeometry padding;
+
+  const KithSegmentedControl({
+    super.key,
+    required this.items,
+    required this.selectedItem,
+    required this.labelBuilder,
+    required this.onSelected,
+    this.iconBuilder,
+    this.badgeBuilder,
+    this.padding = const EdgeInsets.all(4.0),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+          width: 0.8,
+        ),
+      ),
+      child: Row(
+        children: items.map((item) {
+          final isSelected = item == selectedItem;
+          final icon = iconBuilder != null ? iconBuilder!(item) : null;
+          final badge = badgeBuilder != null ? badgeBuilder!(item) : null;
+
+          return Expanded(
+            child: GestureDetector(
+              onTap: () {
+                if (!isSelected) {
+                  HapticHelper.selection();
+                  onSelected(item);
+                }
+              },
+              behavior: HitTestBehavior.opaque,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOutCubic,
+                padding: const EdgeInsets.symmetric(vertical: 9),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? (isDark ? AppColors.darkSurfaceElevated : Colors.white)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                  border: isSelected
+                      ? Border.all(
+                          color: isDark ? AppColors.darkBorderStrong : AppColors.lightBorderSubtle,
+                          width: 0.8,
+                        )
+                      : null,
+                  boxShadow: isSelected
+                      ? [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.05),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (icon != null) ...[
+                      Icon(
+                        icon,
+                        size: 15,
+                        color: isSelected
+                            ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
+                            : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                      ),
+                      const SizedBox(width: 6),
+                    ],
+                    Text(
+                      labelBuilder(item),
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                        letterSpacing: -0.2,
+                        color: isSelected
+                            ? (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary)
+                            : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
+                      ),
+                    ),
+                    if (badge != null && badge > 0) ...[
+                      const SizedBox(width: 5),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? (isDark ? AppColors.emeraldLight.withValues(alpha: 0.2) : AppColors.emeraldPrimary.withValues(alpha: 0.12))
+                              : (isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.06)),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '$badge',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: isSelected
+                                ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
+                                : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
       ),
     );
   }
@@ -1095,6 +1244,142 @@ class KithAvatarGroup extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// Airbnb-grade bottom navigation bar with refined typography, micro-scale animations,
+/// subtle active dot indicator, and zero chunky background blobs.
+class KithNavItem {
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+
+  const KithNavItem({
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+  });
+}
+
+class KithBottomNavigationBar extends StatelessWidget {
+  final int selectedIndex;
+  final ValueChanged<int> onDestinationSelected;
+  final List<KithNavItem> items;
+
+  const KithBottomNavigationBar({
+    super.key,
+    required this.selectedIndex,
+    required this.onDestinationSelected,
+    required this.items,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final activeColor = isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary;
+    final inactiveColor = isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0F1418).withValues(alpha: 0.95) : Colors.white.withValues(alpha: 0.97),
+        border: Border(
+          top: BorderSide(
+            color: isDark ? const Color(0xFF1E2630) : const Color(0xFFE2E8F0),
+            width: 0.75,
+          ),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 60,
+          child: Row(
+            children: [
+              for (int i = 0; i < items.length; i++) ...[
+                Expanded(
+                  child: InkWell(
+                    onTap: () {
+                      if (selectedIndex != i) {
+                        HapticHelper.selection();
+                        onDestinationSelected(i);
+                      }
+                    },
+                    highlightColor: Colors.transparent,
+                    splashColor: Colors.transparent,
+                    child: _KithNavItemWidget(
+                      item: items[i],
+                      isSelected: selectedIndex == i,
+                      activeColor: activeColor,
+                      inactiveColor: inactiveColor,
+                      isDark: isDark,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _KithNavItemWidget extends StatelessWidget {
+  final KithNavItem item;
+  final bool isSelected;
+  final Color activeColor;
+  final Color inactiveColor;
+  final bool isDark;
+
+  const _KithNavItemWidget({
+    required this.item,
+    required this.isSelected,
+    required this.activeColor,
+    required this.inactiveColor,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedScale(
+      scale: isSelected ? 1.0 : 0.94,
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOutCubic,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            child: Icon(
+              isSelected ? item.activeIcon : item.icon,
+              key: ValueKey(isSelected),
+              size: 22,
+              color: isSelected ? activeColor : inactiveColor,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            item.label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              color: isSelected ? activeColor : inactiveColor,
+              letterSpacing: -0.1,
+            ),
+          ),
+          const SizedBox(height: 2),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: isSelected ? 4 : 0,
+            height: isSelected ? 4 : 0,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: activeColor,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

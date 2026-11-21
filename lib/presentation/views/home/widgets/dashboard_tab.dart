@@ -6,9 +6,11 @@ import '../../../../core/design_system/components/liquid_glass_card.dart';
 import '../../../../core/design_system/components/liquid_glass_modal_sheet.dart';
 import '../../../../core/design_system/tokens/glass_tokens.dart';
 import '../../../../core/localization/app_localizations.dart';
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/utils/date_formatter.dart';
 import '../../../../core/utils/haptic_feedback_helper.dart';
+import '../../../../core/widgets/kith_components.dart';
 import '../../../../data/services/local_storage_service.dart';
 import '../../../../domain/models/trip.dart';
 import '../../../viewmodels/auth_viewmodel.dart';
@@ -87,30 +89,23 @@ class DashboardTab extends StatelessWidget {
     LocalStorageService storage,
     AppLocalizations l10n,
   ) {
-    return LiquidGlassCard(
+    return KithCard(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-      borderRadius: GlassRadii.lgBorder,
-      backgroundGradient: LinearGradient(
-        colors: isDark
-            ? [const Color(0xFF0F1E19), const Color(0xFF091411)]
-            : [const Color(0xFFF0FDF4), const Color(0xFFDCFCE7)],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ),
+      borderRadius: BorderRadius.circular(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(9),
                 decoration: BoxDecoration(
-                  color: GlassColors.brandLight.withValues(alpha: 0.16),
+                  color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.14),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.qr_code_2_rounded,
-                  color: GlassColors.brandLight,
+                  color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
                   size: 20,
                 ),
               ),
@@ -121,17 +116,26 @@ class DashboardTab extends StatelessWidget {
                   children: [
                     Text(
                       l10n.dashPaymentSetupTitle,
-                      style: GlassTypography.titleSmall(isDark: isDark),
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.2,
+                        color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       l10n.dashPaymentSetupSub,
-                      style: GlassTypography.bodySmall(isDark: isDark),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                      ),
                     ),
                   ],
                 ),
               ),
-              // Accessible 48x48dp touch target for dismiss (Fixes UX-HIGH-01)
+              // Accessible 48x48dp touch target for dismiss
               Semantics(
                 button: true,
                 label: 'Dismiss payment setup prompt',
@@ -142,9 +146,9 @@ class DashboardTab extends StatelessWidget {
                       HapticHelper.light();
                       storage.dismissPaymentPrompt();
                     },
-                    borderRadius: GlassRadii.smBorder,
+                    borderRadius: BorderRadius.circular(8),
                     child: Container(
-                      constraints: GlassSpacing.touchTargetConstraints,
+                      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
                       alignment: Alignment.center,
                       child: Icon(
                         Icons.close_rounded,
@@ -158,11 +162,12 @@ class DashboardTab extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          LiquidGlassButton(
-            text: l10n.dashPaymentSetupBtn,
+          KithButton(
+            label: l10n.dashPaymentSetupBtn,
             icon: Icons.add_card_rounded,
             isFullWidth: true,
-            variant: LiquidGlassButtonVariant.primary,
+            variant: KithButtonVariant.primary,
+            height: 44,
             onPressed: () {
               HapticHelper.selection();
               context.push('/payment-methods');
@@ -269,85 +274,159 @@ class DashboardTab extends StatelessWidget {
     AppLocalizations l10n,
   ) {
     final netColor = userNetPaise > 0
-        ? GlassColors.positive(isDark)
-        : (userNetPaise < 0 ? GlassColors.negative(isDark) : (isDark ? Colors.white : const Color(0xFF0F172A)));
+        ? (isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight)
+        : (userNetPaise < 0
+            ? (isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight)
+            : (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary));
 
-    return LiquidGlassCard(
-      padding: const EdgeInsets.all(20.0),
-      borderRadius: GlassRadii.xlBorder,
+    return KithCard(
+      padding: const EdgeInsets.all(18.0),
+      borderRadius: BorderRadius.circular(20),
       onTap: () {
         HapticHelper.light();
         context.push('/trip/${trip.id}');
       },
-      child: Stack(
-        clipBehavior: Clip.none,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '${trip.name} ${trip.emoji}',
-                      style: GlassTypography.titleMedium(isDark: isDark),
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+                  border: Border.all(
+                    color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  trip.emoji.isNotEmpty ? trip.emoji : '🏝️',
+                  style: const TextStyle(fontSize: 22),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      trip.name,
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
+                        color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                      ),
                       overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  Icon(
-                    Icons.arrow_forward_ios_rounded,
-                    size: 14,
-                    color: isDark ? GlassColors.darkTextMuted : GlassColors.lightTextMuted,
-                  ),
-                ],
+                    const SizedBox(height: 2),
+                    Text(
+                      '${DateFormatter.formatTripDateRange(trip.createdAt, trip.updatedAt)} • ${trip.members.length == 1 ? l10n.tripCardMemberSingle : l10n.tripCardMemberPlural(trip.members.length)}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                '${DateFormatter.formatTripDateRange(trip.createdAt, trip.updatedAt)} • ${trip.members.length == 1 ? l10n.tripCardMemberSingle : l10n.tripCardMemberPlural(trip.members.length)}',
-                style: GlassTypography.bodySmall(isDark: isDark),
-              ),
-              const SizedBox(height: 18),
-              Text(
-                userNetPaise > 0
-                    ? l10n.dashYouAreOwed
-                    : (userNetPaise < 0 ? l10n.dashYouOwe : l10n.dashAllSettled),
-                style: GlassTypography.labelCaps(isDark: isDark),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                CurrencyFormatter.formatPaise(userNetPaise.abs(), currencyCode: trip.currencyCode),
-                style: GlassTypography.moneyLarge(isDark: isDark, color: netColor),
-              ),
-              const SizedBox(height: 16),
-              LiquidGlassButton(
-                text: l10n.dashSettleUp,
-                icon: Icons.handshake_outlined,
-                variant: LiquidGlassButtonVariant.primary,
-                onPressed: () {
-                  HapticHelper.medium();
-                  context.push('/trip/${trip.id}?tab=1');
-                },
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 13,
+                color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
               ),
             ],
           ),
-          Positioned(
-            right: 0,
-            top: 20,
-            child: Container(
-              width: 58,
-              height: 58,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isDark ? GlassColors.darkSurfaceSubtle : GlassColors.lightSurfaceSubtle,
-                border: Border.all(
-                  color: isDark ? GlassColors.darkBorderSubtle : GlassColors.lightBorderSubtle,
+          const SizedBox(height: 16),
+          // Inner financial summary block (adheres to nested radius formula: outer 20 - padding 8 = 12)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+                width: 0.8,
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      userNetPaise > 0
+                          ? l10n.dashYouAreOwed.toUpperCase()
+                          : (userNetPaise < 0 ? l10n.dashYouOwe.toUpperCase() : l10n.dashAllSettled.toUpperCase()),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                        color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      userNetPaise > 0
+                          ? '+${CurrencyFormatter.formatPaise(userNetPaise, currencyCode: trip.currencyCode)}'
+                          : (userNetPaise < 0
+                              ? '-${CurrencyFormatter.formatPaise(userNetPaise.abs(), currencyCode: trip.currencyCode)}'
+                              : CurrencyFormatter.formatPaise(0, currencyCode: trip.currencyCode)),
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.5,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                        color: netColor,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                trip.emoji.isNotEmpty ? trip.emoji : '🏝️',
-                style: const TextStyle(fontSize: 28),
-              ),
+                if (userNetPaise != 0)
+                  KithButton(
+                    label: l10n.dashSettleUp,
+                    icon: Icons.handshake_outlined,
+                    variant: KithButtonVariant.primary,
+                    height: 40,
+                    onPressed: () {
+                      HapticHelper.medium();
+                      context.push('/trip/${trip.id}?tab=1');
+                    },
+                  )
+                else
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.check_circle_rounded,
+                          size: 14,
+                          color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Settled',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
             ),
           ),
         ],
@@ -356,41 +435,53 @@ class DashboardTab extends StatelessWidget {
   }
 
   Widget _buildNoActiveTripHeroCard(BuildContext context, bool isDark, AppLocalizations l10n) {
-    return LiquidGlassCard(
-      padding: const EdgeInsets.all(20.0),
-      borderRadius: GlassRadii.xlBorder,
+    return KithCard(
+      padding: const EdgeInsets.all(18.0),
+      borderRadius: BorderRadius.circular(20),
       child: Row(
         children: [
           Container(
-            width: 54,
-            height: 54,
+            width: 50,
+            height: 50,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: isDark ? GlassColors.darkSurfaceSubtle : GlassColors.lightSurfaceSubtle,
+              color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+              border: Border.all(
+                color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+              ),
             ),
             alignment: Alignment.center,
-            child: const Text('✈️', style: TextStyle(fontSize: 26)),
+            child: const Text('✈️', style: TextStyle(fontSize: 24)),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   l10n.dashNoActiveTrips,
-                  style: GlassTypography.titleSmall(isDark: isDark),
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   l10n.dashCreateTripPrompt,
-                  style: GlassTypography.bodySmall(isDark: isDark),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                  ),
                 ),
               ],
             ),
           ),
-          LiquidGlassButton(
-            text: l10n.dashCreateBtn,
-            variant: LiquidGlassButtonVariant.primary,
+          KithButton(
+            label: l10n.dashCreateBtn,
+            variant: KithButtonVariant.primary,
+            height: 40,
             onPressed: () {
               HapticHelper.light();
               context.push('/create-trip');
@@ -414,28 +505,41 @@ class DashboardTab extends StatelessWidget {
       children: [
         Text(
           l10n.dashMyBalances,
-          style: GlassTypography.titleMedium(isDark: isDark),
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.3,
+            color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+          ),
         ),
         const SizedBox(height: 12),
         Row(
           children: [
             Expanded(
-              child: LiquidGlassCard(
+              child: KithCard(
                 padding: const EdgeInsets.all(16.0),
-                borderRadius: GlassRadii.lgBorder,
+                borderRadius: BorderRadius.circular(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      l10n.dashYouAreOwed,
-                      style: GlassTypography.labelCaps(isDark: isDark),
+                      l10n.dashYouAreOwed.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                        color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                      ),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       CurrencyFormatter.formatPaise(totalOwedToUser, currencyCode: baseCurrency),
-                      style: GlassTypography.moneyMedium(
-                        isDark: isDark,
-                        color: GlassColors.positive(isDark),
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                        letterSpacing: -0.4,
+                        color: isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight,
                       ),
                     ),
                   ],
@@ -444,22 +548,30 @@ class DashboardTab extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: LiquidGlassCard(
+              child: KithCard(
                 padding: const EdgeInsets.all(16.0),
-                borderRadius: GlassRadii.lgBorder,
+                borderRadius: BorderRadius.circular(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      l10n.dashYouOwe,
-                      style: GlassTypography.labelCaps(isDark: isDark),
+                      l10n.dashYouOwe.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                        color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                      ),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       CurrencyFormatter.formatPaise(totalUserOwes, currencyCode: baseCurrency),
-                      style: GlassTypography.moneyMedium(
-                        isDark: isDark,
-                        color: GlassColors.negative(isDark),
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                        letterSpacing: -0.4,
+                        color: isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight,
                       ),
                     ),
                   ],
@@ -692,31 +804,41 @@ class DashboardTab extends StatelessWidget {
       label: label,
       child: InkWell(
         onTap: onTap,
-        borderRadius: GlassRadii.lgBorder,
+        borderRadius: BorderRadius.circular(16),
         child: Container(
-          constraints: GlassSpacing.touchTargetConstraints,
-          width: 72,
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          width: 76,
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: Column(
             children: [
-              LiquidGlassCard(
-                padding: EdgeInsets.zero,
-                borderRadius: GlassRadii.lgBorder,
-                backgroundColor: GlassColors.brandLight,
-                child: SizedBox(
-                  width: 52,
-                  height: 52,
-                  child: Icon(icon, color: Colors.white, size: 24),
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+                    width: 0.8,
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  icon,
+                  color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                  size: 24,
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 7),
               Text(
                 label,
                 textAlign: TextAlign.center,
-                style: GlassTypography.bodySmall(isDark: isDark).copyWith(
+                style: TextStyle(
                   fontWeight: FontWeight.w600,
-                  fontSize: 11,
+                  fontSize: 11.5,
+                  letterSpacing: -0.1,
                   height: 1.15,
+                  color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                 ),
               ),
             ],

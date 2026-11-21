@@ -16,6 +16,7 @@ import '../../../core/services/location_service.dart';
 import '../../../core/services/voice_speech_service.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/kith_amount_calculator_field.dart';
+import '../../../core/widgets/kith_components.dart';
 import '../../../core/widgets/kith_description_input_field.dart';
 import '../../../core/widgets/member_avatar.dart';
 import '../../../core/widgets/waveform_visualizer.dart';
@@ -552,82 +553,20 @@ class _AddExpenseViewState extends State<AddExpenseView> {
   }
 
   Widget _buildModeTabs(BuildContext context, bool isDark, AddExpenseViewModel addVm, AppLocalizations l10n) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 4.0),
-      child: Container(
-        padding: const EdgeInsets.all(3),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF141A21) : const Color(0xFFEDF2F7),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            _buildTabButton(title: l10n.expenseManualTab, icon: Icons.edit_rounded, index: 2, isDark: isDark, activeIndex: addVm.currentTab, onTap: () => addVm.setTab(2)),
-            _buildTabButton(title: l10n.expenseVoiceTab, icon: Icons.mic_rounded, index: 0, isDark: isDark, activeIndex: addVm.currentTab, onTap: () => addVm.setTab(0)),
-            _buildTabButton(title: l10n.expenseReceiptTab, icon: Icons.document_scanner_rounded, index: 1, isDark: isDark, activeIndex: addVm.currentTab, onTap: () => addVm.setTab(1)),
-          ],
-        ),
-      ),
-    );
-  }
+    final tabs = [
+      {'label': l10n.expenseManualTab, 'icon': Icons.edit_rounded, 'index': 2},
+      {'label': l10n.expenseVoiceTab, 'icon': Icons.mic_rounded, 'index': 0},
+      {'label': l10n.expenseReceiptTab, 'icon': Icons.document_scanner_rounded, 'index': 1},
+    ];
 
-  Widget _buildTabButton({
-    required String title,
-    required IconData icon,
-    required int index,
-    required bool isDark,
-    required int activeIndex,
-    required VoidCallback onTap,
-  }) {
-    final isSelected = activeIndex == index;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          HapticHelper.selection();
-          onTap();
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          height: 34,
-          decoration: BoxDecoration(
-            color: isSelected
-                ? (isDark ? const Color(0xFF222B35) : Colors.white)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(9),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.05),
-                      blurRadius: 4,
-                      offset: const Offset(0, 1),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 14,
-                color: isSelected
-                    ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
-                    : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
-              ),
-              const SizedBox(width: 5),
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                  color: isSelected
-                      ? (isDark ? Colors.white : const Color(0xFF0F172A))
-                      : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
-                ),
-              ),
-            ],
-          ),
-        ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 6.0),
+      child: KithSegmentedControl<int>(
+        items: const [2, 0, 1],
+        selectedItem: addVm.currentTab,
+        labelBuilder: (idx) => tabs.firstWhere((t) => t['index'] == idx)['label'] as String,
+        iconBuilder: (idx) => tabs.firstWhere((t) => t['index'] == idx)['icon'] as IconData,
+        onSelected: (idx) => addVm.setTab(idx),
       ),
     );
   }

@@ -2,14 +2,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/localization/app_localizations.dart';
-import '../../../core/design_system/components/liquid_glass_nav_bar.dart';
+import '../../../core/widgets/kith_components.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/realtime_client.dart';
 import '../../../core/services/fcm_service.dart';
 import '../../../core/services/kith_widget_service.dart';
 import '../../../core/services/permission_service.dart';
 import '../../../core/utils/currency_formatter.dart';
-import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../data/repositories/expense_repository.dart';
 import '../../../data/services/local_storage_service.dart';
 import '../../../data/services/p2p_sync_service.dart';
@@ -408,23 +407,6 @@ class _HomeViewState extends State<HomeView> {
       TripsHomeTab(),
       ProfileHomeTab(),
     ];
-    final destinations = [
-      NavigationDestination(
-        icon: const Icon(Icons.home_outlined, size: 22),
-        selectedIcon: const Icon(Icons.home_rounded, size: 22, color: Color(0xFF14B8A6)),
-        label: l10n.navHome,
-      ),
-      NavigationDestination(
-        icon: const Icon(Icons.flight_takeoff_outlined, size: 22),
-        selectedIcon: const Icon(Icons.flight_takeoff_rounded, size: 22, color: Color(0xFF14B8A6)),
-        label: l10n.navTrips,
-      ),
-      NavigationDestination(
-        icon: const Icon(Icons.person_outline_rounded, size: 22),
-        selectedIcon: const Icon(Icons.person_rounded, size: 22, color: Color(0xFF14B8A6)),
-        label: l10n.navProfile,
-      ),
-    ];
 
     final activeIndex = _currentIndex.clamp(0, pages.length - 1);
 
@@ -453,21 +435,30 @@ class _HomeViewState extends State<HomeView> {
           ],
         ),
       ),
-      bottomNavigationBar: LiquidGlassNavBar(
-        child: NavigationBar(
-          selectedIndex: activeIndex,
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          indicatorColor: const Color(0xFF14B8A6).withValues(alpha: isDark ? 0.25 : 0.16),
-          height: 64,
-          onDestinationSelected: (index) {
-            if (_currentIndex != index) {
-              setState(() => _currentIndex = index);
-              HapticHelper.selection();
-            }
-          },
-          destinations: destinations,
-        ),
+      bottomNavigationBar: KithBottomNavigationBar(
+        selectedIndex: activeIndex,
+        onDestinationSelected: (index) {
+          if (_currentIndex != index) {
+            setState(() => _currentIndex = index);
+          }
+        },
+        items: [
+          KithNavItem(
+            icon: Icons.home_outlined,
+            activeIcon: Icons.home_rounded,
+            label: l10n.navHome,
+          ),
+          KithNavItem(
+            icon: Icons.flight_takeoff_outlined,
+            activeIcon: Icons.flight_takeoff_rounded,
+            label: l10n.navTrips,
+          ),
+          KithNavItem(
+            icon: Icons.person_outline_rounded,
+            activeIcon: Icons.person_rounded,
+            label: l10n.navProfile,
+          ),
+        ],
       ),
     );
   }

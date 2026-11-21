@@ -1359,7 +1359,7 @@ class SyncService {
               }
             } else {
               final msgLower = e.message.toLowerCase();
-              final isMembershipError = (e.statusCode == 400 || e.statusCode == 422) &&
+              final isMembershipError = (e.statusCode == 400 || e.statusCode == 422 || e.statusCode == 403) &&
                   (msgLower.contains('payer member') ||
                    msgLower.contains('split participant') ||
                    msgLower.contains('member not found') ||
@@ -1496,11 +1496,18 @@ class SyncService {
         'members': members,
       };
 
-      await apiClient.post('/trips', body: payload);
+      try {
+        await apiClient.post('/trips', body: payload);
+      } on ApiException catch (e) {
+        if (e.statusCode != 409) {
+          rethrow;
+        }
+        // 409 Conflict: trip already exists on server, proceed to synchronize members
+      }
 
-      // Re-push virtual members
+      // Re-push members to guarantee all participant IDs exist on server
       for (final m in members) {
-        if (m is Map && m['role'] != 'creator') {
+        if (m is Map) {
           try {
             await apiClient.post('/trips/$tripId/members', body: {
               'tripId': tripId,

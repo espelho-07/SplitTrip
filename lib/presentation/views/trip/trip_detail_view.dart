@@ -2,12 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import '../../../core/design_system/components/liquid_glass_button.dart';
 import '../../../core/design_system/components/liquid_glass_card.dart';
 import '../../../core/design_system/tokens/glass_tokens.dart';
 import '../../../core/services/permission_service.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_elevation.dart';
 import '../../../core/theme/app_radius.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
@@ -1052,12 +1050,14 @@ class _TripDetailViewState extends State<TripDetailView> {
   ) {
     final totalTripPaise = balanceSummary.totalTripSpentInPaise;
     final netColor = userNetPaise > 0
-        ? GlassColors.positive(isDark)
-        : (userNetPaise < 0 ? GlassColors.negative(isDark) : (isDark ? Colors.white : const Color(0xFF0F172A)));
+        ? (isDark ? AppColors.positiveGreenDark : AppColors.positiveGreenLight)
+        : (userNetPaise < 0
+            ? (isDark ? AppColors.negativeRedDark : AppColors.negativeRedLight)
+            : (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary));
 
-    return LiquidGlassCard(
+    return KithCard(
       padding: const EdgeInsets.all(20.0),
-      borderRadius: GlassRadii.xlBorder,
+      borderRadius: BorderRadius.circular(22),
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -1069,10 +1069,11 @@ class _TripDetailViewState extends State<TripDetailView> {
                 padding: const EdgeInsets.only(right: 68.0),
                 child: Text(
                   trip.name,
-                  style: GlassTypography.titleMedium(isDark: isDark).copyWith(
+                  style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w800,
-                    letterSpacing: -0.3,
+                    letterSpacing: -0.4,
+                    color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -1088,7 +1089,11 @@ class _TripDetailViewState extends State<TripDetailView> {
                 children: [
                   Text(
                     '${DateFormatter.formatTripDateRange(trip.createdAt, trip.updatedAt)} • ${trip.members.where((m) => !m.isMerged).length == 1 ? l10n.tripCardMemberSingle : l10n.tripCardMemberPlural(trip.members.where((m) => !m.isMerged).length)}',
-                    style: GlassTypography.bodySmall(isDark: isDark),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+                    ),
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
@@ -1106,7 +1111,7 @@ class _TripDetailViewState extends State<TripDetailView> {
                         letterSpacing: 0.5,
                         color: trip.lifecycleState == TripLifecycle.active
                             ? (isDark ? const Color(0xFF6EE7B7) : const Color(0xFF047857))
-                            : (isDark ? GlassColors.darkTextSecondary : GlassColors.lightTextSecondary),
+                            : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
                       ),
                     ),
                   ),
@@ -1133,19 +1138,31 @@ class _TripDetailViewState extends State<TripDetailView> {
                       children: [
                         Text(
                           userNetPaise > 0
-                              ? l10n.dashYouAreOwed
-                              : (userNetPaise < 0 ? l10n.dashYouOwe : l10n.dashAllSettled),
-                          style: GlassTypography.labelCaps(isDark: isDark),
+                              ? l10n.dashYouAreOwed.toUpperCase()
+                              : (userNetPaise < 0 ? l10n.dashYouOwe.toUpperCase() : l10n.dashAllSettled.toUpperCase()),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.5,
+                            color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                          ),
                         ),
                         const SizedBox(height: 4),
                         FittedBox(
                           fit: BoxFit.scaleDown,
                           alignment: Alignment.centerLeft,
                           child: Text(
-                            CurrencyFormatter.formatPaise(userNetPaise.abs(), currencyCode: trip.currencyCode),
-                            style: GlassTypography.moneyLarge(isDark: isDark, color: netColor).copyWith(
+                            userNetPaise > 0
+                                ? '+${CurrencyFormatter.formatPaise(userNetPaise, currencyCode: trip.currencyCode)}'
+                                : (userNetPaise < 0
+                                    ? '-${CurrencyFormatter.formatPaise(userNetPaise.abs(), currencyCode: trip.currencyCode)}'
+                                    : CurrencyFormatter.formatPaise(0, currencyCode: trip.currencyCode)),
+                            style: TextStyle(
                               fontSize: 32,
                               fontWeight: FontWeight.w800,
+                              letterSpacing: -0.6,
+                              fontFeatures: const [FontFeature.tabularFigures()],
+                              color: netColor,
                             ),
                           ),
                         ),
@@ -1158,7 +1175,12 @@ class _TripDetailViewState extends State<TripDetailView> {
                     children: [
                       Text(
                         'TOTAL SPENT',
-                        style: GlassTypography.labelCaps(isDark: isDark),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.5,
+                          color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       FittedBox(
@@ -1166,9 +1188,11 @@ class _TripDetailViewState extends State<TripDetailView> {
                         alignment: Alignment.centerRight,
                         child: Text(
                           CurrencyFormatter.formatPaise(totalTripPaise, currencyCode: trip.currencyCode),
-                          style: GlassTypography.titleMedium(isDark: isDark).copyWith(
+                          style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
+                            letterSpacing: -0.3,
+                            fontFeatures: const [FontFeature.tabularFigures()],
                             color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                           ),
                         ),
@@ -1180,26 +1204,26 @@ class _TripDetailViewState extends State<TripDetailView> {
 
               const SizedBox(height: 20),
 
-              // 4. Action Buttons (Tactile Liquid Glass)
+              // 4. Action Buttons (Tactile KithButton)
               Row(
                 children: [
                   Expanded(
-                    child: LiquidGlassButton(
-                      text: balanceSummary.simplifiedSettlements.isNotEmpty
+                    child: KithButton(
+                      label: balanceSummary.simplifiedSettlements.isNotEmpty
                           ? '${l10n.tripDetailBtnSettleUp} (${balanceSummary.simplifiedSettlements.length})'
                           : l10n.tripDetailBtnSettleUp,
                       icon: Icons.handshake_outlined,
-                      variant: LiquidGlassButtonVariant.primary,
+                      variant: KithButtonVariant.primary,
                       onPressed: _showSettlementSheet,
                     ),
                   ),
                   if (isCreator && trip.lifecycleState == TripLifecycle.active) ...[
                     const SizedBox(width: 10),
                     Expanded(
-                      child: LiquidGlassButton(
-                        text: l10n.tripDetailCompleteBtn,
+                      child: KithButton(
+                        label: l10n.tripDetailCompleteBtn,
                         icon: Icons.check_circle_outline_rounded,
-                        variant: LiquidGlassButtonVariant.secondary,
+                        variant: KithButtonVariant.secondary,
                         onPressed: _showCompleteTripConfirmation,
                       ),
                     ),
@@ -1214,14 +1238,14 @@ class _TripDetailViewState extends State<TripDetailView> {
             right: 0,
             top: 4,
             child: Container(
-              width: 58,
-              height: 58,
+              width: 54,
+              height: 54,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: isDark ? GlassColors.darkSurfaceSubtle : GlassColors.lightSurfaceSubtle,
+                color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
                 border: Border.all(
-                  color: isDark ? GlassColors.darkBorderSubtle : GlassColors.lightBorderSubtle,
-                  width: 1.2,
+                  color: isDark ? AppColors.darkBorderSubtle : AppColors.lightBorderSubtle,
+                  width: 1.0,
                 ),
                 boxShadow: [
                   BoxShadow(
@@ -1234,7 +1258,7 @@ class _TripDetailViewState extends State<TripDetailView> {
               alignment: Alignment.center,
               child: Text(
                 trip.emoji.isNotEmpty ? trip.emoji : '🏝️',
-                style: const TextStyle(fontSize: 28),
+                style: const TextStyle(fontSize: 26),
               ),
             ),
           ),
@@ -1396,68 +1420,18 @@ class _TripDetailViewState extends State<TripDetailView> {
 
   Widget _buildTopTabSwitcher(Trip trip, bool isDark, AppLocalizations l10n) {
     final tabs = [
-      {'label': l10n.tripDetailTabOverview, 'icon': Icons.space_dashboard_outlined},
-      {'label': l10n.tripDetailTabSpending, 'icon': Icons.credit_card_rounded},
+      {'label': l10n.tripDetailTabOverview, 'icon': Icons.space_dashboard_outlined, 'index': 0},
+      {'label': l10n.tripDetailTabSpending, 'icon': Icons.credit_card_rounded, 'index': 1},
       if (trip.isJourneyEnabled)
-        {'label': l10n.tripDetailTabJourney, 'icon': Icons.map_outlined},
+        {'label': l10n.tripDetailTabJourney, 'icon': Icons.map_outlined, 'index': 2},
     ];
 
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
-        borderRadius: AppRadius.mdBorder,
-      ),
-      padding: const EdgeInsets.all(4),
-      child: Row(
-        children: List.generate(tabs.length, (index) {
-          final isSelected = _topLevelTab == index;
-          final tab = tabs[index];
-          return Expanded(
-            child: GestureDetector(
-              onTap: () {
-                HapticHelper.selection();
-                setState(() => _topLevelTab = index);
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 9),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? (isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard)
-                      : Colors.transparent,
-                  borderRadius: AppRadius.smBorder,
-                  boxShadow: isSelected
-                      ? (isDark ? AppElevation.darkSubtle : AppElevation.lightSubtle)
-                      : null,
-                ),
-                alignment: Alignment.center,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      tab['icon'] as IconData,
-                      size: 16,
-                      color: isSelected
-                          ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
-                          : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      tab['label'] as String,
-                      style: TextStyle(
-                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                        fontSize: 13,
-                        color: isSelected
-                            ? (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary)
-                            : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }),
-      ),
+    return KithSegmentedControl<int>(
+      items: tabs.map((t) => t['index'] as int).toList(),
+      selectedItem: _topLevelTab,
+      labelBuilder: (idx) => tabs.firstWhere((t) => t['index'] == idx)['label'] as String,
+      iconBuilder: (idx) => tabs.firstWhere((t) => t['index'] == idx)['icon'] as IconData,
+      onSelected: (idx) => setState(() => _topLevelTab = idx),
     );
   }
 
@@ -1997,54 +1971,20 @@ class _TripDetailViewState extends State<TripDetailView> {
 
   Widget _buildSpendingSubSwitcher(bool isDark, int expenseCount, int memberCount, AppLocalizations l10n) {
     final subTabs = [
-      {'label': '${l10n.tripDetailTabExpenses} ($expenseCount)', 'index': 0},
-      {'label': '${l10n.tripDetailTabPeople} ($memberCount)', 'index': 1},
-      {'label': l10n.tripDetailTabCategories, 'index': 2},
+      {'label': l10n.tripDetailTabExpenses, 'index': 0, 'count': expenseCount},
+      {'label': l10n.tripDetailTabPeople, 'index': 1, 'count': memberCount},
+      {'label': l10n.tripDetailTabCategories, 'index': 2, 'count': 0},
     ];
 
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurfaceSubtle : AppColors.lightSurfaceSubtle,
-        borderRadius: AppRadius.mdBorder,
-      ),
-      padding: const EdgeInsets.all(4),
-      child: Row(
-        children: subTabs.map((tab) {
-          final idx = tab['index'] as int;
-          final isSelected = _spendingSubTab == idx;
-          return Expanded(
-            child: GestureDetector(
-              onTap: () {
-                HapticHelper.selection();
-                setState(() => _spendingSubTab = idx);
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 7),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? (isDark ? AppColors.darkSurfaceCard : AppColors.lightSurfaceCard)
-                      : Colors.transparent,
-                  borderRadius: AppRadius.smBorder,
-                  boxShadow: isSelected
-                      ? (isDark ? AppElevation.darkSubtle : AppElevation.lightSubtle)
-                      : null,
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  tab['label'] as String,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                    color: isSelected
-                        ? (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary)
-                        : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
-                  ),
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
+    return KithSegmentedControl<int>(
+      items: const [0, 1, 2],
+      selectedItem: _spendingSubTab,
+      labelBuilder: (idx) => subTabs[idx]['label'] as String,
+      badgeBuilder: (idx) {
+        final c = subTabs[idx]['count'] as int;
+        return c > 0 ? c : null;
+      },
+      onSelected: (idx) => setState(() => _spendingSubTab = idx),
     );
   }
 

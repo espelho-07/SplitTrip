@@ -1214,37 +1214,13 @@ class _CreateTripViewState extends State<CreateTripView> {
       ),
       child: SafeArea(
         top: false,
-        child: SizedBox(
-          width: double.infinity,
+        child: KithButton(
+          label: l10n.createTripSubmitBtn,
+          icon: Icons.arrow_forward_rounded,
+          isLoading: createVm.isCreating,
+          isFullWidth: true,
           height: 48,
-          child: ElevatedButton(
-            onPressed: createVm.isValid && !createVm.isCreating ? _handleCreate : null,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF14B8A6),
-              foregroundColor: Colors.white,
-              disabledBackgroundColor: isDark ? const Color(0xFF1E2830) : const Color(0xFFE2E8F0),
-              disabledForegroundColor: isDark ? Colors.white30 : Colors.black26,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              elevation: 2,
-            ),
-            child: createVm.isCreating
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                  )
-                : Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        l10n.createTripSubmitBtn,
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
-                      ),
-                      const SizedBox(width: 6),
-                      const Icon(Icons.arrow_forward_rounded, size: 18),
-                    ],
-                  ),
-          ),
+          onPressed: createVm.isValid && !createVm.isCreating ? _handleCreate : null,
         ),
       ),
     );

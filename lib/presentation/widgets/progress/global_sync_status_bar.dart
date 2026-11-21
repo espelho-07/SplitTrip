@@ -106,11 +106,16 @@ class _GlobalSyncStatusBarState extends State<GlobalSyncStatusBar> {
             ? '$pendingCount changes waiting to sync'
             : 'Your changes are waiting to sync.';
         actionLabel = 'Sync now';
-        onAction = () {
+        onAction = () async {
           HapticHelper.medium();
           final apiClient = Provider.of<ApiClient?>(context, listen: false);
           if (apiClient != null && !syncService.isProcessing) {
-            syncService.flushQueue(apiClient, force: true);
+            await syncService.flushQueue(apiClient, force: true);
+            if (context.mounted) {
+              if (syncService.pendingMutationCount > 0 || syncService.quarantinedCount > 0) {
+                CloudSyncSheet.show(context);
+              }
+            }
           }
         };
         break;

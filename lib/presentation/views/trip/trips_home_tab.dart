@@ -188,80 +188,26 @@ class _TripsHomeTabState extends State<TripsHomeTab> {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Join Trip Pill
-            GestureDetector(
-              onTap: () {
-                HapticHelper.light();
+            KithButton(
+              label: l10n.navJoin,
+              icon: Icons.person_add_alt_1_outlined,
+              variant: KithButtonVariant.secondary,
+              height: 36,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              onPressed: () {
                 context.push('/join-trip');
               },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF161D24) : const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isDark ? AppColors.darkBorderSubtle : const Color(0xFFE2E8F0),
-                    width: 1,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.person_add_alt_1_outlined,
-                      size: 15,
-                      color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-                    ),
-                    const SizedBox(width: 5),
-                    Text(
-                      l10n.navJoin,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ),
             const SizedBox(width: 8),
-
-            // Create Trip Button
-            GestureDetector(
-              onTap: () {
-                HapticHelper.medium();
+            KithButton(
+              label: l10n.tripsCreate,
+              icon: Icons.add_rounded,
+              variant: KithButtonVariant.primary,
+              height: 36,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              onPressed: () {
                 context.push('/create-trip');
               },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                decoration: BoxDecoration(
-                  color: AppColors.emeraldPrimary,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.emeraldPrimary.withValues(alpha: isDark ? 0.35 : 0.25),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.add_rounded, size: 16, color: Colors.white),
-                    const SizedBox(width: 4),
-                    Text(
-                      l10n.tripsCreate,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ),
           ],
         ),
