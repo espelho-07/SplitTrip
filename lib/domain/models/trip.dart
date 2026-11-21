@@ -142,21 +142,43 @@ class Trip {
             ? otherMember.displayName
             : existing.displayName;
 
-        final bool isNowClaimed = otherMember.isClaimed || existing.isClaimed;
+        final bool existingHasRealUid = existing.userId.isNotEmpty &&
+            !existing.userId.startsWith('unclaimed_') &&
+            !existing.userId.startsWith('virtual_');
+        final bool otherHasRealUid = otherMember.userId.isNotEmpty &&
+            !otherMember.userId.startsWith('unclaimed_') &&
+            !otherMember.userId.startsWith('virtual_');
+
+        final bool isNowClaimed = otherMember.isClaimed || existing.isClaimed || existingHasRealUid || otherHasRealUid;
         final String chosenUserId;
-        if (!existing.userId.startsWith('unclaimed_') && existing.userId.isNotEmpty) {
+        if (existingHasRealUid) {
           chosenUserId = existing.userId;
-        } else if (!otherMember.userId.startsWith('unclaimed_') && otherMember.userId.isNotEmpty) {
+        } else if (otherHasRealUid) {
           chosenUserId = otherMember.userId;
         } else {
           chosenUserId = existing.userId.isNotEmpty ? existing.userId : otherMember.userId;
+        }
+
+        final String effectiveRole;
+        if (existing.isCreator || otherMember.isCreator) {
+          effectiveRole = 'creator';
+        } else if (isNowClaimed || (chosenUserId.isNotEmpty && !chosenUserId.startsWith('unclaimed_') && !chosenUserId.startsWith('virtual_'))) {
+          if (otherMember.role.toLowerCase() != 'virtual' && otherMember.role.isNotEmpty) {
+            effectiveRole = otherMember.role;
+          } else if (existing.role.toLowerCase() != 'virtual' && existing.role.isNotEmpty) {
+            effectiveRole = existing.role;
+          } else {
+            effectiveRole = 'member';
+          }
+        } else {
+          effectiveRole = otherMember.role.isNotEmpty ? otherMember.role : existing.role;
         }
 
         mergedMembersMap[otherMember.id] = existing.copyWith(
           displayName: chosenDisplayName,
           userId: chosenUserId,
           avatarUrl: otherMember.avatarUrl ?? existing.avatarUrl,
-          role: otherMember.role != 'member' && otherMember.role != 'virtual' ? otherMember.role : existing.role,
+          role: effectiveRole,
           upiId: otherMember.upiId ?? existing.upiId,
           isClaimed: isNowClaimed,
           status: isNowClaimed ? 'claimed' : (otherMember.status ?? existing.status),
@@ -344,12 +366,27 @@ class Trip {
             chosenUserId = matched.userId.isNotEmpty ? matched.userId : otherMember.userId;
           }
 
+          final String effectiveRole;
+          if (matched.isCreator || otherMember.isCreator) {
+            effectiveRole = 'creator';
+          } else if (isNowClaimed || (chosenUserId.isNotEmpty && !chosenUserId.startsWith('unclaimed_') && !chosenUserId.startsWith('virtual_'))) {
+            if (otherMember.role.toLowerCase() != 'virtual' && otherMember.role.isNotEmpty) {
+              effectiveRole = otherMember.role;
+            } else if (matched.role.toLowerCase() != 'virtual' && matched.role.isNotEmpty) {
+              effectiveRole = matched.role;
+            } else {
+              effectiveRole = 'member';
+            }
+          } else {
+            effectiveRole = otherMember.role.isNotEmpty ? otherMember.role : matched.role;
+          }
+
           mergedMembersMap[canonicalId] = (canonicalId == otherMember.id ? otherMember : matched).copyWith(
             id: canonicalId,
             displayName: chosenDisplayName,
             userId: chosenUserId,
             avatarUrl: otherMember.avatarUrl ?? matched.avatarUrl,
-            role: otherMember.role != 'member' && otherMember.role != 'virtual' ? otherMember.role : matched.role,
+            role: effectiveRole,
             upiId: otherMember.upiId ?? matched.upiId,
             isClaimed: isNowClaimed,
             status: isNowClaimed ? 'claimed' : (otherMember.status ?? matched.status),
@@ -478,8 +515,16 @@ class Trip {
         uniqueMap[group.first.id] = group.first;
       } else {
         // Check if all duplicates are unclaimed virtual members
-        final claimedOrAuth = group.where((m) => m.isClaimed || !m.userId.startsWith('unclaimed_')).toList();
-        final unclaimedVirtual = group.where((m) => !m.isClaimed && m.userId.startsWith('unclaimed_')).toList();
+        final claimedOrAuth = group.where((m) =>
+            m.isClaimed &&
+            m.userId.isNotEmpty &&
+            !m.userId.startsWith('unclaimed_') &&
+            !m.userId.startsWith('virtual_')).toList();
+        final unclaimedVirtual = group.where((m) =>
+            !m.isClaimed ||
+            m.userId.isEmpty ||
+            m.userId.startsWith('unclaimed_') ||
+            m.userId.startsWith('virtual_')).toList();
 
         if (unclaimedVirtual.length > 1 && claimedOrAuth.isEmpty) {
           // Sort to pick canonical member:

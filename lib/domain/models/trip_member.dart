@@ -117,22 +117,25 @@ class TripMember {
         !rawUserId.startsWith('unclaimed_') &&
         !rawUserId.startsWith('virtual_');
 
+    final String cleanRole;
     final bool isClaimed;
     final String status;
     final bool isVirtual;
 
-    if (hasRealUserId && rawClaimed != false && rawStatus != 'unclaimed' && role != 'virtual') {
+    if (hasRealUserId && rawClaimed != false && rawStatus != 'unclaimed') {
       // Authoritative: A registered user with a valid UID who is claimed is NEVER virtual
       isClaimed = true;
       status = rawStatus ?? 'claimed';
       isVirtual = false;
+      cleanRole = (role == 'virtual' || role.isEmpty) ? 'member' : (json['role'] as String? ?? 'member');
     } else {
       final isExplicitVirtual = json['isVirtual'] == true ||
           json['is_virtual'] == true ||
           json['isVirtualMember'] == true;
-      isClaimed = rawClaimed ?? (!isExplicitVirtual && rawStatus != 'unclaimed');
+      isClaimed = rawClaimed ?? (!isExplicitVirtual && rawStatus != 'unclaimed' && hasRealUserId);
       status = rawStatus ?? (isClaimed ? 'claimed' : 'unclaimed');
       isVirtual = isExplicitVirtual || !isClaimed || status == 'unclaimed' || !hasRealUserId || role == 'virtual';
+      cleanRole = json['role'] as String? ?? (isVirtual ? 'virtual' : 'member');
     }
 
     final rawName = (json['displayName'] as String?) ?? (json['display_name'] as String?);
@@ -143,7 +146,7 @@ class TripMember {
       userId: rawUserId,
       displayName: cleanName,
       avatarUrl: json['avatarUrl'] as String? ?? json['avatar_url'] as String?,
-      role: json['role'] as String? ?? 'member',
+      role: cleanRole,
       joinedAt: json['joinedAt'] != null
           ? DateTime.tryParse(json['joinedAt'] as String) ?? DateTime.now()
           : (json['joined_at'] != null

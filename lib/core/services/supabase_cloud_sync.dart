@@ -826,32 +826,30 @@ class SupabaseCloudSync {
 
             tripMap['members'] = (membersData as List<dynamic>? ?? [])
                 .map(
-                  (m) => {
-                    'id': m['id'],
-
-                    'tripId': m['trip_id'],
-
-                    'userId': m['user_id'],
-
-                    'displayName': m['display_name'],
-
-                    'avatarUrl': m['avatar_url'],
-
-                    'role': m['role'],
-
-                    'upiId': m['upi_id'],
-
-                    'isClaimed': m['is_claimed'] ?? true,
-
-                    'isVirtual': m['is_virtual'] ?? false,
-
-                    'claimToken': m['claim_token'],
-
-                    'status': m['status'],
-
-                    'mergedIntoMemberId': m['merged_into_member_id'],
-
-                    'joinedAt': m['joined_at'],
+                  (m) {
+                    final memberUid = m['user_id'] as String? ?? '';
+                    final hasRealUid = memberUid.isNotEmpty &&
+                        !memberUid.startsWith('unclaimed_') &&
+                        !memberUid.startsWith('virtual_');
+                    final isClaimed = hasRealUid || (m['is_claimed'] ?? true);
+                    final isVirtual = !hasRealUid && (m['is_virtual'] ?? false);
+                    final rawRole = (m['role'] as String? ?? 'member').toLowerCase();
+                    final effectiveRole = (hasRealUid && (rawRole == 'virtual' || rawRole.isEmpty)) ? 'member' : (m['role'] ?? 'member');
+                    return {
+                      'id': m['id'],
+                      'tripId': m['trip_id'],
+                      'userId': m['user_id'],
+                      'displayName': m['display_name'],
+                      'avatarUrl': m['avatar_url'],
+                      'role': effectiveRole,
+                      'upiId': m['upi_id'],
+                      'isClaimed': isClaimed,
+                      'isVirtual': isVirtual,
+                      'claimToken': m['claim_token'],
+                      'status': m['status'],
+                      'mergedIntoMemberId': m['merged_into_member_id'],
+                      'joinedAt': m['joined_at'],
+                    };
                   },
                 )
                 .toList();
@@ -1017,32 +1015,30 @@ class SupabaseCloudSync {
 
         tripMap['members'] = (membersData as List<dynamic>? ?? [])
             .map(
-              (m) => {
-                'id': m['id'],
-
-                'tripId': m['trip_id'],
-
-                'userId': m['user_id'],
-
-                'displayName': m['display_name'],
-
-                'avatarUrl': m['avatar_url'],
-
-                'role': m['role'],
-
-                'upiId': m['upi_id'],
-
-                'isClaimed': m['is_claimed'] ?? true,
-
-                'isVirtual': m['is_virtual'] ?? false,
-
-                'claimToken': m['claim_token'],
-
-                'status': m['status'],
-
-                'mergedIntoMemberId': m['merged_into_member_id'],
-
-                'joinedAt': m['joined_at'],
+              (m) {
+                final memberUid = m['user_id'] as String? ?? '';
+                final hasRealUid = memberUid.isNotEmpty &&
+                    !memberUid.startsWith('unclaimed_') &&
+                    !memberUid.startsWith('virtual_');
+                final isClaimed = hasRealUid || (m['is_claimed'] ?? true);
+                final isVirtual = !hasRealUid && (m['is_virtual'] ?? false);
+                final rawRole = (m['role'] as String? ?? 'member').toLowerCase();
+                final effectiveRole = (hasRealUid && (rawRole == 'virtual' || rawRole.isEmpty)) ? 'member' : (m['role'] ?? 'member');
+                return {
+                  'id': m['id'],
+                  'tripId': m['trip_id'],
+                  'userId': m['user_id'],
+                  'displayName': m['display_name'],
+                  'avatarUrl': m['avatar_url'],
+                  'role': effectiveRole,
+                  'upiId': m['upi_id'],
+                  'isClaimed': isClaimed,
+                  'isVirtual': isVirtual,
+                  'claimToken': m['claim_token'],
+                  'status': m['status'],
+                  'mergedIntoMemberId': m['merged_into_member_id'],
+                  'joinedAt': m['joined_at'],
+                };
               },
             )
             .toList();
@@ -1210,50 +1206,54 @@ class SupabaseCloudSync {
 
       for (final m in members) {
         if (m is Map<String, dynamic>) {
-          final isVirtual =
-              m['isVirtual'] == true ||
-              m['is_virtual'] == true ||
-              m['isClaimed'] == false ||
-              m['is_claimed'] == false ||
-              (m['userId'] as String? ?? '').startsWith('unclaimed_');
+          final memberUserId = (m['userId'] ?? m['user_id'] as String?)?.toString().trim() ?? '';
+          final hasRealUid = memberUserId.isNotEmpty &&
+              !memberUserId.startsWith('unclaimed_') &&
+              !memberUserId.startsWith('virtual_');
 
-          await _client.from(tableMembers).upsert({
-            'id': m['id'],
+          final rawClaimed = m['isClaimed'] ?? m['is_claimed'];
+          final rawVirtual = m['isVirtual'] ?? m['is_virtual'] ?? m['isVirtualMember'];
+          final bool isVirtual = !hasRealUid && (rawVirtual == true || rawClaimed == false || memberUserId.startsWith('unclaimed_'));
+          final bool isClaimed = hasRealUid || (rawClaimed == true && !isVirtual);
 
-            'trip_id': tripId,
+          final rawRole = (m['role'] as String? ?? 'member').toLowerCase();
+          final effectiveRole = (hasRealUid && (rawRole == 'virtual' || rawRole.isEmpty))
+              ? 'member'
+              : (m['role'] ?? 'member');
 
-            'user_id': m['userId'] ?? 'unclaimed_',
+          final effectiveUserId = hasRealUid
+              ? memberUserId
+              : (memberUserId.isNotEmpty ? memberUserId : 'unclaimed_${m['id']}');
 
-            'display_name':
-                (m['displayName'] ?? m['display_name'] ?? 'Traveler')
-                    .toString()
-                    .trim()
-                    .isNotEmpty
-                ? (m['displayName'] ?? m['display_name']).toString().trim()
-                : 'Traveler',
-
-            'avatar_url': m['avatarUrl'] ?? m['avatar_url'],
-
-            'role': m['role'] ?? 'member',
-
-            'upi_id': m['upi_id'] ?? m['upiId'],
-
-            'is_claimed': m['isClaimed'] ?? m['is_claimed'] ?? !isVirtual,
-
-            'is_virtual': isVirtual,
-
-            'claim_token': m['claimToken'] ?? m['claim_token'],
-
-            'status': m['status'] ?? (isVirtual ? 'unclaimed' : 'claimed'),
-
-            'merged_into_member_id':
-                m['mergedIntoMemberId'] ?? m['merged_into_member_id'],
-
-            'joined_at':
-                m['joinedAt'] ??
-                m['joined_at'] ??
-                DateTime.now().toIso8601String(),
-          }, onConflict: 'id');
+          try {
+            await _client.from(tableMembers).upsert({
+              'id': m['id'],
+              'trip_id': tripId,
+              'user_id': effectiveUserId,
+              'display_name':
+                  (m['displayName'] ?? m['display_name'] ?? 'Traveler')
+                      .toString()
+                      .trim()
+                      .isNotEmpty
+                  ? (m['displayName'] ?? m['display_name']).toString().trim()
+                  : 'Traveler',
+              'avatar_url': m['avatarUrl'] ?? m['avatar_url'],
+              'role': effectiveRole,
+              'upi_id': m['upi_id'] ?? m['upiId'],
+              'is_claimed': isClaimed,
+              'is_virtual': isVirtual,
+              'claim_token': m['claimToken'] ?? m['claim_token'],
+              'status': m['status'] ?? (isVirtual ? 'unclaimed' : 'claimed'),
+              'merged_into_member_id':
+                  m['mergedIntoMemberId'] ?? m['merged_into_member_id'],
+              'joined_at':
+                  m['joinedAt'] ??
+                  m['joined_at'] ??
+                  DateTime.now().toIso8601String(),
+            }, onConflict: 'id');
+          } catch (memberErr) {
+            debugPrint('[SupabaseCloudSync] Failed to upsert member ${m['id']}: $memberErr');
+          }
         }
       }
 

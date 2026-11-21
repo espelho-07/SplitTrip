@@ -13,7 +13,10 @@ import '../../core/network/api_exceptions.dart';
 import '../../core/network/realtime_client.dart';
 import '../../domain/engine/expense_merge.dart';
 import '../../domain/models/expense.dart';
+import '../../domain/models/guest_user.dart';
 import '../../domain/models/trip.dart';
+import '../../domain/models/trip_member.dart';
+import '../repositories/trip_repository.dart';
 import 'local_storage_service.dart';
 
 enum MutationType {
@@ -795,6 +798,8 @@ class SyncService {
         case MutationType.createTrip:
         case MutationType.joinTrip:
         case MutationType.updateTripLifecycle:
+        case MutationType.addMember:
+        case MutationType.renameMember:
           final trips = storage.getSavedTrips();
           final tId =
               payload['id'] as String? ??
@@ -803,7 +808,57 @@ class SyncService {
           if (tId != null) {
             final idx = trips.indexWhere((t) => t['id'] == tId);
             if (idx != -1) {
-              trips[idx] = {...trips[idx], ...payload};
+              final existingTrip = Trip.fromJson(trips[idx]);
+              Trip updatedTrip = existingTrip;
+              if (payload.containsKey('member') && payload['member'] is Map<String, dynamic>) {
+                final incomingMember = TripMember.fromJson(payload['member'] as Map<String, dynamic>);
+                final mergedDetailed = existingTrip.mergeWithDetailed(
+                  existingTrip.copyWith(members: [...existingTrip.members, incomingMember]),
+                );
+                updatedTrip = mergedDetailed.mergedTrip;
+              } else if (payload.containsKey('user') && payload['user'] is Map<String, dynamic>) {
+                final guestUser = GuestUser.fromJson(payload['user'] as Map<String, dynamic>);
+                updatedTrip = TripRepository.processLocalParticipantClaim(
+                  existingTrip,
+                  guestUser,
+                  claimMemberId: payload['claimMemberId'] as String?,
+                  claimToken: payload['claimToken'] as String?,
+                );
+              } else if (mutation.type == MutationType.addMember && payload.containsKey('displayName')) {
+                final rawName = payload['displayName'] as String;
+                final existing = existingTrip.members.where((m) => m.displayName.trim().toLowerCase() == rawName.trim().toLowerCase()).firstOrNull;
+                if (existing == null) {
+                  final newMember = TripMember(
+                    id: payload['id'] as String? ?? 'mbr_${const Uuid().v4().replaceAll('-', '').substring(0, 10)}',
+                    userId: payload['userId'] as String? ?? 'unclaimed_${const Uuid().v4().replaceAll('-', '').substring(0, 8)}',
+                    displayName: rawName.trim(),
+                    role: payload['role'] as String? ?? 'member',
+                    status: 'unclaimed',
+                    isClaimed: false,
+                    isVirtualMember: true,
+                    claimToken: payload['claimToken'] as String?,
+                    joinedAt: DateTime.now(),
+                  );
+                  updatedTrip = existingTrip.copyWith(
+                    members: [...existingTrip.members, newMember],
+                    updatedAt: DateTime.now(),
+                  );
+                }
+              } else if (mutation.type == MutationType.renameMember && payload.containsKey('memberId') && payload.containsKey('displayName')) {
+                final mId = payload['memberId'] as String;
+                final newName = payload['displayName'] as String;
+                final updatedMemberList = existingTrip.members.map((m) {
+                  if (m.id == mId) return m.copyWith(displayName: newName);
+                  return m;
+                }).toList();
+                updatedTrip = existingTrip.copyWith(members: updatedMemberList, updatedAt: DateTime.now());
+              } else {
+                trips[idx] = {...trips[idx], ...payload};
+                updatedTrip = Trip.fromJson(trips[idx]);
+              }
+              trips[idx] = updatedTrip.toJson();
+            } else if (payload.containsKey('trip') && payload['trip'] is Map<String, dynamic>) {
+              trips.insert(0, payload['trip'] as Map<String, dynamic>);
             } else {
               trips.insert(0, payload);
             }
@@ -1347,6 +1402,21 @@ class SyncService {
 
                   // First check if it was intentionally deleted/tombstoned locally
                   if (!_storage.isExpenseTombstoned(tId, expenseId)) {
+                    // Enrich payload from local storage if fields are missing
+                    final localExpenses = _storage.getSavedExpenses(tId);
+                    final localMatch = localExpenses.where((exp) =>
+                        (exp['id'] as String? ?? exp['expenseId'] as String?) == expenseId).firstOrNull;
+                    if (localMatch != null) {
+                      for (final entry in localMatch.entries) {
+                        expensePayload.putIfAbsent(entry.key, () => entry.value);
+                      }
+                    }
+                    if (expensePayload['amountInPaise'] != null) {
+                      expensePayload['amountInPaise'] = (expensePayload['amountInPaise'] as num).toInt();
+                    }
+                    if (expensePayload['title'] == null || (expensePayload['title'] as String).trim().isEmpty) {
+                      expensePayload['title'] = 'Expense';
+                    }
                     await apiClient.post('/trips/$tId/expenses', body: expensePayload);
                     completedMutationIds.add(mutation.id);
                     await removeMutation(mutation.id);
@@ -1359,6 +1429,17 @@ class SyncService {
                   }
                 } catch (createErr) {
                   debugPrint('[SyncService] Failed to auto-create missing expense on server: $createErr');
+                  if (createErr is ApiException && createErr.statusCode == 409) {
+                    completedMutationIds.add(mutation.id);
+                    await removeMutation(mutation.id);
+                    expenseHealed = true;
+                  } else if (createErr is ApiException && createErr.statusCode == 404 &&
+                      (createErr.message.toLowerCase().contains('trip not found') ||
+                       createErr.message.toLowerCase().contains('not found'))) {
+                    completedMutationIds.add(mutation.id);
+                    await removeMutation(mutation.id);
+                    expenseHealed = true;
+                  }
                 }
               }
               if (!expenseHealed) {

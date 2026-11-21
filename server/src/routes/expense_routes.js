@@ -105,7 +105,7 @@ router.delete('/:expenseId', (req, res, next) => {
     const result = expenseService.deleteExpense(
       req.params.tripId,
       req.params.expenseId,
-      req.user.id,
+      req.user,
       realtimeHub
     );
     res.status(200).json({ data: result });

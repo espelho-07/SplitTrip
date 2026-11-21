@@ -511,7 +511,13 @@ class TripRepository {
           trips.insert(0, updatedTrip);
         }
         await _saveTripsAndCache(trips.map((t) => t.toJson()).toList());
-        await syncService.enqueueMutation(MutationType.joinTrip, payload);
+        final joinMutationPayload = {
+          ...payload,
+          'tripId': updatedTrip.id,
+          'user': user.toJson(),
+          'member': updatedTrip.members.where((m) => m.userId == user.id).firstOrNull?.toJson(),
+        };
+        await syncService.enqueueMutation(MutationType.joinTrip, joinMutationPayload);
         eventBus?.emit(TripJoinedEvent(trip: updatedTrip));
         return updatedTrip;
       }
@@ -543,7 +549,13 @@ class TripRepository {
           trips.add(updatedTrip);
         }
         await _saveTripsAndCache(trips.map((t) => t.toJson()).toList());
-        await syncService.enqueueMutation(MutationType.joinTrip, payload);
+        final joinMutationPayload = {
+          ...payload,
+          'tripId': updatedTrip.id,
+          'user': user.toJson(),
+          'member': updatedTrip.members.where((m) => m.userId == user.id).firstOrNull?.toJson(),
+        };
+        await syncService.enqueueMutation(MutationType.joinTrip, joinMutationPayload);
         eventBus?.emit(TripJoinedEvent(trip: updatedTrip));
         return updatedTrip;
       }
@@ -579,7 +591,13 @@ class TripRepository {
           trips.add(updatedTrip);
         }
         await _saveTripsAndCache(trips.map((t) => t.toJson()).toList());
-        await syncService.enqueueMutation(MutationType.joinTrip, payload);
+        final joinMutationPayload = {
+          ...payload,
+          'tripId': updatedTrip.id,
+          'user': user.toJson(),
+          'member': updatedTrip.members.where((m) => m.userId == user.id).firstOrNull?.toJson(),
+        };
+        await syncService.enqueueMutation(MutationType.joinTrip, joinMutationPayload);
         eventBus?.emit(TripJoinedEvent(trip: updatedTrip));
         return updatedTrip;
       }
@@ -608,7 +626,13 @@ class TripRepository {
           trips.add(updatedTrip);
         }
         await _saveTripsAndCache(trips.map((t) => t.toJson()).toList());
-        await syncService.enqueueMutation(MutationType.joinTrip, payload);
+        final joinMutationPayload = {
+          ...payload,
+          'tripId': updatedTrip.id,
+          'user': user.toJson(),
+          'member': updatedTrip.members.where((m) => m.userId == user.id).firstOrNull?.toJson(),
+        };
+        await syncService.enqueueMutation(MutationType.joinTrip, joinMutationPayload);
         eventBus?.emit(TripJoinedEvent(trip: updatedTrip));
         return updatedTrip;
       }
@@ -634,7 +658,6 @@ class TripRepository {
     );
   }
 
-  @visibleForTesting
   static Trip processLocalParticipantClaim(
     Trip match,
     GuestUser user, {

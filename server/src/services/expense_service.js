@@ -146,7 +146,16 @@ class ExpenseService {
     }
 
     if (!Array.isArray(splits) || splits.length === 0) {
-      throw AppError.badRequest('At least one participant split is required');
+      // Auto-generate equal splits among current trip members if splits omitted
+      const tripMembers = db.filter('trip_members', (m) => m.tripId === tripId && !m.isDeleted && m.status !== 'merged');
+      const targetMembers = tripMembers.length > 0 ? tripMembers : [payerMember];
+      const count = targetMembers.length;
+      const baseShare = Math.floor(amountInPaise / count);
+      let remainder = amountInPaise - (baseShare * count);
+      splits = targetMembers.map((m, idx) => ({
+        memberId: m.id,
+        amountInPaise: baseShare + (idx === 0 ? remainder : 0),
+      }));
     }
 
     // Server-Side Financial Validation: Sum of splits must strictly equal total amount
@@ -305,18 +314,29 @@ class ExpenseService {
 
     const existing = db.get('expenses', expenseId);
     if (!existing || existing.tripId !== tripId || existing.isDeleted) {
-      // Graceful recovery: If the expense is not yet on the server, but client sent a complete expense creation payload
-      // (as happens when local-only expenses were queued for sync or during recovery), auto-create with the original ID!
-      if (title && title.trim() && amountInPaise && Number.isInteger(amountInPaise) && amountInPaise > 0) {
+      // Graceful recovery: If the expense is not yet on the server, but client sent an expense creation/update payload
+      // (as happens when local-only expenses were queued for sync or during out-of-order peer forward), auto-create with the original ID!
+      let parsedAmount = amountInPaise !== undefined ? Number(amountInPaise) : undefined;
+      if ((parsedAmount === undefined || isNaN(parsedAmount)) && baseExpense?.amountInPaise !== undefined) {
+        parsedAmount = Number(baseExpense.amountInPaise);
+      }
+      const effectiveTitle = (title && title.trim()) || baseExpense?.title || 'Expense';
+      const effectiveCategory = category || baseExpense?.category || 'general';
+      const effectivePaidById = paidById || baseExpense?.paidById || authMember.id;
+      const effectivePaidByMap = paidByMap || baseExpense?.paidByMap || null;
+      const effectiveSplitType = splitType || baseExpense?.splitType || 'equal';
+      let effectiveSplits = splits && splits.length > 0 ? splits : (baseExpense?.splits || []);
+
+      if (parsedAmount && Number.isInteger(parsedAmount) && parsedAmount > 0) {
         return this.createExpense(user, tripId, {
           id: expenseId,
-          title: title.trim(),
-          amountInPaise,
-          category,
-          paidById: paidById || authMember.id,
-          paidByMap,
-          splitType,
-          splits,
+          title: effectiveTitle,
+          amountInPaise: parsedAmount,
+          category: effectiveCategory,
+          paidById: effectivePaidById,
+          paidByMap: effectivePaidByMap,
+          splitType: effectiveSplitType,
+          splits: effectiveSplits,
           voiceTranscript,
           receiptUrl,
         }, realtimeHub);
@@ -490,7 +510,16 @@ class ExpenseService {
     }
 
     if (!Array.isArray(splits) || splits.length === 0) {
-      throw AppError.badRequest('At least one participant split is required');
+      // Auto-generate equal splits among current trip members if splits omitted
+      const tripMembers = db.filter('trip_members', (m) => m.tripId === tripId && !m.isDeleted && m.status !== 'merged');
+      const targetMembers = tripMembers.length > 0 ? tripMembers : [payerMember];
+      const count = targetMembers.length;
+      const baseShare = Math.floor(amountInPaise / count);
+      let remainder = amountInPaise - (baseShare * count);
+      splits = targetMembers.map((m, idx) => ({
+        memberId: m.id,
+        amountInPaise: baseShare + (idx === 0 ? remainder : 0),
+      }));
     }
 
     let splitSum = 0;
@@ -597,31 +626,44 @@ class ExpenseService {
     const trip = db.get('trips', tripId);
     if (!trip) throw AppError.notFound('Trip not found');
 
-    const authMember = db.findOne('trip_members', (m) => m.tripId === tripId && m.userId === user.id);
+    const userId = typeof user === 'string' ? user : (user?.id || user?.userId);
+    let authMember = db.findOne('trip_members', (m) => m.tripId === tripId && m.userId === userId);
+    const now = new Date().toISOString();
+    if (!authMember && trip.creatorId === userId) {
+      authMember = {
+        id: `mbr_${crypto.randomUUID().replace(/-/g, '').substring(0, 10)}`,
+        tripId,
+        userId: userId,
+        displayName: (typeof user === 'object' && user?.displayName) || 'Creator',
+        role: 'creator',
+        isVirtual: false,
+        joinedAt: now,
+      };
+      db.insert('trip_members', authMember);
+    }
     if (!authMember) throw AppError.forbidden('Not a member of this trip');
 
     if (trip.lifecycleState === 'completed' || trip.lifecycleState === 'settled') {
-      db.update('trips', tripId, { lifecycleState: 'active', updatedAt: new Date().toISOString() });
+      db.update('trips', tripId, { lifecycleState: 'active', updatedAt: now });
     }
 
     const expense = db.get('expenses', expenseId);
     if (!expense || expense.tripId !== tripId) {
-      throw AppError.notFound('Expense not found');
+      return { success: true, alreadyDeleted: true, balanceSummary: this.getBalanceSummary(tripId, userId) };
     }
     if (expense.isDeleted) {
-      return { expense, balanceSummary: this.getBalanceSummary(tripId, user.id), alreadyDeleted: true };
+      return { expense, balanceSummary: this.getBalanceSummary(tripId, userId), alreadyDeleted: true };
     }
 
     // Only creator of trip, creator of expense, or payer can delete
-    const isTripCreator = trip.creatorId === user.id || authMember.role === 'creator';
-    const isExpenseCreator = expense.createdByUserId === user.id;
+    const isTripCreator = trip.creatorId === userId || authMember.role === 'creator';
+    const isExpenseCreator = expense.createdByUserId === userId;
     const isPayer = expense.paidById === authMember.id;
 
     if (!isTripCreator && !isExpenseCreator && !isPayer) {
       throw AppError.forbidden('You do not have permission to delete this expense');
     }
 
-    const now = new Date().toISOString();
     db.update('expenses', expenseId, { isDeleted: true, updatedAt: now });
     db.update('trips', tripId, { updatedAt: now, revision: (trip.revision || 1) + 1 });
     db.update('trip_members', authMember.id, { lastSyncedRevision: (trip.revision || 1) + 1, lastSeenAt: now });
@@ -629,7 +671,7 @@ class ExpenseService {
     const tripService = require('./trip_service');
     tripService.logActivity(tripId, {
       type: 'expense_deleted',
-      actorId: user.id,
+      actorId: userId,
       actorName: authMember.displayName,
       description: `${authMember.displayName} removed expense "${expense.title}"`,
       metadata: { expenseId },
