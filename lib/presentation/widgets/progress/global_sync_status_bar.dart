@@ -5,7 +5,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/haptic_feedback_helper.dart';
 import '../../../data/services/sync_service.dart';
-import '../../views/cloud/cloud_sync_sheet.dart';
+import '../../views/sync/offline_synchronization_sheet.dart';
 
 /// Top-level reactive connectivity and synchronization status bar.
 ///
@@ -77,7 +77,7 @@ class _GlobalSyncStatusBarState extends State<GlobalSyncStatusBar> {
           actionLabel = 'View';
           onAction = () {
             HapticHelper.light();
-            CloudSyncSheet.show(context);
+            OfflineSynchronizationSheet.show(context);
           };
         } else {
           bgColor = isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9);
@@ -113,7 +113,7 @@ class _GlobalSyncStatusBarState extends State<GlobalSyncStatusBar> {
             await syncService.flushQueue(apiClient, force: true);
             if (context.mounted) {
               if (syncService.pendingMutationCount > 0 || syncService.quarantinedCount > 0) {
-                CloudSyncSheet.show(context);
+                OfflineSynchronizationSheet.show(context);
               }
             }
           }
@@ -148,7 +148,7 @@ class _GlobalSyncStatusBarState extends State<GlobalSyncStatusBar> {
         }
         onAction = () {
           HapticHelper.light();
-          CloudSyncSheet.show(context);
+          OfflineSynchronizationSheet.show(context);
         };
         break;
 
@@ -160,7 +160,7 @@ class _GlobalSyncStatusBarState extends State<GlobalSyncStatusBar> {
       behavior: HitTestBehavior.opaque,
       onTap: () {
         HapticHelper.light();
-        CloudSyncSheet.show(context);
+        OfflineSynchronizationSheet.show(context);
       },
       child: Container(
         width: double.infinity,

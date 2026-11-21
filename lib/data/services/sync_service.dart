@@ -524,6 +524,55 @@ class SyncService {
     final effectiveUserId = userId ??
         _storage.getSavedUser()?['id'] as String? ??
         _storage.getSavedUser()?['accountId'] as String?;
+
+    final queue = getAllMutations();
+    final resolvedDependsOn = Set<String>.from(dependsOn ?? const []);
+
+    // Automatic Causal Dependency Resolution:
+    // Preserves causal ordering so child operations never sync before parent entities
+    final targetTripId = (payload['tripId'] ?? (type == MutationType.createTrip ? payload['id'] : null))?.toString();
+    if (targetTripId != null && targetTripId.isNotEmpty) {
+      if (type != MutationType.createTrip) {
+        // Any mutation on a trip depends on its initial trip creation mutation if still pending
+        for (final pending in queue) {
+          if (pending.type == MutationType.createTrip &&
+              (pending.payload['id'] == targetTripId || pending.idempotencyKey == targetTripId)) {
+            resolvedDependsOn.add(pending.id);
+          }
+        }
+      }
+
+      // Sequential expense operations: update and delete depend on earlier mutations for the same expense
+      final expenseId = (payload['id'] ?? payload['expenseId'])?.toString();
+      if (expenseId != null && expenseId.isNotEmpty &&
+          (type == MutationType.updateExpense || type == MutationType.deleteExpense)) {
+        for (final pending in queue) {
+          if ((pending.type == MutationType.addExpense || pending.type == MutationType.updateExpense) &&
+              (pending.payload['id'] == expenseId || pending.idempotencyKey == expenseId)) {
+            resolvedDependsOn.add(pending.id);
+          }
+        }
+      }
+
+      // Member additions before expense creation: if adding an expense, depend on any pending member additions for this trip
+      if (type == MutationType.addExpense) {
+        for (final pending in queue) {
+          if (pending.tripId == targetTripId && pending.type == MutationType.addMember) {
+            resolvedDependsOn.add(pending.id);
+          }
+        }
+      }
+
+      // Trip completion depends on ALL preceding pending mutations for this trip
+      if (type == MutationType.updateTripLifecycle) {
+        for (final pending in queue) {
+          if (pending.tripId == targetTripId && pending.id != mutationId) {
+            resolvedDependsOn.add(pending.id);
+          }
+        }
+      }
+    }
+
     final mutation = SyncMutation(
       id: mutationId,
       idempotencyKey: idempotencyKey ?? mutationId,
@@ -531,12 +580,11 @@ class SyncService {
       type: type,
       payload: payload,
       createdAt: DateTime.now(),
-      dependsOn: dependsOn ?? const [],
+      dependsOn: resolvedDependsOn.toList(),
       syncState: SyncState.localPending,
       originDeviceId: _storage.getDeviceId(),
     );
 
-    final queue = getAllMutations();
     queue.add(mutation);
     await _storage.saveMutationQueue(queue.map((m) => m.toJson()).toList());
     _setStatus(SyncStatus.pending);
@@ -1209,14 +1257,17 @@ class SyncService {
         apiClient.setAuthToken(token);
       }
 
-      // Auto-adopt any mutations created on this device by earlier guest sessions
+      // Auto-adopt any mutations created on this device by earlier unassigned guest sessions
       if (activeUserId != null) {
         final allMutations = getAllMutations();
         bool queueChanged = false;
         for (int i = 0; i < allMutations.length; i++) {
           final m = allMutations[i];
-          if (m.originDeviceId == _storage.getDeviceId() &&
-              (m.userId == null || m.userId != activeUserId)) {
+          final isGuestOrUnassigned = m.userId == null ||
+              m.userId!.isEmpty ||
+              m.userId!.toLowerCase().contains('guest') ||
+              m.userId!.toLowerCase().contains('unclaimed');
+          if (m.originDeviceId == _storage.getDeviceId() && isGuestOrUnassigned && m.userId != activeUserId) {
             final payload = Map<String, dynamic>.from(m.payload);
             if (payload['userId'] == m.userId || payload['userId'] == null) {
               payload['userId'] = activeUserId;
@@ -1263,11 +1314,11 @@ class SyncService {
         for (final mutation in actionableQueue) {
           final tId = mutation.tripId;
 
-          // Multi-user safety: Skip mutations created by a different user account on another device
+          // Multi-user safety: Skip mutations created by a different user account
           if (activeUserId != null &&
               mutation.userId != null &&
-              mutation.userId != activeUserId &&
-              mutation.originDeviceId != _storage.getDeviceId()) {
+              mutation.userId!.isNotEmpty &&
+              mutation.userId != activeUserId) {
             continue;
           }
 
