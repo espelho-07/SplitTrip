@@ -109,7 +109,23 @@ class ExpenseRepository {
         for (final deletedId in outcome.remoteDeletedIds) {
           await storage.markExpenseTombstoned(tripId, deletedId);
         }
-        for (final expenseId in outcome.localNewerIds) {
+        for (final expenseId in outcome.localCreatedIds) {
+          Expense? expense;
+          for (final candidate in outcome.expenses) {
+            if (candidate.id == expenseId) {
+              expense = candidate;
+              break;
+            }
+          }
+          if (expense == null || pendingUpserts.containsKey(expenseId)) continue;
+          await syncService.enqueueMutation(
+            MutationType.addExpense,
+            expense.toJson(),
+            idempotencyKey: expense.id,
+            backgroundApiClient: apiClient,
+          );
+        }
+        for (final expenseId in outcome.localUpdatedIds) {
           Expense? expense;
           for (final candidate in outcome.expenses) {
             if (candidate.id == expenseId) {

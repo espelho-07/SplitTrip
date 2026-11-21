@@ -34,17 +34,21 @@ class TripService {
       completedBy: trip.completedBy || null,
       members: members.map((m) => {
         const u = db.get('users', m.userId) || {};
-        const isUnclaimed = m.status === 'unclaimed' || (m.userId && m.userId.startsWith('unclaimed_'));
+        const hasRealUid = m.userId && !m.userId.startsWith('unclaimed_') && !m.userId.startsWith('virtual_');
+        const isClaimed = typeof m.isClaimed === 'boolean' ? m.isClaimed : (hasRealUid && m.status !== 'unclaimed');
+        const isVirtual = (hasRealUid && isClaimed && m.status !== 'unclaimed' && m.role !== 'virtual')
+          ? false
+          : (m.isVirtual !== undefined ? m.isVirtual : !isClaimed);
         return {
           id: m.id,
           userId: m.userId,
           displayName: m.displayName,
           avatarUrl: m.avatarUrl || null,
           role: m.role || 'member',
-          status: m.status || (isUnclaimed ? 'unclaimed' : 'claimed'),
-          isClaimed: typeof m.isClaimed === 'boolean' ? m.isClaimed : !isUnclaimed,
+          status: m.status || (isClaimed ? 'claimed' : 'unclaimed'),
+          isClaimed: isClaimed,
           claimToken: m.claimToken || null,
-          isVirtual: m.isVirtual !== undefined ? m.isVirtual : isUnclaimed,
+          isVirtual: isVirtual,
           mergedIntoMemberId: m.mergedIntoMemberId || null,
           joinedAt: m.joinedAt,
           lastSeenAt: m.lastSeenAt || m.joinedAt || null,
@@ -356,6 +360,7 @@ class TripService {
         avatarUrl: user.avatarUrl || targetMember.avatarUrl || null,
         status: 'claimed',
         isClaimed: true,
+        isVirtual: false,
         claimToken: null,
         joinedAt: now,
         lastSeenAt: now,
@@ -387,6 +392,7 @@ class TripService {
           avatarUrl: user.avatarUrl || candidateVirtual.avatarUrl || null,
           status: 'claimed',
           isClaimed: true,
+          isVirtual: false,
           claimToken: null,
           joinedAt: now,
           lastSeenAt: now,
@@ -412,6 +418,7 @@ class TripService {
           role: 'member',
           status: 'claimed',
           isClaimed: true,
+          isVirtual: false,
           joinedAt: now,
           lastSeenAt: now,
           lastSyncedRevision: 1,
@@ -508,16 +515,29 @@ class TripService {
       return this._enrichTrip(trip);
     }
 
+    // Check if member already exists by explicit user ID (idempotency)
+    if (explicitUserId) {
+      const existingByUid = db.findOne('trip_members', (m) => m.tripId === tripId && m.userId === explicitUserId);
+      if (existingByUid) {
+        return this._enrichTrip(trip);
+      }
+    }
+
     // Check if an unclaimed member with the same display name already exists (idempotency)
     const cleanName = displayName.trim().toLowerCase();
     const existingByName = db.findOne('trip_members', (m) => 
       m.tripId === tripId && 
-      m.status === 'unclaimed' && 
+      (m.status === 'unclaimed' || (m.userId && m.userId.startsWith('unclaimed_'))) && 
       (m.displayName || '').trim().toLowerCase() === cleanName
     );
     if (existingByName) {
       return this._enrichTrip(trip);
     }
+
+    const hasRealUid = explicitUserId && !explicitUserId.startsWith('unclaimed_') && !explicitUserId.startsWith('virtual_');
+    const memberIsClaimed = hasRealUid || isVirtual === false;
+    const memberStatus = memberIsClaimed ? 'claimed' : 'unclaimed';
+    const memberIsVirtual = memberIsClaimed ? false : (isVirtual !== false);
 
     const newMember = {
       id: finalId,
@@ -526,10 +546,10 @@ class TripService {
       displayName: displayName.trim(),
       avatarUrl: null,
       role: 'member',
-      status: 'unclaimed',
-      isClaimed: false,
-      isVirtual: isVirtual !== false,
-      claimToken: explicitClaimToken || `clm_${crypto.randomUUID().replace(/-/g, '').substring(0, 10)}`,
+      status: memberStatus,
+      isClaimed: memberIsClaimed,
+      isVirtual: memberIsVirtual,
+      claimToken: memberIsClaimed ? null : (explicitClaimToken || `clm_${crypto.randomUUID().replace(/-/g, '').substring(0, 10)}`),
       joinedAt: now,
       lastSeenAt: now,
       lastSyncedRevision: 1,

@@ -216,5 +216,52 @@ void main() {
       expect(syncService.pendingMutationCount, 0);
       expect(syncService.currentStatus, SyncStatus.synced);
     });
+
+    test('flushQueue self-heals updateExpense 404 by creating missing expense on server', () async {
+      await storage.saveUser({
+        'id': 'usr_active_canonical',
+        'displayName': 'Darpan',
+        'anonymousToken': 'token_xyz',
+      });
+
+      await syncService.enqueueMutation(MutationType.updateExpense, {
+        'id': 'exp_999',
+        'tripId': 'trip_100',
+        'title': 'Tent',
+        'amountInPaise': 50000,
+      });
+
+      final requestedEndpoints = <String>[];
+      final mockClient = MockClient((request) async {
+        requestedEndpoints.add('${request.method} ${request.url.path}');
+        if (request.method == 'PUT' && request.url.path.contains('/expenses/exp_999')) {
+          // Server returns 404 Expense not found
+          return http.Response(
+            jsonEncode({'error': {'message': 'Expense not found'}}),
+            404,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        if (request.method == 'POST' && request.url.path.contains('/trips/trip_100/expenses')) {
+          // Self-healing POST succeeds
+          return http.Response(
+            jsonEncode({'data': {'id': 'exp_999', 'title': 'Tent'}}),
+            201,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        return http.Response(jsonEncode({'data': {}}), 200, headers: {'content-type': 'application/json'});
+      });
+
+      final apiClient = ApiClient(httpClient: mockClient);
+
+      expect(syncService.pendingMutationCount, 1);
+      await syncService.flushQueue(apiClient, force: true);
+
+      // Self-healing succeeded: mutation was removed from pending queue
+      expect(syncService.pendingMutationCount, 0);
+      expect(requestedEndpoints.any((e) => e.startsWith('PUT')), isTrue);
+      expect(requestedEndpoints.any((e) => e.startsWith('POST') && e.contains('/trips/trip_100/expenses')), isTrue);
+    });
   });
 }

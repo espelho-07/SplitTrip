@@ -342,13 +342,21 @@ class ExpenseMergeOutcome {
   /// Local expenses the server no longer returns and that are not pending upload.
   final Set<String> remoteDeletedIds;
 
-  /// Local expenses newer than the server copy, with no pending mutation yet.
-  final Set<String> localNewerIds;
+  /// Local expenses that exist locally but NOT on the server (need addExpense / POST).
+  final Set<String> localCreatedIds;
+
+  /// Local expenses that exist on the server but have newer local edits (need updateExpense / PUT).
+  final Set<String> localUpdatedIds;
+
+  /// Backward-compatible combined set of local expenses needing synchronization.
+  Set<String> get localNewerIds => {...localCreatedIds, ...localUpdatedIds};
 
   const ExpenseMergeOutcome({
     required this.expenses,
     required this.remoteDeletedIds,
-    required this.localNewerIds,
+    this.localCreatedIds = const {},
+    this.localUpdatedIds = const {},
+    Set<String>? localNewerIds,
   });
 }
 
@@ -368,7 +376,8 @@ ExpenseMergeOutcome mergeAuthoritativeExpenses({
   final serverIds = serverExpenses.map((expense) => expense.id).toSet();
   final merged = <String, Expense>{};
   final remoteDeletedIds = <String>{};
-  final localNewerIds = <String>{};
+  final localCreatedIds = <String>{};
+  final localUpdatedIds = <String>{};
 
   bool isBlocked(String id) =>
       pendingDeletedIds.contains(id) || tombstonedIds.contains(id);
@@ -406,7 +415,7 @@ ExpenseMergeOutcome mergeAuthoritativeExpenses({
       );
       merged[server.id] = mergedExpense;
       if (mergedExpense.updatedAt.isAfter(server.updatedAt)) {
-        localNewerIds.add(server.id);
+        localUpdatedIds.add(server.id);
       }
       continue;
     }
@@ -419,7 +428,7 @@ ExpenseMergeOutcome mergeAuthoritativeExpenses({
       );
       merged[server.id] = mergedExpense;
       if (mergedExpense.updatedAt.isAfter(server.updatedAt)) {
-        localNewerIds.add(server.id);
+        localUpdatedIds.add(server.id);
       }
       continue;
     }
@@ -445,7 +454,7 @@ ExpenseMergeOutcome mergeAuthoritativeExpenses({
     // Preserve it locally and schedule it to be synced/uploaded to the server.
     if (!serverIds.contains(local.id)) {
       merged[local.id] = local;
-      localNewerIds.add(local.id);
+      localCreatedIds.add(local.id);
     }
   }
 
@@ -455,6 +464,7 @@ ExpenseMergeOutcome mergeAuthoritativeExpenses({
   return ExpenseMergeOutcome(
     expenses: expenses,
     remoteDeletedIds: remoteDeletedIds,
-    localNewerIds: localNewerIds,
+    localCreatedIds: localCreatedIds,
+    localUpdatedIds: localUpdatedIds,
   );
 }

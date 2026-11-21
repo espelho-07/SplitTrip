@@ -20,11 +20,13 @@ class MainActivity : FlutterFragmentActivity() {
     private val CHANNEL = "com.nirniq.kith/widgets"
     private val CONTACTS_CHANNEL = "com.nirniq.kith/contacts"
     private val MIGRATION_CHANNEL = "com.kith.migration/channel"
+    private val BLE_CHANNEL = "com.nirniq.kith/ble_discovery"
     private val REQUEST_CODE_PICK_CONTACT = 4242
     private val REQUEST_CODE_SAF_CREATE = 4243
     private var pendingSafCreateResult: MethodChannel.Result? = null
     private var pendingSafCreateContent: String? = null
 
+    private var bleManager: KithBleManager? = null
     private var initialDeepLink: String? = null
     private var flutterEngineInstance: FlutterEngine? = null
     private var pendingContactPickerResult: MethodChannel.Result? = null
@@ -341,6 +343,59 @@ class MainActivity : FlutterFragmentActivity() {
                 else -> result.notImplemented()
             }
         }
+
+        // Bluetooth Low Energy (BLE) Mesh & Nearby Discovery Channel
+        val bleMethodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, BLE_CHANNEL)
+        bleManager = KithBleManager(applicationContext, bleMethodChannel)
+        bleMethodChannel.setMethodCallHandler { call, result ->
+            val mgr = bleManager
+            if (mgr == null) {
+                result.error("UNAVAILABLE", "BLE Manager not initialized", null)
+                return@setMethodCallHandler
+            }
+            when (call.method) {
+                "isSupported" -> result.success(mgr.isSupported())
+                "isEnabled" -> result.success(mgr.isEnabled())
+                "hasPermissions" -> result.success(mgr.hasPermissions())
+                "startAdvertising" -> {
+                    val tripTokenHash = call.argument<Int>("tripTokenHash") ?: 0
+                    val deviceIdHash = call.argument<Number>("deviceIdHash")?.toLong() ?: 0L
+                    val userIdHash = call.argument<Int>("userIdHash") ?: 0
+                    val ok = mgr.startAdvertising(tripTokenHash, deviceIdHash, userIdHash)
+                    result.success(ok)
+                }
+                "stopAdvertising" -> {
+                    mgr.stopAdvertising()
+                    result.success(true)
+                }
+                "startScanning" -> {
+                    val tripTokenHash = call.argument<Int>("tripTokenHash") ?: 0
+                    val deviceIdHash = call.argument<Number>("deviceIdHash")?.toLong() ?: 0L
+                    val ok = mgr.startScanning(tripTokenHash, deviceIdHash)
+                    result.success(ok)
+                }
+                "stopScanning" -> {
+                    mgr.stopScanning()
+                    result.success(true)
+                }
+                "stopAll" -> {
+                    mgr.stopAll()
+                    result.success(true)
+                }
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    override fun onStop() {
+        bleManager?.stopAll()
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        bleManager?.stopAll()
+        bleManager = null
+        super.onDestroy()
     }
     companion object {
         private const val TAG = "MainActivity"

@@ -1331,6 +1331,47 @@ class SyncService {
               completedMutationIds.add(mutation.id);
               await removeMutation(mutation.id);
             } else if (e.statusCode == 404 &&
+                mutation.type == MutationType.updateExpense &&
+                (e.message.toLowerCase().contains('expense not found') ||
+                 e.message.toLowerCase().contains('not found'))) {
+              // CASE A / SELF-HEALING: The expense exists locally (or in mutation payload)
+              // but does not exist on the server. Safely create it remotely using its original stable ID!
+              bool expenseHealed = false;
+              if (tId != null) {
+                try {
+                  final expensePayload = Map<String, dynamic>.from(mutation.payload);
+                  final expenseId = expensePayload['id'] as String? ??
+                      expensePayload['expenseId'] as String? ??
+                      mutation.id;
+                  expensePayload['id'] = expenseId;
+
+                  // First check if it was intentionally deleted/tombstoned locally
+                  if (!_storage.isExpenseTombstoned(tId, expenseId)) {
+                    await apiClient.post('/trips/$tId/expenses', body: expensePayload);
+                    completedMutationIds.add(mutation.id);
+                    await removeMutation(mutation.id);
+                    expenseHealed = true;
+                  } else {
+                    // CASE C: The expense was intentionally deleted locally. Acknowledge safely!
+                    completedMutationIds.add(mutation.id);
+                    await removeMutation(mutation.id);
+                    expenseHealed = true;
+                  }
+                } catch (createErr) {
+                  debugPrint('[SyncService] Failed to auto-create missing expense on server: $createErr');
+                }
+              }
+              if (!expenseHealed) {
+                _lastErrorMessage = e.message;
+                await _updateMutationAttempt(
+                  mutation.id,
+                  mutation.retryCount + 1,
+                  errorMessage: e.message,
+                  syncState: SyncState.failed,
+                );
+                if (tId != null) blockedTripIds.add(tId);
+              }
+            } else if (e.statusCode == 404 &&
                 (e.message.toLowerCase().contains('trip not found') ||
                  e.message.toLowerCase().contains('not found'))) {
               // Self-healing: Trip is missing on server! Re-create trip on server and retry.
@@ -1509,13 +1550,23 @@ class SyncService {
       for (final m in members) {
         if (m is Map) {
           try {
+            final mUid = m['userId']?.toString() ?? '';
+            final hasRealUid = mUid.isNotEmpty &&
+                !mUid.startsWith('unclaimed_') &&
+                !mUid.startsWith('virtual_');
+            final isClaimed = m['isClaimed'] == true;
+            final isExplicitVirtual = m['isVirtual'] == true || m['isVirtualMember'] == true;
+            final isVirtual = isExplicitVirtual && !hasRealUid && !isClaimed;
+
             await apiClient.post('/trips/$tripId/members', body: {
               'tripId': tripId,
               'id': m['id'],
               'userId': m['userId'],
               'displayName': m['displayName'],
               'claimToken': m['claimToken'],
-              'isVirtual': m['isVirtual'] ?? true,
+              'isVirtual': isVirtual,
+              'isClaimed': !isVirtual,
+              'status': isVirtual ? 'unclaimed' : 'claimed',
             });
           } catch (_) {}
         }

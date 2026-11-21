@@ -72,7 +72,15 @@ test('Trip Member Claim & Duplicate Prevention Tests', async (t) => {
     assert.strictEqual(claimedRahul.userId, rahulUser.id);
     assert.strictEqual(claimedRahul.isClaimed, true);
     assert.strictEqual(claimedRahul.status, 'claimed');
+    assert.strictEqual(claimedRahul.isVirtual, false);
     assert.strictEqual(claimedRahul.avatarUrl, rahulUser.avatarUrl);
+
+    // Verify creator fetching trip later sees Rahul as non-virtual
+    const creatorTripView = tripService.getTripById(trip.id, creator.id);
+    const rahulInCreatorView = creatorTripView.members.find((m) => m.id === claimedRahul.id);
+    assert.ok(rahulInCreatorView);
+    assert.strictEqual(rahulInCreatorView.isVirtual, false);
+    assert.strictEqual(rahulInCreatorView.isClaimed, true);
 
     // Verify financial integrity: split remains attached to the claimed member ID
     const expenses = expenseService.getExpenses(trip.id, creator.id);
@@ -148,5 +156,57 @@ test('Trip Member Claim & Duplicate Prevention Tests', async (t) => {
         displayName: 'Duplicate Darpan',
       });
     }, (err) => err.message.includes('already a member'));
+  });
+
+  await t.test('7. Automatic placeholder claim by display name ensures member is NOT virtual', () => {
+    const trip = tripService.createTrip(creator, {
+      name: 'Manali Trek',
+      initialFriendNames: ['Neel Vyas'],
+    });
+
+    const neelUser = { id: 'usr_neel_123', displayName: 'Neel Vyas', avatarUrl: null, upiId: 'neel@upi' };
+
+    // Neel joins by code without specifying claimMemberId (auto-claims by display name)
+    const joinedTrip = tripService.joinTripByCode(neelUser, trip.inviteCode);
+    assert.strictEqual(joinedTrip.members.length, 2);
+
+    const neelMember = joinedTrip.members.find((m) => m.userId === neelUser.id);
+    assert.ok(neelMember);
+    assert.strictEqual(neelMember.isVirtual, false);
+    assert.strictEqual(neelMember.isClaimed, true);
+    assert.strictEqual(neelMember.status, 'claimed');
+
+    // Creator opens trip later
+    const creatorView = tripService.getTripById(trip.id, creator.id);
+    const neelInCreatorView = creatorView.members.find((m) => m.userId === neelUser.id);
+    assert.ok(neelInCreatorView);
+    assert.strictEqual(neelInCreatorView.isVirtual, false);
+    assert.strictEqual(neelInCreatorView.isClaimed, true);
+  });
+
+  await t.test('8. updateExpense with missing expenseId gracefully recovers via creation (upsert)', () => {
+    const trip = tripService.createTrip(creator, { name: 'Trek Trip' });
+    const expenseService = require('../src/services/expense_service');
+    const creatorMember = trip.members.find((m) => m.role === 'creator');
+
+    const missingExpenseId = 'exp_offline_created_123';
+
+    // Call updateExpense with full payload for an expense that does not exist on the server
+    const result = expenseService.updateExpense(creator, trip.id, missingExpenseId, {
+      title: 'Camping Tent',
+      amountInPaise: 150000,
+      paidById: creatorMember.id,
+      splits: [{ memberId: creatorMember.id, amountInPaise: 150000 }],
+    });
+
+    assert.ok(result.expense);
+    assert.strictEqual(result.expense.id, missingExpenseId);
+    assert.strictEqual(result.expense.title, 'Camping Tent');
+    assert.strictEqual(result.expense.amountInPaise, 150000);
+
+    // Verify it is now in the database
+    const fetched = db.get('expenses', missingExpenseId);
+    assert.ok(fetched);
+    assert.strictEqual(fetched.title, 'Camping Tent');
   });
 });

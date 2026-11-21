@@ -37,13 +37,19 @@ class TripMember {
   bool get isCreator => role.toLowerCase() == 'creator';
   bool get isUnclaimed => !isClaimed || status == 'unclaimed';
   bool get isMerged => status == 'merged' || mergedIntoMemberId != null;
-  bool get isVirtual =>
-      isVirtualMember ||
-      isUnclaimed ||
-      userId.startsWith('unclaimed_') ||
-      role == 'virtual' ||
-      !isClaimed;
-  bool get isRegistered => !isVirtual;
+
+  /// Authoritative check: A registered member has an active, authenticated account ID,
+  /// is claimed, and does not have an unclaimed placeholder identifier or role.
+  bool get isRegistered =>
+      userId.isNotEmpty &&
+      !userId.startsWith('unclaimed_') &&
+      !userId.startsWith('virtual_') &&
+      isClaimed &&
+      status != 'unclaimed' &&
+      role.toLowerCase() != 'virtual';
+
+  /// A member is virtual if and only if they are not a fully registered/claimed member.
+  bool get isVirtual => !isRegistered;
   String get currentStatus => status ?? (isClaimed ? 'claimed' : 'unclaimed');
 
   TripMember copyWith({
@@ -104,14 +110,30 @@ class TripMember {
   factory TripMember.fromJson(Map<String, dynamic> json) {
     final rawUserId = json['userId'] as String? ?? json['user_id'] as String? ?? '';
     final rawStatus = json['status'] as String?;
-    final isExplicitVirtual = json['isVirtual'] == true ||
-        json['is_virtual'] == true ||
-        json['isVirtualMember'] == true;
-    final isUnclaimed = isExplicitVirtual ||
-        json['isClaimed'] == false ||
-        json['is_claimed'] == false ||
-        rawStatus == 'unclaimed' ||
-        rawUserId.startsWith('unclaimed_');
+    final rawClaimed = json['isClaimed'] as bool? ?? json['is_claimed'] as bool?;
+    final role = (json['role'] as String? ?? 'member').toLowerCase();
+
+    final hasRealUserId = rawUserId.isNotEmpty &&
+        !rawUserId.startsWith('unclaimed_') &&
+        !rawUserId.startsWith('virtual_');
+
+    final bool isClaimed;
+    final String status;
+    final bool isVirtual;
+
+    if (hasRealUserId && rawClaimed != false && rawStatus != 'unclaimed' && role != 'virtual') {
+      // Authoritative: A registered user with a valid UID who is claimed is NEVER virtual
+      isClaimed = true;
+      status = rawStatus ?? 'claimed';
+      isVirtual = false;
+    } else {
+      final isExplicitVirtual = json['isVirtual'] == true ||
+          json['is_virtual'] == true ||
+          json['isVirtualMember'] == true;
+      isClaimed = rawClaimed ?? (!isExplicitVirtual && rawStatus != 'unclaimed');
+      status = rawStatus ?? (isClaimed ? 'claimed' : 'unclaimed');
+      isVirtual = isExplicitVirtual || !isClaimed || status == 'unclaimed' || !hasRealUserId || role == 'virtual';
+    }
 
     final rawName = (json['displayName'] as String?) ?? (json['display_name'] as String?);
     final cleanName = (rawName != null && rawName.trim().isNotEmpty) ? rawName.trim() : 'Member';
@@ -135,11 +157,11 @@ class TripMember {
       lastSyncedRevision: json['lastSyncedRevision'] as int? ?? json['last_synced_revision'] as int? ?? 1,
       pendingMutationsCount: json['pendingMutationsCount'] as int? ?? json['pending_mutations_count'] as int? ?? 0,
       upiId: json['upiId'] as String? ?? json['upi_id'] as String?,
-      isClaimed: json['isClaimed'] as bool? ?? json['is_claimed'] as bool? ?? !isUnclaimed,
+      isClaimed: isClaimed,
       claimToken: json['claimToken'] as String? ?? json['claim_token'] as String?,
-      status: rawStatus ?? (isUnclaimed ? 'unclaimed' : 'claimed'),
+      status: status,
       mergedIntoMemberId: json['mergedIntoMemberId'] as String? ?? json['merged_into_member_id'] as String?,
-      isVirtualMember: isUnclaimed,
+      isVirtualMember: isVirtual,
     );
   }
 }

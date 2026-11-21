@@ -305,6 +305,22 @@ class ExpenseService {
 
     const existing = db.get('expenses', expenseId);
     if (!existing || existing.tripId !== tripId || existing.isDeleted) {
+      // Graceful recovery: If the expense is not yet on the server, but client sent a complete expense creation payload
+      // (as happens when local-only expenses were queued for sync or during recovery), auto-create with the original ID!
+      if (title && title.trim() && amountInPaise && Number.isInteger(amountInPaise) && amountInPaise > 0) {
+        return this.createExpense(user, tripId, {
+          id: expenseId,
+          title: title.trim(),
+          amountInPaise,
+          category,
+          paidById: paidById || authMember.id,
+          paidByMap,
+          splitType,
+          splits,
+          voiceTranscript,
+          receiptUrl,
+        }, realtimeHub);
+      }
       throw AppError.notFound('Expense not found');
     }
 

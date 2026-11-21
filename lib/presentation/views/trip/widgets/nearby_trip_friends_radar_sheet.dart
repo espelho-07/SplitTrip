@@ -76,8 +76,11 @@ class _NearbyTripFriendsRadarSheetState extends State<NearbyTripFriendsRadarShee
       }
     });
 
-    // Start 60-second active discovery session
-    widget.p2pService.startDiscoverySession(timeout: const Duration(seconds: 60));
+    // Start 60-second active discovery session with BLE and Mesh
+    widget.p2pService.startDiscoverySession(
+      timeout: const Duration(seconds: 60),
+      targetTripId: widget.trip.id,
+    );
   }
 
   @override
@@ -195,9 +198,23 @@ class _NearbyTripFriendsRadarSheetState extends State<NearbyTripFriendsRadarShee
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    final eligibleMembers = widget.trip.members.where((m) => !m.isVirtual && m.isClaimed).toList();
 
-    final nearbyPeersForTrip = _peers.where((p) => p.sharedTripIds.contains(widget.trip.id)).toList();
+    final currentUserId = widget.p2pService.storage.getSavedUser()?['id']?.toString() ?? '';
+    final currentDeviceId = widget.p2pService.deviceId;
+
+    // Partition members: Authoritative local device vs remote peers
+    final allEligibleMembers = widget.trip.members.where((m) => !m.isVirtual && m.isClaimed).toList();
+    final localMember = allEligibleMembers.where((m) => m.userId == currentUserId).firstOrNull ??
+        allEligibleMembers.where((m) => m.role == 'creator' && widget.trip.creatorId == currentUserId).firstOrNull;
+    final remoteMembers = allEligibleMembers.where((m) => m != localMember && m.userId != currentUserId).toList();
+
+    // Discovered remote peers for this trip, strictly excluding own device
+    final nearbyPeersForTrip = _peers.where(
+      (p) => p.sharedTripIds.contains(widget.trip.id) && p.deviceId != currentDeviceId,
+    ).toList();
+
+    // Check if user has other devices detected under their own account
+    final myOtherDevicePeers = nearbyPeersForTrip.where((p) => p.userId != null && p.userId == currentUserId).toList();
 
     return Container(
       constraints: BoxConstraints(
@@ -300,19 +317,24 @@ class _NearbyTripFriendsRadarSheetState extends State<NearbyTripFriendsRadarShee
                     // Visual Sonar Radar Graphic
                     _buildRadarAnimation(isDark, nearbyPeersForTrip.length),
 
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
+
+                    // Dedicated Local Device Status Card (Never appears as a remote peer or Not in Range)
+                    _buildLocalDeviceCard(isDark, localMember, currentDeviceId),
+
+                    const SizedBox(height: 14),
 
                     // Results Banner if sync completed
                     if (_meshResult != null) _buildResultBanner(isDark, _meshResult!),
 
                     const SizedBox(height: 12),
 
-                    // Section Title: Friends in this Trip
+                    // Section Title: Eligible Friends in this Trip
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'ELIGIBLE KITH MEMBERS (${eligibleMembers.length})',
+                          'ELIGIBLE TRIP FRIENDS (${remoteMembers.length})',
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w800,
@@ -332,7 +354,7 @@ class _NearbyTripFriendsRadarSheetState extends State<NearbyTripFriendsRadarShee
                             ),
                             const SizedBox(width: 5),
                             Text(
-                              nearbyPeersForTrip.isNotEmpty ? 'Mesh Active' : 'Scanning...',
+                              nearbyPeersForTrip.isNotEmpty ? 'Mesh & BLE Active' : 'Scanning...',
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
@@ -346,26 +368,78 @@ class _NearbyTripFriendsRadarSheetState extends State<NearbyTripFriendsRadarShee
 
                     const SizedBox(height: 8),
 
-                    // List of Eligible Linked KITH Members with status (Virtual members excluded)
-                    ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: eligibleMembers.length,
-                      separatorBuilder: (_, _) => Divider(
-                        height: 10,
-                        thickness: 0.5,
-                        color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.04),
-                      ),
-                      itemBuilder: (ctx, idx) {
-                        final member = eligibleMembers[idx];
-                        // Match member strictly by authenticated userId identity, never by displayName
-                        final matchedPeer = nearbyPeersForTrip.where(
-                          (p) => p.userId != null && p.userId == member.userId,
-                        ).firstOrNull;
+                    // List of Remote Eligible KITH Friends with status
+                    if (remoteMembers.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 24),
+                        child: Center(
+                          child: Column(
+                            children: [
+                              Icon(Icons.group_add_rounded, size: 36, color: isDark ? Colors.white24 : Colors.black26),
+                              const SizedBox(height: 8),
+                              Text(
+                                'No other friends joined this trip yet',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark ? Colors.white54 : Colors.black45,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Share your QR or Invite Code (${widget.trip.inviteCode}) so friends can join and sync offline.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else
+                      ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: remoteMembers.length,
+                        separatorBuilder: (_, _) => Divider(
+                          height: 10,
+                          thickness: 0.5,
+                          color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.04),
+                        ),
+                        itemBuilder: (ctx, idx) {
+                          final member = remoteMembers[idx];
+                          // Match member strictly by authenticated userId identity, excluding own device
+                          final matchedPeer = nearbyPeersForTrip.where(
+                            (p) => p.userId != null && p.userId == member.userId && p.deviceId != currentDeviceId,
+                          ).firstOrNull;
 
-                        return _buildMemberStatusRow(isDark, member, matchedPeer);
-                      },
-                    ),
+                          return _buildMemberStatusRow(isDark, member, matchedPeer);
+                        },
+                      ),
+
+                    // If user has other devices under the same account in range
+                    if (myOtherDevicePeers.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Icon(Icons.devices_rounded, size: 14, color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary),
+                          const SizedBox(width: 6),
+                          Text(
+                            'YOUR OTHER DEVICES (${myOtherDevicePeers.length})',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.8,
+                              color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      ...myOtherDevicePeers.map((p) => _buildOtherDeviceRow(isDark, p)),
+                    ],
 
                     const SizedBox(height: 20),
                   ],
@@ -568,12 +642,174 @@ class _NearbyTripFriendsRadarSheetState extends State<NearbyTripFriendsRadarShee
     );
   }
 
+  Widget _buildLocalDeviceCard(bool isDark, TripMember? localMember, String deviceId) {
+    final name = localMember?.displayName ?? 'You';
+    final shortDevId = deviceId.length > 8 ? deviceId.substring(0, 8) : deviceId;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      decoration: BoxDecoration(
+        color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary).withValues(alpha: 0.22),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              MemberAvatar(name: name, size: 38),
+              Positioned(
+                bottom: -2,
+                right: -2,
+                child: Container(
+                  padding: const EdgeInsets.all(2.5),
+                  decoration: const BoxDecoration(
+                    color: Colors.green,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.wifi_tethering_rounded, size: 10, color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        '$name (This Device)',
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w800,
+                          color: isDark ? Colors.white : const Color(0xFF0F172A),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        'LOCAL',
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.green,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Broadcasting discovery beacon (BLE & Mesh Active) • #$shortDevId',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: isDark ? AppColors.emeraldLight.withValues(alpha: 0.9) : AppColors.emeraldPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOtherDeviceRow(bool isDark, NearbyPeer peer) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: Colors.blue.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.devices_rounded, size: 18, color: Colors.blue),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${peer.displayName} (Second Device)',
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  peer.isBleOnly ? 'Nearby • BLE In Range' : 'Nearby • Mesh Connected',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.blue,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (peer.canSyncData)
+            IconButton(
+              icon: Icon(
+                Icons.sync_rounded,
+                size: 20,
+                color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+              ),
+              onPressed: () => _handleSyncIndividual(peer),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMemberStatusRow(bool isDark, TripMember member, NearbyPeer? peer) {
     final isNearby = peer != null;
     final isSyncingThis = peer != null && (_syncingPeerId == peer.deviceId || peer.isSyncing);
+    final isBleOnly = peer != null && peer.isBleOnly;
+    final canDirectSync = peer != null && peer.canSyncData;
+
+    final String statusText;
+    final Color statusColor;
+    if (isNearby) {
+      if (peer.lastSyncedAt != null) {
+        statusText = 'Nearby • Synced';
+        statusColor = Colors.green;
+      } else if (isBleOnly) {
+        final rssiStr = peer.rssi != null ? ' (${peer.rssi} dBm)' : '';
+        statusText = 'Nearby • BLE In Range$rssiStr';
+        statusColor = const Color(0xFF3B82F6);
+      } else {
+        statusText = 'Nearby • In Range (Mesh Active)';
+        statusColor = isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary;
+      }
+    } else {
+      statusText = 'Not in Range';
+      statusColor = Colors.grey.shade400;
+    }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
         children: [
           MemberAvatar(name: member.displayName, size: 36),
@@ -597,19 +833,17 @@ class _NearbyTripFriendsRadarSheetState extends State<NearbyTripFriendsRadarShee
                       width: 6,
                       height: 6,
                       decoration: BoxDecoration(
-                        color: isNearby ? Colors.green : Colors.grey.shade400,
+                        color: statusColor,
                         shape: BoxShape.circle,
                       ),
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      isNearby
-                          ? (peer.lastSyncedAt != null ? 'Nearby • Synced' : 'Nearby • In Range')
-                          : 'Not in Range',
+                      statusText,
                       style: TextStyle(
                         fontSize: 11.5,
                         color: isNearby
-                            ? (isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary)
+                            ? statusColor
                             : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
                         fontWeight: isNearby ? FontWeight.w700 : FontWeight.w500,
                       ),
@@ -619,21 +853,47 @@ class _NearbyTripFriendsRadarSheetState extends State<NearbyTripFriendsRadarShee
               ],
             ),
           ),
-          if (isNearby)
-            isSyncingThis
-                ? const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : IconButton(
-                    icon: Icon(
-                      Icons.sync_rounded,
-                      size: 20,
-                      color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+          if (isNearby) ...[
+            if (isSyncingThis)
+              const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            else if (canDirectSync)
+              IconButton(
+                icon: Icon(
+                  Icons.sync_rounded,
+                  size: 20,
+                  color: isDark ? AppColors.emeraldLight : AppColors.emeraldPrimary,
+                ),
+                tooltip: 'Sync with ${member.displayName}',
+                onPressed: () => _handleSyncIndividual(peer),
+              )
+            else if (isBleOnly)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: (isDark ? const Color(0xFF1E3A8A) : const Color(0xFFDBEAFE)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.bluetooth_searching_rounded, size: 13, color: isDark ? Colors.lightBlueAccent : Colors.blue.shade700),
+                    const SizedBox(width: 4),
+                    Text(
+                      'BLE Detected',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? Colors.lightBlueAccent : Colors.blue.shade700,
+                      ),
                     ),
-                    onPressed: () => _handleSyncIndividual(peer),
-                  ),
+                  ],
+                ),
+              ),
+          ],
         ],
       ),
     );

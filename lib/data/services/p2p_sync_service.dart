@@ -18,7 +18,7 @@ import 'package:flutter/foundation.dart';
 
 
 
-import 'package:uuid/uuid.dart';
+
 
 
 
@@ -27,6 +27,7 @@ import 'local_storage_service.dart';
 
 
 import 'sync_service.dart';
+import 'ble_discovery_service.dart';
 
 
 
@@ -273,153 +274,60 @@ class NearbyPeer {
 
 
   final bool isAuthenticated;
-
-
+  final String transport; // 'wifi_mesh', 'ble', 'hybrid'
+  final int? rssi;
 
   NearbyPeer({
-
     required this.deviceId,
-
-
-
     required this.displayName,
-
-
-
     this.userId,
-
-
-
     required this.address,
-
-
-
     required this.port,
-
-
-
     required this.sharedTripIds,
-
-
-
     this.sharedTripNames = const [],
-
-
-
     required this.pairingCode,
-
-
-
     required this.lastSeenAt,
-
-
-
     this.lastSyncedAt,
-
-
-
     this.lastSyncedChanges = 0,
-
-
-
     this.isSyncing = false,
-
-
-
     this.isAuthenticated = false,
-
+    this.transport = 'wifi_mesh',
+    this.rssi,
   });
 
-
+  bool get isBleOnly => transport == 'ble';
+  bool get canSyncData => port > 0 && address != InternetAddress.loopbackIPv4;
 
   NearbyPeer copyWith({
-
     String? displayName,
-
-
-
     String? userId,
-
-
-
+    InternetAddress? address,
+    int? port,
     DateTime? lastSeenAt,
-
-
-
     Set<String>? sharedTripIds,
-
-
-
     List<String>? sharedTripNames,
-
-
-
     DateTime? lastSyncedAt,
-
-
-
     int? lastSyncedChanges,
-
-
-
     bool? isSyncing,
-
-
-
     bool? isAuthenticated,
-
+    String? transport,
+    int? rssi,
   }) => NearbyPeer(
-
     deviceId: deviceId,
-
-
-
     displayName: displayName ?? this.displayName,
-
-
-
     userId: userId ?? this.userId,
-
-
-
-    address: address,
-
-
-
-    port: port,
-
-
-
+    address: address ?? this.address,
+    port: port ?? this.port,
     sharedTripIds: sharedTripIds ?? this.sharedTripIds,
-
-
-
     sharedTripNames: sharedTripNames ?? this.sharedTripNames,
-
-
-
     pairingCode: pairingCode,
-
-
-
     lastSeenAt: lastSeenAt ?? this.lastSeenAt,
-
-
-
     lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
-
-
-
     lastSyncedChanges: lastSyncedChanges ?? this.lastSyncedChanges,
-
-
-
     isSyncing: isSyncing ?? this.isSyncing,
-
-
-
     isAuthenticated: isAuthenticated ?? this.isAuthenticated,
-
+    transport: transport ?? this.transport,
+    rssi: rssi ?? this.rssi,
   );
 
 }
@@ -518,9 +426,20 @@ class P2PSyncService {
 
 
 
-  P2PSyncService(this._storage, this._syncService, {String? deviceId})
+  final BleDiscoveryService _bleService;
+  StreamSubscription<BleDiscoveredEvent>? _bleSubscription;
 
-    : _deviceId = deviceId ?? const Uuid().v4();
+  LocalStorageService get storage => _storage;
+
+  P2PSyncService(
+    this._storage,
+    this._syncService, {
+    String? deviceId,
+    BleDiscoveryService? bleService,
+  })  : _deviceId = (deviceId != null && deviceId.isNotEmpty)
+            ? deviceId
+            : _storage.getDeviceId(),
+        _bleService = bleService ?? BleDiscoveryService();
 
 
 
@@ -985,37 +904,155 @@ class P2PSyncService {
 
 
   /// Starts an intentional, user-initiated P2P discovery session with battery-saving auto-timeout.
-
-
-
   Future<void> startDiscoverySession({
-
     Duration timeout = const Duration(seconds: 45),
-
+    String? targetTripId,
   }) async {
-
     await start();
 
-
+    // Launch Bluetooth Low Energy (BLE) background mesh discovery alongside Wi-Fi
+    _startBleDiscovery(targetTripId: targetTripId);
 
     _sessionTimeoutTimer?.cancel();
-
-
-
     _sessionTimeoutTimer = Timer(timeout, () {
-
       if (_status == P2PStatus.discovering || _status == P2PStatus.listening) {
-
         stop();
-
-
-
         _setStatus(P2PStatus.timeout);
+      }
+    });
+  }
 
+  Future<void> _startBleDiscovery({String? targetTripId}) async {
+    try {
+      final supported = await _bleService.isSupported();
+      if (!supported) return;
+
+      String? tripToken;
+      if (targetTripId != null) {
+        final trips = _storage.getSavedTrips();
+        final match = trips.firstWhere((t) => t['id'] == targetTripId, orElse: () => {});
+        if (match.isNotEmpty && match['id'] != null) {
+          tripToken = deriveTripToken(match['id'] as String, match['inviteCode'] as String? ?? 'CODE');
+        }
+      } else {
+        final trips = _storage.getSavedTrips();
+        if (trips.isNotEmpty) {
+          final first = trips.first;
+          tripToken = deriveTripToken(first['id'] as String, first['inviteCode'] as String? ?? 'CODE');
+        }
       }
 
-    });
+      if (tripToken == null || tripToken.isEmpty) return;
 
+      final myUser = _storage.getSavedUser();
+      final myUserId = myUser?['id']?.toString() ?? '';
+
+      await _bleService.startAdvertising(
+        tripToken: tripToken,
+        deviceId: _deviceId,
+        userId: myUserId,
+      );
+
+      await _bleService.startScanning(
+        tripToken: tripToken,
+        deviceId: _deviceId,
+      );
+
+      _bleSubscription?.cancel();
+      _bleSubscription = _bleService.onPeerDiscovered.listen((event) {
+        _handleBleDiscoveredEvent(event);
+      });
+    } catch (e) {
+      debugPrint('[P2PSync] Error starting BLE discovery: $e');
+    }
+  }
+
+  void _handleBleDiscoveredEvent(BleDiscoveredEvent event) {
+    final localDevHash = BleDiscoveryService.hashStringTo64Bit(_deviceId).toString();
+    // 1. Strict self exclusion: Never detect self
+    if (event.deviceIdHash == localDevHash) return;
+
+    final myUser = _storage.getSavedUser();
+    final myUserId = myUser?['id']?.toString() ?? '';
+    final localUserHash = BleDiscoveryService.hashStringTo32Bit(myUserId);
+    if (myUserId.isNotEmpty && event.userIdHash == localUserHash && event.deviceIdHash == localDevHash) {
+      return;
+    }
+
+    // 2. Resolve matching trip and member
+    final trips = _storage.getSavedTrips();
+    for (final t in trips) {
+      final tId = t['id']?.toString() ?? '';
+      final tCode = t['inviteCode']?.toString() ?? 'CODE';
+      final tToken = deriveTripToken(tId, tCode);
+      if (BleDiscoveryService.hashStringTo32Bit(tToken) != event.tripTokenHash) {
+        continue;
+      }
+
+      final members = t['members'] as List<dynamic>? ?? [];
+      String? matchedDisplayName;
+      String? matchedUserId;
+      for (final m in members) {
+        if (m is Map) {
+          final mUid = m['userId']?.toString() ?? '';
+          if (mUid.isNotEmpty && BleDiscoveryService.hashStringTo32Bit(mUid) == event.userIdHash) {
+            matchedDisplayName = m['displayName']?.toString();
+            matchedUserId = mUid;
+            break;
+          }
+        }
+      }
+
+      final peerDeviceId = 'ble_${event.deviceIdHash}';
+      registerBleDiscoveredPeer(
+        deviceId: peerDeviceId,
+        displayName: matchedDisplayName ?? 'Nearby Friend',
+        userId: matchedUserId,
+        sharedTripIds: {tId},
+        sharedTripNames: [t['name']?.toString() ?? 'Trip'],
+        rssi: event.rssi,
+      );
+      break;
+    }
+  }
+
+  void registerBleDiscoveredPeer({
+    required String deviceId,
+    required String displayName,
+    String? userId,
+    required Set<String> sharedTripIds,
+    List<String> sharedTripNames = const [],
+    int? rssi,
+  }) {
+    if (deviceId == _deviceId) return; // Strict local device exclusion
+
+    final now = DateTime.now();
+    final existing = _discoveredPeers[deviceId];
+
+    final address = existing?.address ?? InternetAddress.loopbackIPv4;
+    final port = existing?.port ?? 0;
+    final pairingCode = derivePairingCode(_deviceId, deviceId);
+
+    final updated = NearbyPeer(
+      deviceId: deviceId,
+      displayName: displayName.isNotEmpty ? displayName : (existing?.displayName ?? 'Nearby Friend'),
+      userId: userId ?? existing?.userId,
+      address: address,
+      port: port,
+      sharedTripIds: {...?existing?.sharedTripIds, ...sharedTripIds},
+      sharedTripNames: sharedTripNames.isNotEmpty ? sharedTripNames : (existing?.sharedTripNames ?? const []),
+      pairingCode: pairingCode,
+      lastSeenAt: now,
+      lastSyncedAt: existing?.lastSyncedAt,
+      lastSyncedChanges: existing?.lastSyncedChanges ?? 0,
+      isSyncing: existing?.isSyncing ?? false,
+      isAuthenticated: existing?.isAuthenticated ?? false,
+      transport: (existing != null && existing.port > 0) ? 'hybrid' : 'ble',
+      rssi: rssi ?? existing?.rssi,
+    );
+
+    _discoveredPeers[deviceId] = updated;
+    _notifyPeersChanged();
   }
 
 
@@ -1172,44 +1209,22 @@ class P2PSyncService {
 
     _isStarted = false;
 
-
-
     _sessionTimeoutTimer?.cancel();
-
-
-
     _beaconTimer?.cancel();
-
-
-
     _cleanupTimer?.cancel();
 
-
+    _bleSubscription?.cancel();
+    _bleSubscription = null;
+    _bleService.stopAll();
 
     _udpSocket?.close();
-
-
-
     _udpSocket = null;
 
-
-
     await _httpServer?.close(force: true);
-
-
-
     _httpServer = null;
 
-
-
     _discoveredPeers.clear();
-
-
-
     _setStatus(P2PStatus.idle);
-
-
-
     _notifyPeersChanged();
 
   }

@@ -454,5 +454,78 @@ void main() {
       // Both from and to are correctly resolved to display names instead of fallback 'Member'
       expect(textSummary.contains('• Darpan pays Rahul Sharma: INR 250.00'), isTrue);
     });
+
+    test('8. TripMember.fromJson authoritative rule: Real authenticated userId is NEVER virtual', () {
+      final jsonWithStaleVirtual = {
+        'id': 'mbr_neel_123',
+        'userId': 'usr_neel_vyas',
+        'displayName': 'Neel Vyas',
+        'role': 'member',
+        'isVirtual': true, // Stale server or local flag
+        'isVirtualMember': true,
+        'isClaimed': true,
+        'status': 'claimed',
+      };
+
+      final member = TripMember.fromJson(jsonWithStaleVirtual);
+      expect(member.isVirtual, isFalse);
+      expect(member.isRegistered, isTrue);
+      expect(member.isVirtualMember, isFalse);
+      expect(member.isClaimed, isTrue);
+      expect(member.status, equals('claimed'));
+    });
+
+    test('9. Trip.mergeWithDetailed: Stale local virtual member upgrades to remote claimed member cleanly', () {
+      final localVirtual = TripMember(
+        id: 'mbr_neel_local',
+        userId: 'unclaimed_neel',
+        displayName: 'Neel Vyas',
+        role: 'member',
+        joinedAt: DateTime.now(),
+        isClaimed: false,
+        isVirtualMember: true,
+        status: 'unclaimed',
+      );
+
+      final remoteClaimed = TripMember(
+        id: 'mbr_neel_remote',
+        userId: 'usr_neel_registered',
+        displayName: 'Neel Vyas',
+        role: 'member',
+        joinedAt: DateTime.now(),
+        isClaimed: true,
+        isVirtualMember: false,
+        status: 'claimed',
+      );
+
+      final tripLocal = Trip(
+        id: 'trip_manali',
+        inviteCode: 'MNLI01',
+        name: 'Manali Trek',
+        creatorId: 'usr_creator',
+        members: [localVirtual],
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      final tripRemote = Trip(
+        id: 'trip_manali',
+        inviteCode: 'MNLI01',
+        name: 'Manali Trek',
+        creatorId: 'usr_creator',
+        members: [remoteClaimed],
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      final mergedTrip = tripLocal.mergeWith(tripRemote);
+      expect(mergedTrip.members.length, equals(1));
+      final mergedMember = mergedTrip.members.first;
+
+      expect(mergedMember.userId, equals('usr_neel_registered'));
+      expect(mergedMember.isClaimed, isTrue);
+      expect(mergedMember.isVirtual, isFalse);
+      expect(mergedMember.isVirtualMember, isFalse);
+    });
   });
 }

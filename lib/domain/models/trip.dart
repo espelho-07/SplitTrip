@@ -304,12 +304,19 @@ class Trip {
         }
 
         if (matched != null) {
-          final bool isNowClaimed = otherMember.isClaimed || matched.isClaimed;
+          final bool matchedHasRealUid = matched.userId.isNotEmpty &&
+              !matched.userId.startsWith('unclaimed_') &&
+              !matched.userId.startsWith('virtual_');
+          final bool otherHasRealUid = otherMember.userId.isNotEmpty &&
+              !otherMember.userId.startsWith('unclaimed_') &&
+              !otherMember.userId.startsWith('virtual_');
+
+          final bool isNowClaimed = otherMember.isClaimed || matched.isClaimed || matchedHasRealUid || otherHasRealUid;
 
           // Determine canonical ID: Always preserve the real claimed member ID over a temporary virtual ID
           final String canonicalId;
           final String supersededId;
-          if (matched.isClaimed && !otherMember.isClaimed) {
+          if ((matched.isClaimed || matchedHasRealUid) && !otherMember.isClaimed && !otherHasRealUid) {
             canonicalId = matched.id;
             supersededId = otherMember.id;
           } else {
@@ -329,9 +336,9 @@ class Trip {
               : matched.displayName;
 
           final String chosenUserId;
-          if (!matched.userId.startsWith('unclaimed_') && matched.userId.isNotEmpty) {
+          if (matchedHasRealUid) {
             chosenUserId = matched.userId;
-          } else if (!otherMember.userId.startsWith('unclaimed_') && otherMember.userId.isNotEmpty) {
+          } else if (otherHasRealUid) {
             chosenUserId = otherMember.userId;
           } else {
             chosenUserId = matched.userId.isNotEmpty ? matched.userId : otherMember.userId;
