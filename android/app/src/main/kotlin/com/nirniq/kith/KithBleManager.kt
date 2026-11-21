@@ -60,19 +60,33 @@ class KithBleManager(
         return bluetoothAdapter?.isEnabled == true
     }
 
-    fun hasPermissions(): Boolean {
+    fun hasAdvertisePermissions(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val scanGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
             val advGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_ADVERTISE) == PackageManager.PERMISSION_GRANTED
             val connGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
-            scanGranted && advGranted && connGranted
+            advGranted && connGranted
         } else {
             val btGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH) == PackageManager.PERMISSION_GRANTED
             val adminGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_ADMIN) == PackageManager.PERMISSION_GRANTED
+            btGranted && adminGranted
+        }
+    }
+
+    fun hasScanPermissions(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val scanGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
+            val connGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+            scanGranted && connGranted
+        } else {
+            val btGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH) == PackageManager.PERMISSION_GRANTED
             val locGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
                     ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-            btGranted && adminGranted && locGranted
+            btGranted && locGranted
         }
+    }
+
+    fun hasPermissions(): Boolean {
+        return hasAdvertisePermissions() && hasScanPermissions()
     }
 
     private val advertiseCallback = object : AdvertiseCallback() {
@@ -135,7 +149,11 @@ class KithBleManager(
                 )
 
                 mainHandler.post {
-                    channel.invokeMethod("onBlePeerDiscovered", payload)
+                    try {
+                        channel.invokeMethod("onBlePeerDiscovered", payload)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to deliver onBlePeerDiscovered to Flutter engine: ${e.message}")
+                    }
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Error decoding BLE scan payload: ${e.message}")
@@ -151,8 +169,8 @@ class KithBleManager(
     }
 
     fun startAdvertising(tripTokenHash: Int, deviceIdHash: Long, userIdHash: Int): Boolean {
-        if (!isSupported() || !isEnabled() || !hasPermissions()) {
-            Log.w(TAG, "startAdvertising: Preconditions not met (supported=${isSupported()}, enabled=${isEnabled()}, permissions=${hasPermissions()})")
+        if (!isSupported() || !isEnabled() || !hasAdvertisePermissions()) {
+            Log.w(TAG, "startAdvertising: Preconditions not met (supported=${isSupported()}, enabled=${isEnabled()}, permissions=${hasAdvertisePermissions()})")
             return false
         }
 
@@ -220,8 +238,8 @@ class KithBleManager(
     }
 
     fun startScanning(tripTokenHash: Int, deviceIdHash: Long): Boolean {
-        if (!isSupported() || !isEnabled() || !hasPermissions()) {
-            Log.w(TAG, "startScanning: Preconditions not met (supported=${isSupported()}, enabled=${isEnabled()}, permissions=${hasPermissions()})")
+        if (!isSupported() || !isEnabled() || !hasScanPermissions()) {
+            Log.w(TAG, "startScanning: Preconditions not met (supported=${isSupported()}, enabled=${isEnabled()}, permissions=${hasScanPermissions()})")
             return false
         }
 
@@ -286,16 +304,22 @@ class KithBleManager(
 
     private fun notifyStateChanged() {
         mainHandler.post {
-            channel.invokeMethod(
-                "onBleStateChanged",
-                mapOf(
-                    "isSupported" to isSupported(),
-                    "isEnabled" to isEnabled(),
-                    "hasPermissions" to hasPermissions(),
-                    "isAdvertising" to isAdvertising,
-                    "isScanning" to isScanning
+            try {
+                channel.invokeMethod(
+                    "onBleStateChanged",
+                    mapOf(
+                        "isSupported" to isSupported(),
+                        "isEnabled" to isEnabled(),
+                        "hasPermissions" to hasPermissions(),
+                        "hasAdvertisePermissions" to hasAdvertisePermissions(),
+                        "hasScanPermissions" to hasScanPermissions(),
+                        "isAdvertising" to isAdvertising,
+                        "isScanning" to isScanning
+                    )
                 )
-            )
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to deliver onBleStateChanged to Flutter engine: ${e.message}")
+            }
         }
     }
 }

@@ -95,7 +95,22 @@ class JoinTripViewModel extends ChangeNotifier {
       return null;
     } finally {
       _isJoining = false;
-      notifyListeners();
+      if (!_isDisposed && hasListeners) notifyListeners();
     }
+  }
+
+  bool _isDisposed = false;
+
+  @override
+  void notifyListeners() {
+    if (!_isDisposed && hasListeners) {
+      super.notifyListeners();
+    }
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
   }
 }

@@ -395,6 +395,16 @@ class MainActivity : FlutterFragmentActivity() {
     override fun onDestroy() {
         bleManager?.stopAll()
         bleManager = null
+        try {
+            pendingSafCreateResult?.error("ACTIVITY_DESTROYED", "Activity was destroyed before SAF operation completed", null)
+        } catch (_: Exception) {}
+        pendingSafCreateResult = null
+        pendingSafCreateContent = null
+        try {
+            pendingContactPickerResult?.error("ACTIVITY_DESTROYED", "Activity was destroyed before Contact picker completed", null)
+        } catch (_: Exception) {}
+        pendingContactPickerResult = null
+        flutterEngineInstance = null
         super.onDestroy()
     }
     companion object {

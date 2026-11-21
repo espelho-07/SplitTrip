@@ -20,6 +20,38 @@ class BalanceEngine {
 
     final activeExpenses = expenses.where((e) => !e.isDeleted).toList();
 
+    // Build canonical member resolver map to handle merged members, claim reassignments, and userId lookups
+    final idToCanonicalMemberMap = <String, String>{};
+    for (final member in members) {
+      idToCanonicalMemberMap[member.id] = member.id;
+      if (member.userId.isNotEmpty) {
+        idToCanonicalMemberMap[member.userId] = member.id;
+      }
+      if (member.mergedIntoMemberId != null && member.mergedIntoMemberId!.isNotEmpty) {
+        idToCanonicalMemberMap[member.id] = member.mergedIntoMemberId!;
+      }
+    }
+
+    String resolveCanonicalMemberId(String rawId) {
+      if (idToCanonicalMemberMap.containsKey(rawId)) {
+        var target = idToCanonicalMemberMap[rawId]!;
+        int depth = 0;
+        while (idToCanonicalMemberMap.containsKey(target) && idToCanonicalMemberMap[target] != target && depth < 10) {
+          target = idToCanonicalMemberMap[target]!;
+          depth++;
+        }
+        return target;
+      }
+      final match = members.where((m) => m.id == rawId || m.userId == rawId).firstOrNull;
+      if (match != null) {
+        if (match.mergedIntoMemberId != null && match.mergedIntoMemberId!.isNotEmpty) {
+          return match.mergedIntoMemberId!;
+        }
+        return match.id;
+      }
+      return rawId;
+    }
+
     int totalSpent = 0;
     final paidMap = <String, int>{};
     final shareMap = <String, int>{};
@@ -37,15 +69,18 @@ class BalanceEngine {
       // Credit the payer(s) (supports single or multi-payer custom contributions)
       if (expense.paidByMap != null && expense.paidByMap!.isNotEmpty) {
         expense.paidByMap!.forEach((payerId, paidPaise) {
-          paidMap[payerId] = (paidMap[payerId] ?? 0) + paidPaise;
+          final targetPayerId = resolveCanonicalMemberId(payerId);
+          paidMap[targetPayerId] = (paidMap[targetPayerId] ?? 0) + paidPaise;
         });
       } else {
-        paidMap[expense.paidById] = (paidMap[expense.paidById] ?? 0) + expense.amountInPaise;
+        final targetPayerId = resolveCanonicalMemberId(expense.paidById);
+        paidMap[targetPayerId] = (paidMap[targetPayerId] ?? 0) + expense.amountInPaise;
       }
 
       // Debit each participant's allocated share
       for (final split in expense.splits) {
-        shareMap[split.memberId] = (shareMap[split.memberId] ?? 0) + split.amountInPaise;
+        final targetSplitMemberId = resolveCanonicalMemberId(split.memberId);
+        shareMap[targetSplitMemberId] = (shareMap[targetSplitMemberId] ?? 0) + split.amountInPaise;
       }
     }
 
@@ -75,12 +110,8 @@ class BalanceEngine {
       }
 
       if (isPaid && fromId != null && toId != null && amt > 0) {
-        // Resolve member by id or userId
-        final fromMember = members.where((m) => m.id == fromId || m.userId == fromId).firstOrNull;
-        final toMember = members.where((m) => m.id == toId || m.userId == toId).firstOrNull;
-
-        final targetFromId = fromMember?.id ?? fromId;
-        final targetToId = toMember?.id ?? toId;
+        final targetFromId = resolveCanonicalMemberId(fromId);
+        final targetToId = resolveCanonicalMemberId(toId);
 
         // fromId transferred amt to toId.
         // Therefore fromId is credited +amt (they paid their debt),
@@ -100,7 +131,7 @@ class BalanceEngine {
 
     // Find the current member id that matches the current user's userId
     final currentMember = members.where((m) => m.userId == currentUserId).firstOrNull;
-    final currentMemberId = currentMember?.id ?? currentUserId;
+    final currentMemberId = resolveCanonicalMemberId(currentMember?.id ?? currentUserId);
     final currentUserNet = netBalances[currentMemberId] ?? 0;
 
     // Run settlement simplification

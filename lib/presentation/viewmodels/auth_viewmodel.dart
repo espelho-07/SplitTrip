@@ -25,6 +25,14 @@ class AuthViewModel extends ChangeNotifier {
   String? _errorMessage;
 
   StreamSubscription? _accountDeletedSub;
+  bool _isDisposed = false;
+
+  @override
+  void notifyListeners() {
+    if (!_isDisposed && hasListeners) {
+      super.notifyListeners();
+    }
+  }
 
   AuthViewModel({required this.userRepo}) {
     // Fast synchronous local restoration to prevent cold-boot race conditions
@@ -46,6 +54,7 @@ class AuthViewModel extends ChangeNotifier {
 
   @override
   void dispose() {
+    _isDisposed = true;
     _accountDeletedSub?.cancel();
     super.dispose();
   }
